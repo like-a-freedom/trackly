@@ -1,0 +1,22 @@
+localhost {
+    tls internal
+
+    log {
+        output stdout
+        format console
+        level DEBUG
+    }
+
+    handle /tracks* {
+        reverse_proxy backend:8080 {
+            flush_interval -1
+            header_up X-Request-Start "{http.request.time}"
+        }
+    }
+
+    handle {
+        root * /usr/share/caddy
+        file_server
+        try_files {path} /index.html
+    }
+}
