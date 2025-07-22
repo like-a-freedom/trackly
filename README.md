@@ -49,4 +49,24 @@ So I created my own one.
 ---
 
 ## To Start
+
+### Development
+- Use `docker-compose -f docker-compose.dev.yaml up --build`
+
+### Production
 - Use `docker-compose -f docker-compose.<target-arch>.prod.yaml up --build`
+- Where `<target-arch>` is either `aarch64` or `amd64`
+
+### Docker Images
+Pre-built Docker images are available from:
+- **Docker Hub**: `like-a-freedom/trackly-backend` and `like-a-freedom/trackly-frontend`
+- **GitHub Container Registry**: `ghcr.io/like-a-freedom/trackly-backend` and `ghcr.io/like-a-freedom/trackly-frontend`
+
+---
+
+## CI/CD
+
+The project uses GitHub Actions for automated building and testing:
+- **Test workflow**: Runs on every push and PR, tests both backend and frontend
+- **Build workflow**: Builds and publishes Docker images on releases and pushes to main branch
+- **Multi-architecture support**: Images are built for both `linux/amd64` and `linux/arm64`
