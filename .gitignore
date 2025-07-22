@@ -1,5 +1,10 @@
+# Stuff to ignore in the root directory of the repository
+dev/
+.github/instructions/
+.github/prompts/
 # macOS
 .DS_Store
+data/
 
 # Node.js
 node_modules/
@@ -41,6 +46,7 @@ desktop.ini
 *.bak
 *.tmp
 db/
+db_data/
 tracks/
 
 Session.vim

@@ -1,0 +1,308 @@
+import { ref } from 'vue';
+import { getColorForId } from '../utils/trackColors';
+import { getSessionId } from '../utils/session';
+
+
+
+/**
+ * Speed and pace utility functions
+ */
+export function validateSpeedData(speed) {
+    if (typeof speed !== 'number' || isNaN(speed) || speed < 0 || speed > 200) {
+        return null;
+    }
+    return speed;
+}
+
+export function formatSpeed(speed, unit = 'kmh') {
+    const validSpeed = validateSpeedData(speed);
+    if (validSpeed === null) return 'N/A';
+
+    if (unit === 'mph') {
+        return `${(validSpeed * 0.621371).toFixed(2)} mph`;
+    }
+    return `${validSpeed.toFixed(2)} km/h`;
+}
+
+export function calculatePaceFromSpeed(speed, unit = 'min/km') {
+    const validSpeed = validateSpeedData(speed);
+    if (validSpeed === null || validSpeed === 0) return 'N/A';
+
+    let paceMinutes;
+    if (unit === 'min/mi') {
+        // Convert km/h to min/mi: 60 / (km/h * 0.621371)
+        paceMinutes = 60 / (validSpeed * 0.621371);
+    } else {
+        // Convert km/h to min/km: 60 / km/h
+        paceMinutes = 60 / validSpeed;
+    }
+
+    const minutes = Math.floor(paceMinutes);
+    const seconds = Math.round((paceMinutes - minutes) * 60);
+
+    return `${minutes}:${seconds.toString().padStart(2, '0')} ${unit}`;
+}
+
+export function speedToPace(speed, unit = 'min/km') {
+    return calculatePaceFromSpeed(speed, unit);
+}
+
+export function paceToSpeed(paceString, unit = 'min/km') {
+    if (!paceString || typeof paceString !== 'string') return null;
+
+    // Parse pace like "5:30" or "5:30 min/km" - ensure match starts at beginning
+    const match = paceString.match(/^(\d+):(\d+)/);
+    if (!match) return null;
+
+    const minutes = parseInt(match[1]);
+    const seconds = parseInt(match[2]);
+
+    if (minutes < 0 || seconds < 0 || seconds >= 60) return null;
+
+    const totalMinutes = minutes + (seconds / 60);
+
+    if (unit === 'min/mi') {
+        // Convert min/mi to km/h: (60 / min/mi) * 1.60934
+        return (60 / totalMinutes) * 1.60934;
+    } else {
+        // Convert min/km to km/h: 60 / min/km
+        return 60 / totalMinutes;
+    }
+}
+
+export function formatDuration(seconds) {
+    if (seconds === null || seconds === undefined || seconds < 0 || isNaN(seconds)) return 'N/A';
+
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+        return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${remainingSeconds}s`;
+    } else {
+        return `${remainingSeconds}s`;
+    }
+}
+
+export function formatDistance(distanceKm, unit = 'km') {
+    if (typeof distanceKm !== 'number' || isNaN(distanceKm) || distanceKm < 0) {
+        return 'N/A';
+    }
+
+    if (unit === 'mi') {
+        return `${(distanceKm * 0.621371).toFixed(2)} mi`;
+    }
+    return `${distanceKm.toFixed(2)} km`;
+}
+
+export function formatPace(paceMinutes, unit = 'min/km') {
+    if (typeof paceMinutes !== 'number' || isNaN(paceMinutes) || paceMinutes <= 0) {
+        return 'N/A';
+    }
+
+    const minutes = Math.floor(paceMinutes);
+    const seconds = Math.round((paceMinutes - minutes) * 60);
+
+    return `${minutes}:${seconds.toString().padStart(2, '0')} ${unit}`;
+}
+
+export function useTracks() {
+    const polylines = ref([]);
+    const tracksCollection = ref({ type: 'FeatureCollection', features: [] });
+    const error = ref(null);
+    async function fetchTracksInBounds(bounds) {
+        error.value = null;
+        if (!bounds) return;
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        const url = `/tracks?bbox=${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Failed to fetch tracks");
+            const data = await response.json();
+            if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+                let newPolylines = [];
+                data.features.forEach((feature, index) => {
+                    const id = feature.properties && feature.properties.id ? feature.properties.id : undefined;
+                    const color = getColorForId(id);
+
+                    if (feature.geometry && feature.geometry.type === 'MultiLineString') {
+                        feature.geometry.coordinates.forEach(coords => {
+                            newPolylines.push({
+                                latlngs: coords.map(([lng, lat]) => [lat, lng]),
+                                color,
+                                properties: feature.properties,
+                                showTooltip: false
+                            });
+                        });
+                    } else if (feature.geometry && feature.geometry.type === 'LineString') {
+                        newPolylines.push({
+                            latlngs: feature.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+                            color,
+                            properties: feature.properties,
+                            showTooltip: false
+                        });
+                    }
+                });
+                polylines.value = newPolylines;
+                tracksCollection.value = data;
+            } else {
+                polylines.value = [];
+                tracksCollection.value = { type: 'FeatureCollection', features: [] };
+            }
+        } catch (e) {
+            error.value = e.message || 'Unknown error fetching tracks';
+            polylines.value = [];
+            tracksCollection.value = { type: 'FeatureCollection', features: [] };
+        }
+    }
+    async function uploadTrack({ file, name, categories }) {
+        error.value = null;
+        const formData = new FormData();
+        formData.append('file', file);
+        if (name) formData.append('name', name);
+        if (categories && categories.length > 0) formData.append('categories', categories.join(','));
+        // Always attach session_id
+        formData.append('session_id', getSessionId());
+        try {
+            const response = await fetch('/tracks/upload', { method: 'POST', body: formData });
+            if (!response.ok) {
+                const text = await response.text();
+                if (response.status === 429) {
+                    throw new Error('Please, wait 10 seconds between uploads.');
+                }
+                throw new Error(text || 'Unknown error uploading track');
+            }
+            return await response.json();
+        } catch (e) {
+            error.value = e.message || 'Unknown upload error';
+            throw e;
+        }
+    }
+    /**
+     * Checks if a track already exists by uploading file to /tracks/exist.
+     * Returns { alreadyExists: boolean, id?: string, warning?: string }
+     */
+    async function checkTrackDuplicate({ file }) {
+        if (!file) return { alreadyExists: false };
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await fetch('/tracks/exist', { method: 'POST', body: formData });
+            let json = null;
+            try {
+                json = await response.json();
+            } catch { }
+            if (json && json.is_exist) {
+                return {
+                    alreadyExists: true,
+                    id: json.id,
+                    warning: 'Track already exists',
+                };
+            }
+            return { alreadyExists: false };
+        } catch (e) {
+            return { alreadyExists: false, warning: e.message || 'Error checking track' };
+        }
+    }
+
+    /**
+     * Validate and process track data for display
+     */
+    function processTrackData(trackData) {
+        if (!trackData || typeof trackData !== 'object') {
+            console.warn('Invalid track data provided');
+            return null;
+        }
+
+        const processed = { ...trackData };
+
+        // Validate and process speed data
+        if (processed.avg_speed !== undefined) {
+            processed.avg_speed = validateSpeedData(processed.avg_speed);
+        }
+
+        if (processed.max_speed !== undefined) {
+            processed.max_speed = validateSpeedData(processed.max_speed);
+        }
+
+        // Validate distance
+        if (processed.length_km !== undefined) {
+            if (typeof processed.length_km !== 'number' || isNaN(processed.length_km) || processed.length_km < 0) {
+                processed.length_km = null;
+            }
+        }
+
+        // Validate duration
+        if (processed.duration_seconds !== undefined) {
+            if (typeof processed.duration_seconds !== 'number' || isNaN(processed.duration_seconds) || processed.duration_seconds < 0) {
+                processed.duration_seconds = null;
+            }
+        }
+
+        // Validate elevation data
+        ['elevation_up', 'elevation_down', 'avg_hr'].forEach(field => {
+            if (processed[field] !== undefined) {
+                if (typeof processed[field] !== 'number' || isNaN(processed[field])) {
+                    processed[field] = null;
+                }
+            }
+        });
+
+        return processed;
+    }
+
+    /**
+     * Enhanced fetchTrackDetail with data validation
+     */
+    async function fetchTrackDetail(id) {
+        error.value = null;
+        if (!id) {
+            console.warn('fetchTrackDetail: No track ID provided');
+            return null;
+        }
+
+        try {
+            const response = await fetch(`/tracks/${id}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch track detail: ${response.status} ${response.statusText}`);
+            }
+
+            const trackData = await response.json();
+            const processedTrack = processTrackData(trackData);
+
+            if (!processedTrack) {
+                throw new Error('Invalid track data received from server');
+            }
+
+            return processedTrack;
+        } catch (e) {
+            const errorMessage = e.message || 'Unknown error fetching track detail';
+            console.error('fetchTrackDetail error:', errorMessage);
+            error.value = errorMessage;
+            return null;
+        }
+    }
+
+    return {
+        polylines,
+        tracksCollection,
+        fetchTracksInBounds,
+        uploadTrack,
+        error,
+        checkTrackDuplicate,
+        fetchTrackDetail,
+        processTrackData,
+        // Export utility functions
+        validateSpeedData,
+        formatSpeed,
+        calculatePaceFromSpeed,
+        speedToPace,
+        paceToSpeed,
+        formatDuration,
+        formatDistance,
+        formatPace
+    };
+}

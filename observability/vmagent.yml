@@ -1,0 +1,9 @@
+# VictoriaMetrics Agent config for scraping Caddy metrics
+# https://docs.victoriametrics.com/vmagent/
+scrape_configs:
+  - job_name: 'caddy'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['frontend:2019']
+    metrics_path: /metrics
+    scheme: http

@@ -1,0 +1,78 @@
+name: trackly
+services:
+  db:
+    container_name: trackly_db
+    image: imresamu/postgis:17-3.5.2-alpine3.21 # Use community image for ARM64 because official PostGIS image does not support ARM64 yet: https://github.com/postgis/docker-postgis/issues/216
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trackly}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - trackly-internal
+    volumes:
+      - ./db_data:/var/lib/postgresql/data
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  backend:
+    container_name: trackly_backend
+    restart: unless-stopped
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-trackly}
+      RUST_LOG: info # production logging level
+      MAX_HTTP_BODY_SIZE: ${MAX_HTTP_BODY_SIZE:-52428800}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-50331648}
+      UPLOAD_RATE_LIMIT_SECONDS: ${UPLOAD_RATE_LIMIT_SECONDS:-10}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - trackly-internal
+    healthcheck:
+      test: ["CMD", "/app/backend", "--health-check"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+
+  frontend:
+    container_name: trackly_frontend
+    restart: unless-stopped
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - trackly-internal
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  trackly-internal:
+    driver: bridge
+    internal: false
+
+volumes:
+  db_data:
+    driver: local

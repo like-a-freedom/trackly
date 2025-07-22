@@ -1,19 +1,64 @@
+{
+    metrics
+    admin :2019
+}
+
 localhost {
     tls internal
 
     log {
         output stdout
         format console
-        level DEBUG
+        level INFO
     }
 
+    # Security headers - centralized at reverse proxy level
+    header {
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https://*.openstreetmap.org https://*.tile.openstreetmap.org; connect-src 'self'; font-src 'self' https://unpkg.com"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        X-XSS-Protection "1; mode=block"
+        -Server
+    }
+
+    # API routes - proxy to backend
+    handle /api/* {
+        # Strip /api prefix when forwarding to backend
+        uri strip_prefix /api
+        reverse_proxy backend:8080 {
+            flush_interval -1
+            header_up X-Request-Start "{http.request.time}"
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Legacy direct API routes for backward compatibility
     handle /tracks* {
         reverse_proxy backend:8080 {
             flush_interval -1
             header_up X-Request-Start "{http.request.time}"
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
         }
     }
 
+    # Health check
+    handle /health {
+        reverse_proxy backend:8080 {
+            flush_interval -1
+            header_up X-Request-Start "{http.request.time}"
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Serve frontend static files
     handle {
         root * /usr/share/caddy
         file_server
