@@ -59,7 +59,6 @@ So I created my own one.
 
 ### Docker Images
 Pre-built Docker images are available from:
-- **Docker Hub**: `like-a-freedom/trackly-backend` and `like-a-freedom/trackly-frontend`
 - **GitHub Container Registry**: `ghcr.io/like-a-freedom/trackly-backend` and `ghcr.io/like-a-freedom/trackly-frontend`
 
 ---

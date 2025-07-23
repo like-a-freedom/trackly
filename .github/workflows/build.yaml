@@ -26,13 +26,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -46,7 +39,6 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository_owner }}/trackly-backend
             ghcr.io/${{ github.repository_owner }}/trackly-backend
           tags: |
             type=ref,event=branch
@@ -84,13 +76,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -104,7 +89,6 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository_owner }}/trackly-frontend
             ghcr.io/${{ github.repository_owner }}/trackly-frontend
           tags: |
             type=ref,event=branch
@@ -147,12 +131,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -165,7 +143,6 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ github.repository_owner }}/trackly-${{ matrix.arch }}
             ghcr.io/${{ github.repository_owner }}/trackly-${{ matrix.arch }}
           tags: |
             type=semver,pattern={{version}}
@@ -178,17 +155,11 @@ jobs:
           docker-compose -f docker-compose.${{ matrix.arch }}.prod.yaml build
           
           # Tag images with proper names for pushing
-          docker tag trackly-backend:latest ${{ github.repository_owner }}/trackly-backend-${{ matrix.arch }}:${{ github.ref_name }}
-          docker tag trackly-frontend:latest ${{ github.repository_owner }}/trackly-frontend-${{ matrix.arch }}:${{ github.ref_name }}
           docker tag trackly-backend:latest ghcr.io/${{ github.repository_owner }}/trackly-backend-${{ matrix.arch }}:${{ github.ref_name }}
           docker tag trackly-frontend:latest ghcr.io/${{ github.repository_owner }}/trackly-frontend-${{ matrix.arch }}:${{ github.ref_name }}
 
       - name: Push architecture-specific images
         run: |
-          # Push to Docker Hub
-          docker push ${{ github.repository_owner }}/trackly-backend-${{ matrix.arch }}:${{ github.ref_name }}
-          docker push ${{ github.repository_owner }}/trackly-frontend-${{ matrix.arch }}:${{ github.ref_name }}
-          
           # Push to GitHub Container Registry
           docker push ghcr.io/${{ github.repository_owner }}/trackly-backend-${{ matrix.arch }}:${{ github.ref_name }}
           docker push ghcr.io/${{ github.repository_owner }}/trackly-frontend-${{ matrix.arch }}:${{ github.ref_name }}
