@@ -153,13 +153,3 @@ jobs:
         run: |
           # Use the appropriate docker-compose file for the architecture
           docker-compose -f docker-compose.${{ matrix.arch }}.prod.yaml build
-          
-          # Tag images with proper names for pushing
-          docker tag trackly-backend:latest ghcr.io/${{ github.repository_owner }}/trackly-backend-${{ matrix.arch }}:${{ github.ref_name }}
-          docker tag trackly-frontend:latest ghcr.io/${{ github.repository_owner }}/trackly-frontend-${{ matrix.arch }}:${{ github.ref_name }}
-
-      - name: Push architecture-specific images
-        run: |
-          # Push to GitHub Container Registry
-          docker push ghcr.io/${{ github.repository_owner }}/trackly-backend-${{ matrix.arch }}:${{ github.ref_name }}
-          docker push ghcr.io/${{ github.repository_owner }}/trackly-frontend-${{ matrix.arch }}:${{ github.ref_name }}
