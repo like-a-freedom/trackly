@@ -1,6 +1,10 @@
--- Trackly DB schema (PostgreSQL + PostGIS)
--- Table: tracks
+-- Initial database schema for Trackly
+-- This migration creates the complete initial database structure
+
+-- Enable PostGIS extension
 CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Table: tracks
 CREATE TABLE IF NOT EXISTS tracks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -26,19 +30,25 @@ CREATE TABLE IF NOT EXISTS tracks (
     moving_avg_speed DOUBLE PRECISION, -- km/h
     moving_avg_pace DOUBLE PRECISION, -- min/km
     hr_min INTEGER,
-    hr_max INTEGER
+    hr_max INTEGER,
+    temp_data JSONB,
+    time_data JSONB,
+    auto_classifications TEXT[] DEFAULT '{}'
 );
-CREATE UNIQUE INDEX IF NOT EXISTS tracks_hash_idx ON tracks(hash);
 
--- 1. Add spatial index for geom
+-- Create indexes
+CREATE UNIQUE INDEX IF NOT EXISTS tracks_hash_idx ON tracks(hash);
 CREATE INDEX IF NOT EXISTS tracks_geom_idx ON tracks USING GIST (geom);
 
--- 2. Add constraint for geometry validity
+-- Add constraint for geometry validity
 ALTER TABLE tracks DROP CONSTRAINT IF EXISTS tracks_geom_valid;
 ALTER TABLE tracks ADD CONSTRAINT tracks_geom_valid CHECK (ST_IsValid(geom));
 
--- 4. Document SRID and geometry column
+-- Document SRID and geometry column
 COMMENT ON COLUMN tracks.geom IS 'Track geometry, LineString, SRID=4326 (WGS84)';
+COMMENT ON COLUMN tracks.auto_classifications IS 'Automatically determined track classifications based on metrics analysis';
+COMMENT ON COLUMN tracks.temp_data IS 'Temperature data points from GPX extensions (atemp), stored as JSON array';
+COMMENT ON COLUMN tracks.time_data IS 'Array of ISO8601 timestamps for each track point, corresponding to coordinates in geom_geojson';
 
 -- Add trigger to update updated_at on row update
 CREATE OR REPLACE FUNCTION set_updated_at()
