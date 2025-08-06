@@ -30,7 +30,6 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then \
 
 FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /app/backend /app/backend
-COPY schema.sql /app/schema.sql
 COPY migrations /app/migrations
 EXPOSE 8080
 USER 1000:1000

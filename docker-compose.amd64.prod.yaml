@@ -12,7 +12,6 @@ services:
       - trackly-internal
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./backend/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
       interval: 30s
