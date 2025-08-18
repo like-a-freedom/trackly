@@ -3,7 +3,7 @@
     admin :2019
 }
 
-localhost {
+localhost { # use real domain in production
     tls internal
 
     log {
