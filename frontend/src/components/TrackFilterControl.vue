@@ -1,55 +1,101 @@
 <template>
-  <div class="track-filter-control">
-    <!-- Show filters when there are tracks in the area -->
-    <template v-if="hasTracksInArea">
-      <div class="filter-section">
-        <label>Categories:</label>
-        <div class="category-checkboxes">
-          <div 
-            v-for="category in categories" 
-            :key="category" 
-            class="checkbox-item"
+  <div class="track-filter-wrapper">
+    <!-- Compact button is always present to avoid flicker; just hidden while expanded -->
+    <div
+      class="filter-button-compact"
+      :class="{ hidden: isOpen }"
+      title="Show filters"
+      role="button"
+      tabindex="0"
+      :aria-pressed="String(!isOpen)"
+      :aria-expanded="String(!isOpen)"
+      :aria-hidden="String(isOpen)"
+      aria-controls="track-filter-panel"
+      @click="toggleOpen"
+      @keydown.enter.prevent="toggleOpen"
+      @keydown.space.prevent="toggleOpen"
+    >
+      <!-- Funnel icon for filters (collapsed state) -->
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M3 5h18v2H3V5zm3 6h12v2H6v-2zm4 6h4v2h-4v-2z" />
+      </svg>
+    </div>
+
+    <!-- Sliding panel when expanded -->
+    <transition name="filter-slide-fade">
+      <div
+        v-show="isOpen"
+        id="track-filter-panel"
+        class="track-filter-control"
+      >
+        <div class="panel-header">
+          <span class="panel-title">Filters</span>
+          <button
+            class="collapse-btn"
+            type="button"
+            title="Collapse"
+            aria-label="Collapse filters"
+            @click="toggleOpen"
           >
-            <input
-              :id="`category-${category}`"
-              v-model="selectedCategories"
-              type="checkbox"
-              :value="category"
-              class="category-checkbox"
+            <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <!-- Same arrow as UploadForm and TrackDetailPanel -->
+              <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
+            </svg>
+          </button>
+        </div>
+        <!-- Show filters when there are tracks in the area -->
+        <template v-if="hasTracksInArea">
+          <div class="filter-section">
+            <label>Categories:</label>
+            <div class="category-checkboxes">
+              <div 
+                v-for="category in categories" 
+                :key="category" 
+                class="checkbox-item"
+              >
+                <input
+                  :id="`category-${category}`"
+                  v-model="selectedCategories"
+                  type="checkbox"
+                  :value="category"
+                  class="category-checkbox"
+                />
+                <label :for="`category-${category}`" class="checkbox-label">
+                  {{ category }}
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="filter-section">
+            <label>Track length (km):</label>
+            <Slider
+              v-model="lengthRange"
+              :min="minLength"
+              :max="maxLength"
+              :step="0.1"
+              :tooltip="true"
+              :lazy="true"
+              :format="val => val.toFixed(2)"
+              :range="true"
             />
-            <label :for="`category-${category}`" class="checkbox-label">
-              {{ category }}
-            </label>
+          </div>
+          <div class="filter-actions">
+            <button @click="resetFilters">Reset</button>
+          </div>
+        </template>
+
+        <!-- Show placeholder when no tracks in area -->
+        <div v-else class="no-tracks-placeholder">
+          <div class="placeholder-icon">📍</div>
+          <div class="placeholder-text">
+            <h3>No tracks in this area yet</h3>
+            <p>Wanna add one?</p>
           </div>
         </div>
       </div>
-      <div class="filter-section">
-        <label>Track length (km):</label>
-        <Slider
-          v-model="lengthRange"
-          :min="minLength"
-          :max="maxLength"
-          :step="0.1"
-          :tooltip="true"
-          :lazy="true"
-          :format="val => val.toFixed(2)"
-          :range="true"
-        />
-      </div>
-      <div class="filter-actions">
-        <button @click="resetFilters">Reset</button>
-      </div>
-    </template>
-
-    <!-- Show placeholder when no tracks in area -->
-    <div v-else class="no-tracks-placeholder">
-      <div class="placeholder-icon">📍</div>
-      <div class="placeholder-text">
-        <h3>No tracks in this area yet</h3>
-        <p>Wanna add one?</p>
-      </div>
-    </div>
+    </transition>
   </div>
+  
 </template>
 
 <script setup>
@@ -80,14 +126,26 @@ const hasTracksInArea = computed(() => {
 });
 
 const LOCAL_STORAGE_KEY = 'trackFiltersVue';
+const LOCAL_UI_KEY = 'trackFiltersVueOpen';
 
 const selectedCategories = ref([]); // Will be set in onMounted
 const lengthRange = ref([props.minLength, props.maxLength]);
+const isOpen = ref(true);
 
 // Flag to track if values were restored from localStorage
 const restoredFromLocalStorage = ref(false);
 
 onMounted(() => {
+  // Decide default open state (closed on mobile by default)
+  const prefersClosed = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+  isOpen.value = !prefersClosed;
+  try {
+    const savedOpen = localStorage.getItem(LOCAL_UI_KEY);
+    if (savedOpen !== null) {
+      isOpen.value = savedOpen === 'true';
+    }
+  } catch {}
+
   // Initialize with global session values if no saved preferences exist
   let initialCategories = props.globalCategories ? [...props.globalCategories] : [];
   let initialLengthRange = [props.globalMinLength, props.globalMaxLength];
@@ -122,6 +180,10 @@ onMounted(() => {
     categories: selectedCategories.value,
     lengthRange: lengthRange.value,
   });
+});
+
+watch(isOpen, (val) => {
+  try { localStorage.setItem(LOCAL_UI_KEY, String(val)); } catch {}
 });
 
 watch(() => props.categories, (newCategories) => {
@@ -190,13 +252,53 @@ function resetFilters() {
     lengthRange: lengthRange.value,
   }));
 }
+
+function toggleOpen() {
+  isOpen.value = !isOpen.value;
+}
 </script>
 
 <style scoped>
+.track-filter-wrapper {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1002;
+}
+
+.filter-button-compact {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: #666;
+}
+
+.filter-button-compact:hover {
+  transform: translateY(-1px);
+  color: #333;
+}
+
+.filter-button-compact.hidden {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.filter-icon { width: 20px; height: 20px; }
+
 .track-filter-control {
-  position: absolute !important;
-  top: 16px !important;
-  right: 16px !important;
+  position: relative !important;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
@@ -208,6 +310,39 @@ function resetFilters() {
   transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   box-sizing: border-box !important;
+  margin-top: 8px; /* space from button */
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -8px -8px 8px -8px; /* pull to edges visually */
+  padding: 8px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.panel-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+}
+.collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: #fff;
+  color: #666;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s, color 0.2s;
+}
+.collapse-btn:hover { background: #f5f5f5; color: #333; transform: translateY(-1px); }
+.collapse-icon { 
+  display: block;
+  flex-shrink: 0;
 }
 .filter-section {
   margin-bottom: 12px;
@@ -333,5 +468,39 @@ button:hover {
   margin: 0;
   color: #777;
   font-weight: 400;
+}
+
+/* Transition for panel */
+.filter-slide-fade-enter-active,
+.filter-slide-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.filter-slide-fade-enter-from,
+.filter-slide-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+  .track-filter-wrapper {
+    top: 12px;
+    right: 12px;
+  }
+  .filter-button-compact {
+  top: 0;
+  right: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+  .track-filter-control {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px);
+  }
+  .collapse-btn {
+    width: 36px;
+    height: 36px;
+  }
 }
 </style>

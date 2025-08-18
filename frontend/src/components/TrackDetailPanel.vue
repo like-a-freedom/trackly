@@ -5,8 +5,9 @@
       <button class="collapse-toggle-btn" @click="toggleCollapse" 
               title="Expand panel"
               aria-label="Expand panel">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 10L8 6L4 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Inverted arrow for expand - pointing up -->
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12,13L8,9H11V5H13V9H16L12,13Z" />
         </svg>
       </button>
     </div>
@@ -96,8 +97,10 @@
             <button class="collapse-toggle-btn" @click="toggleCollapse" 
                     title="Collapse panel"
                     aria-label="Collapse panel">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <!-- Arrow icon like in UploadForm -->
+              <svg width="16" height="16
+              " viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
               </svg>
             </button>
             <button class="close-button" @click="handleClose" title="Close panel">
