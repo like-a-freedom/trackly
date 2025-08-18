@@ -349,7 +349,7 @@ html, body, #app {
   position: absolute;
   bottom: 16px;
   right: 16px;
-  z-index: 1000;
+  z-index: 1100; /* Higher than base, but lower than filters/search */
   /* Optimize for smooth animations */
   will-change: transform;
   backface-visibility: hidden;
@@ -391,6 +391,12 @@ html, body, #app {
   user-select: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   color: #666;
+  /* Ensure visibility across different zoom levels */
+  position: relative;
+  z-index: 1100;
+  /* Force layer creation for better rendering */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .upload-button-compact:hover {
@@ -481,16 +487,58 @@ html, body, #app {
   height: 18px;
 }
 
-/* Responsive design for smaller screens */
-@media (max-width: 480px) {
+/* Responsive design for smaller screens - matching other components */
+@media (max-width: 640px) {
   .upload-form-container {
-    bottom: 16px;
-    right: 16px;
+    bottom: 12px; /* Match other components */
+    right: 12px;  /* Match other components */
+  }
+  
+  .upload-button-compact {
+    width: 44px; /* Same as other buttons */
+    height: 44px;
+    border-radius: 10px;
+    /* Solid background for better visibility */
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .upload-icon {
+    width: 22px; /* Match other icons */
+    height: 22px;
+    color: #1976d2 !important;
   }
   
   .upload-form-expanded {
     min-width: 260px;
     max-width: calc(100vw - 32px);
+  }
+}
+
+/* Safari-specific mobile fixes */
+@supports (-webkit-appearance: none) {
+  @media (max-width: 640px) {
+    .upload-button-compact {
+      /* Force visibility in Safari mobile with solid background */
+      background: #ffffff !important;
+      backdrop-filter: none !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+      /* Prevent Safari rendering issues */
+      transform: translate3d(0, 0, 0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      /* Ensure proper layer composition */
+      isolation: isolate;
+    }
+    
+    .upload-button-compact .upload-icon {
+      /* Make icon more prominent in Safari */
+      color: #1976d2 !important;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+    }
   }
 }
 </style>
