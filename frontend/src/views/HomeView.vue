@@ -346,10 +346,16 @@ html, body, #app {
 }
 
 .upload-form-container {
-  position: absolute;
-  bottom: 16px;
+  /* Fix visibility on mobile Safari: pin to viewport and respect safe areas */
+  position: fixed;
   right: 16px;
-  z-index: 1100; /* Higher than base, but lower than filters/search */
+  bottom: 16px;
+  /* iOS safe area support (older constant() first, then env()) */
+  right: calc(16px + constant(safe-area-inset-right));
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + constant(safe-area-inset-bottom));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 2000; /* Above map panes and controls */
   /* Optimize for smooth animations */
   will-change: transform;
   backface-visibility: hidden;
@@ -360,6 +366,7 @@ html, body, #app {
   background: none;
   box-shadow: none;
   border-radius: 0;
+  pointer-events: auto;
 }
 
 .collapsible-upload {
@@ -490,8 +497,11 @@ html, body, #app {
 /* Responsive design for smaller screens - matching other components */
 @media (max-width: 640px) {
   .upload-form-container {
-    bottom: 12px; /* Match other components */
-    right: 12px;  /* Match other components */
+  /* Safe-area aware offsets on small screens */
+  right: calc(12px + constant(safe-area-inset-right));
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(12px + constant(safe-area-inset-bottom));
+  bottom: calc(12px + env(safe-area-inset-bottom));
   }
   
   .upload-button-compact {
