@@ -34,6 +34,9 @@ const openSearch = () => {
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   color: #666;
+  /* Force layer creation for better rendering */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .search-button:hover {
@@ -45,5 +48,39 @@ const openSearch = () => {
 .search-button:active {
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Mobile adjustments to match other buttons */
+@media (max-width: 640px) {
+  .search-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    /* Solid background for better visibility */
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .search-button svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* Safari-specific mobile fixes */
+@supports (-webkit-appearance: none) {
+  @media (max-width: 640px) {
+    .search-button {
+      background: #ffffff !important;
+      backdrop-filter: none !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+      transform: translate3d(0, 0, 0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+  }
 }
 </style>

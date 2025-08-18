@@ -263,7 +263,7 @@ function toggleOpen() {
   position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 1002;
+  z-index: 1300; /* Higher than SearchButton's 1200 */
 }
 
 .filter-button-compact {
@@ -283,6 +283,10 @@ function toggleOpen() {
   user-select: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   color: #666;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  /* Force layer creation for better rendering */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .filter-button-compact:hover {
@@ -295,7 +299,10 @@ function toggleOpen() {
   opacity: 0;
 }
 
-.filter-icon { width: 20px; height: 20px; }
+.filter-icon { 
+  width: 20px; 
+  height: 20px; 
+}
 
 .track-filter-control {
   position: relative !important;
@@ -303,7 +310,7 @@ function toggleOpen() {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
   padding: 16px !important;
-  z-index: 1002;
+  z-index: 1300; /* Same as wrapper */
   min-width: 210px;
   max-width: 320px;
   width: 320px !important;
@@ -488,12 +495,23 @@ button:hover {
     right: 12px;
   }
   .filter-button-compact {
-  top: 0;
-  right: 0;
+    top: 0;
+    right: 0;
     width: 44px;
     height: 44px;
     border-radius: 10px;
+    /* Solid background for better visibility */
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
+  
+  .filter-icon {
+    width: 22px;
+    height: 22px;
+  }
+  
   .track-filter-control {
     width: calc(100vw - 24px) !important;
     max-width: calc(100vw - 24px);
@@ -501,6 +519,28 @@ button:hover {
   .collapse-btn {
     width: 36px;
     height: 36px;
+  }
+}
+
+/* Safari-specific fixes for mobile */
+@supports (-webkit-appearance: none) {
+  @media (max-width: 640px) {
+    .filter-button-compact {
+      /* Ensure visibility in Safari with stronger visual styling */
+      background: #ffffff !important;
+      backdrop-filter: none !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+      transform: translate3d(0, 0, 0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    
+    .track-filter-control {
+      /* Stronger shadow for Safari */
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
   }
 }
 </style>

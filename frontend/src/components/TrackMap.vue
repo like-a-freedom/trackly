@@ -1378,4 +1378,12 @@ defineExpose({ leafletMap });
   flex-direction: column;
   gap: 8px;
 }
+
+/* Mobile adjustments for map controls - match other components */
+@media (max-width: 640px) {
+  .map-controls {
+    top: 12px;
+    left: 12px;
+  }
+}
 </style>
