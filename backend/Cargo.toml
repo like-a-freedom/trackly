@@ -41,3 +41,28 @@ tokio-util = "0.7.15"
 # For tests
 [dev-dependencies]
 assert_approx_eq = "1.1.0"
+
+# Speed up compilation by pre-compiling dependencies
+[profile.dev.package."*"]
+opt-level = 1  # Light optimization for dependencies
+debug = false  # No debug info for dependencies
+
+# Optimizations for development builds
+[profile.dev]
+debug = 1          # Reduced debug info
+incremental = true # Enable incremental compilation
+codegen-units = 256 # More parallel code generation
+
+# Fast test builds
+[profile.test]
+debug = 1
+incremental = true
+codegen-units = 256
+opt-level = 0
+
+# Optimizations for release builds
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
