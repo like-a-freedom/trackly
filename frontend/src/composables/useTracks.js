@@ -255,9 +255,11 @@ export function useTracks() {
     }
 
     /**
-     * Enhanced fetchTrackDetail with data validation
+     * Enhanced fetchTrackDetail with data validation and optional simplification
+     * @param {string} id - track ID
+     * @param {number} zoom - zoom level for track simplification (optional)
      */
-    async function fetchTrackDetail(id) {
+    async function fetchTrackDetail(id, zoom = null) {
         error.value = null;
         if (!id) {
             console.warn('fetchTrackDetail: No track ID provided');
@@ -265,7 +267,12 @@ export function useTracks() {
         }
 
         try {
-            const response = await fetch(`/tracks/${id}`);
+            // Use simplified endpoint if zoom is provided for better performance
+            const endpoint = zoom !== null
+                ? `/tracks/${id}/simplified?zoom=${zoom}`
+                : `/tracks/${id}`;
+
+            const response = await fetch(endpoint);
             if (!response.ok) {
                 throw new Error(`Failed to fetch track detail: ${response.status} ${response.statusText}`);
             }

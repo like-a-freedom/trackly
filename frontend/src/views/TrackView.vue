@@ -6,7 +6,6 @@
       :polylines="polylines"
       :zoom="zoom"
       :center="center"
-      :bounds="trackBounds"
       :markerLatLng="markerLatLng"
       :url="url"
       :attribution="attribution"
@@ -15,8 +14,6 @@
       @mapReady="onMapReady"
       @update:center="handleCenterUpdate"
       @update:zoom="handleZoomUpdate"
-      @update:bounds="onBoundsUpdate"
-      @trackClick="onTrackClick"
     >
       <Toast
         :message="(toast.value && toast.value.message) || ''"
@@ -33,6 +30,10 @@
         @name-updated="handleNameUpdated"
       />
     </TrackMap>
+    <div v-if="track && polylines.length === 0" class="error-message">
+      <h2>Loading track data...</h2>
+      <p>Processing track geometry, please wait...</p>
+    </div>
     <div v-if="!track && !loading" class="error-message">
       <h2>Track not found</h2>
       <p>The track you're looking for doesn't exist or has been removed.</p>
@@ -45,7 +46,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, provide, watch, onUnmounted, onActivated, onDeactivated, nextTick } from 'vue';
+import { ref, onMounted, computed, provide, watch, onUnmounted, onActivated, onDeactivated, nextTick, shallowRef } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import TrackMap from '../components/TrackMap.vue';
 import Toast from '../components/Toast.vue';
@@ -54,6 +55,7 @@ import { useToast } from '../composables/useToast';
 import { useTracks } from '../composables/useTracks';
 import { useSearchState } from '../composables/useSearchState';
 import { getSessionId } from '../utils/session';
+import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 
 // Define component name for keep-alive
 defineOptions({
@@ -95,10 +97,11 @@ const props = defineProps({
 
 // State
 const loading = ref(true);
-const track = ref(null);
+const track = shallowRef(null); // Use shallowRef for better performance
 const sessionId = getSessionId();
 const windowWidth = ref(window.innerWidth);
 const windowHeight = ref(window.innerHeight);
+const lastFetchZoom = ref(null); // Track last zoom used for fetching to avoid duplicates
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -106,11 +109,66 @@ const { fetchTrackDetail } = useTracks();
 // Use search state to determine where to return
 const { hasSearchState, restoreSearchState } = useSearchState();
 
+// Debounced track fetching
+const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
+  try {
+    const trackData = await fetchTrackDetail(id, zoomLevel);
+    track.value = trackData;
+    
+    // Process track data to create latlngs (same logic as before)
+    if (track.value) {
+      // Extract latlngs from geom_geojson if available
+      if (track.value.geom_geojson && track.value.geom_geojson.coordinates) {
+        if (track.value.geom_geojson.type === 'LineString') {
+          track.value.latlngs = track.value.geom_geojson.coordinates.map(([lng, lat]) => [lat, lng]);
+        } else if (track.value.geom_geojson.type === 'MultiLineString') {
+          // Take the first line if it's a MultiLineString
+          track.value.latlngs = track.value.geom_geojson.coordinates[0].map(([lng, lat]) => [lat, lng]);
+        }
+      }
+      // Fallback: if track has path field, use it
+      else if (track.value.path && !track.value.latlngs) {
+        track.value.latlngs = track.value.path;
+      }
+      
+      // Set initial center and zoom based on track bounds (only on first load)
+      if (track.value.latlngs && track.value.latlngs.length > 0 && (!center.value || center.value[0] === 59.9311)) {
+        const bounds = calculateBounds(track.value.latlngs);
+        if (bounds) {
+          // Set center to track center, shifted up to account for detail panel
+          const trackCenterLat = (bounds.north + bounds.south) / 2;
+          const trackCenterLng = (bounds.east + bounds.west) / 2;
+          const latRange = bounds.north - bounds.south;
+          
+          // Shift center up by 25% of lat range to account for bottom panel
+          const shiftedLat = trackCenterLat + (latRange * 0.25);
+          
+          center.value = [shiftedLat, trackCenterLng];
+          // Set a reasonable zoom level based on track size
+          const lngRange = bounds.east - bounds.west;
+          const maxRange = Math.max(latRange, lngRange);
+          if (maxRange > 0.1) zoom.value = 10;
+          else if (maxRange > 0.05) zoom.value = 12;
+          else if (maxRange > 0.01) zoom.value = 14;
+          else zoom.value = 16;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch track:', error);
+    track.value = null;
+  } finally {
+    loading.value = false;
+  }
+}, 300, { leading: false, trailing: true });
+
 // Computed polylines for TrackMap (converted from track data)
 const polylines = computed(() => {
-  if (!track.value || !track.value.latlngs) return [];
+  if (!track.value || !track.value.latlngs) {
+    return [];
+  }
   
-  return [{
+  const result = [{
     latlngs: track.value.latlngs,
     color: getColorForId(track.value.id), // Generate color based on track ID
     properties: {
@@ -128,6 +186,8 @@ const polylines = computed(() => {
     },
     showTooltip: false
   }];
+  
+  return result;
 });
 
 // Computed properties
@@ -187,50 +247,23 @@ const trackBounds = computed(() => {
 const { toast, showToast } = useToast();
 provide('toast', toast);
 
-async function fetchTrack() {
-  try {
-    loading.value = true;
-    const id = trackId.value;
-    
-    if (!id) {
-      console.error('No track ID provided');
-      track.value = null;
-      return;
-    }
-    
-    const trackData = await fetchTrackDetail(id);
-    
-    if (!trackData) {
-      console.log('Track not found for ID:', id);
-      track.value = null;
-      return;
-    }
-    
-    // Use processed track data directly
-    track.value = trackData;
-    
-    // Extract latlngs from geom_geojson if available
-    if (track.value.geom_geojson && track.value.geom_geojson.coordinates) {
-      if (track.value.geom_geojson.type === 'LineString') {
-        track.value.latlngs = track.value.geom_geojson.coordinates.map(([lng, lat]) => [lat, lng]);
-      } else if (track.value.geom_geojson.type === 'MultiLineString') {
-        // Take the first line if it's a MultiLineString
-        track.value.latlngs = track.value.geom_geojson.coordinates[0].map(([lng, lat]) => [lat, lng]);
-      }
-    }
-    // Fallback: if track has path field, use it
-    else if (track.value.path && !track.value.latlngs) {
-      track.value.latlngs = track.value.path;
-    }
-    
-    // Map bounds will be automatically calculated by trackBounds computed property
-
-  } catch (error) {
-    console.error('Error fetching track:', error);
+async function fetchTrack(zoomLevel = null) {
+  const id = trackId.value;
+  if (!id) {
+    console.error('No track ID provided');
     track.value = null;
-  } finally {
     loading.value = false;
+    return;
   }
+  
+  // Use debounced function for performance
+  const currentZoom = zoomLevel || zoom.value || 10;
+  const roundedZoom = Math.round(currentZoom);
+  
+  console.log(`Fetching track ${id} with zoom ${roundedZoom} for performance optimization`);
+  lastFetchZoom.value = roundedZoom;
+  
+  await debouncedFetchTrack(id, roundedZoom);
 }
 
 function calculateBounds(latlngs) {
@@ -256,19 +289,45 @@ function onMapReady() {
 }
 
 function handleCenterUpdate(newCenter) {
-  center.value = newCenter;
+  // Only update if valid
+  if (Array.isArray(newCenter) && newCenter.length === 2 &&
+      typeof newCenter[0] === 'number' && typeof newCenter[1] === 'number' &&
+      !isNaN(newCenter[0]) && !isNaN(newCenter[1])) {
+    center.value = newCenter;
+  }
 }
+
+// Handle zoom updates for adaptive loading
+const debouncedZoomUpdate = useAdvancedDebounce((newZoom) => {
+  if (track.value?.id) {
+    // Round zoom to prevent floating point precision issues
+    const roundedZoom = Math.round(newZoom);
+    
+    // Skip if this zoom level was already fetched recently
+    if (lastFetchZoom.value === roundedZoom) {
+      console.log(`Skip refetch - zoom ${roundedZoom} already fetched`);
+      return;
+    }
+    
+    console.log(`Zoom changed to ${roundedZoom}, refetching track with adaptive detail`);
+    lastFetchZoom.value = roundedZoom;
+    fetchTrack(roundedZoom);
+  }
+}, 1000, { leading: false, trailing: true });
 
 function handleZoomUpdate(newZoom) {
+  const currentZoom = zoom.value;
+  const roundedNewZoom = Math.round(newZoom);
+  const roundedCurrentZoom = Math.round(currentZoom);
+  
+  // Always update zoom value
   zoom.value = newZoom;
-}
-
-function onBoundsUpdate() {
-  // Handle bounds update if needed
-}
-
-function onTrackClick() {
-  // Already on track detail page
+  
+  // Only trigger fetch if zoom changed by at least 2 levels to reduce unnecessary requests
+  if (Math.abs(roundedNewZoom - roundedCurrentZoom) >= 2) {
+    console.log(`Significant zoom change: ${roundedCurrentZoom} -> ${roundedNewZoom}`);
+    debouncedZoomUpdate(roundedNewZoom);
+  }
 }
 
 function goHome() {
@@ -364,6 +423,9 @@ onDeactivated(() => {
 watch(() => route.params.id, async (newId) => {
   if (newId && newId !== track.value?.id) {
     console.log('Route changed, fetching new track:', newId);
+    // Reset zoom tracking and center for new track
+    lastFetchZoom.value = null;
+    center.value = [59.9311, 30.3609]; // Reset to default, will be updated by track data
     await fetchTrack();
   }
 }, { immediate: false });
