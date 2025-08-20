@@ -59,6 +59,38 @@ pub struct TrackDetail {
     pub auto_classifications: Vec<String>, // Automatically determined track classifications
 }
 
+#[derive(Debug, Serialize)]
+pub struct TrackSimplified {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub categories: Vec<String>,
+    pub geom_geojson: serde_json::Value, // Simplified geometry
+    pub length_km: f64,
+    // Include data profiles for charts (but geometry will be simplified)
+    pub elevation_profile: Option<serde_json::Value>,
+    pub hr_data: Option<serde_json::Value>,
+    pub temp_data: Option<serde_json::Value>,
+    pub time_data: Option<serde_json::Value>,
+    // Basic stats without heavy data arrays
+    pub elevation_up: Option<f64>,
+    pub elevation_down: Option<f64>,
+    pub avg_speed: Option<f64>,
+    pub avg_hr: Option<i32>,
+    pub hr_min: Option<i32>,
+    pub hr_max: Option<i32>,
+    pub moving_time: Option<i32>,
+    pub pause_time: Option<i32>,
+    pub moving_avg_speed: Option<f64>,
+    pub moving_avg_pace: Option<f64>,
+    pub duration_seconds: Option<i32>,
+    pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub session_id: Option<Uuid>,
+    pub auto_classifications: Vec<String>,
+}
+
 #[derive(Serialize)]
 pub struct TrackGeoJsonFeature {
     #[serde(rename = "type")]
@@ -118,6 +150,11 @@ pub struct UpdateTrackNameRequest {
 #[derive(Debug, Deserialize)]
 pub struct TrackSearchQuery {
     pub query: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TrackSimplificationQuery {
+    pub zoom: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]

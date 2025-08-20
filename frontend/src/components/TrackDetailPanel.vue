@@ -5,9 +5,9 @@
       <button class="collapse-toggle-btn" @click="toggleCollapse" 
               title="Expand panel"
               aria-label="Expand panel">
-        <!-- Inverted arrow for expand - pointing up -->
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12,13L8,9H11V5H13V9H16L12,13Z" />
+        <!-- Arrow pointing up for expand -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M16.59,15.42L12,10.83L7.41,15.42L6,14L12,8L18,14L16.59,15.42Z" />
         </svg>
       </button>
     </div>
@@ -370,7 +370,8 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue';
+import { ref, computed, nextTick, watch, shallowRef, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import ElevationChart from './ElevationChart.vue';
 import { 
   formatSpeed, 
@@ -381,6 +382,8 @@ import {
   formatPace
 } from '../composables/useTracks';
 import { useUnits } from '../composables/useUnits';
+import { useMemoizedComputed } from '../composables/useMemoization';
+import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 
 const props = defineProps({
   track: {
@@ -398,6 +401,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'description-updated', 'name-updated']);
+const route = useRoute();
 const isClosing = ref(false);
 const isCollapsed = ref(false);
 // Use global unit management
@@ -413,6 +417,26 @@ const editedName = ref('');
 const savingName = ref(false);
 const nameError = ref('');
 
+// Reset panel state on mount to fix re-opening issues
+onMounted(() => {
+  isClosing.value = false;
+  isCollapsed.value = false;
+});
+
+// Reset panel state when track changes
+watch(() => props.track?.id, () => {
+  isClosing.value = false;
+  isCollapsed.value = false;
+});
+
+// Reset panel state when returning to track view (handles same track re-opening)
+watch(() => route.path, (newPath) => {
+  if (newPath && newPath.startsWith('/track/')) {
+    isClosing.value = false;
+    isCollapsed.value = false;
+  }
+});
+
 // --- Description editing state ---
 const isEditingDescription = ref(false);
 const editedDescription = ref('');
@@ -426,141 +450,265 @@ const exportingTrack = ref(false);
 const copyingLink = ref(false);
 const linkCopied = ref(false);
 
-// Computed properties for data validation and formatting
-const hasSpeedData = computed(() => {
-  return (track.value?.avg_speed !== undefined && track.value?.avg_speed !== null) ||
-         (track.value?.max_speed !== undefined && track.value?.max_speed !== null);
-});
-
-const hasElevationData = computed(() => {
-  // Check for elevation profile data (most important)
-  if (track.value?.elevation_profile && track.value?.elevation_profile.length > 0) {
-    return true;
+// Computed properties for data validation and formatting - memoized for performance
+const hasSpeedData = useMemoizedComputed(
+  (track) => {
+    return (track?.avg_speed !== undefined && track?.avg_speed !== null) ||
+           (track?.max_speed !== undefined && track?.max_speed !== null);
+  },
+  [() => props.track],
+  {
+    keyFn: (deps) => `speed_${deps[0]?.id}_${deps[0]?.avg_speed}_${deps[0]?.max_speed}`
   }
-  
-  // Check for meaningful elevation stats (not just zeros)
-  const hasElevationUp = track.value?.elevation_up !== undefined && 
-                        track.value?.elevation_up !== null && 
-                        track.value?.elevation_up > 0;
-  const hasElevationDown = track.value?.elevation_down !== undefined && 
-                          track.value?.elevation_down !== null && 
-                          Math.abs(track.value?.elevation_down) > 0;
-  
-  return hasElevationUp || hasElevationDown;
-});
+);
 
-const hasHeartRateData = computed(() => {
-  // Check for heart rate profile data
-  if (track.value?.hr_data && track.value?.hr_data.length > 0) {
-    return true;
+const hasElevationData = useMemoizedComputed(
+  (track) => {
+    // Check for elevation profile data (most important)
+    if (track?.elevation_profile && track?.elevation_profile.length > 0) {
+      return true;
+    }
+    
+    // Check for meaningful elevation stats (not just zeros)
+    const hasElevationUp = track?.elevation_up !== undefined && 
+                          track?.elevation_up !== null && 
+                          track?.elevation_up > 0;
+    const hasElevationDown = track?.elevation_down !== undefined && 
+                            track?.elevation_down !== null && 
+                            Math.abs(track?.elevation_down) > 0;
+    
+    return hasElevationUp || hasElevationDown;
+  },
+  [() => props.track],
+  {
+    keyFn: (deps) => `elevation_${deps[0]?.id}_${deps[0]?.elevation_profile?.length}_${deps[0]?.elevation_up}_${deps[0]?.elevation_down}`
   }
-  
-  // Check for meaningful heart rate stats (not just zeros)
-  const hasAvgHr = track.value?.avg_hr !== undefined && 
-                  track.value?.avg_hr !== null && 
-                  track.value?.avg_hr > 0;
-  const hasMaxHr = track.value?.max_hr !== undefined && 
-                  track.value?.max_hr !== null && 
-                  track.value?.max_hr > 0;
-  
-  return hasAvgHr || hasMaxHr;
-});
+);
 
-const hasTemperatureData = computed(() => {
-  // Check for temperature profile data
-  if (track.value?.temp_data && track.value?.temp_data.length > 0) {
-    return track.value.temp_data.some(temp => temp !== null && temp !== undefined && typeof temp === 'number');
+const hasHeartRateData = useMemoizedComputed(
+  (track) => {
+    // Check for heart rate profile data
+    if (track?.hr_data && track?.hr_data.length > 0) {
+      return true;
+    }
+    
+    // Check for meaningful heart rate stats (not just zeros)
+    const hasAvgHr = track?.avg_hr !== undefined && 
+                    track?.avg_hr !== null && 
+                    track?.avg_hr > 0;
+    const hasMaxHr = track?.max_hr !== undefined && 
+                    track?.max_hr !== null && 
+                    track?.max_hr > 0;
+    
+    return hasAvgHr || hasMaxHr;
+  },
+  [() => props.track],
+  {
+    keyFn: (deps) => `hr_${deps[0]?.id}_${deps[0]?.hr_data?.length}_${deps[0]?.avg_hr}_${deps[0]?.max_hr}`
   }
-  return false;
-});
+);
+
+const hasTemperatureData = useMemoizedComputed(
+  (track) => {
+    // Check for temperature profile data
+    if (track?.temp_data && track?.temp_data.length > 0) {
+      return track.temp_data.some(temp => temp !== null && temp !== undefined && typeof temp === 'number');
+    }
+    return false;
+  },
+  [() => props.track],
+  {
+    keyFn: (deps) => `temp_${deps[0]?.id}_${deps[0]?.temp_data?.length}_${JSON.stringify(deps[0]?.temp_data?.slice(0, 5))}`
+  }
+);
 
 // Combined check for elevation section visibility
 const hasElevationOrHeartRateData = computed(() => {
   return hasElevationData.value || hasHeartRateData.value || hasTemperatureData.value;
 });
 
-// Dynamic chart title based on available data
-const chartTitle = computed(() => {
-  const hasElevation = hasElevationData.value;
-  const hasHR = hasHeartRateData.value;
-  const hasTemp = hasTemperatureData.value;
-  
-  const dataTypes = [];
-  if (hasElevation) dataTypes.push('Elevation');
-  if (hasHR) dataTypes.push('Heart Rate');
-  if (hasTemp) dataTypes.push('Temperature');
-  
-  if (dataTypes.length > 1) {
-    return `${track.value.name} - ${dataTypes.join(' & ')}`;
-  } else if (dataTypes.length === 1) {
-    return `${track.value.name} - ${dataTypes[0]} Profile`;
-  } else {
-    return `${track.value.name} - Profile`;
+// Dynamic chart title based on available data - memoized
+const chartTitle = useMemoizedComputed(
+  (hasElevation, hasHR, hasTemp, trackName) => {
+    const dataTypes = [];
+    if (hasElevation) dataTypes.push('Elevation');
+    if (hasHR) dataTypes.push('Heart Rate');
+    if (hasTemp) dataTypes.push('Temperature');
+    
+    if (dataTypes.length > 1) {
+      return `${trackName} - ${dataTypes.join(' & ')}`;
+    } else if (dataTypes.length === 1) {
+      return `${trackName} - ${dataTypes[0]} Profile`;
+    } else {
+      return `${trackName} - Profile`;
+    }
+  },
+  [
+    () => hasElevationData.value,
+    () => hasHeartRateData.value, 
+    () => hasTemperatureData.value,
+    () => props.track?.name || 'Unnamed Track'
+  ],
+  {
+    keyFn: (deps) => `charttitle_${deps.join('_')}`
   }
+);
+
+const track = shallowRef(props.track);
+
+// Watch for track changes
+watch(() => props.track, (newTrack) => {
+  track.value = newTrack;
 });
 
-const track = computed(() => props.track);
-
-// Distance formatting
-const formattedDistance = computed(() => {
-  if (track.value?.length_km === undefined || track.value?.length_km === null) {
-    return 'N/A';
+// Distance formatting - memoized
+const formattedDistance = useMemoizedComputed(
+  (lengthKm, distanceUnit) => {
+    if (lengthKm === undefined || lengthKm === null) {
+      return 'N/A';
+    }
+    return formatDistance(lengthKm, distanceUnit);
+  },
+  [() => track.value?.length_km, () => getDistanceUnit()],
+  {
+    keyFn: (deps) => `distance_${deps[0]}_${deps[1]}`
   }
-  return formatDistance(track.value.length_km, getDistanceUnit());
-});
+);
 
-// Duration formatting
-const formattedDuration = computed(() => {
-  return utilFormatDuration(track.value?.duration_seconds);
-});
-
-// Speed formatting
-const formattedAvgSpeed = computed(() => {
-  if (!validateSpeedData(track.value?.avg_speed)) return 'N/A';
-  return formatSpeed(track.value.avg_speed, speedUnit.value);
-});
-
-const formattedMaxSpeed = computed(() => {
-  if (!validateSpeedData(track.value?.max_speed)) return 'N/A';
-  return formatSpeed(track.value.max_speed, speedUnit.value);
-});
-
-// Pace formatting
-const formattedAvgPace = computed(() => {
-  if (!validateSpeedData(track.value?.avg_speed)) return 'N/A';
-  return calculatePaceFromSpeed(track.value.avg_speed, getPaceUnit());
-});
-
-const formattedBestPace = computed(() => {
-  if (!validateSpeedData(track.value?.max_speed)) return 'N/A';
-  return calculatePaceFromSpeed(track.value.max_speed, getPaceUnit());
-});
-
-// Moving speed and pace formatting
-const formattedMovingAvgSpeed = computed(() => {
-  if (!validateSpeedData(track.value?.moving_avg_speed)) return 'N/A';
-  return formatSpeed(track.value.moving_avg_speed, speedUnit.value);
-});
-
-const formattedMovingAvgPace = computed(() => {
-  if (track.value?.moving_avg_pace === undefined || track.value?.moving_avg_pace === null || track.value?.moving_avg_pace <= 0) return 'N/A';
-  const convertedPace = convertPace(track.value.moving_avg_pace);
-  if (convertedPace === null) return 'N/A';
-  return formatPace(convertedPace, getPaceUnit());
-});
-
-// Elevation calculations
-const elevationGain = computed(() => {
-  const up = track.value?.elevation_up;
-  const down = track.value?.elevation_down;
-  
-  if (up === undefined || up === null || down === undefined || down === null) {
-    return null;
+// Duration formatting - memoized
+const formattedDuration = useMemoizedComputed(
+  (durationSeconds) => {
+    return utilFormatDuration(durationSeconds);
+  },
+  [() => track.value?.duration_seconds],
+  {
+    keyFn: (deps) => `duration_${deps[0]}`
   }
+);
+
+// Speed formatting - memoized
+const formattedAvgSpeed = useMemoizedComputed(
+  (avgSpeed, speedUnitValue) => {
+    if (!validateSpeedData(avgSpeed)) return 'N/A';
+    return formatSpeed(avgSpeed, speedUnitValue);
+  },
+  [() => track.value?.avg_speed, () => speedUnit.value],
+  {
+    keyFn: (deps) => `avgspeed_${deps[0]}_${deps[1]}`
+  }
+);
+
+const formattedMaxSpeed = useMemoizedComputed(
+  (maxSpeed, speedUnitValue) => {
+    if (!validateSpeedData(maxSpeed)) return 'N/A';
+    return formatSpeed(maxSpeed, speedUnitValue);
+  },
+  [() => track.value?.max_speed, () => speedUnit.value],
+  {
+    keyFn: (deps) => `maxspeed_${deps[0]}_${deps[1]}`
+  }
+);
+
+// Pace formatting - memoized
+const formattedAvgPace = useMemoizedComputed(
+  (avgSpeed, paceUnit) => {
+    if (!validateSpeedData(avgSpeed)) return 'N/A';
+    return calculatePaceFromSpeed(avgSpeed, paceUnit);
+  },
+  [() => track.value?.avg_speed, () => getPaceUnit()],
+  {
+    keyFn: (deps) => `avgpace_${deps[0]}_${deps[1]}`
+  }
+);
+
+const formattedBestPace = useMemoizedComputed(
+  (maxSpeed, paceUnit) => {
+    if (!validateSpeedData(maxSpeed)) return 'N/A';
+    return calculatePaceFromSpeed(maxSpeed, paceUnit);
+  },
+  [() => track.value?.max_speed, () => getPaceUnit()],
+  {
+    keyFn: (deps) => `bestpace_${deps[0]}_${deps[1]}`
+  }
+);
+
+// Moving speed and pace formatting - memoized
+const formattedMovingAvgSpeed = useMemoizedComputed(
+  (movingAvgSpeed, speedUnitValue) => {
+    if (!validateSpeedData(movingAvgSpeed)) return 'N/A';
+    return formatSpeed(movingAvgSpeed, speedUnitValue);
+  },
+  [() => track.value?.moving_avg_speed, () => speedUnit.value],
+  {
+    keyFn: (deps) => `movingavgspeed_${deps[0]}_${deps[1]}`
+  }
+);
+
+const formattedMovingAvgPace = useMemoizedComputed(
+  (movingAvgPace, paceUnit) => {
+    if (movingAvgPace === undefined || movingAvgPace === null || movingAvgPace <= 0) return 'N/A';
+    const convertedPace = convertPace(movingAvgPace);
+    if (convertedPace === null) return 'N/A';
+    return formatPace(convertedPace, paceUnit);
+  },
+  [() => track.value?.moving_avg_pace, () => getPaceUnit()],
+  {
+    keyFn: (deps) => `movingavgpace_${deps[0]}_${deps[1]}`
+  }
+);
+
+// Elevation calculations - memoized
+const elevationGain = useMemoizedComputed(
+  (elevationUp, elevationDown) => {
+    if (elevationUp === undefined || elevationUp === null || elevationDown === undefined || elevationDown === null) {
+      return null;
+    }
+    
+    const gain = elevationUp - Math.abs(elevationDown);
+    return gain >= 0 ? `+${gain.toFixed(0)}` : gain.toFixed(0);
+  },
+  [() => track.value?.elevation_up, () => track.value?.elevation_down],
+  {
+    keyFn: (deps) => `elevgain_${deps[0]}_${deps[1]}`
+  }
+);
+
+// Debounced API functions to prevent excessive requests
+const debouncedSaveName = useAdvancedDebounce(async (trackId, name, sessionId) => {
+  const response = await fetch(`/tracks/${trackId}/name`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name: name.trim(), session_id: sessionId })
+  });
   
-  const gain = up - Math.abs(down);
-  return gain >= 0 ? `+${gain.toFixed(0)}` : gain.toFixed(0);
-});
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('You are not allowed to edit this track name.');
+    } else {
+      throw new Error('Failed to update track name.');
+    }
+  }
+}, 500, { leading: false, trailing: true });
+
+const debouncedSaveDescription = useAdvancedDebounce(async (trackId, description, sessionId) => {
+  const response = await fetch(`/tracks/${trackId}/description`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ description, session_id: sessionId })
+  });
+  
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error('You are not allowed to edit this description.');
+    } else {
+      throw new Error('Failed to update description.');
+    }
+  }
+}, 500, { leading: false, trailing: true });
 
 function startEditName() {
   isEditingName.value = true;
@@ -589,31 +737,16 @@ async function saveName() {
 
   savingName.value = true;
   nameError.value = '';
+  
   try {
-    const response = await fetch(`/tracks/${track.value.id}/name`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name: editedName.value.trim(), session_id: props.sessionId })
-    });
-    
-    if (!response.ok) {
-      if (response.status === 403) {
-        nameError.value = 'You are not allowed to edit this track name.';
-      } else {
-        nameError.value = 'Failed to update track name.';
-      }
-      savingName.value = false;
-      return;
-    }
+    await debouncedSaveName(track.value.id, editedName.value, props.sessionId);
     
     // Update local track object immediately for reactive UI
     track.value.name = editedName.value.trim();
     emit('name-updated', editedName.value.trim());
     isEditingName.value = false;
   } catch (err) {
-    nameError.value = 'Network error.';
+    nameError.value = err.message || 'Network error.';
   } finally {
     savingName.value = false;
   }
@@ -647,49 +780,49 @@ function cancelEditDescription() {
 async function saveDescription() {
   savingDescription.value = true;
   descriptionError.value = '';
+  
   try {
-    const response = await fetch(`/tracks/${track.value.id}/description`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ description: editedDescription.value, session_id: props.sessionId })
-    });
-    if (!response.ok) {
-      if (response.status === 403) {
-        descriptionError.value = 'You are not allowed to edit this description.';
-      } else {
-        descriptionError.value = 'Failed to update description.';
-      }
-      savingDescription.value = false;
-      return;
-    }
+    await debouncedSaveDescription(track.value.id, editedDescription.value, props.sessionId);
+    
     // Update local track object immediately for reactive UI
     track.value.description = editedDescription.value;
     emit('description-updated', editedDescription.value);
     isEditingDescription.value = false;
   } catch (err) {
-    descriptionError.value = 'Network error.';
+    descriptionError.value = err.message || 'Network error.';
   } finally {
     savingDescription.value = false;
   }
 }
 
-// Utility functions
+// Utility functions - memoized for performance
+// Date formatting function
+
 function formatDate(dateString) {
   if (!dateString) return 'N/A';
+  
   try {
+    // Create Date object and check if it's valid
+    const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date string:', dateString);
+      return 'Invalid Date';
+    }
+    
     const options = { 
       year: 'numeric', 
       month: 'short', 
       day: 'numeric', 
       hour: '2-digit', 
       minute: '2-digit',
-      hour12: false // Force 24-hour format
+      hour12: false
     };
-    return new Date(dateString).toLocaleString(undefined, options);
+    
+    return date.toLocaleString(undefined, options);
   } catch (error) {
-    console.error('Error formatting date:', error);
+    console.error('Error formatting date:', dateString, error);
     return 'Invalid Date';
   }
 }
@@ -933,43 +1066,52 @@ watch(() => props.track, (newTrack) => {
 }
 
 .panel-controls-tab {
-  position: absolute;
-  top: -34px;
-  right: 18px;
-  display: flex;
-  gap: 2px;
-  align-items: center;
-  z-index: 20;
-  background: rgba(255,255,255,0.98);
-  border-radius: 6px;
-  padding: 2px;
-  box-shadow: 0 -4px 24px rgba(0,0,0,0.18);
-  border: none;
-}
-
-.collapse-toggle-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: #666;
-  padding: 6px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 1300; /* Same as TrackFilterControl */
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  box-sizing: border-box;
+  /* Force layer creation for better rendering */
+  transform: translateZ(0);
+  will-change: transform;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel-controls-tab:hover {
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.collapse-toggle-btn {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
 }
 
 .collapse-toggle-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
   color: #333;
 }
 
 .collapse-toggle-btn:active {
-  background: rgba(0, 0, 0, 0.1);
   transform: scale(0.95);
 }
 
@@ -1683,35 +1825,23 @@ watch(() => props.track, (newTrack) => {
 }
 
 /* Panel controls responsive adjustments */
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .panel-controls-tab {
+    bottom: 12px;
     right: 12px;
-    gap: 1px;
-    padding: 4px 6px 2px 6px;
-  }
-  
-  .collapse-toggle-btn {
-    min-width: 24px;
-    height: 24px;
-    padding: 4px;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    /* Solid background for better visibility on mobile */
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
   
   .collapse-toggle-btn svg {
-    width: 10px;
-    height: 10px;
-  }
-  
-  /* Keep header action buttons same size on mobile */
-  .header-actions .collapse-toggle-btn {
-    min-width: 24px;
-    height: 24px;
-    padding: 4px;
-  }
-  
-  .header-actions .close-button {
-    min-width: 24px;
-    height: 24px;
-    padding: 4px;
+    width: 20px;
+    height: 20px;
   }
 }
 
@@ -1756,6 +1886,21 @@ watch(() => props.track, (newTrack) => {
   
   .metadata-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Safari-specific mobile fixes */
+@supports (-webkit-appearance: none) {
+  @media (max-width: 640px) {
+    .panel-controls-tab {
+      background: #ffffff !important;
+      backdrop-filter: none !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+      transform: translate3d(0, 0, 0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
   }
 }
 </style>

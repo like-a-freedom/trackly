@@ -6,7 +6,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, shallowRef } from 'vue';
 import { Line } from 'vue-chartjs';
 import {
   Chart as ChartJS,
@@ -19,6 +19,7 @@ import {
   PointElement,
   Filler
 } from 'chart.js';
+import { useMemoizedComputed } from '../composables/useMemoization';
 
 ChartJS.register(
   Title,
@@ -58,121 +59,165 @@ const props = defineProps({
   }
 });
 
-const hasPulse = computed(() => {
-  return Array.isArray(props.heartRateData) && 
-         props.heartRateData.length > 0 && 
-         props.heartRateData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
-});
-
-const hasTemperature = computed(() => {
-  return Array.isArray(props.temperatureData) && 
-         props.temperatureData.length > 0 && 
-         props.temperatureData.some(value => value !== null && value !== undefined && typeof value === 'number');
-});
-
-const chartData = computed(() => {
-  if ((!props.elevationData || props.elevationData.length === 0) && (!hasPulse.value) && (!hasTemperature.value)) {
-    return {};
+const hasPulse = useMemoizedComputed(
+  (heartRateData) => {
+    return Array.isArray(heartRateData) && 
+           heartRateData.length > 0 && 
+           heartRateData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
+  },
+  [() => props.heartRateData],
+  {
+    keyFn: (deps) => `pulse_${deps[0]?.length}_${JSON.stringify(deps[0]?.slice(0, 5))}`
   }
-  // Use totalDistance prop to generate X-axis labels in kilometers
-  const pointCount = Math.max(
-    props.elevationData ? props.elevationData.length : 0,
-    hasPulse.value ? props.heartRateData.length : 0,
-    hasTemperature.value ? props.temperatureData.length : 0
-  );
-  if (pointCount === 0) return {};
-  const step = pointCount === 2 ? props.totalDistance : props.totalDistance / (pointCount - 1);
-  const labels = Array.from({ length: pointCount }, (_, i) => (i === pointCount - 1
-    ? props.totalDistance
-    : i * step
-  ).toFixed(2) + ' km');
+);
 
-  // Elevation extraction
-  let elevation = [];
-  if (props.elevationData && props.elevationData.length > 0) {
-    if (props.elevationData.every(p => typeof p === 'number' || p === null)) {
-      elevation = props.elevationData;
-    } else if (props.elevationData.every(p => Array.isArray(p) && p.length === 2)) {
-      elevation = props.elevationData.map(p => p[1]);
-    } else if (props.elevationData.every(p => typeof p === 'object' && p !== null && 'dist' in p && 'ele' in p)) {
-      elevation = props.elevationData.map(p => p.ele);
+const hasTemperature = useMemoizedComputed(
+  (temperatureData) => {
+    return Array.isArray(temperatureData) && 
+           temperatureData.length > 0 && 
+           temperatureData.some(value => value !== null && value !== undefined && typeof value === 'number');
+  },
+  [() => props.temperatureData],
+  {
+    keyFn: (deps) => `temp_${deps[0]?.length}_${JSON.stringify(deps[0]?.slice(0, 5))}`
+  }
+);
+
+const chartData = useMemoizedComputed(
+  (elevationData, heartRateData, temperatureData, hasPulseValue, hasTemperatureValue, totalDistance, chartMode) => {
+    if ((!elevationData || elevationData.length === 0) && (!hasPulseValue) && (!hasTemperatureValue)) {
+      return {};
+    }
+    
+    // Use totalDistance prop to generate X-axis labels in kilometers
+    const pointCount = Math.max(
+      elevationData ? elevationData.length : 0,
+      hasPulseValue ? heartRateData.length : 0,
+      hasTemperatureValue ? temperatureData.length : 0
+    );
+    if (pointCount === 0) return {};
+    
+    const step = pointCount === 2 ? totalDistance : totalDistance / (pointCount - 1);
+    const labels = Array.from({ length: pointCount }, (_, i) => (i === pointCount - 1
+      ? totalDistance
+      : i * step
+    ).toFixed(2) + ' km');
+
+    // Elevation extraction (optimized with memoization)
+    let elevation = [];
+    if (elevationData && elevationData.length > 0) {
+      if (elevationData.every(p => typeof p === 'number' || p === null)) {
+        elevation = elevationData;
+      } else if (elevationData.every(p => Array.isArray(p) && p.length === 2)) {
+        elevation = elevationData.map(p => p[1]);
+      } else if (elevationData.every(p => typeof p === 'object' && p !== null && 'dist' in p && 'ele' in p)) {
+        elevation = elevationData.map(p => p.ele);
+      }
+    }
+    
+    // Pulse extraction
+    let pulse = [];
+    if (hasPulseValue) {
+      if (heartRateData.every(p => typeof p === 'number' || p === null)) {
+        pulse = heartRateData;
+      } else if (heartRateData.every(p => Array.isArray(p) && p.length >= 2)) {
+        pulse = heartRateData.map(p => p[1]);
+      } else if (heartRateData.every(p => typeof p === 'object' && p !== null && ('hr' in p || 'pulse' in p))) {
+        pulse = heartRateData.map(p => p.hr ?? p.pulse);
+      }
+    }
+    
+    // Temperature extraction
+    let temperature = [];
+    if (hasTemperatureValue) {
+      if (temperatureData.every(p => typeof p === 'number' || p === null)) {
+        temperature = temperatureData;
+      } else if (temperatureData.every(p => Array.isArray(p) && p.length >= 2)) {
+        temperature = temperatureData.map(p => p[1]);
+      } else if (temperatureData.every(p => typeof p === 'object' && p !== null && ('temp' in p || 'temperature' in p))) {
+        temperature = temperatureData.map(p => p.temp ?? p.temperature);
+      }
+    }
+    
+    // Pad arrays to match pointCount
+    if (elevation.length < pointCount) elevation = [...elevation, ...Array(pointCount - elevation.length).fill(null)];
+    if (pulse.length < pointCount) pulse = [...pulse, ...Array(pointCount - pulse.length).fill(null)];
+    if (temperature.length < pointCount) temperature = [...temperature, ...Array(pointCount - temperature.length).fill(null)];
+
+    const datasets = [];
+    if (chartMode === 'elevation' || chartMode === 'both') {
+      datasets.push({
+        label: 'Elevation (m)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        borderColor: 'rgba(75, 192, 192, 1)',
+        borderWidth: 2,
+        tension: 0.3,
+        fill: true,
+        pointRadius: 0,
+        data: elevation,
+        yAxisID: 'y-elevation',
+      });
+    }
+    if ((chartMode === 'pulse' || chartMode === 'both') && hasPulseValue) {
+      datasets.push({
+        label: 'Pulse (bpm)',
+        backgroundColor: 'rgba(255, 99, 132, 0.13)',
+        borderColor: 'rgba(255, 99, 132, 1)',
+        borderWidth: 2,
+        tension: 0.3,
+        fill: false,
+        pointRadius: 0,
+        data: pulse,
+        yAxisID: 'y-pulse',
+      });
+    }
+    if ((chartMode === 'temperature' || chartMode === 'both') && hasTemperatureValue) {
+      datasets.push({
+        label: 'Temperature (°C)',
+        backgroundColor: 'rgba(255, 165, 0, 0.13)',
+        borderColor: 'rgba(255, 165, 0, 1)',
+        borderWidth: 2,
+        tension: 0.3,
+        fill: false,
+        pointRadius: 0,
+        data: temperature,
+        yAxisID: 'y-temperature',
+      });
+    }
+    return { labels, datasets };
+  },
+  [
+    () => props.elevationData,
+    () => props.heartRateData,
+    () => props.temperatureData,
+    () => hasPulse.value,
+    () => hasTemperature.value,
+    () => props.totalDistance,
+    () => props.chartMode
+  ],
+  {
+    keyFn: (deps) => {
+      const [elevData, hrData, tempData, hasPulseVal, hasTempVal, totalDist, mode] = deps;
+      return `chartdata_${elevData?.length || 0}_${hrData?.length || 0}_${tempData?.length || 0}_${hasPulseVal}_${hasTempVal}_${totalDist}_${mode}`;
     }
   }
-  // Pulse extraction
-  let pulse = [];
-  if (hasPulse.value) {
-    if (props.heartRateData.every(p => typeof p === 'number' || p === null)) {
-      pulse = props.heartRateData;
-    } else if (props.heartRateData.every(p => Array.isArray(p) && p.length >= 2)) {
-      pulse = props.heartRateData.map(p => p[1]);
-    } else if (props.heartRateData.every(p => typeof p === 'object' && p !== null && ('hr' in p || 'pulse' in p))) {
-      pulse = props.heartRateData.map(p => p.hr ?? p.pulse);
-    }
-  }
-  // Temperature extraction
-  let temperature = [];
-  if (hasTemperature.value) {
-    if (props.temperatureData.every(p => typeof p === 'number' || p === null)) {
-      temperature = props.temperatureData;
-    } else if (props.temperatureData.every(p => Array.isArray(p) && p.length >= 2)) {
-      temperature = props.temperatureData.map(p => p[1]);
-    } else if (props.temperatureData.every(p => typeof p === 'object' && p !== null && ('temp' in p || 'temperature' in p))) {
-      temperature = props.temperatureData.map(p => p.temp ?? p.temperature);
-    }
-  }
-  // Pad arrays to match pointCount
-  if (elevation.length < pointCount) elevation = [...elevation, ...Array(pointCount - elevation.length).fill(null)];
-  if (pulse.length < pointCount) pulse = [...pulse, ...Array(pointCount - pulse.length).fill(null)];
-  if (temperature.length < pointCount) temperature = [...temperature, ...Array(pointCount - temperature.length).fill(null)];
+);
 
-  const datasets = [];
-  if (props.chartMode === 'elevation' || props.chartMode === 'both') {
-    datasets.push({
-      label: 'Elevation (m)',
-      backgroundColor: 'rgba(75, 192, 192, 0.2)',
-      borderColor: 'rgba(75, 192, 192, 1)',
-      borderWidth: 2,
-      tension: 0.3,
-      fill: true,
-      pointRadius: 0,
-      data: elevation,
-      yAxisID: 'y-elevation',
-    });
-  }
-  if ((props.chartMode === 'pulse' || props.chartMode === 'both') && hasPulse.value) {
-    datasets.push({
-      label: 'Pulse (bpm)',
-      backgroundColor: 'rgba(255, 99, 132, 0.13)',
-      borderColor: 'rgba(255, 99, 132, 1)',
-      borderWidth: 2,
-      tension: 0.3,
-      fill: false,
-      pointRadius: 0,
-      data: pulse,
-      yAxisID: 'y-pulse',
-    });
-  }
-  if ((props.chartMode === 'temperature' || props.chartMode === 'both') && hasTemperature.value) {
-    datasets.push({
-      label: 'Temperature (°C)',
-      backgroundColor: 'rgba(255, 165, 0, 0.13)',
-      borderColor: 'rgba(255, 165, 0, 1)',
-      borderWidth: 2,
-      tension: 0.3,
-      fill: false,
-      pointRadius: 0,
-      data: temperature,
-      yAxisID: 'y-temperature',
-    });
-  }
-  return { labels, datasets };
-});
+// Use shallowRef for chart options to avoid deep reactivity
+const chartOptions = shallowRef({});
 
-const chartOptions = computed(() => {
+// Update chart options when dependencies change
+watch([
+  () => props.chartMode,
+  () => hasPulse.value,
+  () => hasTemperature.value,
+  () => props.trackName
+], () => {
   const showElevation = props.chartMode === 'elevation' || props.chartMode === 'both';
   const showPulse = (props.chartMode === 'pulse' || props.chartMode === 'both') && hasPulse.value;
   const showTemperature = (props.chartMode === 'temperature' || props.chartMode === 'both') && hasTemperature.value;
-  return {
+  
+  chartOptions.value = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -253,10 +298,10 @@ const chartOptions = computed(() => {
       } : {})
     }
   };
-});
+}, { immediate: true });
 
 watch(() => props.trackName, (newName) => {
-  if (chartOptions.value.plugins.title) {
+  if (chartOptions.value?.plugins?.title) {
     chartOptions.value.plugins.title.text = newName;
   }
 });

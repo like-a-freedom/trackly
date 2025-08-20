@@ -93,12 +93,12 @@ import TrackMap from '../components/TrackMap.vue';
 import TrackTooltip from '../components/TrackTooltip.vue';
 import UploadForm from '../components/UploadForm.vue';
 import Toast from '../components/Toast.vue';
-
 import TrackSearch from '../components/TrackSearch.vue';
 import { useTracks } from '../composables/useTracks';
 import { useToast } from '../composables/useToast';
 import { useSearchState } from '../composables/useSearchState';
 import { getSessionId } from '../utils/session';
+import { useAdvancedDebounce, useThrottle } from '../composables/useAdvancedDebounce';
 
 // Define component name for keep-alive
 defineOptions({
@@ -126,8 +126,15 @@ const sessionId = getSessionId();
 // Search state
 const searchVisible = ref(false);
 
-// Tooltip timeout for better performance
-let tooltipTimeout = null;
+// Debounced and throttled functions for performance
+const debouncedFetchTracks = useAdvancedDebounce((bounds) => {
+  hideTooltip();
+  fetchTracksInBounds(bounds);
+}, 150, { leading: false, trailing: true, maxWait: 500 });
+
+const throttledTooltipUpdate = useThrottle((event) => {
+  updateTooltipPosition(event);
+}, 16); // ~60fps
 
 
 
@@ -185,16 +192,8 @@ function onBoundsUpdate(newBounds) {
   // Update bounds immediately for visual responsiveness
   bounds.value = newBounds;
   
-  // Clear and restart tooltip timeout
-  if (tooltipTimeout) {
-    clearTimeout(tooltipTimeout);
-  }
-  
-  // Debounce only the API call, with very short delay
-  tooltipTimeout = setTimeout(() => {
-    hideTooltip();
-    fetchTracksInBounds(newBounds);
-  }, 50); // Very short debounce for smooth experience
+  // Use debounced function for API calls
+  debouncedFetchTracks(newBounds);
 }
 
 async function onTrackClick(poly, event) {
@@ -216,7 +215,7 @@ function onTrackMouseOver(poly, event) {
 }
 
 function onTrackMouseMove(event) { 
-  updateTooltipPosition(event); 
+  throttledTooltipUpdate(event);
 }
 
 function onTrackMouseOut(event) {
@@ -229,10 +228,9 @@ function onTrackMouseOut(event) {
 
 // Helper function to hide tooltip consistently
 function hideTooltip() {
-  // Clear any pending tooltip timeout
-  if (tooltipTimeout) {
-    clearTimeout(tooltipTimeout);
-    tooltipTimeout = null;
+  // Cancel any pending debounced operations
+  if (debouncedFetchTracks.pending()) {
+    // Don't cancel track fetching, just clean tooltip
   }
   
   tooltip.visible = false;

@@ -41,7 +41,7 @@ async fn main() {
     let max_body_size = std::env::var("MAX_HTTP_BODY_SIZE")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(10 * 1024 * 1024); // Default 10MB
+        .unwrap_or(50 * 1024 * 1024); // Default 50MB
 
     let pool = Arc::new(
         PgPoolOptions::new()
@@ -67,6 +67,7 @@ async fn main() {
         .route("/tracks/exist", post(handlers::check_track_exist))
         .route("/tracks/search", get(handlers::search_tracks))
         .route("/tracks/{id}", get(handlers::get_track))
+        .route("/tracks/{id}/simplified", get(handlers::get_track_simplified))
         .route(
             "/tracks/{id}/description",
             axum::routing::patch(handlers::update_track_description),
