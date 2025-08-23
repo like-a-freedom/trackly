@@ -136,8 +136,12 @@ const isOpen = ref(true);
 const restoredFromLocalStorage = ref(false);
 
 onMounted(() => {
-  // Decide default open state (closed on mobile by default)
-  const prefersClosed = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+  // Decide default open state (closed on mobile by default); guard against test env missing matchMedia
+  let prefersClosed = false;
+  try {
+    const mm = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 640px)') : null;
+    prefersClosed = !!(mm && typeof mm.matches === 'boolean' && mm.matches);
+  } catch { /* ignore */ }
   isOpen.value = !prefersClosed;
   try {
     const savedOpen = localStorage.getItem(LOCAL_UI_KEY);

@@ -154,6 +154,28 @@ global.ResizeObserver = class ResizeObserver {
     disconnect() { }
 };
 
+// Mock vue-router composables (useRoute, useRouter) to avoid needing a real router in unit tests
+vi.mock('vue-router', () => {
+    const route = {
+        path: '/',
+        fullPath: '/',
+        name: 'home',
+        params: {},
+        query: {},
+        hash: '',
+        matched: [],
+        meta: {}
+    };
+    return {
+        useRoute: () => route,
+        useRouter: () => ({
+            push: vi.fn(),
+            replace: vi.fn(),
+            currentRoute: { value: route }
+        })
+    };
+});
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
     writable: true,

@@ -92,6 +92,23 @@ describe('TrackFilterControl', () => {
 
         // Mock console.error to suppress expected localStorage parsing errors
         vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        // Ensure matchMedia always defined for this suite (defensive)
+        if (!window.matchMedia) {
+            Object.defineProperty(window, 'matchMedia', {
+                writable: true,
+                value: vi.fn().mockImplementation(q => ({
+                    matches: false,
+                    media: q,
+                    onchange: null,
+                    addListener: vi.fn(),
+                    removeListener: vi.fn(),
+                    addEventListener: vi.fn(),
+                    removeEventListener: vi.fn(),
+                    dispatchEvent: vi.fn()
+                }))
+            });
+        }
     });
 
     afterEach(() => {
@@ -358,7 +375,8 @@ describe('TrackFilterControl', () => {
             await nextTick();
 
             // Reset filters
-            const resetButton = wrapper.find('button');
+            // Select the actual Reset button (avoid the first collapse button)
+            const resetButton = wrapper.find('.filter-actions button');
             await resetButton.trigger('click');
 
             await nextTick();
@@ -380,7 +398,7 @@ describe('TrackFilterControl', () => {
 
             await nextTick();
 
-            const resetButton = wrapper.find('button');
+            const resetButton = wrapper.find('.filter-actions button');
             await resetButton.trigger('click');
 
             await nextTick();
@@ -406,7 +424,7 @@ describe('TrackFilterControl', () => {
 
             await nextTick();
 
-            const resetButton = wrapper.find('button');
+            const resetButton = wrapper.find('.filter-actions button');
             await resetButton.trigger('click');
 
             await nextTick();
@@ -495,7 +513,6 @@ describe('TrackFilterControl', () => {
         });
 
         it('restores empty categories from localStorage on page reload', async () => {
-            // Simulate user who deselected all categories and saved empty array
             mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
                 categories: [],
                 lengthRange: [0, 50],
@@ -570,7 +587,7 @@ describe('TrackFilterControl', () => {
 
             await nextTick();
 
-            const resetButton = wrapper.find('button');
+            const resetButton = wrapper.find('.filter-actions button');
             await resetButton.trigger('click');
 
             await nextTick();
@@ -1131,7 +1148,7 @@ describe('TrackFilterControl', () => {
             await nextTick();
 
             // Find and click reset button
-            const resetButton = wrapper.find('button');
+            const resetButton = wrapper.find('.filter-actions button');
             expect(resetButton.text()).toBe('Reset');
 
             await resetButton.trigger('click');

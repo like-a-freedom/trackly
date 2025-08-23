@@ -6,6 +6,7 @@
       :polylines="polylines"
       :zoom="zoom"
       :center="center"
+  :bounds="trackBounds"
       :markerLatLng="markerLatLng"
       :url="url"
       :attribution="attribution"
