@@ -70,44 +70,58 @@
               </svg>
             </button>
           </div>
-          <div class="header-actions">
-            <button 
-              class="share-track-btn" 
-              @click="shareTrack" 
-              :disabled="copyingLink"
-              :title="copyingLink ? 'Copying...' : 'Copy shareable link'"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.53 1.53"></path>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.53-1.53"></path>
-              </svg>
-            </button>
-            <button 
-              class="export-gpx-btn" 
-              @click="exportTrack" 
-              :disabled="exportingTrack"
-              :title="exportingTrack ? 'Exporting...' : 'Export track as GPX file'"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7,10 12,15 17,10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-            </button>
-            <button class="collapse-toggle-btn" @click="toggleCollapse" 
-                    title="Collapse panel"
-                    aria-label="Collapse panel">
-              <!-- Arrow icon like in UploadForm -->
-              <svg width="16" height="16
-              " viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
-              </svg>
-            </button>
-            <button class="close-button" @click="handleClose" title="Close panel">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
+          <div class="header-actions grouped">
+            <div class="action-group track-actions" aria-label="Track actions">
+              <button 
+                class="share-track-btn" 
+                @click="shareTrack" 
+                :disabled="copyingLink"
+                :title="copyingLink ? 'Copying...' : 'Copy shareable link'"
+                aria-label="Share track"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.53 1.53"></path>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.53-1.53"></path>
+                </svg>
+              </button>
+              <button 
+                class="export-gpx-btn" 
+                @click="exportTrack" 
+                :disabled="exportingTrack"
+                :title="exportingTrack ? 'Exporting...' : 'Export track as GPX file'"
+                aria-label="Export GPX"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7,10 12,15 17,10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </button>
+              <button v-if="isOwner" class="delete-track-btn" @click="confirmDelete" title="Delete track permanently" aria-label="Delete track">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+              </button>
+            </div>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="action-group panel-actions" aria-label="Panel layout controls">
+              <button class="collapse-toggle-btn" @click="toggleCollapse" 
+                      title="Collapse panel"
+                      aria-label="Collapse panel">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
+                </svg>
+              </button>
+              <button class="close-button" @click="handleClose" title="Close panel" aria-label="Close panel">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -400,7 +414,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close', 'description-updated', 'name-updated']);
+const emit = defineEmits(['close', 'description-updated', 'name-updated', 'deleted']);
 const route = useRoute();
 const isClosing = ref(false);
 const isCollapsed = ref(false);
@@ -445,6 +459,7 @@ const descriptionError = ref('');
 
 // --- Export state ---
 const exportingTrack = ref(false);
+const deletingTrack = ref(false);
 
 // --- Share state ---
 const copyingLink = ref(false);
@@ -722,6 +737,39 @@ function startEditName() {
       nameInput.value.select(); // Select all text for easy replacement
     }
   });
+}
+async function confirmDelete() {
+  if (deletingTrack.value) return;
+  if (!track.value?.id) return;
+  const proceed = window.confirm('Delete track? This action cannot be undone.');
+  if (!proceed) return;
+  try {
+    deletingTrack.value = true;
+    const res = await fetch(`/tracks/${track.value.id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: track.value.name || '', session_id: props.sessionId })
+    });
+    if (res.status === 204) {
+      const deletedId = track.value.id; // preserve before close
+      // Emit locally
+      emit('deleted', deletedId);
+      // Also dispatch global event so views (e.g., HomeView) can react if this panel is on another route
+      window.dispatchEvent(new CustomEvent('track-deleted', { detail: { id: deletedId } }));
+      emit('close');
+    } else if (res.status === 403) {
+      alert('You are not allowed to delete this track.');
+    } else if (res.status === 404) {
+      alert('Track not found or already deleted.');
+    } else {
+      alert('Failed to delete track.');
+    }
+  } catch (err) {
+    console.error('Delete track error', err);
+    alert('Error deleting track.');
+  } finally {
+    deletingTrack.value = false;
+  }
 }
 
 function cancelEditName() {
@@ -1163,6 +1211,23 @@ watch(() => props.track, (newTrack) => {
   gap: 12px;
 }
 
+.header-actions.grouped {
+  gap: 16px;
+}
+
+.header-actions .action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-actions .divider {
+  width: 1px;
+  align-self: stretch;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.08), rgba(0,0,0,0.15), rgba(0,0,0,0.08));
+  border-radius: 1px;
+}
+
 .share-track-btn {
   background: none;
   border: none;
@@ -1214,6 +1279,35 @@ watch(() => props.track, (newTrack) => {
 }
 
 .export-gpx-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.delete-track-btn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+}
+
+.delete-track-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  transform: scale(1.05);
+}
+
+.delete-track-btn:active { transform: scale(0.95); }
+
+.delete-track-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;

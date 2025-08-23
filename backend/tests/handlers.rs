@@ -389,3 +389,76 @@ async fn test_get_track_simplified_adaptive_alignment() {
     let temp_simpl = simplify_profile_array_adaptive(track.temp_data.as_ref().unwrap(), original_points.len(), simplified.len()).unwrap();
     assert_eq!(temp_simpl.as_array().unwrap().len(), simplified.len());
 }
+
+#[tokio::test]
+async fn test_delete_track_not_found() {
+    // Setup pool (may point to test DB). If not set, skip.
+    if std::env::var("TEST_DATABASE_URL").is_err() && std::env::var("DATABASE_URL").is_err() {
+        eprintln!("Skipping delete tests: no DB URL");
+        return;
+    }
+    let pool = setup_test_pool().await;
+    let app = Router::new()
+        .route("/tracks/{id}", axum::routing::delete(handlers::delete_track))
+        .with_state(pool);
+    let fake_uuid = Uuid::new_v4();
+    let payload = serde_json::json!({"name":"irrelevant","session_id": Uuid::new_v4().to_string()});
+    let req = Request::builder()
+        .uri(format!("/tracks/{fake_uuid}"))
+        .method("DELETE")
+        .header("content-type","application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_delete_track_forbidden() {
+    if std::env::var("TEST_DATABASE_URL").is_err() && std::env::var("DATABASE_URL").is_err() { return; }
+    let pool = setup_test_pool().await;
+    // Insert track with a known session id
+    let session_owner = Uuid::new_v4();
+    let track_id: Uuid = sqlx::query_scalar(
+        r#"INSERT INTO tracks (name, categories, geom, length_km, hash, session_id)
+           VALUES ($1, $2, ST_GeomFromText('LINESTRING(0 0, 0 0.001)',4326), 0.1, $3, $4) RETURNING id"#)
+        .bind("DelTest")
+        .bind(Vec::<String>::new())
+        .bind(format!("hash_{}", Uuid::new_v4()))
+        .bind(session_owner)
+        .fetch_one(&*pool)
+        .await
+        .expect("insert");
+    let app = Router::new().route("/tracks/{id}", axum::routing::delete(handlers::delete_track)).with_state(pool.clone());
+    let payload = serde_json::json!({"name":"irrelevant","session_id": Uuid::new_v4().to_string()});
+    let req = Request::builder().uri(format!("/tracks/{track_id}")).method("DELETE").header("content-type","application/json").body(Body::from(payload.to_string())).unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    // Cleanup
+    sqlx::query("DELETE FROM tracks WHERE id=$1").bind(track_id).execute(&*pool).await.ok();
+}
+
+#[tokio::test]
+async fn test_delete_track_success() {
+    if std::env::var("TEST_DATABASE_URL").is_err() && std::env::var("DATABASE_URL").is_err() { return; }
+    let pool = setup_test_pool().await;
+    let session_owner = Uuid::new_v4();
+    let track_id: Uuid = sqlx::query_scalar(
+        r#"INSERT INTO tracks (name, categories, geom, length_km, hash, session_id)
+           VALUES ($1, $2, ST_GeomFromText('LINESTRING(0 0, 0 0.001)',4326), 0.1, $3, $4) RETURNING id"#)
+        .bind("DelTestOK")
+        .bind(Vec::<String>::new())
+        .bind(format!("hash_{}", Uuid::new_v4()))
+        .bind(session_owner)
+        .fetch_one(&*pool)
+        .await
+        .expect("insert");
+    let app = Router::new().route("/tracks/{id}", axum::routing::delete(handlers::delete_track)).with_state(pool.clone());
+    let payload = serde_json::json!({"name":"irrelevant","session_id": session_owner.to_string()});
+    let req = Request::builder().uri(format!("/tracks/{track_id}")).method("DELETE").header("content-type","application/json").body(Body::from(payload.to_string())).unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    // Verify actually deleted
+    let exists: Option<Uuid> = sqlx::query_scalar("SELECT id FROM tracks WHERE id=$1").bind(track_id).fetch_optional(&*pool).await.expect("select");
+    assert!(exists.is_none());
+}

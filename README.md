@@ -38,6 +38,7 @@ So I created my own one.
 - Deduplication by geometry hash
 - Export to GPX
 - Adaptive on-the-fly simplification for large tracks (geometry + elevation/HR/temp/time profiles) based on point count & map zoom. Small tracks (≤1000 pts) are never simplified. Moderate tracks retain > ~33% of points (guard) even if Douglas-Peucker would drop more.
+- Track ownership enforced for mutating operations (name/description/delete); delete requires session ownership.
 
 ## Frontend (Vue + Leaflet)
 - Map with tracks, filters (category, length)
