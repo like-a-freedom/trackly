@@ -1,8 +1,8 @@
 use crate::db;
 use crate::models::*;
 use crate::track_utils::{
-    self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal, simplify_json_array,
-    simplify_profile_array_adaptive, simplify_track_for_zoom,
+    self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal, simplify_profile_array_adaptive,
+    simplify_track_for_zoom,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -666,6 +666,32 @@ pub async fn export_track_gpx(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+pub async fn delete_track(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateTrackNameRequest>, // reuse session_id field pattern
+) -> Result<StatusCode, StatusCode> {
+    // Fetch track
+    let track = db::get_track_detail(&pool, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let Some(track) = track else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    // Ownership check
+    if track.session_id != Some(payload.session_id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    // Delete
+    let affected = db::delete_track(&pool, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if affected == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn sanitize_filename(name: &str) -> String {

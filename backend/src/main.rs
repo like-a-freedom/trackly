@@ -67,7 +67,10 @@ async fn main() {
         .route("/tracks/exist", post(handlers::check_track_exist))
         .route("/tracks/search", get(handlers::search_tracks))
         .route("/tracks/{id}", get(handlers::get_track))
-        .route("/tracks/{id}/simplified", get(handlers::get_track_simplified))
+        .route(
+            "/tracks/{id}/simplified",
+            get(handlers::get_track_simplified),
+        )
         .route(
             "/tracks/{id}/description",
             axum::routing::patch(handlers::update_track_description),
@@ -77,6 +80,10 @@ async fn main() {
             axum::routing::patch(handlers::update_track_name),
         )
         .route("/tracks/{id}/export", get(handlers::export_track_gpx))
+        .route(
+            "/tracks/{id}",
+            axum::routing::delete(handlers::delete_track),
+        )
         .layer(DefaultBodyLimit::max(max_body_size))
         .with_state(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));

@@ -87,7 +87,7 @@
 
 <script setup>
 // Import the logic from App.vue
-import { ref, reactive, watch, shallowRef, computed, provide, onActivated, onDeactivated } from 'vue';
+import { ref, reactive, watch, shallowRef, computed, provide, onActivated, onDeactivated, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import TrackMap from '../components/TrackMap.vue';
 import TrackTooltip from '../components/TrackTooltip.vue';
@@ -320,6 +320,32 @@ async function onTrackSelected(track) {
   router.push(`/track/${track.id}`);
   closeSearch();
 }
+
+// Track deletion handling
+function removeTrackLocally(id) {
+  if (!id) return;
+  // Remove matching polylines
+  polylines.value = polylines.value.filter(p => p.properties?.id !== id);
+}
+
+function handleTrackDeleted(event) {
+  const id = event.detail?.id;
+  removeTrackLocally(id);
+  // Optionally refetch for consistency (cheap because bbox filtered)
+  refreshTracks();
+  // Clear any active tooltip related to removed track
+  if (activeTrackId.value === id) {
+    hideTooltip();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('track-deleted', handleTrackDeleted);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('track-deleted', handleTrackDeleted);
+});
 </script>
 
 <style>

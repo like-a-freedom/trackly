@@ -357,6 +357,18 @@ pub async fn update_track_name(
     Ok(())
 }
 
+pub async fn delete_track(pool: &Arc<PgPool>, track_id: Uuid) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM tracks WHERE id = $1
+        "#,
+    )
+    .bind(track_id)
+    .execute(&**pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 pub async fn search_tracks(
     pool: &Arc<PgPool>,
     query: &str,
