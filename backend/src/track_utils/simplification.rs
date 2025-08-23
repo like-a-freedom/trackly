@@ -132,29 +132,68 @@ fn adaptive_tolerance_scale(point_count: usize) -> Option<f64> {
         1001..=5000 => Some(0.5),   // Mild
         5001..=20000 => Some(1.0),  // Base
         20001..=50000 => Some(1.5), // Strong
-        _ => Some(2.5),             // Aggressive
+        _ => Some(2.0),             // Reduce aggressiveness for huge tracks
     }
 }
 
 /// Adaptive wrapper: given raw points & zoom, decide whether and how strongly to simplify.
 pub fn simplify_track_for_zoom(points: &[(f64, f64)], zoom: f64) -> Vec<(f64, f64)> {
     let base_tolerance = get_tolerance_for_zoom(zoom);
-    if let Some(scale) = adaptive_tolerance_scale(points.len()) {
-        let tol = base_tolerance * scale;
-        let mut simplified = simplify_track(points, tol);
-        // Prevent over-aggressive collapse for moderate-size tracks where user still expects detail.
-        if (5001..=20000).contains(&points.len()) {
-            let min_points = points.len() / 3 + 1; // ensure strictly greater than one third when possible
-            if simplified.len() < min_points && min_points >= 3 {
-                // only enforce if meaningful
-                simplified = sample_uniform_points(points, min_points.max(3));
-            }
-        }
-        simplified
-    } else {
-        // Return original for tiny tracks
-        points.to_vec()
+    let point_count = points.len();
+
+    // Always bypass for very small tracks
+    if adaptive_tolerance_scale(point_count).is_none() {
+        return points.to_vec();
     }
+
+    let scale = adaptive_tolerance_scale(point_count).unwrap();
+    let mut tol = base_tolerance * scale;
+
+    // Min retention configuration (read each call; inexpensive & keeps dynamic)
+    let min_ratio: f64 = std::env::var("TRACK_SIMPLIFY_MIN_RATIO")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.01); // 1% default
+    let min_points_cfg: usize = std::env::var("TRACK_SIMPLIFY_MIN_POINTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(500);
+    let max_iterations: usize = std::env::var("TRACK_SIMPLIFY_REFINE_ITERATIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4); // halve tolerance up to 4 times
+
+    let min_required = min_points_cfg.max(((point_count as f64) * min_ratio).round() as usize);
+
+    let mut simplified = simplify_track(points, tol);
+
+    // Existing moderate-size guard (retain > 1/3). Keep original behavior.
+    if (5001..=20000).contains(&point_count) {
+        let min_points = point_count / 3 + 1;
+        if simplified.len() < min_points && min_points >= 3 {
+            simplified = sample_uniform_points(points, min_points.max(3));
+        }
+    }
+
+    // New huge-track retention guard (applies when > 20k and simplification too aggressive)
+    if point_count > 20000 && simplified.len() < min_required {
+        // Iteratively reduce tolerance to recover more points first
+        let mut iterations = 0;
+        while simplified.len() < min_required
+            && iterations < max_iterations
+            && tol > base_tolerance * 0.1
+        {
+            tol *= 0.5; // decrease tolerance => more detail
+            simplified = simplify_track(points, tol);
+            iterations += 1;
+        }
+        // If still below requirement, fallback to uniform sampling to guarantee density
+        if simplified.len() < min_required {
+            simplified = sample_uniform_points(points, min_required);
+        }
+    }
+
+    simplified
 }
 
 /// Simplify profile data (elevation, heart rate, temperature) arrays
@@ -376,7 +415,7 @@ mod tests {
         assert_eq!(adaptive_tolerance_scale(1500), Some(0.5));
         assert_eq!(adaptive_tolerance_scale(8000), Some(1.0));
         assert_eq!(adaptive_tolerance_scale(30000), Some(1.5));
-        assert_eq!(adaptive_tolerance_scale(120000), Some(2.5));
+        assert_eq!(adaptive_tolerance_scale(120000), Some(2.0));
     }
 
     #[test]
@@ -443,5 +482,33 @@ mod tests {
         let simplified_len = simplified_profile.as_array().unwrap().len();
         assert_eq!(simplified_len, simplified_points.len());
         assert!(simplified_len < hr.len());
+    }
+
+    #[test]
+    fn test_huge_track_min_retention_env() {
+        // Create a large track with mild curvature
+        let points: Vec<(f64, f64)> = (0..95_000)
+            .map(|i| {
+                (
+                    55.0 + i as f64 * 0.000001,
+                    37.0 + (i as f64 * 0.000001).sin() * 0.001,
+                )
+            })
+            .collect();
+
+        // Set stricter min retention for test
+        std::env::set_var("TRACK_SIMPLIFY_MIN_RATIO", "0.012"); // 1.2%
+        std::env::set_var("TRACK_SIMPLIFY_MIN_POINTS", "800");
+        std::env::set_var("TRACK_SIMPLIFY_REFINE_ITERATIONS", "5");
+
+        let simplified = simplify_track_for_zoom(&points, 12.0);
+        let min_required = 800usize.max(((points.len() as f64) * 0.012).round() as usize);
+        assert!(
+            simplified.len() >= min_required,
+            "simplified {} < required {}",
+            simplified.len(),
+            min_required
+        );
+        assert!(simplified.len() < points.len()); // still simplified
     }
 }
