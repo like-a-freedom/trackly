@@ -1,5 +1,6 @@
 // KML parser module for trackly
 // Extracted from track_utils.rs for modularization
+// TODO: switch to https://github.com/georust/kml
 
 use crate::models::ParsedTrackData;
 use crate::track_utils::geometry::haversine_distance;

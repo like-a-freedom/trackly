@@ -1,5 +1,5 @@
 // GPX parser module for trackly
-// Extracted from track_utils.rs for modularization
+// TODO: maybe switch to https://github.com/georust/gpx
 
 use crate::models::ParsedTrackData;
 use crate::track_utils::geometry::haversine_distance;
@@ -121,15 +121,13 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         }
                     }
                     "hr" | "heartrate" => {
-                        if (!in_extensions || in_trackpoint_extension) && (in_rtept || in_trkpt)
-                        {
+                        if (!in_extensions || in_trackpoint_extension) && (in_rtept || in_trkpt) {
                             capture_text = true;
                             text_target = Some("hr".to_string());
                         }
                     }
                     "atemp" | "temp" | "temperature" => {
-                        if (!in_extensions || in_trackpoint_extension) && (in_rtept || in_trkpt)
-                        {
+                        if (!in_extensions || in_trackpoint_extension) && (in_rtept || in_trkpt) {
                             capture_text = true;
                             text_target = Some("temp".to_string());
                         }

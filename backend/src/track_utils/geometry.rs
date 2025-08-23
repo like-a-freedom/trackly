@@ -2,6 +2,7 @@
 // Contains functions for geospatial calculations and WKT parsing
 
 /// Calculates the distance between two points (lat, lon) in meters using the haversine formula
+/// TODO: maybe switch to https://github.com/georust/geo?tab=readme-ov-file
 pub fn haversine_distance(a: (f64, f64), b: (f64, f64)) -> f64 {
     let (lat1, lon1) = a;
     let (lat2, lon2) = b;

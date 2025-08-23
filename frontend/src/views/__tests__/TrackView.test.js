@@ -3,6 +3,11 @@ import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import TrackView from '../TrackView.vue';
 
+// Disable debouncing to simplify timing in tests
+vi.mock('../../composables/useAdvancedDebounce', () => ({
+    useAdvancedDebounce: (fn) => fn
+}));
+
 // Mock router
 const mockRouter = {
     push: vi.fn().mockResolvedValue(undefined)

@@ -1,5 +1,6 @@
 // Track simplification utilities for trackly
 // Implements Douglas-Peucker algorithm for line simplification
+// TODO: maybe switch to https://github.com/georust/geo?tab=readme-ov-file
 
 use crate::track_utils::geometry::haversine_distance;
 
