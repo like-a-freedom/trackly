@@ -2,7 +2,7 @@ use crate::db;
 use crate::models::*;
 use crate::track_utils::{
     self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal, simplify_json_array,
-    simplify_track_for_zoom,
+    simplify_profile_array_adaptive, simplify_track_for_zoom,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -493,31 +493,23 @@ pub async fn get_track_simplified(
                     );
 
                     // Simplify profile data to match simplified track points
-                    let simplified_elevation_profile = if let Some(ref elevation_data) =
-                        track.elevation_profile
-                    {
-                        simplify_json_array(elevation_data, points.len(), simplified_points.len())
-                    } else {
-                        None
-                    };
-
-                    let simplified_hr_data = if let Some(ref hr_data) = track.hr_data {
-                        simplify_json_array(hr_data, points.len(), simplified_points.len())
-                    } else {
-                        None
-                    };
-
-                    let simplified_temp_data = if let Some(ref temp_data) = track.temp_data {
-                        simplify_json_array(temp_data, points.len(), simplified_points.len())
-                    } else {
-                        None
-                    };
-
-                    let simplified_time_data = if let Some(ref time_data) = track.time_data {
-                        simplify_json_array(time_data, points.len(), simplified_points.len())
-                    } else {
-                        None
-                    };
+                    let simplified_elevation_profile =
+                        track.elevation_profile.as_ref().and_then(|data| {
+                            simplify_profile_array_adaptive(
+                                data,
+                                points.len(),
+                                simplified_points.len(),
+                            )
+                        });
+                    let simplified_hr_data = track.hr_data.as_ref().and_then(|data| {
+                        simplify_profile_array_adaptive(data, points.len(), simplified_points.len())
+                    });
+                    let simplified_temp_data = track.temp_data.as_ref().and_then(|data| {
+                        simplify_profile_array_adaptive(data, points.len(), simplified_points.len())
+                    });
+                    let simplified_time_data = track.time_data.as_ref().and_then(|data| {
+                        simplify_profile_array_adaptive(data, points.len(), simplified_points.len())
+                    });
 
                     // Create simplified response with simplified chart data and geometry
                     let simplified_track = TrackSimplified {

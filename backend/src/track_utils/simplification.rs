@@ -112,39 +112,136 @@ pub fn get_tolerance_for_zoom(zoom: f64) -> f64 {
     }
 }
 
-/// Simplify track for different zoom levels and cache results
-pub fn simplify_track_for_zoom(points: &[(f64, f64)], zoom: f64) -> Vec<(f64, f64)> {
-    let tolerance = get_tolerance_for_zoom(zoom);
-    simplify_track(points, tolerance)
-}
-
-/// Calculate simplification statistics
-pub struct SimplificationStats {
-    pub original_points: usize,
-    pub simplified_points: usize,
-    pub compression_ratio: f64,
-    pub tolerance_used: f64,
-}
-
-pub fn get_simplification_stats(
-    original: &[(f64, f64)], 
-    simplified: &[(f64, f64)], 
-    tolerance: f64
-) -> SimplificationStats {
-    let compression_ratio = if !original.is_empty() {
-        simplified.len() as f64 / original.len() as f64
-    } else {
-        0.0
-    };
-    
-    SimplificationStats {
-        original_points: original.len(),
-        simplified_points: simplified.len(),
-        compression_ratio,
-        tolerance_used: tolerance,
+/// Determine adaptive tolerance scaling factor based on original point count.
+/// Small tracks are left untouched to preserve fidelity.
+/// Buckets:
+/// - 0..=1000: no simplification (return original geometry & profiles)
+/// - 1001..=5000: mild (scale 0.5 * base tolerance)
+/// - 5001..=20000: base (scale 1.0) BUT guarded: ensure >= ~33% points retained
+/// - 20001..=50000: strong (1.5x)
+/// - >50000: aggressive (2.5x)
+/// Rationale: frontend must remain responsive; small tracks deserve full detail; huge tracks need payload reduction.
+/// The retention guard for moderate tracks avoids Douglas-Peucker over-collapsing nearly-linear segments.
+fn adaptive_tolerance_scale(point_count: usize) -> Option<f64> {
+    match point_count {
+        0..=1000 => None,                 // No simplification
+        1001..=5000 => Some(0.5),          // Mild
+        5001..=20000 => Some(1.0),         // Base
+        20001..=50000 => Some(1.5),        // Strong
+        _ => Some(2.5),                    // Aggressive
     }
 }
 
+/// Adaptive wrapper: given raw points & zoom, decide whether and how strongly to simplify.
+pub fn simplify_track_for_zoom(points: &[(f64, f64)], zoom: f64) -> Vec<(f64, f64)> {
+    let base_tolerance = get_tolerance_for_zoom(zoom);
+    if let Some(scale) = adaptive_tolerance_scale(points.len()) {
+        let tol = base_tolerance * scale;
+        let mut simplified = simplify_track(points, tol);
+        // Prevent over-aggressive collapse for moderate-size tracks where user still expects detail.
+        if (5001..=20000).contains(&points.len()) {
+            let min_points = points.len() / 3 + 1; // ensure strictly greater than one third when possible
+            if simplified.len() < min_points && min_points >= 3 { // only enforce if meaningful
+                simplified = sample_uniform_points(points, min_points.max(3));
+            }
+        }
+        simplified
+    } else {
+        // Return original for tiny tracks
+        points.to_vec()
+    }
+}
+
+/// Simplify profile data (elevation, heart rate, temperature) arrays
+/// by taking every nth element to match simplified track points
+pub fn simplify_profile_data(
+    original_data: &[f64],
+    original_track_length: usize,
+    simplified_track_length: usize,
+) -> Vec<f64> {
+    if original_data.is_empty() || simplified_track_length == 0 {
+        return Vec::new();
+    }
+    
+    if original_data.len() != original_track_length {
+        // If data length doesn't match track length, just sample uniformly
+        return sample_uniform(original_data, simplified_track_length);
+    }
+    
+    let mut simplified_data = Vec::with_capacity(simplified_track_length);
+    
+    for i in 0..simplified_track_length {
+        let original_index = (i * (original_track_length - 1)) / (simplified_track_length - 1);
+        let original_index = original_index.min(original_data.len() - 1);
+        simplified_data.push(original_data[original_index]);
+    }
+    
+    simplified_data
+}
+
+/// Simplify JSON array of numbers to match simplified track points
+pub fn simplify_json_array(
+    json_value: &serde_json::Value,
+    original_track_length: usize,
+    simplified_track_length: usize,
+) -> Option<serde_json::Value> {
+    if let Some(array) = json_value.as_array() {
+        let numbers: Vec<f64> = array
+            .iter()
+            .filter_map(|v| v.as_f64())
+            .collect();
+        
+        if numbers.is_empty() {
+            return None;
+        }
+        
+        let simplified_numbers = simplify_profile_data(&numbers, original_track_length, simplified_track_length);
+        let simplified_json: Vec<serde_json::Value> = simplified_numbers
+            .into_iter()
+            .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or_else(|| serde_json::Number::from(0))))
+            .collect();
+        
+        Some(serde_json::Value::Array(simplified_json))
+    } else {
+        None
+    }
+}
+
+/// Sample data uniformly across the array
+fn sample_uniform(data: &[f64], target_length: usize) -> Vec<f64> {
+    if data.is_empty() || target_length == 0 {
+        return Vec::new();
+    }
+    
+    if data.len() <= target_length {
+        return data.to_vec();
+    }
+    
+    let mut result = Vec::with_capacity(target_length);
+    let step = data.len() as f64 / target_length as f64;
+    
+    for i in 0..target_length {
+        let index = (i as f64 * step) as usize;
+        let index = index.min(data.len() - 1);
+        result.push(data[index]);
+    }
+    
+    result
+}
+
+/// Uniformly sample point geometry to desired target length preserving endpoints.
+fn sample_uniform_points(points: &[(f64, f64)], target_len: usize) -> Vec<(f64, f64)> {
+    if target_len == 0 { return Vec::new(); }
+    if target_len >= points.len() { return points.to_vec(); }
+    if points.len() <= 2 { return points.to_vec(); }
+    let mut result = Vec::with_capacity(target_len);
+    let step = (points.len() - 1) as f64 / (target_len - 1) as f64;
+    for i in 0..target_len {
+        let idx = (i as f64 * step).round() as usize;
+        result.push(points[idx]);
+    }
+    result
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,81 +337,102 @@ mod tests {
         // East bearing should be close to π/2 radians
         assert!((east - std::f64::consts::PI / 2.0).abs() < 0.1);
     }
+
+    #[test]
+    fn test_adaptive_scale_thresholds() {
+        assert_eq!(adaptive_tolerance_scale(500), None);
+        assert_eq!(adaptive_tolerance_scale(1500), Some(0.5));
+        assert_eq!(adaptive_tolerance_scale(8000), Some(1.0));
+        assert_eq!(adaptive_tolerance_scale(30000), Some(1.5));
+        assert_eq!(adaptive_tolerance_scale(120000), Some(2.5));
+    }
+
+    #[test]
+    fn test_adaptive_no_simplification_small_track() {
+        let points: Vec<(f64,f64)> = (0..500).map(|i| (55.0 + i as f64 * 0.0001, 37.0 + i as f64 * 0.0001)).collect();
+        let simplified = simplify_track_for_zoom(&points, 14.0);
+        assert_eq!(simplified.len(), points.len());
+    }
+
+    #[test]
+    fn test_adaptive_moderate_large_track() {
+        let points: Vec<(f64,f64)> = (0..6000).map(|i| (55.0 + i as f64 * 0.00001, 37.0 + i as f64 * 0.00001)).collect();
+        let simplified = simplify_track_for_zoom(&points, 14.0);
+        assert!(simplified.len() < points.len());
+        assert!(simplified.len() > points.len() / 3); // Not too aggressive at this size
+    }
+
+    #[test]
+    fn test_adaptive_aggressive_huge_track() {
+        let points: Vec<(f64,f64)> = (0..120000).map(|i| (55.0 + i as f64 * 0.000001, 37.0 + i as f64 * 0.000001)).collect();
+        let simplified = simplify_track_for_zoom(&points, 10.0); // base tol higher at lower zoom
+        assert!(simplified.len() < points.len() / 2); // Should compress strongly
+    }
+
+    #[test]
+    fn test_adaptive_profile_small_track_untouched() {
+        let points: Vec<(f64,f64)> = (0..800).map(|i| (55.0 + i as f64 * 0.00005, 37.0 + i as f64 * 0.00005)).collect();
+        let elevation: Vec<f64> = (0..points.len()).map(|i| i as f64).collect();
+        let elevation_json = serde_json::json!(elevation);
+        let simplified_points = simplify_track_for_zoom(&points, 14.0);
+        // No simplification expected for geometry
+        assert_eq!(simplified_points.len(), points.len());
+        let simplified_profile = simplify_profile_array_adaptive(&elevation_json, points.len(), simplified_points.len()).unwrap();
+        assert_eq!(simplified_profile.as_array().unwrap().len(), elevation.len());
+    }
+
+    #[test]
+    fn test_adaptive_profile_moderate_track_reduced() {
+        let points: Vec<(f64,f64)> = (0..7000).map(|i| (55.0 + i as f64 * 0.00001, 37.0 + i as f64 * 0.00001)).collect();
+        let hr: Vec<f64> = (0..points.len()).map(|i| (60 + (i % 100) as i32) as f64).collect();
+        let hr_json = serde_json::json!(hr);
+        let simplified_points = simplify_track_for_zoom(&points, 14.0);
+        assert!(simplified_points.len() < points.len());
+        // Geometry should retain > 1/3 due to retention guard
+        assert!(simplified_points.len() > points.len() / 3);
+        let simplified_profile = simplify_profile_array_adaptive(&hr_json, points.len(), simplified_points.len()).unwrap();
+        let simplified_len = simplified_profile.as_array().unwrap().len();
+        assert_eq!(simplified_len, simplified_points.len());
+        assert!(simplified_len < hr.len());
+    }
 }
 
-/// Simplify profile data (elevation, heart rate, temperature) arrays
-/// by taking every nth element to match simplified track points
-pub fn simplify_profile_data(
-    original_data: &[f64],
-    original_track_length: usize,
-    simplified_track_length: usize,
-) -> Vec<f64> {
-    if original_data.is_empty() || simplified_track_length == 0 {
-        return Vec::new();
-    }
-    
-    if original_data.len() != original_track_length {
-        // If data length doesn't match track length, just sample uniformly
-        return sample_uniform(original_data, simplified_track_length);
-    }
-    
-    let mut simplified_data = Vec::with_capacity(simplified_track_length);
-    
-    for i in 0..simplified_track_length {
-        let original_index = (i * (original_track_length - 1)) / (simplified_track_length - 1);
-        let original_index = original_index.min(original_data.len() - 1);
-        simplified_data.push(original_data[original_index]);
-    }
-    
-    simplified_data
+/// Calculate simplification statistics
+pub struct SimplificationStats {
+    pub original_points: usize,
+    pub simplified_points: usize,
+    pub compression_ratio: f64,
+    pub tolerance_used: f64,
 }
 
-/// Simplify JSON array of numbers to match simplified track points
-pub fn simplify_json_array(
+pub fn get_simplification_stats(
+    original: &[(f64, f64)],
+    simplified: &[(f64, f64)],
+    tolerance: f64,
+) -> SimplificationStats {
+    let compression_ratio = if !original.is_empty() {
+        simplified.len() as f64 / original.len() as f64
+    } else {
+        0.0
+    };
+    SimplificationStats {
+        original_points: original.len(),
+        simplified_points: simplified.len(),
+        compression_ratio,
+        tolerance_used: tolerance,
+    }
+}
+
+/// Adaptive simplification for profile arrays (elevation, hr, temp, time)
+/// Keeps arrays untouched for small tracks and samples proportionally otherwise.
+pub fn simplify_profile_array_adaptive(
     json_value: &serde_json::Value,
     original_track_length: usize,
     simplified_track_length: usize,
 ) -> Option<serde_json::Value> {
-    if let Some(array) = json_value.as_array() {
-        let numbers: Vec<f64> = array
-            .iter()
-            .filter_map(|v| v.as_f64())
-            .collect();
-        
-        if numbers.is_empty() {
-            return None;
-        }
-        
-        let simplified_numbers = simplify_profile_data(&numbers, original_track_length, simplified_track_length);
-        let simplified_json: Vec<serde_json::Value> = simplified_numbers
-            .into_iter()
-            .map(|n| serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap_or_else(|| serde_json::Number::from(0))))
-            .collect();
-        
-        Some(serde_json::Value::Array(simplified_json))
-    } else {
-        None
+    // If no geometry simplification happened (lengths equal) OR small track: return original
+    if original_track_length <= 1000 || original_track_length == simplified_track_length {
+        return json_value.clone().into();
     }
-}
-
-/// Sample data uniformly across the array
-fn sample_uniform(data: &[f64], target_length: usize) -> Vec<f64> {
-    if data.is_empty() || target_length == 0 {
-        return Vec::new();
-    }
-    
-    if data.len() <= target_length {
-        return data.to_vec();
-    }
-    
-    let mut result = Vec::with_capacity(target_length);
-    let step = data.len() as f64 / target_length as f64;
-    
-    for i in 0..target_length {
-        let index = (i as f64 * step) as usize;
-        let index = index.min(data.len() - 1);
-        result.push(data[index]);
-    }
-    
-    result
+    simplify_json_array(json_value, original_track_length, simplified_track_length)
 }

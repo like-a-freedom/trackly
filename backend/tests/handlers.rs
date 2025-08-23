@@ -7,11 +7,13 @@ use axum::{
 };
 use backend::handlers;
 use backend::models::TrackExistResponse;
+use backend::models::TrackDetail;
 use serde_json::from_slice;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower::ServiceExt; // for .oneshot()
+use uuid::Uuid;
 
 // Helper function to create a mock PgPool (in-memory SQLite for simplicity if needed, or mock)
 // For true integration tests, a real test PostgreSQL database is needed.
@@ -317,4 +319,73 @@ async fn test_export_track_gpx_invalid_uuid() {
 
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+// Lightweight test for get_track_simplified logic without real DB by constructing handler manually.
+// We call simplify_track_for_zoom + adaptive profile logic indirectly through handler.
+#[tokio::test]
+async fn test_get_track_simplified_adaptive_alignment() {
+    // Build a synthetic track with 7000 points (moderate bucket) and matching profiles
+    let point_count = 7000;
+    let coords: Vec<serde_json::Value> = (0..point_count)
+        .map(|i| {
+            let lat = 55.0 + i as f64 * 0.00001;
+            let lon = 37.0 + i as f64 * 0.00001;
+            serde_json::json!([lon, lat])
+        })
+        .collect();
+    let elevation: Vec<f64> = (0..point_count).map(|i| (i % 500) as f64).collect();
+    let hr: Vec<i64> = (0..point_count).map(|i| 120 + (i % 40) as i64).collect();
+    let temp: Vec<f64> = (0..point_count).map(|i| 15.0 + (i % 10) as f64 * 0.1).collect();
+
+    // Compose TrackDetail
+    let track = TrackDetail {
+        id: Uuid::new_v4(),
+        name: "Adaptive Test".to_string(),
+        description: None,
+        categories: vec!["running".into()],
+        auto_classifications: vec![],
+        geom_geojson: serde_json::json!({"type":"LineString","coordinates": coords}),
+        length_km: 10.0,
+        elevation_profile: Some(serde_json::json!(elevation)),
+        hr_data: Some(serde_json::json!(hr)),
+        temp_data: Some(serde_json::json!(temp)),
+        time_data: None,
+        elevation_up: Some(100.0),
+        elevation_down: Some(90.0),
+        avg_speed: Some(10.0),
+        avg_hr: Some(130),
+        hr_min: Some(110),
+        hr_max: Some(170),
+        moving_time: Some(3600),
+        pause_time: Some(0),
+        moving_avg_speed: Some(10.5),
+        moving_avg_pace: Some(5.7),
+        duration_seconds: Some(3700),
+        recorded_at: None,
+        created_at: None,
+        updated_at: None,
+        session_id: None,
+    };
+
+    // Directly invoke logic as db::get_track_detail would return track.
+    // We simulate zoom param.
+    use backend::track_utils::simplification::simplify_track_for_zoom;
+    let coords_val = track.geom_geojson.get("coordinates").unwrap().as_array().unwrap();
+    let original_points: Vec<(f64,f64)> = coords_val.iter().map(|c| {
+        let arr = c.as_array().unwrap();
+        (arr[1].as_f64().unwrap(), arr[0].as_f64().unwrap())
+    }).collect();
+    let simplified = simplify_track_for_zoom(&original_points, 14.0);
+    assert!(simplified.len() < original_points.len());
+    assert!(simplified.len() > original_points.len()/3); // retention guard
+
+    // Profile simplification should match geometry length
+    use backend::track_utils::simplification::simplify_profile_array_adaptive;
+    let elev_simpl = simplify_profile_array_adaptive(track.elevation_profile.as_ref().unwrap(), original_points.len(), simplified.len()).unwrap();
+    assert_eq!(elev_simpl.as_array().unwrap().len(), simplified.len());
+    let hr_simpl = simplify_profile_array_adaptive(track.hr_data.as_ref().unwrap(), original_points.len(), simplified.len()).unwrap();
+    assert_eq!(hr_simpl.as_array().unwrap().len(), simplified.len());
+    let temp_simpl = simplify_profile_array_adaptive(track.temp_data.as_ref().unwrap(), original_points.len(), simplified.len()).unwrap();
+    assert_eq!(temp_simpl.as_array().unwrap().len(), simplified.len());
 }

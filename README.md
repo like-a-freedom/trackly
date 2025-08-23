@@ -37,6 +37,7 @@ So I created my own one.
 - No file storage, only extracted data
 - Deduplication by geometry hash
 - Export to GPX
+- Adaptive on-the-fly simplification for large tracks (geometry + elevation/HR/temp/time profiles) based on point count & map zoom. Small tracks (≤1000 pts) are never simplified. Moderate tracks retain > ~33% of points (guard) even if Douglas-Peucker would drop more.
 
 ## Frontend (Vue + Leaflet)
 - Map with tracks, filters (category, length)
@@ -45,6 +46,21 @@ So I created my own one.
 
 ## Database
 - PostgreSQL + PostGIS
+
+### Adaptive Simplification Details
+Simplification happens only in responses (original data stored intact). Buckets:
+
+| Points Count | Geometry Tolerance Scale* | Behavior |
+|--------------|---------------------------|----------|
+| 0–1000       | none                      | Return original geometry & profiles |
+| 1001–5000    | 0.5 × base                | Mild simplification |
+| 5001–20000   | 1.0 × base                | Base simplification + retention guard (≥ ~33% points) |
+| 20001–50000  | 1.5 × base                | Strong |
+| >50000       | 2.5 × base                | Aggressive |
+
+*Base tolerance depends on zoom (world view 1000m → max detail 5m). Profile arrays (elevation, hr, temp, time) are down-sampled to match simplified geometry length except when geometry untouched.
+
+Rationale: keep UX snappy for huge tracks while preserving fidelity for small ones and preventing over-collapse in moderately sized, mostly linear tracks.
 
 ---
 
