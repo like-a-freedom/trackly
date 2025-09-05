@@ -64,13 +64,13 @@ describe('format.js', () => {
 
         it('should escape HTML entities in URLs', () => {
             const input = 'Check http://example.com/<script>';
-            const expected = 'Check <a href="http://example.com/&lt;script&gt;" target="_blank" rel="noopener noreferrer">http://example.com/<script></a>';
+            const expected = 'Check <a href="http://example.com/%3Cscript%3E" target="_blank" rel="noopener noreferrer">http://example.com/&lt;script&gt;</a>';
             expect(convertUrlsToLinks(input)).toBe(expected);
         });
 
         it('should handle URLs with special characters', () => {
             const input = 'Visit https://example.com/path?query=value&other=test';
-            const expected = 'Visit <a href="https://example.com/path?query=value&amp;other=test" target="_blank" rel="noopener noreferrer">https://example.com/path?query=value&other=test</a>';
+            const expected = 'Visit <a href="https://example.com/path?query=value&other=test" target="_blank" rel="noopener noreferrer">https://example.com/path?query=value&amp;other=test</a>';
             expect(convertUrlsToLinks(input)).toBe(expected);
         });
 

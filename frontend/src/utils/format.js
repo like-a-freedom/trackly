@@ -31,8 +31,10 @@ export function formatDistance(km, unit = 'km') {
 
   if (unit === 'mi') {
     const miles = km * 0.621371;
-    if (miles < 1) {
-      return `${Math.round(miles * 1000)}m`;
+    // Use rounding to handle floating point precision issues
+    const roundedMiles = Math.round(miles * 100000) / 100000;
+    if (roundedMiles < 1) {
+      return `${Math.round(roundedMiles * 1000)}m`;
     }
     return `${miles.toFixed(2)} mi`;
   }
