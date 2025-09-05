@@ -104,6 +104,7 @@ const windowWidth = ref(window.innerWidth);
 const windowHeight = ref(window.innerHeight);
 const lastFetchZoom = ref(null); // Track last zoom used for fetching to avoid duplicates
 const isInitialLoad = ref(true); // Track if this is the first load to prevent redundant fetches
+const currentTrackId = ref(null); // Track current processing track ID to prevent race conditions
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -114,8 +115,21 @@ const { hasSearchState, restoreSearchState } = useSearchState();
 // Debounced track fetching with zoom and mode support
 const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
   try {
+    // Check if this request is still relevant (prevent race conditions)
+    if (id !== trackId.value) {
+      console.log(`Skipping fetch for ${id} - current track is ${trackId.value}`);
+      return;
+    }
+
     // Use detail mode for track view with current zoom for optimal data
     const trackData = await fetchTrackDetail(id, zoomLevel, 'detail');
+    
+    // Double-check if this is still the current track
+    if (id !== trackId.value) {
+      console.log(`Discarding fetch result for ${id} - current track is ${trackId.value}`);
+      return;
+    }
+    
     track.value = trackData;
     
     // Process track data to create latlngs (same logic as before)
@@ -159,9 +173,15 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
     }
   } catch (error) {
     console.error('Failed to fetch track:', error);
-    track.value = null;
+    // Only clear track if this was for the current track
+    if (id === trackId.value) {
+      track.value = null;
+    }
   } finally {
-    loading.value = false;
+    // Only update loading state if this was for the current track
+    if (id === trackId.value) {
+      loading.value = false;
+    }
   }
 }, 300, { leading: false, trailing: true });
 
@@ -250,8 +270,9 @@ const trackBounds = computed(() => {
 const { toast, showToast } = useToast();
 provide('toast', toast);
 
-async function fetchTrack(zoomLevel = null) {
-  const id = trackId.value;
+async function fetchTrack(zoomLevel = null, forceTrackId = null) {
+  // Use explicit track ID or current route track ID
+  const id = forceTrackId || trackId.value;
   if (!id) {
     console.error('No track ID provided');
     track.value = null;
@@ -259,17 +280,30 @@ async function fetchTrack(zoomLevel = null) {
     return;
   }
   
+  // Prevent fetching if this track is already being processed
+  if (currentTrackId.value === id && !isInitialLoad.value) {
+    console.log(`Already processing track ${id}, skipping duplicate fetch`);
+    return;
+  }
+  
+  // CRITICAL: Skip if this is not the current route track
+  if (id !== route.params.id) {
+    console.log(`Skipping fetch for ${id} - current route track is ${route.params.id}`);
+    return;
+  }
+  
   // Use debounced function for performance
   const currentZoom = zoomLevel || zoom.value || 10;
   const roundedZoom = Math.round(currentZoom);
   
-  // Skip if same zoom was already fetched (prevent duplicates)
-  if (!isInitialLoad.value && lastFetchZoom.value === roundedZoom) {
-    console.log(`Skip duplicate fetch - zoom ${roundedZoom} already fetched`);
+  // Skip if same zoom was already fetched for current track (prevent duplicates)
+  if (!isInitialLoad.value && lastFetchZoom.value === roundedZoom && currentTrackId.value === id) {
+    console.log(`Skip duplicate fetch - zoom ${roundedZoom} already fetched for track ${id}`);
     return;
   }
   
   console.log(`Fetching track ${id} with zoom ${roundedZoom} for performance optimization`);
+  currentTrackId.value = id; // Mark this track as being processed
   lastFetchZoom.value = roundedZoom;
   
   await debouncedFetchTrack(id, roundedZoom);
@@ -308,8 +342,15 @@ function handleCenterUpdate(newCenter) {
 }
 
 // Handle zoom updates for adaptive loading
-const debouncedZoomUpdate = useAdvancedDebounce((newZoom) => {
-  if (track.value?.id && !isInitialLoad.value) { // Don't trigger during initial load
+const debouncedZoomUpdate = useAdvancedDebounce((newZoom, targetTrackId) => {
+  // CRITICAL: Only process if this is still the current route track
+  if (targetTrackId !== route.params.id) {
+    console.log(`Skip zoom update for ${targetTrackId} - current route track is ${route.params.id}`);
+    return;
+  }
+  
+  // Only process if this is still the current track and not during initial load
+  if (track.value?.id === targetTrackId && !isInitialLoad.value) {
     // Round zoom to prevent floating point precision issues
     const roundedZoom = Math.round(newZoom);
     
@@ -320,7 +361,7 @@ const debouncedZoomUpdate = useAdvancedDebounce((newZoom) => {
     }
     
     console.log(`Zoom changed to ${roundedZoom}, refetching track with adaptive detail`);
-    fetchTrack(roundedZoom);
+    fetchTrack(roundedZoom, targetTrackId); // Pass explicit track ID
   }
 }, 1500, { leading: false, trailing: true }); // Increased delay to 1.5s to avoid refetch during auto-zoom
 
@@ -341,7 +382,9 @@ function handleZoomUpdate(newZoom) {
   // Only trigger fetch if zoom changed by at least 3 levels to reduce unnecessary requests
   if (Math.abs(roundedNewZoom - roundedCurrentZoom) >= 3) {
     console.log(`Significant zoom change: ${roundedCurrentZoom} -> ${roundedNewZoom}`);
-    debouncedZoomUpdate(roundedNewZoom);
+    // Pass current route track ID to ensure we only update if it's still the current route
+    const currentRouteTrackId = route.params.id;
+    debouncedZoomUpdate(roundedNewZoom, currentRouteTrackId);
   }
 }
 
@@ -401,8 +444,13 @@ function handleNameUpdated(newName) {
 
 // Initialize
 onMounted(async () => {
-  console.log('TrackView mounted, trackId:', trackId.value);
-  await fetchTrack();
+  const currentRouteId = route.params.id;
+  console.log('TrackView mounted, trackId:', currentRouteId);
+  
+  // Only fetch if this component should handle this track and it's not already being processed
+  if (currentRouteId && currentRouteId !== currentTrackId.value) {
+    await fetchTrack(null, currentRouteId); // Pass explicit track ID
+  }
   
   // Add ESC key listener
   document.addEventListener('keydown', handleKeyDown);
@@ -435,14 +483,28 @@ onDeactivated(() => {
 });
 
 // Handle route changes for keep-alive
-watch(() => route.params.id, async (newId) => {
-  if (newId && newId !== track.value?.id) {
-    console.log('Route changed, fetching new track:', newId);
+watch(() => route.params.id, async (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    console.log(`Route changed from ${oldId} to ${newId}, preparing for new track`);
+    
+    // Cancel any pending debounced operations for old track
+    debouncedFetchTrack.cancel();
+    debouncedZoomUpdate.cancel();
+    
     // Reset state for new track
     lastFetchZoom.value = null;
     isInitialLoad.value = true;
+    currentTrackId.value = null; // Clear current processing track
     center.value = [59.9311, 30.3609]; // Reset to default, will be updated by track data
-    await fetchTrack();
+    loading.value = true; // Set loading state
+    
+    // Small delay to ensure route is fully updated
+    await nextTick();
+    
+    // Fetch new track with explicit ID
+    if (newId === route.params.id) { // Double-check route hasn't changed again
+      await fetchTrack(null, newId);
+    }
   }
 }, { immediate: false });
 </script>
