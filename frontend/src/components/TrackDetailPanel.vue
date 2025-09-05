@@ -795,6 +795,15 @@ async function saveName() {
     // Update local track object immediately for reactive UI
     track.value.name = editedName.value.trim();
     emit('name-updated', editedName.value.trim());
+    
+    // Dispatch global event for other components (like HomeView tooltip)
+    window.dispatchEvent(new CustomEvent('track-name-updated', { 
+      detail: { 
+        trackId: track.value.id, 
+        newName: editedName.value.trim() 
+      } 
+    }));
+    
     isEditingName.value = false;
   } catch (err) {
     nameError.value = err.message || 'Network error.';
@@ -838,6 +847,15 @@ async function saveDescription() {
     // Update local track object immediately for reactive UI
     track.value.description = editedDescription.value;
     emit('description-updated', editedDescription.value);
+    
+    // Dispatch global event for other components (like HomeView tooltip)
+    window.dispatchEvent(new CustomEvent('track-description-updated', { 
+      detail: { 
+        trackId: track.value.id, 
+        newDescription: editedDescription.value 
+      } 
+    }));
+    
     isEditingDescription.value = false;
   } catch (err) {
     descriptionError.value = err.message || 'Network error.';
