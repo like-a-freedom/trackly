@@ -168,7 +168,7 @@
         <!-- Description Display Mode -->
         <div v-else-if="track.description || isOwner" class="track-description-block" :class="{ 'editable': isOwner, 'empty': !track.description && isOwner }">
           <div class="description-content">
-            <p v-if="track.description" class="track-description-text">{{ track.description }}</p>
+            <p v-if="track.description" class="track-description-text" v-html="processedDescription"></p>
             <p v-else-if="isOwner" class="track-description-placeholder">No description added yet</p>
           </div>
           <button v-if="isOwner" class="edit-description-btn" @click="startEditDescription" :title="track.description ? 'Edit description' : 'Add description'">
@@ -384,17 +384,15 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, shallowRef, onMounted } from 'vue';
+import { ref, computed, nextTick, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import ElevationChart from './ElevationChart.vue';
 import { 
-  formatSpeed, 
-  calculatePaceFromSpeed, 
   formatDuration as utilFormatDuration,
   formatDistance,
-  validateSpeedData,
-  formatPace
-} from '../composables/useTracks';
+  convertUrlsToLinks
+} from '../utils/format';
+import { validateSpeedData, formatSpeed, formatPace, calculatePaceFromSpeed } from '../composables/useTracks';
 import { useUnits } from '../composables/useUnits';
 import { useMemoizedComputed } from '../composables/useMemoization';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
@@ -569,11 +567,16 @@ const chartTitle = useMemoizedComputed(
   }
 );
 
-const track = shallowRef(props.track);
+const track = ref(props.track);
 
 // Watch for track changes
 watch(() => props.track, (newTrack) => {
   track.value = newTrack;
+});
+
+// Processed description with clickable links
+const processedDescription = computed(() => {
+  return track.value?.description ? convertUrlsToLinks(track.value.description) : '';
 });
 
 // Distance formatting - memoized

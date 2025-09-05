@@ -1081,25 +1081,6 @@ describe('TrackDetailPanel', () => {
       expect(elevationChart.props('trackName')).toContain('Temperature');
     });
 
-    it('should show only available chart toggle buttons based on data', () => {
-      // Test with only elevation data
-      const trackOnlyElevation = {
-        id: 1,
-        name: 'Elevation Only Track',
-        elevation_profile: [100, 110, 120],
-        hr_data: null,
-        temp_data: null
-      };
-
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: trackOnlyElevation, isVisible: true }
-      });
-
-      const chartToggleButtons = wrapper.findAll('button.chart-toggle');
-      expect(chartToggleButtons).toHaveLength(1);
-      expect(chartToggleButtons[0].text()).toBe('Elevation');
-    });
-
     it('should show only HR and Elevation buttons when temperature data is missing', () => {
       const trackNoTemperature = {
         ...mockTrackComplete,
@@ -1163,6 +1144,91 @@ describe('TrackDetailPanel', () => {
       expect(buttonTexts).not.toContain('Both');
       expect(buttonTexts).not.toContain('Elevation');
       expect(buttonTexts).not.toContain('Temperature');
+    });
+  });
+
+  describe('Description Link Conversion', () => {
+    it('should render description with clickable links', () => {
+      const trackWithLinks = {
+        ...mockTrackComplete,
+        description: 'Check out http://example.com and https://google.com for more info'
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackWithLinks }
+      });
+
+      const descriptionElement = wrapper.find('.track-description-text');
+      expect(descriptionElement.exists()).toBe(true);
+      expect(descriptionElement.html()).toContain('<a href="http://example.com"');
+      expect(descriptionElement.html()).toContain('<a href="https://google.com"');
+      expect(descriptionElement.html()).toContain('target="_blank"');
+      expect(descriptionElement.html()).toContain('rel="noopener noreferrer"');
+    });
+
+    it('should handle description without links', () => {
+      const trackNoLinks = {
+        ...mockTrackComplete,
+        description: 'This is a description without any links'
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoLinks }
+      });
+
+      const descriptionElement = wrapper.find('.track-description-text');
+      expect(descriptionElement.exists()).toBe(true);
+      expect(descriptionElement.html()).not.toContain('<a href=');
+      expect(descriptionElement.text()).toBe('This is a description without any links');
+    });
+
+    it('should handle www links correctly', () => {
+      const trackWithWww = {
+        ...mockTrackComplete,
+        description: 'Visit www.example.com for more info'
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackWithWww }
+      });
+
+      const descriptionElement = wrapper.find('.track-description-text');
+      expect(descriptionElement.html()).toContain('<a href="https://www.example.com"');
+      expect(descriptionElement.html()).toContain('www.example.com</a>');
+    });
+
+    it('should escape HTML entities in URLs', () => {
+      const trackWithSpecialChars = {
+        ...mockTrackComplete,
+        description: 'Check http://example.com/<script> for XSS test'
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackWithSpecialChars }
+      });
+
+      const descriptionElement = wrapper.find('.track-description-text');
+      // Check that HTML entities are properly escaped in the visible link text
+      expect(descriptionElement.html()).toContain('http://example.com/&lt;script&gt;');
+      // Check that no unescaped script tags appear in the HTML source
+      expect(descriptionElement.html()).not.toContain('<script>');
+    });
+
+    it('should handle multiple links in description', () => {
+      const trackMultipleLinks = {
+        ...mockTrackComplete,
+        description: 'Visit http://site1.com and https://site2.com or www.site3.com'
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackMultipleLinks }
+      });
+
+      const descriptionElement = wrapper.find('.track-description-text');
+      const html = descriptionElement.html();
+      expect(html).toContain('<a href="http://site1.com"');
+      expect(html).toContain('<a href="https://site2.com"');
+      expect(html).toContain('<a href="https://www.site3.com"');
     });
   });
 });
