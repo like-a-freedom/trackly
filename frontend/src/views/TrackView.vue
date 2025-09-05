@@ -110,10 +110,11 @@ const { fetchTrackDetail } = useTracks();
 // Use search state to determine where to return
 const { hasSearchState, restoreSearchState } = useSearchState();
 
-// Debounced track fetching
+// Debounced track fetching with zoom and mode support
 const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
   try {
-    const trackData = await fetchTrackDetail(id, zoomLevel);
+    // Use detail mode for track view with current zoom for optimal data
+    const trackData = await fetchTrackDetail(id, zoomLevel, 'detail');
     track.value = trackData;
     
     // Process track data to create latlngs (same logic as before)

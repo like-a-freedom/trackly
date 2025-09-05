@@ -5,6 +5,7 @@ dev/
 # macOS
 .DS_Store
 data/
+docs/
 
 # Node.js
 node_modules/

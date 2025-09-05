@@ -10,6 +10,7 @@ pub mod optimized_gpx_parser;
 pub mod simplification;
 pub mod time_utils;
 pub mod types;
+pub mod zoom_adaptation;
 
 pub use geometry::{haversine_distance, parse_linestring_wkt};
 pub use gpx_parser::parse_gpx;
@@ -21,6 +22,7 @@ pub use simplification::{
     simplify_profile_array_adaptive, simplify_profile_data, simplify_track,
     simplify_track_for_zoom,
 };
+pub use zoom_adaptation::{get_simplification_params, tolerance_for_zoom, SimplificationParams};
 
 #[cfg(test)]
 mod tests {

@@ -127,10 +127,16 @@ const sessionId = getSessionId();
 const searchVisible = ref(false);
 
 // Debounced and throttled functions for performance
+// Increased debounce to 500ms to reduce multiple requests as recommended in optimization spec
 const debouncedFetchTracks = useAdvancedDebounce((bounds) => {
   hideTooltip();
-  fetchTracksInBounds(bounds);
-}, 150, { leading: false, trailing: true, maxWait: 500 });
+  // Pass current zoom level for backend optimization
+  const options = { 
+    zoom: zoom.value, 
+    mode: 'overview' // Use overview mode for track lists
+  };
+  fetchTracksInBounds(bounds, options);
+}, 500, { leading: false, trailing: true, maxWait: 1000 });
 
 const throttledTooltipUpdate = useThrottle((event) => {
   updateTooltipPosition(event);
@@ -185,7 +191,11 @@ watch(() => router.currentRoute.value.path, (newPath) => {
 function onMapReady(e) {
   const map = e.target || e;
   bounds.value = map.getBounds();
-  fetchTracksInBounds(bounds.value);
+  const options = { 
+    zoom: zoom.value, 
+    mode: 'overview' 
+  };
+  fetchTracksInBounds(bounds.value, options);
 }
 
 function onBoundsUpdate(newBounds) {
@@ -249,7 +259,14 @@ function updateTooltipPosition(event) {
 }
 
 function refreshTracks() {
-  if (bounds.value) fetchTracksInBounds(bounds.value);
+  if (bounds.value) {
+    const options = { 
+      zoom: zoom.value, 
+      mode: 'overview',
+      forceRefresh: true // Force refresh to bypass cache
+    };
+    fetchTracksInBounds(bounds.value, options);
+  }
 }
 
 async function handleUpload({ file, name, categories }) {

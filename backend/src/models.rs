@@ -109,6 +109,31 @@ pub struct TrackGeoJsonCollection {
 #[derive(Debug, Deserialize)]
 pub struct TrackGeoJsonQuery {
     pub bbox: Option<String>,
+    pub zoom: Option<f64>,
+    pub mode: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrackMode {
+    Overview,
+    Detail,
+}
+
+impl TrackMode {
+    pub fn from_string(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "detail" => TrackMode::Detail,
+            _ => TrackMode::Overview, // default
+        }
+    }
+
+    pub fn is_overview(&self) -> bool {
+        matches!(self, TrackMode::Overview)
+    }
+
+    pub fn is_detail(&self) -> bool {
+        matches!(self, TrackMode::Detail)
+    }
 }
 
 #[derive(Debug)]
@@ -155,6 +180,7 @@ pub struct TrackSearchQuery {
 #[derive(Debug, Deserialize)]
 pub struct TrackSimplificationQuery {
     pub zoom: Option<f64>,
+    pub mode: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

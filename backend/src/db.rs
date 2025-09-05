@@ -1,4 +1,5 @@
 use crate::models::*;
+use crate::track_utils::{get_simplification_params, simplify_track_for_zoom};
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -231,12 +232,238 @@ pub async fn get_track_detail(
     }
 }
 
+/// Get track detail with adaptive simplification based on zoom and mode
+pub async fn get_track_detail_adaptive(
+    pool: &Arc<PgPool>,
+    id: Uuid,
+    zoom: Option<f64>,
+    mode: Option<&str>,
+) -> Result<Option<TrackDetail>, sqlx::Error> {
+    let track_mode = TrackMode::from_string(mode.unwrap_or("detail"));
+    let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
+    
+    let row = sqlx::query(r#"
+        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom) as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_up, elevation_down, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, ST_NPoints(geom) as original_points
+        FROM tracks WHERE id = $1
+    "#)
+        .bind(id)
+        .fetch_optional(&**pool)
+        .await?;
+        
+    if let Some(row) = row {
+        let original_points: i32 = row.try_get("original_points").unwrap_or(0);
+        let mut geom_geojson: serde_json::Value = serde_json::from_str(
+            row.try_get::<&str, _>("geom_geojson")
+                .expect("Failed to get geom_geojson"),
+        )
+        .unwrap_or(serde_json::json!({}));
+        
+        // Apply simplification for huge tracks or overview mode
+        let params = get_simplification_params(track_mode, Some(zoom_level), original_points as usize);
+        if params.should_simplify(original_points as usize) {
+            if let Some(coordinates) = geom_geojson.get("coordinates").and_then(|c| c.as_array()) {
+                if !coordinates.is_empty() {
+                    let points: Vec<(f64, f64)> = coordinates
+                        .iter()
+                        .filter_map(|coord| {
+                            if let Some(coord_array) = coord.as_array() {
+                                if coord_array.len() >= 2 {
+                                    let lng = coord_array[0].as_f64()?;
+                                    let lat = coord_array[1].as_f64()?;
+                                    Some((lat, lng))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    
+                    if !points.is_empty() {
+                        let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
+                        if simplified_geom.len() < points.len() {
+                            let simplified_coords: Vec<serde_json::Value> = simplified_geom
+                                .iter()
+                                .map(|(lat, lng)| serde_json::json!([lng, lat]))
+                                .collect();
+                            
+                            geom_geojson = serde_json::json!({
+                                "type": "LineString",
+                                "coordinates": simplified_coords
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Simplify profile data for charts based on mode
+        let elevation_profile = simplify_chart_data(
+            row.try_get("elevation_profile").ok(),
+            track_mode,
+            zoom_level,
+        );
+        
+        let hr_data = simplify_chart_data(
+            row.try_get("hr_data").ok(),
+            track_mode,
+            zoom_level,
+        );
+        
+        let temp_data = simplify_chart_data(
+            row.try_get("temp_data").ok(),
+            track_mode,
+            zoom_level,
+        );
+        
+        let time_data = simplify_chart_data(
+            row.try_get("time_data").ok(),
+            track_mode,
+            zoom_level,
+        );
+        
+        Ok(Some(TrackDetail {
+            id: row
+                .try_get::<Uuid, _>("id")
+                .expect("Failed to get id: id column missing or wrong type"),
+            name: row
+                .try_get("name")
+                .expect("Failed to get name: name column missing or wrong type"),
+            description: row
+                .try_get("description")
+                .expect("Failed to get description: description column missing or wrong type"),
+            categories: row
+                .try_get("categories")
+                .expect("Failed to get categories: categories column missing or wrong type"),
+            auto_classifications: row
+                .try_get("auto_classifications")
+                .unwrap_or_else(|_| Vec::new()),
+            geom_geojson,
+            length_km: row
+                .try_get("length_km")
+                .expect("Failed to get length_km: length_km column missing or wrong type"),
+            elevation_profile,
+            hr_data,
+            temp_data,
+            time_data,
+            elevation_up: row
+                .try_get("elevation_up")
+                .expect("Failed to get elevation_up: elevation_up column missing or wrong type"),
+            elevation_down: row.try_get("elevation_down").expect(
+                "Failed to get elevation_down: elevation_down column missing or wrong type",
+            ),
+            avg_speed: row
+                .try_get("avg_speed")
+                .expect("Failed to get avg_speed: avg_speed column missing or wrong type"),
+            avg_hr: row
+                .try_get("avg_hr")
+                .expect("Failed to get avg_hr: avg_hr column missing or wrong type"),
+            hr_min: row
+                .try_get("hr_min")
+                .expect("Failed to get hr_min: hr_min column missing or wrong type"),
+            hr_max: row
+                .try_get("hr_max")
+                .expect("Failed to get hr_max: hr_max column missing or wrong type"),
+            moving_time: row
+                .try_get("moving_time")
+                .expect("Failed to get moving_time: moving_time column missing or wrong type"),
+            pause_time: row
+                .try_get("pause_time")
+                .expect("Failed to get pause_time: pause_time column missing or wrong type"),
+            moving_avg_speed: row.try_get("moving_avg_speed").ok(),
+            moving_avg_pace: row.try_get("moving_avg_pace").ok(),
+            duration_seconds: row.try_get("duration_seconds").expect(
+                "Failed to get duration_seconds: duration_seconds column missing or wrong type",
+            ),
+            created_at: row.try_get("created_at").ok(),
+            updated_at: row.try_get("updated_at").ok(),
+            recorded_at: row.try_get("recorded_at").ok(),
+            session_id: row.try_get("session_id").ok(),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Helper function to simplify chart data (elevation, HR, temp) based on mode
+fn simplify_chart_data(
+    data: Option<serde_json::Value>,
+    mode: TrackMode,
+    _zoom: f64,
+) -> Option<serde_json::Value> {
+    match data {
+        Some(json_data) => {
+            if let Some(array) = json_data.as_array() {
+                let max_points = match mode {
+                    TrackMode::Overview => 500,  // For overview mode, limit chart data aggressively
+                    TrackMode::Detail => 1500,   // For detail mode, allow more points but still limit for performance
+                };
+                
+                if array.len() > max_points {
+                    // Simple uniform sampling for chart data
+                    let step = array.len() / max_points;
+                    let simplified: Vec<serde_json::Value> = array
+                        .iter()
+                        .step_by(step.max(1))
+                        .take(max_points)
+                        .cloned()
+                        .collect();
+                    
+                    Some(serde_json::Value::Array(simplified))
+                } else {
+                    Some(json_data)
+                }
+            } else {
+                Some(json_data)
+            }
+        },
+        None => None,
+    }
+}
+
 pub async fn list_tracks_geojson(
     pool: &Arc<PgPool>,
     bbox: Option<&str>,
+    zoom: Option<f64>,
+    mode: Option<&str>,
 ) -> Result<TrackGeoJsonCollection, sqlx::Error> {
-    let base_sql = String::from(
-        "SELECT id, name, categories, length_km, elevation_up, elevation_down, avg_hr, avg_speed, duration_seconds, recorded_at, ST_AsGeoJSON(geom) as geom_json FROM tracks WHERE is_public = TRUE",
+    let track_mode = TrackMode::from_string(mode.unwrap_or("overview"));
+    let zoom_level = zoom.unwrap_or(12.0);
+    
+    // Build base SQL with zoom-based simplification using PostGIS ST_Simplify
+    let use_postgis_simplification = track_mode.is_overview() && zoom_level <= 14.0;
+    
+    let base_sql = if use_postgis_simplification {
+        // Use PostGIS ST_Simplify for overview mode with reasonable zoom levels
+        String::from(
+            "SELECT id, name, categories, length_km, 
+             CASE 
+               WHEN ST_NPoints(geom) > 1000 THEN 
+                 ST_AsGeoJSON(ST_Simplify(geom, tolerance_for_zoom_degrees($5)))
+               ELSE ST_AsGeoJSON(geom) 
+             END as geom_json,
+             ST_NPoints(geom) as original_points"
+        )
+    } else {
+        // Return full geometry for Rust-side processing
+        String::from(
+            "SELECT id, name, categories, length_km, ST_AsGeoJSON(geom) as geom_json,
+             ST_NPoints(geom) as original_points"
+        )
+    };
+    
+    // Add properties based on mode
+    let properties_sql = if track_mode.is_overview() {
+        // Minimal properties for overview mode
+        ""
+    } else {
+        // Full properties for detail mode  
+        ", elevation_up, elevation_down, avg_hr, avg_speed, duration_seconds, recorded_at"
+    };
+    
+    let full_sql = format!(
+        "{base_sql}{properties_sql} FROM tracks WHERE is_public = TRUE"
     );
 
     let rows = if let Some(bbox_str) = bbox {
@@ -246,15 +473,26 @@ pub async fn list_tracks_geojson(
             match coords {
                 Ok(c) => {
                     let sql = format!(
-                        "{base_sql} AND ST_Intersects(geom, ST_MakeEnvelope($1, $2, $3, $4, 4326))"
+                        "{full_sql} AND ST_Intersects(geom, ST_MakeEnvelope($1, $2, $3, $4, 4326))"
                     );
-                    sqlx::query(&sql)
-                        .bind(c[0])
-                        .bind(c[1])
-                        .bind(c[2])
-                        .bind(c[3])
-                        .fetch_all(&**pool)
-                        .await?
+                    if use_postgis_simplification {
+                        sqlx::query(&sql)
+                            .bind(c[0])
+                            .bind(c[1])
+                            .bind(c[2])
+                            .bind(c[3])
+                            .bind(zoom_level)
+                            .fetch_all(&**pool)
+                            .await?
+                    } else {
+                        sqlx::query(&sql)
+                            .bind(c[0])
+                            .bind(c[1])
+                            .bind(c[2])
+                            .bind(c[3])
+                            .fetch_all(&**pool)
+                            .await?
+                    }
                 }
                 Err(_) => {
                     eprintln!("Invalid bbox format: {bbox_str}");
@@ -271,46 +509,122 @@ pub async fn list_tracks_geojson(
                 features: vec![],
             });
         }
+    } else if use_postgis_simplification {
+        sqlx::query(&full_sql)
+            .bind(zoom_level)
+            .fetch_all(&**pool)
+            .await?
     } else {
-        sqlx::query(&base_sql).fetch_all(&**pool).await?
+        sqlx::query(&full_sql).fetch_all(&**pool).await?
     };
 
-    let features = rows
+    let features: Vec<TrackGeoJsonFeature> = rows
         .into_iter()
         .map(|row| {
             let id: Uuid = row.get("id");
             let name: String = row.get("name");
             let categories: Vec<String> = row.get("categories");
             let length_km: f64 = row.get("length_km");
-            let elevation_up: Option<f64> = row.try_get("elevation_up").ok();
-            let elevation_down: Option<f64> = row.try_get("elevation_down").ok();
-            let avg_hr: Option<i32> = row.try_get("avg_hr").ok();
-            let avg_speed: Option<f64> = row.try_get("avg_speed").ok();
-            let duration_seconds: Option<i32> = row.try_get("duration_seconds").ok();
-            let recorded_at: Option<chrono::DateTime<chrono::Utc>> =
-                row.try_get("recorded_at").ok();
-            let geom_json: String = row.get("geom_json");
+            let _original_points: i32 = row.try_get("original_points").unwrap_or(0);
+            let mut geom_json: String = row.get("geom_json");
+            
+            // Apply Rust-side simplification if not already done in PostGIS
+            if !use_postgis_simplification && track_mode.is_overview() {
+                if let Ok(geom_value) = serde_json::from_str::<serde_json::Value>(&geom_json) {
+                    if let Some(coordinates) = geom_value.get("coordinates").and_then(|c| c.as_array()) {
+                        if !coordinates.is_empty() {
+                            // Extract points for simplification
+                            let points: Vec<(f64, f64)> = coordinates
+                                .iter()
+                                .filter_map(|coord| {
+                                    if let Some(coord_array) = coord.as_array() {
+                                        if coord_array.len() >= 2 {
+                                            let lng = coord_array[0].as_f64()?;
+                                            let lat = coord_array[1].as_f64()?;
+                                            Some((lat, lng))
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            
+                            if !points.is_empty() {
+                                let params = get_simplification_params(track_mode, Some(zoom_level), points.len());
+                                if params.should_simplify(points.len()) {
+                                    let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
+                                    if simplified_geom.len() < points.len() {
+                                        // Convert back to GeoJSON format
+                                        let simplified_coords: Vec<serde_json::Value> = simplified_geom
+                                            .iter()
+                                            .map(|(lat, lng)| serde_json::json!([lng, lat]))
+                                            .collect();
+                                        
+                                        let simplified_geojson = serde_json::json!({
+                                            "type": "LineString",
+                                            "coordinates": simplified_coords
+                                        });
+                                        
+                                        geom_json = simplified_geojson.to_string();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Build properties based on mode
+            let mut properties = serde_json::json!({
+                "id": id,
+                "name": name,
+                "categories": categories,
+                "length_km": length_km,
+            });
+            
+            // Add extra properties for detail mode
+            if track_mode.is_detail() {
+                let elevation_up: Option<f64> = row.try_get("elevation_up").ok();
+                let elevation_down: Option<f64> = row.try_get("elevation_down").ok();
+                let avg_hr: Option<i32> = row.try_get("avg_hr").ok();
+                let avg_speed: Option<f64> = row.try_get("avg_speed").ok();
+                let duration_seconds: Option<i32> = row.try_get("duration_seconds").ok();
+                let recorded_at: Option<chrono::DateTime<chrono::Utc>> =
+                    row.try_get("recorded_at").ok();
+                
+                properties["elevation_up"] = serde_json::to_value(elevation_up).unwrap_or(serde_json::Value::Null);
+                properties["elevation_down"] = serde_json::to_value(elevation_down).unwrap_or(serde_json::Value::Null);
+                properties["avg_hr"] = serde_json::to_value(avg_hr).unwrap_or(serde_json::Value::Null);
+                properties["avg_speed"] = serde_json::to_value(avg_speed).unwrap_or(serde_json::Value::Null);
+                properties["duration_seconds"] = serde_json::to_value(duration_seconds).unwrap_or(serde_json::Value::Null);
+                properties["recorded_at"] = serde_json::to_value(recorded_at).unwrap_or(serde_json::Value::Null);
+            }
+
             TrackGeoJsonFeature {
                 type_field: "Feature".to_string(),
                 geometry: serde_json::from_str(&geom_json).unwrap_or_else(|e| {
                     eprintln!("Failed to parse geometry GeoJSON: {e}");
                     serde_json::json!({})
                 }),
-                properties: serde_json::json!({
-                    "id": id,
-                    "name": name,
-                    "categories": categories,
-                    "length_km": length_km,
-                    "elevation_up": elevation_up,
-                    "elevation_down": elevation_down,
-                    "avg_hr": avg_hr,
-                    "avg_speed": avg_speed,
-                    "duration_seconds": duration_seconds,
-                    "recorded_at": recorded_at,
-                }),
+                properties,
             }
         })
         .collect();
+
+    // Log performance metrics for monitoring
+    if !features.is_empty() {
+        let total_features = features.len();
+        tracing::info!(
+            total_features = total_features,
+            zoom = zoom_level,
+            mode = mode.unwrap_or("overview"),
+            postgis_simplified = use_postgis_simplification,
+            "[PERF] list_tracks_geojson completed"
+        );
+    }
+
     Ok(TrackGeoJsonCollection {
         type_field: "FeatureCollection".to_string(),
         features,
