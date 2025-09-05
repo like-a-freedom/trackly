@@ -115,18 +115,21 @@ const { hasSearchState, restoreSearchState } = useSearchState();
 // Debounced track fetching with zoom and mode support
 const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
   try {
+    // Always use the current route ID as the source of truth
+    const currentRouteId = route.params.id;
+    
     // Check if this request is still relevant (prevent race conditions)
-    if (id !== trackId.value) {
-      console.log(`Skipping fetch for ${id} - current track is ${trackId.value}`);
+    if (id !== currentRouteId) {
+      console.log(`Skipping fetch for ${id} - current route track is ${currentRouteId}`);
       return;
     }
 
     // Use detail mode for track view with current zoom for optimal data
     const trackData = await fetchTrackDetail(id, zoomLevel, 'detail');
     
-    // Double-check if this is still the current track
-    if (id !== trackId.value) {
-      console.log(`Discarding fetch result for ${id} - current track is ${trackId.value}`);
+    // Double-check if this is still the current route track
+    if (id !== route.params.id) {
+      console.log(`Discarding fetch result for ${id} - current route track is ${route.params.id}`);
       return;
     }
     
@@ -173,13 +176,13 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
     }
   } catch (error) {
     console.error('Failed to fetch track:', error);
-    // Only clear track if this was for the current track
-    if (id === trackId.value) {
+    // Only clear track if this was for the current route track
+    if (id === route.params.id) {
       track.value = null;
     }
   } finally {
-    // Only update loading state if this was for the current track
-    if (id === trackId.value) {
+    // Only update loading state if this was for the current route track
+    if (id === route.params.id) {
       loading.value = false;
     }
   }
@@ -283,12 +286,6 @@ async function fetchTrack(zoomLevel = null, forceTrackId = null) {
   // Prevent fetching if this track is already being processed
   if (currentTrackId.value === id && !isInitialLoad.value) {
     console.log(`Already processing track ${id}, skipping duplicate fetch`);
-    return;
-  }
-  
-  // CRITICAL: Skip if this is not the current route track
-  if (id !== route.params.id) {
-    console.log(`Skipping fetch for ${id} - current route track is ${route.params.id}`);
     return;
   }
   

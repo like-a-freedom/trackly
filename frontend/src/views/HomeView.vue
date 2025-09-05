@@ -116,7 +116,7 @@ const markerLatLng = ref(center.value);
 const bounds = ref(null);
 const dragActive = ref(false);
 const uploadFormExpanded = ref(false); // По умолчанию свернута
-const { polylines, fetchTracksInBounds, uploadTrack, error } = useTracks();
+const { polylines, fetchTracksInBounds, uploadTrack, error, updateTrackInPolylines } = useTracks();
 const tooltip = reactive({ visible: false, x: 0, y: 0, data: null });
 const { showToast, toast } = useToast();
 const { clearSearchState, searchResults, searchQuery, hasSearchState } = useSearchState();
@@ -345,6 +345,21 @@ function removeTrackLocally(id) {
   polylines.value = polylines.value.filter(p => p.properties?.id !== id);
 }
 
+// Track update handling
+function handleTrackNameUpdated(event) {
+  const { trackId, newName } = event.detail || {};
+  if (trackId && newName) {
+    updateTrackInPolylines(trackId, { name: newName });
+  }
+}
+
+function handleTrackDescriptionUpdated(event) {
+  const { trackId, newDescription } = event.detail || {};
+  if (trackId) {
+    updateTrackInPolylines(trackId, { description: newDescription });
+  }
+}
+
 function handleTrackDeleted(event) {
   const id = event.detail?.id;
   removeTrackLocally(id);
@@ -358,10 +373,14 @@ function handleTrackDeleted(event) {
 
 onMounted(() => {
   window.addEventListener('track-deleted', handleTrackDeleted);
+  window.addEventListener('track-name-updated', handleTrackNameUpdated);
+  window.addEventListener('track-description-updated', handleTrackDescriptionUpdated);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('track-deleted', handleTrackDeleted);
+  window.removeEventListener('track-name-updated', handleTrackNameUpdated);
+  window.removeEventListener('track-description-updated', handleTrackDescriptionUpdated);
 });
 </script>
 

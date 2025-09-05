@@ -373,6 +373,39 @@ export function useTracks() {
         }
     }
 
+    // Function to update specific track data in cached polylines
+    function updateTrackInPolylines(trackId, updates) {
+        // Update polylines
+        polylines.value = polylines.value.map(polyline => {
+            if (polyline.properties?.id === trackId) {
+                return {
+                    ...polyline,
+                    properties: {
+                        ...polyline.properties,
+                        ...updates
+                    }
+                };
+            }
+            return polyline;
+        });
+
+        // Update tracksCollection
+        if (tracksCollection.value?.features) {
+            tracksCollection.value.features = tracksCollection.value.features.map(feature => {
+                if (feature.properties?.id === trackId) {
+                    return {
+                        ...feature,
+                        properties: {
+                            ...feature.properties,
+                            ...updates
+                        }
+                    };
+                }
+                return feature;
+            });
+        }
+    }
+
     return {
         polylines,
         tracksCollection,
@@ -382,6 +415,7 @@ export function useTracks() {
         checkTrackDuplicate,
         fetchTrackDetail,
         processTrackData,
+        updateTrackInPolylines,
         // Export utility functions
         validateSpeedData,
         formatSpeed,
