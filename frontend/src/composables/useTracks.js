@@ -112,51 +112,118 @@ export function useTracks() {
     const polylines = ref([]);
     const tracksCollection = ref({ type: 'FeatureCollection', features: [] });
     const error = ref(null);
-    async function fetchTracksInBounds(bounds) {
+
+    // AbortController for cancelling ongoing requests 
+    let currentController = null;
+
+    // Simple cache for bbox requests to prevent duplicates
+    const bboxCache = new Map();
+    const CACHE_TTL = 30000; // 30 seconds
+
+    function getCachedTracks(bboxString) {
+        const cached = bboxCache.get(bboxString);
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return cached.data;
+        }
+        return null;
+    }
+
+    function setCachedTracks(bboxString, data) {
+        bboxCache.set(bboxString, {
+            data,
+            timestamp: Date.now()
+        });
+
+        // Clean old cache entries
+        for (const [key, value] of bboxCache.entries()) {
+            if (Date.now() - value.timestamp > CACHE_TTL) {
+                bboxCache.delete(key);
+            }
+        }
+    }
+
+    async function fetchTracksInBounds(bounds, options = {}) {
         error.value = null;
         if (!bounds) return;
+
+        // Cancel previous request
+        if (currentController) {
+            currentController.abort();
+        }
+
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
-        const url = `/tracks?bbox=${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
+        const bboxString = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
+
+        // Check cache first
+        const cachedData = getCachedTracks(bboxString);
+        if (cachedData && !options.forceRefresh) {
+            updatePolylines(cachedData);
+            return;
+        }
+
+        // Build URL with zoom and mode parameters for optimization
+        const zoom = options.zoom || 12; // Default zoom
+        const mode = options.mode || 'overview'; // Default mode for track lists
+        const url = `/tracks?bbox=${bboxString}&zoom=${zoom}&mode=${mode}`;
+
         try {
-            const response = await fetch(url);
+            currentController = new AbortController();
+            const response = await fetch(url, {
+                signal: currentController.signal
+            });
+
             if (!response.ok) throw new Error("Failed to fetch tracks");
             const data = await response.json();
-            if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
-                let newPolylines = [];
-                data.features.forEach((feature, index) => {
-                    const id = feature.properties && feature.properties.id ? feature.properties.id : undefined;
-                    const color = getColorForId(id);
 
-                    if (feature.geometry && feature.geometry.type === 'MultiLineString') {
-                        feature.geometry.coordinates.forEach(coords => {
-                            newPolylines.push({
-                                latlngs: coords.map(([lng, lat]) => [lat, lng]),
-                                color,
-                                properties: feature.properties,
-                                showTooltip: false
-                            });
-                        });
-                    } else if (feature.geometry && feature.geometry.type === 'LineString') {
-                        newPolylines.push({
-                            latlngs: feature.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
-                            color,
-                            properties: feature.properties,
-                            showTooltip: false
-                        });
-                    }
-                });
-                polylines.value = newPolylines;
-                tracksCollection.value = data;
+            if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+                // Cache the response
+                setCachedTracks(bboxString, data);
+                updatePolylines(data);
             } else {
                 polylines.value = [];
                 tracksCollection.value = { type: 'FeatureCollection', features: [] };
             }
         } catch (e) {
+            // Don't show error for aborted requests
+            if (e.name === 'AbortError') {
+                return;
+            }
+
             error.value = e.message || 'Unknown error fetching tracks';
             polylines.value = [];
             tracksCollection.value = { type: 'FeatureCollection', features: [] };
+        } finally {
+            currentController = null;
         }
+    }
+
+    function updatePolylines(data) {
+        let newPolylines = [];
+        data.features.forEach((feature, index) => {
+            const id = feature.properties && feature.properties.id ? feature.properties.id : undefined;
+            const color = getColorForId(id);
+
+            if (feature.geometry && feature.geometry.type === 'MultiLineString') {
+                feature.geometry.coordinates.forEach(coords => {
+                    newPolylines.push({
+                        latlngs: coords.map(([lng, lat]) => [lat, lng]),
+                        color,
+                        properties: feature.properties,
+                        showTooltip: false
+                    });
+                });
+            } else if (feature.geometry && feature.geometry.type === 'LineString') {
+                newPolylines.push({
+                    latlngs: feature.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+                    color,
+                    properties: feature.properties,
+                    showTooltip: false
+                });
+            }
+        });
+        polylines.value = newPolylines;
+        tracksCollection.value = data;
     }
     async function uploadTrack({ file, name, categories }) {
         error.value = null;
@@ -255,11 +322,12 @@ export function useTracks() {
     }
 
     /**
-     * Enhanced fetchTrackDetail with data validation and optional simplification
+     * Enhanced fetchTrackDetail with data validation and zoom/mode support
      * @param {string} id - track ID
      * @param {number} zoom - zoom level for track simplification (optional)
+     * @param {string} mode - detail or overview mode (optional, defaults to 'detail')
      */
-    async function fetchTrackDetail(id, zoom = null) {
+    async function fetchTrackDetail(id, zoom = null, mode = 'detail') {
         error.value = null;
         if (!id) {
             console.warn('fetchTrackDetail: No track ID provided');
@@ -267,10 +335,20 @@ export function useTracks() {
         }
 
         try {
-            // Use simplified endpoint if zoom is provided for better performance
-            const endpoint = zoom !== null
-                ? `/tracks/${id}/simplified?zoom=${zoom}`
-                : `/tracks/${id}`;
+            // Use adaptive endpoint with zoom and mode for optimal performance
+            let endpoint = `/tracks/${id}`;
+            const params = new URLSearchParams();
+
+            if (zoom !== null) {
+                params.append('zoom', zoom.toString());
+            }
+            if (mode) {
+                params.append('mode', mode);
+            }
+
+            if (params.toString()) {
+                endpoint += `?${params.toString()}`;
+            }
 
             const response = await fetch(endpoint);
             if (!response.ok) {

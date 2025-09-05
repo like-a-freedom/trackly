@@ -1,8 +1,7 @@
 use crate::db;
 use crate::models::*;
 use crate::track_utils::{
-    self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal, simplify_profile_array_adaptive,
-    simplify_track_for_zoom,
+    self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -417,18 +416,32 @@ pub async fn list_tracks_geojson(
     State(pool): State<Arc<PgPool>>,
     Query(params): Query<TrackGeoJsonQuery>,
 ) -> Result<Json<TrackGeoJsonCollection>, StatusCode> {
-    let geojson = db::list_tracks_geojson(&pool, params.bbox.as_deref())
-        .await
-        .map_err(handle_db_error)?;
+    let geojson = db::list_tracks_geojson(
+        &pool, 
+        params.bbox.as_deref(), 
+        params.zoom, 
+        params.mode.as_deref()
+    )
+    .await
+    .map_err(handle_db_error)?;
     Ok(Json(geojson))
 }
 
 pub async fn get_track(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
+    Query(params): Query<TrackSimplificationQuery>,
 ) -> Result<Json<TrackDetail>, StatusCode> {
-    info!(?id, "[get_track] called");
-    match db::get_track_detail(&pool, id).await {
+    info!(?id, ?params.zoom, ?params.mode, "[get_track] called");
+    
+    // Use adaptive track detail if zoom/mode params are provided
+    let result = if params.zoom.is_some() || params.mode.is_some() {
+        db::get_track_detail_adaptive(&pool, id, params.zoom, params.mode.as_deref()).await
+    } else {
+        db::get_track_detail(&pool, id).await
+    };
+    
+    match result {
         Ok(Some(track)) => Ok(Json(track)),
         Ok(None) => {
             error!(?id, "[get_track] not found");
@@ -446,110 +459,48 @@ pub async fn get_track_simplified(
     Path(id): Path<Uuid>,
     Query(params): Query<TrackSimplificationQuery>,
 ) -> Result<Json<TrackSimplified>, StatusCode> {
-    info!(?id, ?params.zoom, "[get_track_simplified] called");
+    info!(?id, ?params.zoom, ?params.mode, "[get_track_simplified] called");
 
-    match db::get_track_detail(&pool, id).await {
+    match db::get_track_detail_adaptive(&pool, id, params.zoom, params.mode.as_deref()).await {
         Ok(Some(track)) => {
-            // Extract coordinates from GeoJSON
-            if let Some(coords) = track.geom_geojson.get("coordinates") {
-                if let Some(coord_array) = coords.as_array() {
-                    let points: Vec<(f64, f64)> = coord_array
-                        .iter()
-                        .filter_map(|coord| {
-                            if let Some(pair) = coord.as_array() {
-                                if pair.len() >= 2 {
-                                    let lon = pair[0].as_f64()?;
-                                    let lat = pair[1].as_f64()?;
-                                    Some((lat, lon))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
+            // Convert TrackDetail to TrackSimplified
+            let simplified = TrackSimplified {
+                id: track.id,
+                name: track.name,
+                description: track.description,
+                categories: track.categories,
+                geom_geojson: track.geom_geojson,
+                length_km: track.length_km,
+                elevation_profile: track.elevation_profile,
+                hr_data: track.hr_data,
+                temp_data: track.temp_data,
+                time_data: track.time_data,
+                elevation_up: track.elevation_up,
+                elevation_down: track.elevation_down,
+                avg_speed: track.avg_speed,
+                avg_hr: track.avg_hr,
+                hr_min: track.hr_min,
+                hr_max: track.hr_max,
+                moving_time: track.moving_time,
+                pause_time: track.pause_time,
+                moving_avg_speed: track.moving_avg_speed,
+                moving_avg_pace: track.moving_avg_pace,
+                duration_seconds: track.duration_seconds,
+                recorded_at: track.recorded_at,
+                created_at: track.created_at,
+                updated_at: track.updated_at,
+                session_id: track.session_id,
+                auto_classifications: track.auto_classifications,
+            };
 
-                    // Simplify the track based on zoom level
-                    let zoom = params.zoom.unwrap_or(10.0);
-                    let simplified_points = simplify_track_for_zoom(&points, zoom);
+            tracing::info!(
+                track_id = %id,
+                zoom = params.zoom.unwrap_or(15.0),
+                mode = params.mode.as_deref().unwrap_or("detail"),
+                "[PERF] get_track_simplified completed with adaptive optimization"
+            );
 
-                    // Update GeoJSON with simplified coordinates
-                    let simplified_coords: Vec<serde_json::Value> = simplified_points
-                        .iter()
-                        .map(|(lat, lon)| serde_json::json!([*lon, *lat]))
-                        .collect();
-
-                    let simplified_geom = serde_json::json!({
-                        "type": "LineString",
-                        "coordinates": simplified_coords
-                    });
-
-                    info!(
-                        ?id,
-                        original_points = points.len(),
-                        simplified_points = simplified_points.len(),
-                        "[get_track_simplified] simplified track"
-                    );
-
-                    // Simplify profile data to match simplified track points
-                    let simplified_elevation_profile =
-                        track.elevation_profile.as_ref().and_then(|data| {
-                            simplify_profile_array_adaptive(
-                                data,
-                                points.len(),
-                                simplified_points.len(),
-                            )
-                        });
-                    let simplified_hr_data = track.hr_data.as_ref().and_then(|data| {
-                        simplify_profile_array_adaptive(data, points.len(), simplified_points.len())
-                    });
-                    let simplified_temp_data = track.temp_data.as_ref().and_then(|data| {
-                        simplify_profile_array_adaptive(data, points.len(), simplified_points.len())
-                    });
-                    let simplified_time_data = track.time_data.as_ref().and_then(|data| {
-                        simplify_profile_array_adaptive(data, points.len(), simplified_points.len())
-                    });
-
-                    // Create simplified response with simplified chart data and geometry
-                    let simplified_track = TrackSimplified {
-                        id: track.id,
-                        name: track.name,
-                        description: track.description,
-                        categories: track.categories,
-                        geom_geojson: simplified_geom,
-                        length_km: track.length_km,
-                        elevation_profile: simplified_elevation_profile,
-                        hr_data: simplified_hr_data,
-                        temp_data: simplified_temp_data,
-                        time_data: simplified_time_data,
-                        elevation_up: track.elevation_up,
-                        elevation_down: track.elevation_down,
-                        avg_speed: track.avg_speed,
-                        avg_hr: track.avg_hr,
-                        hr_min: track.hr_min,
-                        hr_max: track.hr_max,
-                        moving_time: track.moving_time,
-                        pause_time: track.pause_time,
-                        moving_avg_speed: track.moving_avg_speed,
-                        moving_avg_pace: track.moving_avg_pace,
-                        duration_seconds: track.duration_seconds,
-                        recorded_at: track.recorded_at,
-                        created_at: track.created_at,
-                        updated_at: track.updated_at,
-                        session_id: track.session_id,
-                        auto_classifications: track.auto_classifications,
-                    };
-
-                    Ok(Json(simplified_track))
-                } else {
-                    error!(?id, "[get_track_simplified] invalid coordinates format");
-                    Err(StatusCode::INTERNAL_SERVER_ERROR)
-                }
-            } else {
-                error!(?id, "[get_track_simplified] no coordinates in geom_geojson");
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
-            }
+            Ok(Json(simplified))
         }
         Ok(None) => {
             error!(?id, "[get_track_simplified] not found");
