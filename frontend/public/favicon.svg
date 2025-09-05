@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <style>
+      .path { fill: none; stroke: #4CAF50; stroke-width: 2; stroke-linecap: round; }
+      .point { fill: #FF5722; }
+    </style>
+  </defs>
+  <!-- Path representing a track/route -->
+  <path class="path" d="M4 20 Q8 10 12 15 T20 12 T28 18"/>
+  <!-- Start point -->
+  <circle class="point" cx="4" cy="20" r="2"/>
+  <!-- End point -->
+  <circle class="point" cx="28" cy="18" r="2"/>
+</svg>
