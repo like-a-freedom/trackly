@@ -350,6 +350,8 @@ export function useTracks() {
                 endpoint += `?${params.toString()}`;
             }
 
+            console.log(`Fetching track detail: ${endpoint}`);
+
             const response = await fetch(endpoint);
             if (!response.ok) {
                 throw new Error(`Failed to fetch track detail: ${response.status} ${response.statusText}`);

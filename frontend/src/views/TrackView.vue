@@ -103,6 +103,7 @@ const sessionId = getSessionId();
 const windowWidth = ref(window.innerWidth);
 const windowHeight = ref(window.innerHeight);
 const lastFetchZoom = ref(null); // Track last zoom used for fetching to avoid duplicates
+const isInitialLoad = ref(true); // Track if this is the first load to prevent redundant fetches
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -262,10 +263,17 @@ async function fetchTrack(zoomLevel = null) {
   const currentZoom = zoomLevel || zoom.value || 10;
   const roundedZoom = Math.round(currentZoom);
   
+  // Skip if same zoom was already fetched (prevent duplicates)
+  if (!isInitialLoad.value && lastFetchZoom.value === roundedZoom) {
+    console.log(`Skip duplicate fetch - zoom ${roundedZoom} already fetched`);
+    return;
+  }
+  
   console.log(`Fetching track ${id} with zoom ${roundedZoom} for performance optimization`);
   lastFetchZoom.value = roundedZoom;
   
   await debouncedFetchTrack(id, roundedZoom);
+  isInitialLoad.value = false; // Mark that initial load is complete
 }
 
 function calculateBounds(latlngs) {
@@ -301,7 +309,7 @@ function handleCenterUpdate(newCenter) {
 
 // Handle zoom updates for adaptive loading
 const debouncedZoomUpdate = useAdvancedDebounce((newZoom) => {
-  if (track.value?.id) {
+  if (track.value?.id && !isInitialLoad.value) { // Don't trigger during initial load
     // Round zoom to prevent floating point precision issues
     const roundedZoom = Math.round(newZoom);
     
@@ -312,10 +320,9 @@ const debouncedZoomUpdate = useAdvancedDebounce((newZoom) => {
     }
     
     console.log(`Zoom changed to ${roundedZoom}, refetching track with adaptive detail`);
-    lastFetchZoom.value = roundedZoom;
     fetchTrack(roundedZoom);
   }
-}, 1000, { leading: false, trailing: true });
+}, 1500, { leading: false, trailing: true }); // Increased delay to 1.5s to avoid refetch during auto-zoom
 
 function handleZoomUpdate(newZoom) {
   const currentZoom = zoom.value;
@@ -325,8 +332,14 @@ function handleZoomUpdate(newZoom) {
   // Always update zoom value
   zoom.value = newZoom;
   
-  // Only trigger fetch if zoom changed by at least 2 levels to reduce unnecessary requests
-  if (Math.abs(roundedNewZoom - roundedCurrentZoom) >= 2) {
+  // Skip zoom-based fetching during initial load (auto-zoom phase)
+  if (isInitialLoad.value) {
+    console.log(`Skip zoom fetch during initial load: ${roundedNewZoom}`);
+    return;
+  }
+  
+  // Only trigger fetch if zoom changed by at least 3 levels to reduce unnecessary requests
+  if (Math.abs(roundedNewZoom - roundedCurrentZoom) >= 3) {
     console.log(`Significant zoom change: ${roundedCurrentZoom} -> ${roundedNewZoom}`);
     debouncedZoomUpdate(roundedNewZoom);
   }
@@ -425,8 +438,9 @@ onDeactivated(() => {
 watch(() => route.params.id, async (newId) => {
   if (newId && newId !== track.value?.id) {
     console.log('Route changed, fetching new track:', newId);
-    // Reset zoom tracking and center for new track
+    // Reset state for new track
     lastFetchZoom.value = null;
+    isInitialLoad.value = true;
     center.value = [59.9311, 30.3609]; // Reset to default, will be updated by track data
     await fetchTrack();
   }
