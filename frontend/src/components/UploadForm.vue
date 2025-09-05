@@ -102,7 +102,7 @@ function onFileChange(event) {
   const file = event.target.files[0];
   selectedFile.value = file || null;
   if (file) {
-    trackName.value = file.name.replace(/\.[^.]+$/, "");
+    trackName.value = file.name.replace(/\.[^.]+$/, "").normalize('NFC');
     uploadSuccess.value = false; // Hide success message on new file
   } else {
     trackName.value = "";
@@ -121,7 +121,7 @@ async function handleUpload() {
   try {
     await uploadTrack({
       file: selectedFile.value,
-      name: trackName.value,
+      name: trackName.value.normalize('NFC'),
       categories: trackCategories.value.length
         ? trackCategories.value.map(obj => obj.value)
         : []
