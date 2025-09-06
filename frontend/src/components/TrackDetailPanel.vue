@@ -1,5 +1,5 @@
 <template>
-  <div class="track-detail-flyout" :class="{ 'closing': isClosing, 'collapsed': isCollapsed }" @wheel="handleWheel">
+  <div class="track-detail-flyout" :class="{ 'closing': isClosing, 'collapsed': isCollapsed }" @wheel="handleWheel" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
     <!-- Panel Controls "Tab" - только когда свернута -->
     <div class="panel-controls-tab" v-show="isCollapsed">
       <button class="collapse-toggle-btn" @click="toggleCollapse" 
@@ -12,14 +12,14 @@
       </button>
     </div>
     
-    <div class="flyout-content" ref="flyoutContent" @wheel="handleContentWheel">
+    <div class="flyout-content" ref="flyoutContent" @wheel="handleContentWheel" @mousedown.stop @mouseup.stop @selectstart.stop @dragstart.prevent>
       <!-- Collapsible content -->
       <div class="collapsible-content" v-show="!isCollapsed">
       
       <!-- Track Header -->
       <div class="track-header">
         <!-- Name Edit Mode -->
-        <div v-if="isEditingName" class="name-edit-block" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop>
+        <div v-if="isEditingName" class="name-edit-block" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
           <input 
             ref="nameInput"
             v-model="editedName" 
@@ -31,9 +31,11 @@
             @mouseup.stop
             @click.stop
             @dblclick.stop
+            @selectstart.stop
+            @dragstart.prevent
             maxlength="255"
           />
-          <div class="edit-name-actions" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop>
+          <div class="edit-name-actions" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
             <button 
               @click="saveName" 
               :disabled="savingName"
@@ -126,7 +128,7 @@
         </div>
         
         <!-- Description Edit Mode -->
-        <div v-if="isEditingDescription" class="description-edit-block" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop>
+        <div v-if="isEditingDescription" class="description-edit-block" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
           <textarea 
             ref="descriptionTextarea"
             v-model="editedDescription" 
@@ -138,8 +140,10 @@
             @mouseup.stop
             @click.stop
             @dblclick.stop
+            @selectstart.stop
+            @dragstart.prevent
           />
-          <div class="edit-description-actions" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop>
+          <div class="edit-description-actions" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
             <button 
               @click="saveDescription" 
               :disabled="savingDescription"
