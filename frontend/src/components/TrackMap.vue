@@ -52,6 +52,10 @@
         v-if="!props.selectedTrackDetail"
         @open-search="$emit('open-search')"
       />
+      <GeolocationButton 
+        v-if="!props.selectedTrackDetail"
+        @location-found="onLocationFound"
+      />
     </div>
     <slot></slot>
   </l-map>
@@ -73,6 +77,7 @@ import {
 } from '../utils/mapConstants.js';
 import TrackFilterControl from './TrackFilterControl.vue';
 import SearchButton from './SearchButton.vue';
+import GeolocationButton from './GeolocationButton.vue';
 import { useTrackClustering } from '../composables/useTrackClustering.js';
 // Import clustering styles
 import '../styles/track-clustering.css';
@@ -1017,6 +1022,33 @@ function onTrackMouseMove(event) {
 function onTrackMouseOut(event) {
   if (props.selectedTrackDetail) return;
   emit('trackMouseOut', event);
+}
+
+/**
+ * Handle geolocation results from the GeolocationButton component
+ * @param {Object} location - Location object with latitude, longitude, or error
+ */
+function onLocationFound(location) {
+  if (location.error) {
+    console.warn('[TrackMap] Geolocation error:', location.error);
+    return;
+  }
+
+  const map = getMapObject('onLocationFound');
+  if (!map) {
+    console.warn('[TrackMap] Map not available for geolocation');
+    return;
+  }
+
+  try {
+    // Center the map on the user's location
+    map.flyTo([location.latitude, location.longitude], 15, {
+      duration: 1.5,
+      easeLinearity: 0.25
+    });
+  } catch (error) {
+    console.error('[TrackMap] Error centering map on user location:', error);
+  }
 }
 
 /**
