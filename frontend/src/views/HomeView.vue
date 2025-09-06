@@ -70,6 +70,7 @@
           </div>
         </div>
       </div>
+      
       <Toast
         :message="(toast.value && toast.value.message) || ''"
         :type="(toast.value && toast.value.type) || 'info'"
