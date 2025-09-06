@@ -155,6 +155,9 @@ global.ResizeObserver = class ResizeObserver {
 };
 
 // Mock vue-router composables (useRoute, useRouter) to avoid needing a real router in unit tests
+const mockPush = vi.fn();
+const mockReplace = vi.fn();
+
 vi.mock('vue-router', () => {
     const route = {
         path: '/',
@@ -169,10 +172,15 @@ vi.mock('vue-router', () => {
     return {
         useRoute: () => route,
         useRouter: () => ({
-            push: vi.fn(),
-            replace: vi.fn(),
+            push: mockPush,
+            replace: mockReplace,
             currentRoute: { value: route }
-        })
+        }),
+        // Export the mocks so they can be imported in tests
+        __mocks: {
+            push: mockPush,
+            replace: mockReplace
+        }
     };
 });
 
