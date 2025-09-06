@@ -392,6 +392,19 @@ html, body, #app {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* Hide Leaflet Ukraine flag */
+.leaflet-control-attribution .leaflet-attribution-flag {
+  display: none !important;
+}
+
+/* Additional selectors to ensure flag is hidden */
+.leaflet-attribution-flag,
+.leaflet-control-attribution a[href*="ukraine"],
+.leaflet-control-attribution img[alt*="ukraine"],
+.leaflet-control-attribution img[src*="ukraine"] {
+  display: none !important;
+}
+
 .app-container {
   height: 100vh;
   width: 100vw;
