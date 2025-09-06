@@ -110,9 +110,13 @@ const router = useRouter();
 
 const url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const attribution = '&copy; <a target="_blank" href="http://osm.org/copyright">OpenStreetMap</a> contributors';
-const zoom = shallowRef(11);
+
+// Load saved map position or use defaults
+const savedPosition = loadMapPosition();
+const zoom = shallowRef(savedPosition?.zoom || 11);
+const center = shallowRef(savedPosition?.center || [56.04028, 37.83185]);
+
 const pendingZoomRestore = ref(null);
-const center = shallowRef([56.04028, 37.83185]);
 const markerLatLng = ref(center.value);
 const bounds = ref(null);
 const dragActive = ref(false);
@@ -126,6 +130,52 @@ const sessionId = getSessionId();
 
 // Search state
 const searchVisible = ref(false);
+
+// Map position persistence
+const MAP_POSITION_STORAGE_KEY = 'trackly_map_position';
+
+function saveMapPosition(centerValue, zoomValue) {
+  try {
+    const position = {
+      center: centerValue,
+      zoom: zoomValue,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
+  } catch (error) {
+    console.warn('[HomeView] Failed to save map position:', error);
+  }
+}
+
+function loadMapPosition() {
+  try {
+    const stored = localStorage.getItem(MAP_POSITION_STORAGE_KEY);
+    if (!stored) return null;
+    
+    const position = JSON.parse(stored);
+    
+    // Validate stored position
+    if (!position || 
+        !Array.isArray(position.center) || 
+        position.center.length !== 2 ||
+        typeof position.zoom !== 'number' ||
+        typeof position.center[0] !== 'number' ||
+        typeof position.center[1] !== 'number' ||
+        isNaN(position.center[0]) || 
+        isNaN(position.center[1]) ||
+        isNaN(position.zoom) ||
+        position.center[0] === null ||
+        position.center[1] === null ||
+        position.zoom === null) {
+      return null;
+    }
+    
+    return position;
+  } catch (error) {
+    console.warn('[HomeView] Failed to load map position:', error);
+    return null;
+  }
+}
 
 // Debounced and throttled functions for performance
 // Increased debounce to 500ms to reduce multiple requests as recommended in optimization spec
@@ -142,6 +192,11 @@ const debouncedFetchTracks = useAdvancedDebounce((bounds) => {
 const throttledTooltipUpdate = useThrottle((event) => {
   updateTooltipPosition(event);
 }, 16); // ~60fps
+
+// Debounced function to save map position
+const debouncedSavePosition = useAdvancedDebounce(() => {
+  saveMapPosition(center.value, zoom.value);
+}, 1000, { leading: false, trailing: true }); // Save after 1 second of inactivity
 
 
 
@@ -175,6 +230,8 @@ onActivated(() => {
 onDeactivated(() => {
   // Clear tooltip state to prevent it from appearing when returning
   hideTooltip();
+  // Save current map position when component is deactivated
+  saveMapPosition(center.value, zoom.value);
 });
 
 watch(error, (val) => {
@@ -186,6 +243,8 @@ watch(() => router.currentRoute.value.path, (newPath) => {
   if (newPath !== '/') {
     // Clear tooltip when leaving home page
     hideTooltip();
+    // Save current map position when leaving home page
+    saveMapPosition(center.value, zoom.value);
   }
 });
 
@@ -310,12 +369,20 @@ function handleDrop(event) {
 
 function handleZoomUpdate(val) {
   // Only update if valid
-  if (isValidZoom(val)) zoom.value = val;
+  if (isValidZoom(val)) {
+    zoom.value = val;
+    // Save position to localStorage with debouncing
+    debouncedSavePosition();
+  }
 }
 
 function handleCenterUpdate(val) {
   // Only update if valid
-  if (isValidLatLng(val)) center.value = val;
+  if (isValidLatLng(val)) {
+    center.value = val;
+    // Save position to localStorage with debouncing
+    debouncedSavePosition();
+  }
 }
 
 
@@ -372,16 +439,25 @@ function handleTrackDeleted(event) {
   }
 }
 
+// Save map position before page unload
+function handleBeforeUnload() {
+  saveMapPosition(center.value, zoom.value);
+}
+
 onMounted(() => {
   window.addEventListener('track-deleted', handleTrackDeleted);
   window.addEventListener('track-name-updated', handleTrackNameUpdated);
   window.addEventListener('track-description-updated', handleTrackDescriptionUpdated);
+  window.addEventListener('beforeunload', handleBeforeUnload);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('track-deleted', handleTrackDeleted);
   window.removeEventListener('track-name-updated', handleTrackNameUpdated);
   window.removeEventListener('track-description-updated', handleTrackDescriptionUpdated);
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+  // Save final position before unmounting
+  saveMapPosition(center.value, zoom.value);
 });
 </script>
 
