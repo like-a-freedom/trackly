@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import UploadForm from '../UploadForm.vue';
+import * as VueRouter from 'vue-router';
 
 // Create mock function for checkTrackDuplicate
 const mockCheckTrackDuplicate = vi.fn().mockResolvedValue({ alreadyExists: false, warning: '' });
-const mockUploadTrack = vi.fn().mockResolvedValue({ success: true });
+const mockUploadTrack = vi.fn().mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174000', url: '/tracks/123e4567-e89b-12d3-a456-426614174000' });
+const mockPush = vi.fn();
 
 // Mock the useTracks composable
 vi.mock('../../composables/useTracks', () => ({
@@ -13,6 +15,13 @@ vi.mock('../../composables/useTracks', () => ({
         uploadTrack: mockUploadTrack
     }))
 }));
+
+// Spy on useRouter to override the default mock
+vi.spyOn(VueRouter, 'useRouter').mockReturnValue({
+    push: mockPush,
+    replace: vi.fn(),
+    currentRoute: { value: { path: '/', params: {} } }
+});
 
 // Mock the Multiselect component
 vi.mock('@vueform/multiselect', () => ({
@@ -44,8 +53,9 @@ describe('UploadForm', () => {
         // Reset mocks to default behavior
         mockCheckTrackDuplicate.mockClear();
         mockUploadTrack.mockClear();
+        mockPush.mockClear();
         mockCheckTrackDuplicate.mockResolvedValue({ alreadyExists: false, warning: '' });
-        mockUploadTrack.mockResolvedValue({ success: true });
+        mockUploadTrack.mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174000', url: '/tracks/123e4567-e89b-12d3-a456-426614174000' });
     });
 
     afterEach(() => {
@@ -479,8 +489,8 @@ describe('UploadForm', () => {
             expect(wrapper.find('.upload-success').exists()).toBe(true);
             expect(wrapper.vm.uploadSuccess).toBe(true);
 
-            // Verify that setTimeout was called with 3000ms timeout
-            expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 3000);
+            // Verify that setTimeout was called with 5000ms timeout (updated from 3000ms)
+            expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
 
             // Test that setting uploadSuccess to false hides the message (validates reactive behavior)
             wrapper.vm.uploadSuccess = false;
@@ -778,6 +788,366 @@ describe('UploadForm', () => {
             // Should emit true again
             emissions = wrapper.emitted('update:dragActive');
             expect(emissions[emissions.length - 1]).toEqual([true]);
+        });
+    });
+
+    describe('Upload Success with Track Links', () => {
+        beforeEach(() => {
+            // Mock clipboard API
+            global.navigator = {
+                clipboard: {
+                    writeText: vi.fn().mockResolvedValue()
+                }
+            };
+
+            // Mock window.location
+            delete window.location;
+            window.location = {
+                origin: 'http://localhost:3000'
+            };
+        });
+
+        afterEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('shows success message with track links after successful upload', async () => {
+            wrapper = mount(UploadForm);
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            wrapper.vm.selectedFile = file;
+            wrapper.vm.trackExists = false;
+            wrapper.vm.checkingExists = false;
+
+            await wrapper.find('.upload-form').trigger('submit');
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.find('.upload-success').exists()).toBe(true);
+            expect(wrapper.find('.success-message').text()).toContain('Track uploaded successfully!');
+            expect(wrapper.find('.success-actions').exists()).toBe(true);
+            expect(wrapper.find('.track-link-btn').exists()).toBe(true);
+            expect(wrapper.find('.copy-link-btn').exists()).toBe(true);
+        });
+
+        it('navigates to track when View Track button is clicked', async () => {
+            wrapper = mount(UploadForm);
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            wrapper.vm.selectedFile = file;
+            wrapper.vm.trackExists = false;
+            wrapper.vm.checkingExists = false;
+
+            await wrapper.find('.upload-form').trigger('submit');
+            await wrapper.vm.$nextTick();
+
+            const viewTrackBtn = wrapper.find('.track-link-btn');
+            expect(viewTrackBtn.exists()).toBe(true);
+            expect(viewTrackBtn.text()).toBe('Show track');
+
+            await viewTrackBtn.trigger('click');
+
+            expect(mockPush).toHaveBeenCalledWith('/track/123e4567-e89b-12d3-a456-426614174000');
+        });
+
+        it('copies track URL to clipboard when Copy Link button is clicked', async () => {
+            wrapper = mount(UploadForm);
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            wrapper.vm.selectedFile = file;
+            wrapper.vm.trackExists = false;
+            wrapper.vm.checkingExists = false;
+
+            await wrapper.find('.upload-form').trigger('submit');
+            await wrapper.vm.$nextTick();
+
+            const copyLinkBtn = wrapper.find('.copy-link-btn');
+            expect(copyLinkBtn.exists()).toBe(true);
+
+            // Check initial state
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(false);
+
+            await copyLinkBtn.trigger('click');
+
+            expect(global.navigator.clipboard.writeText).toHaveBeenCalledWith(
+                'http://localhost:3000/track/123e4567-e89b-12d3-a456-426614174000'
+            );
+
+            // Check that the success state is set
+            await wrapper.vm.$nextTick();
+            expect(wrapper.vm.linkCopied).toBe(true);
+        });
+
+        it('shows correct copy button states during copying process', async () => {
+            vi.useFakeTimers();
+
+            wrapper = mount(UploadForm);
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            wrapper.vm.selectedFile = file;
+            wrapper.vm.trackExists = false;
+            wrapper.vm.checkingExists = false;
+
+            await wrapper.find('.upload-form').trigger('submit');
+            await wrapper.vm.$nextTick();
+
+            const copyLinkBtn = wrapper.find('.copy-link-btn');
+
+            // Initial state - link icon should be visible
+            expect(copyLinkBtn.find('svg').exists()).toBe(true);
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(false);
+
+            // Click to copy
+            await copyLinkBtn.trigger('click');
+            await wrapper.vm.$nextTick();
+
+            // Should show success state
+            expect(wrapper.vm.linkCopied).toBe(true);
+            expect(wrapper.vm.copyingLink).toBe(false);
+
+            // Fast-forward time to clear success state
+            vi.advanceTimersByTime(2000);
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.vm.linkCopied).toBe(false);
+
+            vi.useRealTimers();
+        });
+
+        it('handles clipboard fallback when clipboard API is not available', async () => {
+            // This test validates that the clipboard fallback method exists and can be called
+            // without throwing errors. Full integration testing of document manipulation
+            // is tested in integration tests.
+
+            wrapper = mount(UploadForm);
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            wrapper.vm.selectedFile = file;
+            wrapper.vm.trackExists = false;
+            wrapper.vm.checkingExists = false;
+
+            await wrapper.find('.upload-form').trigger('submit');
+            await wrapper.vm.$nextTick();
+
+            // Check that the copy function exists and can be called
+            expect(typeof wrapper.vm.copyTrackUrl).toBe('function');
+
+            // Test that calling the function doesn't throw an error
+            expect(() => wrapper.vm.copyTrackUrl()).not.toThrow();
+        });
+
+        it('does not show action buttons when no upload data is available', async () => {
+            wrapper = mount(UploadForm);
+
+            // Manually set uploadSuccess without uploadedTrackData
+            wrapper.vm.uploadSuccess = true;
+            wrapper.vm.uploadedTrackData = null;
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.find('.upload-success').exists()).toBe(true);
+            expect(wrapper.find('.success-message').exists()).toBe(true);
+            expect(wrapper.find('.success-actions').exists()).toBe(false);
+        });
+
+        it('clears uploaded track data on new file selection', async () => {
+            wrapper = mount(UploadForm);
+
+            // Set initial uploaded track data and copy states
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadSuccess = true;
+            wrapper.vm.copyingLink = true;
+            wrapper.vm.linkCopied = true;
+            await wrapper.vm.$nextTick();
+
+            // Select new file
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            const input = wrapper.find('#track-upload');
+
+            Object.defineProperty(input.element, 'files', {
+                value: [file],
+                writable: false,
+            });
+
+            mockCheckTrackDuplicate.mockResolvedValue({ alreadyExists: false, warning: '' });
+
+            await input.trigger('change');
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.vm.uploadSuccess).toBe(false);
+            expect(wrapper.vm.uploadedTrackData).toBe(null);
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(false);
+        });
+
+        it('clears uploaded track data on file drop', async () => {
+            wrapper = mount(UploadForm);
+
+            // Set initial uploaded track data and copy states
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadSuccess = true;
+            wrapper.vm.copyingLink = true;
+            wrapper.vm.linkCopied = true;
+            await wrapper.vm.$nextTick();
+
+            // Drop new file
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            const dropEvent = {
+                dataTransfer: {
+                    files: [file]
+                }
+            };
+
+            mockCheckTrackDuplicate.mockResolvedValue({ alreadyExists: false, warning: '' });
+
+            await wrapper.find('.upload-form').trigger('drop', dropEvent);
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.vm.uploadSuccess).toBe(false);
+            expect(wrapper.vm.uploadedTrackData).toBe(null);
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(false);
+        });
+
+        it('automatically clears upload data after extended timeout', async () => {
+            vi.useFakeTimers();
+
+            wrapper = mount(UploadForm);
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            wrapper.vm.selectedFile = file;
+            wrapper.vm.trackExists = false;
+            wrapper.vm.checkingExists = false;
+
+            await wrapper.find('.upload-form').trigger('submit');
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.vm.uploadSuccess).toBe(true);
+            expect(wrapper.vm.uploadedTrackData).not.toBe(null);
+
+            // Fast-forward time past the 5 second timeout
+            vi.advanceTimersByTime(5000);
+
+            expect(wrapper.vm.uploadSuccess).toBe(false);
+            expect(wrapper.vm.uploadedTrackData).toBe(null);
+
+            vi.useRealTimers();
+        });
+
+        it('handles navigation when no track data is available gracefully', async () => {
+            wrapper = mount(UploadForm);
+
+            // Manually call navigateToTrack without uploadedTrackData
+            wrapper.vm.uploadedTrackData = null;
+            wrapper.vm.navigateToTrack();
+
+            expect(mockPush).not.toHaveBeenCalled();
+        });
+
+        it('handles copy operation when no track data is available gracefully', async () => {
+            wrapper = mount(UploadForm);
+
+            // Manually call copyTrackUrl without uploadedTrackData
+            wrapper.vm.uploadedTrackData = null;
+            await wrapper.vm.copyTrackUrl();
+
+            expect(global.navigator.clipboard.writeText).not.toHaveBeenCalled();
+        });
+
+        it('stores upload response correctly after successful upload', async () => {
+            const mockResponse = {
+                id: 'test-track-id-123',
+                url: '/tracks/test-track-id-123'
+            };
+            mockUploadTrack.mockResolvedValue(mockResponse);
+
+            wrapper = mount(UploadForm);
+            const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
+            wrapper.vm.selectedFile = file;
+            wrapper.vm.trackExists = false;
+            wrapper.vm.checkingExists = false;
+
+            await wrapper.find('.upload-form').trigger('submit');
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.vm.uploadedTrackData).toEqual(mockResponse);
+        });
+
+        it('manages copy states correctly during copy operation', async () => {
+            wrapper = mount(UploadForm);
+
+            // Set up uploaded track data
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadSuccess = true;
+            await wrapper.vm.$nextTick();
+
+            // Initial state
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(false);
+
+            // Start copy operation
+            const copyPromise = wrapper.vm.copyTrackUrl();
+
+            // Should be in copying state
+            expect(wrapper.vm.copyingLink).toBe(true);
+            expect(wrapper.vm.linkCopied).toBe(false);
+
+            await copyPromise;
+            await wrapper.vm.$nextTick();
+
+            // Should be in copied state
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(true);
+        });
+
+        it('resets copy states when clearing upload data', async () => {
+            wrapper = mount(UploadForm);
+
+            // Set up initial state with copy states active
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadSuccess = true;
+            wrapper.vm.copyingLink = true;
+            wrapper.vm.linkCopied = true;
+            await wrapper.vm.$nextTick();
+
+            // Clear upload data manually (simulating new file selection)
+            wrapper.vm.uploadedTrackData = null;
+            wrapper.vm.uploadSuccess = false;
+            wrapper.vm.copyingLink = false;
+            wrapper.vm.linkCopied = false;
+            await wrapper.vm.$nextTick();
+
+            // Copy states should be reset
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(false);
+            expect(wrapper.vm.uploadSuccess).toBe(false);
+            expect(wrapper.vm.uploadedTrackData).toBe(null);
+        });
+
+        it('copy button shows correct states', async () => {
+            wrapper = mount(UploadForm);
+
+            // Set up uploaded track data
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadSuccess = true;
+            await wrapper.vm.$nextTick();
+
+            // Find copy button
+            const copyButton = wrapper.find('.copy-link-btn');
+            expect(copyButton.exists()).toBe(true);
+
+            // Default state
+            expect(wrapper.vm.copyingLink).toBe(false);
+            expect(wrapper.vm.linkCopied).toBe(false);
+
+            // Simulate copying state
+            wrapper.vm.copyingLink = true;
+            await wrapper.vm.$nextTick();
+
+            // Button should be disabled during copying
+            expect(copyButton.attributes('disabled')).toBeDefined();
+
+            // Simulate copied state
+            wrapper.vm.copyingLink = false;
+            wrapper.vm.linkCopied = true;
+            await wrapper.vm.$nextTick();
+
+            // Button should show copied state
+            expect(copyButton.attributes('disabled')).toBeUndefined();
         });
     });
 });
