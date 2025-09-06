@@ -1,6 +1,6 @@
 <template>
   <div>
-    <form class="upload-form" @submit.prevent="handleUpload" @dragover.prevent="setDragActive(true)" @dragleave.prevent="setDragActive(false)" @drop.prevent="onDrop">
+    <form class="upload-form" @submit.prevent="handleUpload" @dragover.prevent="setDragActive(true)" @dragleave.prevent="setDragActive(false)" @drop.prevent="onDrop" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop>
       <label
         for="track-upload"
         class="upload-label drop-area"
@@ -25,6 +25,12 @@
           type="text"
           placeholder="Track name"
           autocomplete="off"
+          @mousedown.stop
+          @mouseup.stop
+          @click.stop
+          @dblclick.stop
+          @selectstart.stop
+          @dragstart.prevent
         />
         <Multiselect
           v-model="trackCategories"
@@ -39,6 +45,12 @@
           append-to-body
           position="auto"
           :max-height="220"
+          @mousedown.stop
+          @mouseup.stop
+          @click.stop
+          @dblclick.stop
+          @selectstart.stop
+          @dragstart.prevent
         />
       </template>
       <transition name="fade-slide">
