@@ -425,6 +425,40 @@ function handleResize() {
   windowHeight.value = window.innerHeight;
 }
 
+// Handle track elevation updates from TrackDetailPanel
+function handleTrackElevationUpdated(event) {
+  const { 
+    trackId, 
+    elevation_gain, 
+    elevation_loss, 
+    elevation_min, 
+    elevation_max, 
+    elevation_dataset, 
+    elevation_profile, 
+    elevation_enriched_at 
+  } = event.detail;
+  
+  // Only update if this is the current track
+  if (track.value && track.value.id === trackId) {
+    console.info(`[TrackView] Updating elevation data for track ${trackId}`);
+    
+    // Create a new track object to trigger reactivity with shallowRef
+    track.value = {
+      ...track.value,
+      elevation_enriched: true,
+      elevation_gain,
+      elevation_loss,
+      elevation_min,
+      elevation_max,
+      elevation_dataset,
+      elevation_profile,
+      elevation_enriched_at: elevation_enriched_at || new Date().toISOString()
+    };
+    
+    console.info(`[TrackView] Track object updated, new elevation_gain: ${track.value.elevation_gain}`);
+  }
+}
+
 function handleDescriptionUpdated(newDescription) {
   if (track.value) {
     track.value.description = newDescription;
@@ -453,6 +487,8 @@ onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown);
   // Add window resize listener
   window.addEventListener('resize', handleResize);
+  // Add track elevation update listener
+  window.addEventListener('track-elevation-updated', handleTrackElevationUpdated);
 });
 
 // Cleanup on unmount
@@ -461,6 +497,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown);
   // Remove window resize listener
   window.removeEventListener('resize', handleResize);
+  // Remove track elevation update listener
+  window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
 });
 
 // Handle keep-alive activation
@@ -469,6 +507,8 @@ onActivated(() => {
   document.addEventListener('keydown', handleKeyDown);
   // Add window resize listener
   window.addEventListener('resize', handleResize);
+  // Add track elevation update listener
+  window.addEventListener('track-elevation-updated', handleTrackElevationUpdated);
 });
 
 // Handle keep-alive deactivation
@@ -477,6 +517,8 @@ onDeactivated(() => {
   document.removeEventListener('keydown', handleKeyDown);
   // Remove window resize listener
   window.removeEventListener('resize', handleResize);
+  // Remove track elevation update listener
+  window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
 });
 
 // Handle route changes for keep-alive

@@ -334,7 +334,8 @@ describe('TrackMap', () => {
             // Apply category filter for running
             wrapper.vm.onFilterChange({
                 categories: ['running'],
-                lengthRange: [0, 100]
+                lengthRange: [0, 100],
+                elevationGainRange: [0, 2000]
             });
 
             await wrapper.vm.$nextTick();
@@ -352,7 +353,8 @@ describe('TrackMap', () => {
             // Apply category filter for both running and cycling
             wrapper.vm.onFilterChange({
                 categories: ['running', 'cycling'],
-                lengthRange: [0, 100]
+                lengthRange: [0, 100],
+                elevationGainRange: [0, 2000]
             });
 
             await wrapper.vm.$nextTick();
@@ -391,7 +393,8 @@ describe('TrackMap', () => {
             // Apply filter with no categories selected
             wrapper.vm.onFilterChange({
                 categories: [],
-                lengthRange: [0, 100]
+                lengthRange: [0, 100],
+                elevationGainRange: [0, 2000]
             });
 
             await wrapper.vm.$nextTick();
@@ -433,7 +436,8 @@ describe('TrackMap', () => {
             // Apply length filter with category selected
             wrapper.vm.onFilterChange({
                 categories: ['running'],
-                lengthRange: [10, 20]
+                lengthRange: [10, 20],
+                elevationGainRange: [0, 2000]
             });
 
             await wrapper.vm.$nextTick();
@@ -479,7 +483,8 @@ describe('TrackMap', () => {
             // Apply filter that would exclude track2
             wrapper.vm.onFilterChange({
                 categories: ['running'],
-                lengthRange: [0, 10]
+                lengthRange: [0, 10],
+                elevationGainRange: [0, 2000]
             });
 
             await wrapper.vm.$nextTick();
@@ -572,7 +577,8 @@ describe('TrackMap', () => {
             // Apply filter - should not change geojsonData as filtering is done by Leaflet
             wrapper.vm.onFilterChange({
                 categories: ['cycling'],
-                lengthRange: [10, 15]
+                lengthRange: [10, 15],
+                elevationGainRange: [0, 2000]
             });
 
             await wrapper.vm.$nextTick();
@@ -611,7 +617,8 @@ describe('TrackMap', () => {
             // Filter for cycling only
             wrapper.vm.onFilterChange({
                 categories: ['cycling'],
-                lengthRange: [0, 50]
+                lengthRange: [0, 50],
+                elevationGainRange: [0, 2000]
             });
 
             const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
@@ -649,7 +656,8 @@ describe('TrackMap', () => {
             // Filter with range [10, 15] - should include tracks with epsilon tolerance (0.5)
             wrapper.vm.onFilterChange({
                 categories: ['cycling'],
-                lengthRange: [10, 15]
+                lengthRange: [10, 15],
+                elevationGainRange: [0, 2000]
             });
 
             const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
@@ -693,7 +701,8 @@ describe('TrackMap', () => {
             // Filter for cycling only (which would normally exclude track2)
             wrapper.vm.onFilterChange({
                 categories: ['cycling'],
-                lengthRange: [0, 50]
+                lengthRange: [0, 50],
+                elevationGainRange: [0, 2000]
             });
 
             await wrapper.vm.$nextTick();
@@ -727,7 +736,7 @@ describe('TrackMap', () => {
             wrapper.vm.mapIsReady = true;
             wrapper.vm.isTransitioning = false;
             wrapper.vm.isUnmounting = false;
-            
+
             // Update clustering zoom level to match the prop (this simulates what happens when map is ready)
             wrapper.vm.clustering.updateZoomLevel(15);
 
@@ -768,7 +777,7 @@ describe('TrackMap', () => {
             wrapper.vm.isTransitioning = false;
             wrapper.vm.isUnmounting = false;
             wrapper.vm.layerKey++;
-            
+
             // Update clustering zoom level to match the prop (this simulates what happens when map is ready)
             wrapper.vm.clustering.updateZoomLevel(15);
 
@@ -821,7 +830,8 @@ describe('TrackMap', () => {
             // Trigger a filter change which increments layerKey
             wrapper.vm.onFilterChange({
                 categories: ['running'],
-                lengthRange: [0, 100]
+                lengthRange: [0, 100],
+                elevationGainRange: [0, 2000]
             });
 
             // Wait for the debounced filter update (50ms timeout)
@@ -856,7 +866,8 @@ describe('TrackMap', () => {
             // Set up filter state
             wrapper.vm.onFilterChange({
                 categories: ['running'],
-                lengthRange: [0, 50]
+                lengthRange: [0, 50],
+                elevationGainRange: [0, 2000]
             });
 
             const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
@@ -898,7 +909,8 @@ describe('TrackMap', () => {
             // Set filter state with no categories
             wrapper.vm.onFilterChange({
                 categories: [],
-                lengthRange: [0, 50]
+                lengthRange: [0, 50],
+                elevationGainRange: [0, 2000]
             });
 
             const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
@@ -943,7 +955,8 @@ describe('TrackMap', () => {
             // Set filter that would exclude track2
             wrapper.vm.onFilterChange({
                 categories: ['running'], // track2 is cycling
-                lengthRange: [0, 15]
+                lengthRange: [0, 15],
+                elevationGainRange: [0, 2000]
             });
 
             const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
@@ -984,7 +997,8 @@ describe('TrackMap', () => {
             // Set filter with range that should include tracks with epsilon tolerance
             wrapper.vm.onFilterChange({
                 categories: ['running'],
-                lengthRange: [10, 15] // Range [10, 15] with epsilon 0.5 = [9.5, 15.5]
+                lengthRange: [10, 15], // Range [10, 15] with epsilon 0.5 = [9.5, 15.5]
+                elevationGainRange: [0, 2000]
             });
 
             const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
@@ -998,6 +1012,522 @@ describe('TrackMap', () => {
             wrapper.vm.isTransitioning = true;
             expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true);
             expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true);
+        });
+    });
+
+    describe('Elevation Gain Filtering', () => {
+        it('should filter tracks by elevation_gain property', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 10,
+                        elevation_gain: 300
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: 800
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                },
+                {
+                    properties: {
+                        id: 'track3',
+                        categories: ['hiking'],
+                        length_km: 12,
+                        elevation_gain: 1200
+                    },
+                    latlngs: [[55.7562, 37.6182], [55.7563, 37.6183]],
+                    color: '#0000ff'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Filter for elevation gain between 500-1000m
+            wrapper.vm.onFilterChange({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [500, 1000]
+            });
+
+            const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
+            const track2Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track2');
+            const track3Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track3');
+
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(false); // 300m < 500m
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true); // 800m in range
+            expect(wrapper.vm.geoJsonFilter(track3Feature)).toBe(false); // 1200m > 1000m
+        });
+
+        it('should use elevation_up as fallback when elevation_gain is not available', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 10,
+                        elevation_up: 450 // Only elevation_up available
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: 600, // Both available - should prefer elevation_gain
+                        elevation_up: 500
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                },
+                {
+                    properties: {
+                        id: 'track3',
+                        categories: ['hiking'],
+                        length_km: 12
+                        // No elevation data at all
+                    },
+                    latlngs: [[55.7562, 37.6182], [55.7563, 37.6183]],
+                    color: '#0000ff'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Filter for elevation gain between 400-650m
+            wrapper.vm.onFilterChange({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [400, 650]
+            });
+
+            const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
+            const track2Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track2');
+            const track3Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track3');
+
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true); // 450m from elevation_up
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true); // 600m from elevation_gain (preferred)
+            expect(wrapper.vm.geoJsonFilter(track3Feature)).toBe(true); // No elevation data = always match
+        });
+
+        it('should apply epsilon tolerance for elevation gain boundaries', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 10,
+                        elevation_gain: 490 // Just below min (500 - 10 = 490)
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: 500 // Exactly at min
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                },
+                {
+                    properties: {
+                        id: 'track3',
+                        categories: ['hiking'],
+                        length_km: 12,
+                        elevation_gain: 1000 // Exactly at max
+                    },
+                    latlngs: [[55.7562, 37.6182], [55.7563, 37.6183]],
+                    color: '#0000ff'
+                },
+                {
+                    properties: {
+                        id: 'track4',
+                        categories: ['hiking'],
+                        length_km: 8,
+                        elevation_gain: 1010 // Just above max (1000 + 10 = 1010)
+                    },
+                    latlngs: [[55.7564, 37.6184], [55.7565, 37.6185]],
+                    color: '#ffff00'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Filter for elevation gain between 500-1000m (with epsilon 10m = 490-1010m)
+            wrapper.vm.onFilterChange({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [500, 1000]
+            });
+
+            const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
+            const track2Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track2');
+            const track3Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track3');
+            const track4Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track4');
+
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true); // 490m >= (500-10)
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true); // 500m in range
+            expect(wrapper.vm.geoJsonFilter(track3Feature)).toBe(true); // 1000m in range
+            expect(wrapper.vm.geoJsonFilter(track4Feature)).toBe(true); // 1010m <= (1000+10)
+        });
+
+        it('should handle edge cases with extreme epsilon values', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 10,
+                        elevation_gain: 480 // Outside epsilon tolerance (500 - 10 = 490)
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: 1020 // Outside epsilon tolerance (1000 + 10 = 1010)
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Filter for elevation gain between 500-1000m
+            wrapper.vm.onFilterChange({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [500, 1000]
+            });
+
+            const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
+            const track2Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track2');
+
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(false); // 480m < (500-10)
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(false); // 1020m > (1000+10)
+        });
+
+        it('should combine elevation gain filter with category and length filters', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 8,
+                        elevation_gain: 600
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['cycling'], // Wrong category
+                        length_km: 12,
+                        elevation_gain: 700
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                },
+                {
+                    properties: {
+                        id: 'track3',
+                        categories: ['hiking'],
+                        length_km: 25, // Too long
+                        elevation_gain: 800
+                    },
+                    latlngs: [[55.7562, 37.6182], [55.7563, 37.6183]],
+                    color: '#0000ff'
+                },
+                {
+                    properties: {
+                        id: 'track4',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: 300 // Too low elevation
+                    },
+                    latlngs: [[55.7564, 37.6184], [55.7565, 37.6185]],
+                    color: '#ffff00'
+                },
+                {
+                    properties: {
+                        id: 'track5',
+                        categories: ['hiking'],
+                        length_km: 12,
+                        elevation_gain: 750 // All criteria match
+                    },
+                    latlngs: [[55.7566, 37.6186], [55.7567, 37.6187]],
+                    color: '#ff00ff'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Apply combined filter: hiking, 10-20km, 500-1000m elevation
+            wrapper.vm.onFilterChange({
+                categories: ['hiking'],
+                lengthRange: [10, 20],
+                elevationGainRange: [500, 1000]
+            });
+
+            const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
+            const track2Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track2');
+            const track3Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track3');
+            const track4Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track4');
+            const track5Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track5');
+
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(false); // Length too short (8km < 10km - 0.5 = 9.5km)
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(false); // Wrong category
+            expect(wrapper.vm.geoJsonFilter(track3Feature)).toBe(false); // Length too long (25km > 20km + 0.5 = 20.5km)
+            expect(wrapper.vm.geoJsonFilter(track4Feature)).toBe(false); // Elevation too low (300m < 500m - 10 = 490m)
+            expect(wrapper.vm.geoJsonFilter(track5Feature)).toBe(true); // All criteria match
+        });
+
+        it('should handle tracks with mixed elevation data types', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 10,
+                        elevation_gain: '600' // String elevation_gain
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['hiking'],
+                        length_km: 12,
+                        elevation_gain: null, // Null elevation_gain
+                        elevation_up: 700
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                },
+                {
+                    properties: {
+                        id: 'track3',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: undefined, // Undefined elevation_gain
+                        elevation_up: '800' // String elevation_up
+                    },
+                    latlngs: [[55.7562, 37.6182], [55.7563, 37.6183]],
+                    color: '#0000ff'
+                },
+                {
+                    properties: {
+                        id: 'track4',
+                        categories: ['hiking'],
+                        length_km: 18,
+                        elevation_gain: -50, // Negative elevation_gain (invalid)
+                        elevation_up: 500
+                    },
+                    latlngs: [[55.7564, 37.6184], [55.7565, 37.6185]],
+                    color: '#ffff00'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Filter for elevation gain between 500-1000m
+            wrapper.vm.onFilterChange({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [500, 1000]
+            });
+
+            const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
+            const track2Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track2');
+            const track3Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track3');
+            const track4Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track4');
+
+            // Track1: string elevation_gain should be ignored, fallback to null = always match
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true);
+
+            // Track2: null elevation_gain, fallback to elevation_up (700m)
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true);
+
+            // Track3: undefined elevation_gain, fallback to string elevation_up (ignored) = always match
+            expect(wrapper.vm.geoJsonFilter(track3Feature)).toBe(true);
+
+            // Track4: negative elevation_gain (-50m) is still a number, so no fallback to elevation_up
+            // -50m is outside range [500-10, 1000+10] = [490, 1010]
+            expect(wrapper.vm.geoJsonFilter(track4Feature)).toBe(false);
+        });
+
+        it('should compute elevation gain bounds correctly from viewport tracks', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 10,
+                        elevation_gain: 300
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: 1500
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                },
+                {
+                    properties: {
+                        id: 'track3',
+                        categories: ['hiking'],
+                        length_km: 12,
+                        elevation_up: 200 // Fallback value
+                    },
+                    latlngs: [[55.7562, 37.6182], [55.7563, 37.6183]],
+                    color: '#0000ff'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Check computed bounds from viewport tracks
+            expect(wrapper.vm.minElevationGain).toBe(200); // Min from elevation_up fallback
+            expect(wrapper.vm.maxElevationGain).toBe(1500); // Max from elevation_gain
+        });
+
+        it('should use default elevation bounds when no tracks have elevation data', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['cycling'],
+                        length_km: 10
+                        // No elevation data
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['cycling'],
+                        length_km: 15
+                        // No elevation data
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Should use default bounds when no elevation data available
+            expect(wrapper.vm.minElevationGain).toBe(0);
+            expect(wrapper.vm.maxElevationGain).toBe(2000);
+        });
+
+        it('should handle elevation filtering during transitions', async () => {
+            const polylines = [
+                {
+                    properties: {
+                        id: 'track1',
+                        categories: ['hiking'],
+                        length_km: 10,
+                        elevation_gain: 600
+                    },
+                    latlngs: [[55.7558, 37.6176], [55.7559, 37.6177]],
+                    color: '#ff0000'
+                },
+                {
+                    properties: {
+                        id: 'track2',
+                        categories: ['hiking'],
+                        length_km: 15,
+                        elevation_gain: 1200
+                    },
+                    latlngs: [[55.7560, 37.6180], [55.7561, 37.6181]],
+                    color: '#00ff00'
+                }
+            ];
+
+            wrapper = mount(TrackMap, {
+                props: { ...defaultProps, polylines }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            // Set filter for elevation 500-1000m
+            wrapper.vm.onFilterChange({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [500, 1000]
+            });
+
+            const track1Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track1');
+            const track2Feature = wrapper.vm.geojsonData.features.find(f => f.properties.id === 'track2');
+
+            // Normal filtering
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true); // 600m in range
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(false); // 1200m > 1000m + 10m
+
+            // During transition, filter logic should still apply
+            wrapper.vm.isTransitioning = true;
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true);
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(false);
         });
 
         it('should properly reset transition state after track deselection', async () => {

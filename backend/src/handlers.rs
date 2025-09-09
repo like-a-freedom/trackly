@@ -1,7 +1,7 @@
 use crate::db;
 use crate::models::*;
 use crate::track_utils::{
-    self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal,
+    self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal, ElevationEnrichmentService,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -385,8 +386,14 @@ pub async fn upload_track(
         hr_data_json,
         temp_data_json,
         time_data_json,
-        elevation_up: parsed_data.elevation_up,
-        elevation_down: parsed_data.elevation_down,
+        elevation_gain: parsed_data.elevation_gain,
+        elevation_loss: parsed_data.elevation_loss,
+        elevation_min: parsed_data.elevation_min,
+        elevation_max: parsed_data.elevation_max,
+        elevation_enriched: Some(false), // Initially not enriched
+        elevation_enriched_at: None,
+        elevation_dataset: Some("original_gpx".to_string()), // Mark as original data from GPX/KML
+        elevation_api_calls: Some(0),                        // No API calls used initially
         avg_speed: parsed_data.avg_speed,
         avg_hr: parsed_data.avg_hr,
         hr_min: parsed_data.hr_min,
@@ -406,6 +413,87 @@ pub async fn upload_track(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     info!(?id, "[upload_track] track uploaded successfully");
+
+    // Check if track needs automatic elevation enrichment
+    let needs_enrichment = parsed_data.elevation_gain.is_none()
+        || parsed_data.elevation_gain == Some(0.0)
+        || parsed_data.elevation_loss.is_none()
+        || parsed_data.elevation_loss == Some(0.0);
+
+    if needs_enrichment {
+        info!(
+            ?id,
+            "[upload_track] track has no elevation data, starting automatic enrichment"
+        );
+
+        // Extract coordinates for enrichment
+        let coordinates = match extract_coordinates_from_geojson(&parsed_data.geom_geojson) {
+            Ok(coords) if !coords.is_empty() => coords,
+            Ok(_) => {
+                info!(
+                    ?id,
+                    "[upload_track] track has no coordinates for enrichment, skipping"
+                );
+                return Ok(Json(TrackUploadResponse {
+                    id,
+                    url: format!("/tracks/{id}"),
+                }));
+            }
+            Err(e) => {
+                error!(
+                    ?id,
+                    "[upload_track] failed to extract coordinates for enrichment: {}", e
+                );
+                return Ok(Json(TrackUploadResponse {
+                    id,
+                    url: format!("/tracks/{id}"),
+                }));
+            }
+        };
+
+        // Start asynchronous elevation enrichment
+        let pool_clone = Arc::clone(&pool);
+        let track_id = id;
+        tokio::spawn(async move {
+            let enrichment_service = ElevationEnrichmentService::new();
+
+            match enrichment_service.enrich_track_elevation(coordinates).await {
+                Ok(result) => {
+                    // Update track with enriched elevation data
+                    if let Err(e) = db::update_track_elevation(
+                        &pool_clone,
+                        track_id,
+                        db::UpdateElevationParams {
+                            elevation_gain: result.metrics.elevation_gain,
+                            elevation_loss: result.metrics.elevation_loss,
+                            elevation_min: result.metrics.elevation_min,
+                            elevation_max: result.metrics.elevation_max,
+                            elevation_enriched: true,
+                            elevation_enriched_at: Some(result.enriched_at.naive_utc()),
+                            elevation_dataset: Some(result.dataset.clone()),
+                            elevation_profile: result.elevation_profile,
+                            elevation_api_calls: result.api_calls_used,
+                        },
+                    )
+                    .await
+                    {
+                        error!(?track_id, "Failed to update enriched elevation data: {}", e);
+                    } else {
+                        info!(
+                            ?track_id,
+                            "Successfully auto-enriched track with elevation data: gain={:.1}m, loss={:.1}m",
+                            result.metrics.elevation_gain.unwrap_or(0.0),
+                            result.metrics.elevation_loss.unwrap_or(0.0)
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!(?track_id, "Failed to auto-enrich track elevation: {}", e);
+                }
+            }
+        });
+    }
+
     Ok(Json(TrackUploadResponse {
         id,
         url: format!("/tracks/{id}"),
@@ -417,10 +505,11 @@ pub async fn list_tracks_geojson(
     Query(params): Query<TrackGeoJsonQuery>,
 ) -> Result<Json<TrackGeoJsonCollection>, StatusCode> {
     let geojson = db::list_tracks_geojson(
-        &pool, 
-        params.bbox.as_deref(), 
-        params.zoom, 
-        params.mode.as_deref()
+        &pool,
+        params.bbox.as_deref(),
+        params.zoom,
+        params.mode.as_deref(),
+        &params,
     )
     .await
     .map_err(handle_db_error)?;
@@ -433,14 +522,14 @@ pub async fn get_track(
     Query(params): Query<TrackSimplificationQuery>,
 ) -> Result<Json<TrackDetail>, StatusCode> {
     info!(?id, ?params.zoom, ?params.mode, "[get_track] called");
-    
+
     // Use adaptive track detail if zoom/mode params are provided
     let result = if params.zoom.is_some() || params.mode.is_some() {
         db::get_track_detail_adaptive(&pool, id, params.zoom, params.mode.as_deref()).await
     } else {
         db::get_track_detail(&pool, id).await
     };
-    
+
     match result {
         Ok(Some(track)) => Ok(Json(track)),
         Ok(None) => {
@@ -475,8 +564,13 @@ pub async fn get_track_simplified(
                 hr_data: track.hr_data,
                 temp_data: track.temp_data,
                 time_data: track.time_data,
-                elevation_up: track.elevation_up,
-                elevation_down: track.elevation_down,
+                elevation_gain: track.elevation_gain,
+                elevation_loss: track.elevation_loss,
+                elevation_min: track.elevation_min,
+                elevation_max: track.elevation_max,
+                elevation_enriched: track.elevation_enriched,
+                elevation_enriched_at: track.elevation_enriched_at,
+                elevation_dataset: track.elevation_dataset,
                 avg_speed: track.avg_speed,
                 avg_hr: track.avg_hr,
                 hr_min: track.hr_min,
@@ -643,6 +737,149 @@ pub async fn delete_track(
         return Err(StatusCode::NOT_FOUND);
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Enrich track with elevation data from OpenTopoData API
+pub async fn enrich_elevation(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<EnrichElevationRequest>,
+) -> Result<Json<EnrichElevationResponse>, StatusCode> {
+    // Get track by id
+    let track = db::get_track_by_id(&pool, id)
+        .await
+        .map_err(|e| {
+            error!("Failed to get track {}: {}", id, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or_else(|| {
+            error!("Track {} not found", id);
+            StatusCode::NOT_FOUND
+        })?;
+
+    // Check ownership
+    if track.session_id != Some(payload.session_id) {
+        error!("Permission denied for track {}: user session mismatch", id);
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Check if enrichment is needed
+    let enrichment_service = ElevationEnrichmentService::new();
+    if !enrichment_service.needs_enrichment(
+        track.elevation_enriched,
+        track.elevation_gain,
+        track.elevation_loss,
+        payload.force.unwrap_or(false),
+    ) {
+        info!(
+            "Track {} already has elevation data, skipping enrichment",
+            id
+        );
+        return Ok(Json(EnrichElevationResponse {
+            id,
+            message: "Track already has elevation data".to_string(),
+            elevation_gain: track.elevation_gain,
+            elevation_loss: track.elevation_loss,
+            elevation_min: track.elevation_min,
+            elevation_max: track.elevation_max,
+            elevation_dataset: track.elevation_dataset,
+            enriched_at: track.elevation_enriched_at,
+        }));
+    }
+
+    // Extract coordinates from track geometry
+    let coordinates = match extract_coordinates_from_geojson(&track.geom_geojson) {
+        Ok(coords) if !coords.is_empty() => coords,
+        Ok(_) => {
+            error!("Track {} has no coordinates", id);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        Err(e) => {
+            error!("Failed to extract coordinates from track {}: {}", id, e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    info!(
+        "Starting elevation enrichment for track {} with {} points",
+        id,
+        coordinates.len()
+    );
+
+    // Enrich elevation data
+    let enrichment_result = match enrichment_service.enrich_track_elevation(coordinates).await {
+        Ok(result) => result,
+        Err(e) => {
+            error!("Failed to enrich elevation for track {}: {}", id, e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Update track in database
+    if let Err(e) = db::update_track_elevation(
+        &pool,
+        id,
+        db::UpdateElevationParams {
+            elevation_gain: enrichment_result.metrics.elevation_gain,
+            elevation_loss: enrichment_result.metrics.elevation_loss,
+            elevation_min: enrichment_result.metrics.elevation_min,
+            elevation_max: enrichment_result.metrics.elevation_max,
+            elevation_enriched: true,
+            elevation_enriched_at: Some(enrichment_result.enriched_at.naive_utc()),
+            elevation_dataset: Some(enrichment_result.dataset.clone()),
+            elevation_profile: enrichment_result.elevation_profile,
+            elevation_api_calls: enrichment_result.api_calls_used,
+        },
+    )
+    .await
+    {
+        error!("Failed to update elevation data for track {}: {}", id, e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    info!(
+        "Successfully enriched track {} with elevation data: gain={:.1}m, loss={:.1}m",
+        id,
+        enrichment_result.metrics.elevation_gain.unwrap_or(0.0),
+        enrichment_result.metrics.elevation_loss.unwrap_or(0.0)
+    );
+
+    Ok(Json(EnrichElevationResponse {
+        id,
+        message: "Track elevation enriched successfully".to_string(),
+        elevation_gain: enrichment_result.metrics.elevation_gain,
+        elevation_loss: enrichment_result.metrics.elevation_loss,
+        elevation_min: enrichment_result.metrics.elevation_min,
+        elevation_max: enrichment_result.metrics.elevation_max,
+        elevation_dataset: Some(enrichment_result.dataset),
+        enriched_at: Some(enrichment_result.enriched_at.naive_utc()),
+    }))
+}
+
+/// Extract coordinates from GeoJSON LineString
+fn extract_coordinates_from_geojson(
+    geom_geojson: &serde_json::Value,
+) -> Result<Vec<(f64, f64)>, String> {
+    let coordinates = geom_geojson
+        .get("coordinates")
+        .ok_or("Missing coordinates in geometry")?
+        .as_array()
+        .ok_or("Coordinates is not an array")?;
+
+    let mut result = Vec::new();
+    for coord in coordinates {
+        let coord_array = coord.as_array().ok_or("Coordinate is not an array")?;
+        if coord_array.len() < 2 {
+            return Err("Coordinate must have at least 2 elements".to_string());
+        }
+
+        let lon = coord_array[0].as_f64().ok_or("Longitude is not a number")?;
+        let lat = coord_array[1].as_f64().ok_or("Latitude is not a number")?;
+
+        result.push((lat, lon));
+    }
+
+    Ok(result)
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -835,8 +1072,13 @@ mod tests {
             hr_data: Some(json!([120, 125])),
             temp_data: None,
             time_data: None,
-            elevation_up: Some(10.0),
-            elevation_down: Some(0.0),
+            elevation_gain: Some(10.0),
+            elevation_loss: Some(0.0),
+            elevation_min: Some(200.0),
+            elevation_max: Some(210.0),
+            elevation_enriched: Some(false),
+            elevation_enriched_at: None,
+            elevation_dataset: None,
             avg_speed: Some(10.0),
             avg_hr: Some(122),
             hr_min: Some(120),
@@ -880,8 +1122,13 @@ mod tests {
             hr_data: Some(json!([120, 125])),
             temp_data: None,
             time_data: Some(json!(["2024-01-01T10:00:00Z", "2024-01-01T10:01:00Z"])),
-            elevation_up: Some(10.0),
-            elevation_down: Some(0.0),
+            elevation_gain: Some(10.0),
+            elevation_loss: Some(0.0),
+            elevation_min: Some(200.0),
+            elevation_max: Some(210.0),
+            elevation_enriched: Some(false),
+            elevation_enriched_at: None,
+            elevation_dataset: None,
             avg_speed: Some(10.0),
             avg_hr: Some(122),
             hr_min: Some(120),
@@ -908,4 +1155,229 @@ mod tests {
         assert!(gpx.contains("<time>2024-01-01T10:00:00Z</time>"));
         assert!(gpx.contains("<time>2024-01-01T10:01:00Z</time>"));
     }
+
+    // Tests for elevation-related functionality
+    #[test]
+    fn test_extract_coordinates_from_geojson_valid() {
+        let geojson = json!({
+            "type": "LineString",
+            "coordinates": [[37.6176, 55.7558], [37.6177, 55.7559], [37.6178, 55.7560]]
+        });
+
+        let result = extract_coordinates_from_geojson(&geojson);
+        assert!(result.is_ok());
+
+        let coordinates = result.unwrap();
+        assert_eq!(coordinates.len(), 3);
+        assert_eq!(coordinates[0], (55.7558, 37.6176));
+        assert_eq!(coordinates[1], (55.7559, 37.6177));
+        assert_eq!(coordinates[2], (55.7560, 37.6178));
+    }
+
+    #[test]
+    fn test_extract_coordinates_from_geojson_invalid() {
+        // Test missing coordinates
+        let invalid_geojson1 = json!({
+            "type": "LineString"
+        });
+        assert!(extract_coordinates_from_geojson(&invalid_geojson1).is_err());
+
+        // Test coordinates not an array
+        let invalid_geojson2 = json!({
+            "type": "LineString",
+            "coordinates": "not_an_array"
+        });
+        assert!(extract_coordinates_from_geojson(&invalid_geojson2).is_err());
+
+        // Test coordinate with insufficient elements
+        let invalid_geojson3 = json!({
+            "type": "LineString",
+            "coordinates": [[37.6176]]
+        });
+        assert!(extract_coordinates_from_geojson(&invalid_geojson3).is_err());
+
+        // Test non-numeric coordinates
+        let invalid_geojson4 = json!({
+            "type": "LineString",
+            "coordinates": [["not_a_number", 55.7558]]
+        });
+        assert!(extract_coordinates_from_geojson(&invalid_geojson4).is_err());
+    }
+
+    #[test]
+    fn test_extract_coordinates_empty() {
+        let empty_geojson = json!({
+            "type": "LineString",
+            "coordinates": []
+        });
+
+        let result = extract_coordinates_from_geojson(&empty_geojson);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_extract_coordinates_with_elevation() {
+        let geojson_with_elevation = json!({
+            "type": "LineString",
+            "coordinates": [
+                [37.6176, 55.7558, 100.0],
+                [37.6177, 55.7559, 110.0],
+                [37.6178, 55.7560, 90.0]
+            ]
+        });
+
+        let result = extract_coordinates_from_geojson(&geojson_with_elevation);
+        assert!(result.is_ok());
+
+        let coordinates = result.unwrap();
+        assert_eq!(coordinates.len(), 3);
+        // Should only extract lat/lon, ignoring elevation
+        assert_eq!(coordinates[0], (55.7558, 37.6176));
+        assert_eq!(coordinates[1], (55.7559, 37.6177));
+        assert_eq!(coordinates[2], (55.7560, 37.6178));
+    }
+
+    #[test]
+    fn test_extract_coordinates_edge_cases() {
+        // Test with extreme coordinate values
+        let extreme_geojson = json!({
+            "type": "LineString",
+            "coordinates": [
+                [-180.0, -90.0],
+                [180.0, 90.0],
+                [0.0, 0.0]
+            ]
+        });
+
+        let result = extract_coordinates_from_geojson(&extreme_geojson);
+        assert!(result.is_ok());
+
+        let coordinates = result.unwrap();
+        assert_eq!(coordinates.len(), 3);
+        assert_eq!(coordinates[0], (-90.0, -180.0));
+        assert_eq!(coordinates[1], (90.0, 180.0));
+        assert_eq!(coordinates[2], (0.0, 0.0));
+    }
+
+    // Additional integration tests from tests/handlers.rs
+
+    // Helper function to create a mock PgPool for testing
+    // Note: These tests require actual database setup
+    #[allow(dead_code)]
+    async fn setup_test_pool() -> Arc<PgPool> {
+        use sqlx::postgres::PgPoolOptions;
+        // Prefer TEST_DATABASE_URL, fallback to DATABASE_URL
+        let db_url = std::env::var("TEST_DATABASE_URL")
+            .or_else(|_| std::env::var("DATABASE_URL"))
+            .expect("Either TEST_DATABASE_URL or DATABASE_URL must be set for tests");
+        Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&db_url)
+                .await
+                .expect("Failed to create test pool"),
+        )
+    }
+
+    #[test]
+    fn test_get_track_simplified_adaptive_alignment() {
+        // Build a synthetic track with 7000 points (moderate bucket) and matching profiles
+        let point_count = 7000;
+        let coords: Vec<serde_json::Value> = (0..point_count)
+            .map(|i| {
+                let lat = 55.0 + i as f64 * 0.00001;
+                let lon = 37.0 + i as f64 * 0.00001;
+                serde_json::json!([lon, lat])
+            })
+            .collect();
+        let elevation: Vec<f64> = (0..point_count).map(|i| (i % 500) as f64).collect();
+        let hr: Vec<i64> = (0..point_count).map(|i| 120 + (i % 40) as i64).collect();
+        let temp: Vec<f64> = (0..point_count)
+            .map(|i| 15.0 + (i % 10) as f64 * 0.1)
+            .collect();
+
+        // Compose TrackDetail
+        let track = crate::models::TrackDetail {
+            id: Uuid::new_v4(),
+            name: "Adaptive Test".to_string(),
+            description: None,
+            categories: vec!["running".into()],
+            auto_classifications: vec![],
+            geom_geojson: serde_json::json!({"type":"LineString","coordinates": coords}),
+            length_km: 10.0,
+            elevation_profile: Some(serde_json::json!(elevation)),
+            hr_data: Some(serde_json::json!(hr)),
+            temp_data: Some(serde_json::json!(temp)),
+            time_data: None,
+            elevation_gain: Some(100.0),
+            elevation_loss: Some(90.0),
+            elevation_min: Some(200.0),
+            elevation_max: Some(300.0),
+            elevation_enriched: Some(true),
+            elevation_enriched_at: None,
+            elevation_dataset: Some("srtm90m".to_string()),
+            avg_speed: Some(10.0),
+            avg_hr: Some(130),
+            hr_min: Some(110),
+            hr_max: Some(170),
+            moving_time: Some(3600),
+            pause_time: Some(0),
+            moving_avg_speed: Some(10.5),
+            moving_avg_pace: Some(5.7),
+            duration_seconds: Some(3700),
+            recorded_at: None,
+            created_at: None,
+            updated_at: None,
+            session_id: None,
+        };
+
+        // Directly invoke logic as db::get_track_detail would return track.
+        // We simulate zoom param.
+        use crate::track_utils::simplification::simplify_track_for_zoom;
+        let coords_val = track
+            .geom_geojson
+            .get("coordinates")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        let original_points: Vec<(f64, f64)> = coords_val
+            .iter()
+            .map(|c| {
+                let arr = c.as_array().unwrap();
+                (arr[1].as_f64().unwrap(), arr[0].as_f64().unwrap())
+            })
+            .collect();
+        let simplified = simplify_track_for_zoom(&original_points, 14.0);
+        assert!(simplified.len() < original_points.len());
+        assert!(simplified.len() > original_points.len() / 3); // retention guard
+
+        // Profile simplification should match geometry length
+        use crate::track_utils::simplification::simplify_profile_array_adaptive;
+        let elev_simpl = simplify_profile_array_adaptive(
+            track.elevation_profile.as_ref().unwrap(),
+            original_points.len(),
+            simplified.len(),
+        )
+        .unwrap();
+        assert_eq!(elev_simpl.as_array().unwrap().len(), simplified.len());
+        let hr_simpl = simplify_profile_array_adaptive(
+            track.hr_data.as_ref().unwrap(),
+            original_points.len(),
+            simplified.len(),
+        )
+        .unwrap();
+        assert_eq!(hr_simpl.as_array().unwrap().len(), simplified.len());
+        let temp_simpl = simplify_profile_array_adaptive(
+            track.temp_data.as_ref().unwrap(),
+            original_points.len(),
+            simplified.len(),
+        )
+        .unwrap();
+        assert_eq!(temp_simpl.as_array().unwrap().len(), simplified.len());
+    }
+
+    // Integration tests would go here for testing the full enrich_elevation handler
+    // However, they require database setup and external API mocking, so we'll
+    // keep them in the existing test files under tests/ directory for now
 }

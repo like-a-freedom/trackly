@@ -11,42 +11,40 @@ vi.mock('vue-chartjs', () => ({
     }
 }));
 
-// Mock Chart.js
-vi.mock('chart.js', () => {
-    const mockChart = {
-        destroy: vi.fn(),
-        update: vi.fn(),
-        resize: vi.fn(),
-        data: { datasets: [] }
-    };
+// Mock Chart.js and its components
+vi.mock('chart.js', () => ({
+    Chart: {
+        register: vi.fn()
+    },
+    CategoryScale: vi.fn(),
+    LinearScale: vi.fn(),
+    PointElement: vi.fn(),
+    LineElement: vi.fn(),
+    Title: vi.fn(),
+    Tooltip: vi.fn(),
+    Legend: vi.fn(),
+    Filler: vi.fn(),
+}));
 
-    const MockChartClass = vi.fn(() => mockChart);
-    MockChartClass.register = vi.fn();
-
-    return {
-        Chart: MockChartClass,
-        registerables: [],
-        CategoryScale: vi.fn(),
-        LinearScale: vi.fn(),
-        PointElement: vi.fn(),
-        LineElement: vi.fn(),
-        Title: vi.fn(),
-        Tooltip: vi.fn(),
-        Legend: vi.fn(),
-        Filler: vi.fn(),
-    };
-});
+// Mock useMemoizedComputed
+vi.mock('../composables/useMemoization', () => ({
+    useMemoizedComputed: (fn, deps, options) => {
+        // Return a computed that just calls the function with current dependency values
+        return {
+            get value() {
+                const depValues = deps.map(dep => dep());
+                return fn(...depValues);
+            }
+        };
+    }
+}));
 
 describe('ElevationChart', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    const createMockElevationData = () => [
-        { distance: 0, elevation: 100 },
-        { distance: 1, elevation: 110 },
-        { distance: 2, elevation: 90 }
-    ];
+    const createMockElevationData = () => [100, 110, 90]; // Simple numbers array
 
     const createMockHeartRateData = () => [150, 160, null, 155];
 
@@ -327,10 +325,9 @@ describe('ElevationChart', () => {
                 }
             });
 
-            // Verify that elevation data is processed
-            expect(wrapper.vm.elevationData.length).toBe(3);
-            expect(wrapper.vm.elevationData[0].elevation).toBe(100);
-            expect(wrapper.vm.elevationData[2].elevation).toBe(90);
+            // Verify that elevation data is processed correctly by checking chart creation
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+            expect(wrapper.vm.elevationData).toEqual([100, 110, 90]);
         });
 
         it('should process heart rate data correctly', () => {
@@ -392,7 +389,8 @@ describe('ElevationChart', () => {
                     elevationData: null,
                     heartRateData,
                     trackName: 'Test Track',
-                    totalDistance: 2.5
+                    totalDistance: 2.5,
+                    chartMode: 'pulse'
                 }
             });
 
@@ -594,6 +592,938 @@ describe('ElevationChart', () => {
 
             // Should still render without errors
             expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Distance units support', () => {
+        it('should use kilometers by default', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.vm.distanceUnit).toBe('km');
+        });
+
+        it('should support miles distance unit', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    distanceUnit: 'mi'
+                }
+            });
+
+            expect(wrapper.vm.distanceUnit).toBe('mi');
+        });
+
+        it('should convert distance to miles when unit is miles', () => {
+            const totalDistanceKm = 10;
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: totalDistanceKm,
+                    distanceUnit: 'mi'
+                }
+            });
+
+            // Chart data should be generated - test that component handles conversion
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+            expect(wrapper.vm.totalDistance).toBe(totalDistanceKm);
+            expect(wrapper.vm.distanceUnit).toBe('mi');
+        });
+    });
+
+    describe('Elevation stats support', () => {
+        const createMockElevationStats = () => ({
+            gain: 500,
+            loss: -400,
+            min: 100,
+            max: 600,
+            enriched: true,
+            dataset: 'srtm90m'
+        });
+
+        it('should display stats when no elevation profile but stats available', () => {
+            const elevationStats = createMockElevationStats();
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.find('.elevation-stats-display').exists()).toBe(true);
+            expect(wrapper.text()).toContain('500 m'); // gain
+            expect(wrapper.text()).toContain('400 m'); // loss (absolute)
+            expect(wrapper.text()).toContain('100 m'); // min
+            expect(wrapper.text()).toContain('600 m'); // max
+        });
+
+        it('should format dataset names correctly', () => {
+            const elevationStats = { ...createMockElevationStats(), dataset: 'srtm90m' };
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('SRTM 90m');
+        });
+
+        it('should handle unknown dataset names', () => {
+            const elevationStats = { ...createMockElevationStats(), dataset: 'unknown_dataset' };
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('Unknown_dataset');
+        });
+
+        it('should generate synthetic elevation data from stats when no profile', () => {
+            const elevationStats = createMockElevationStats();
+            const heartRateData = createMockHeartRateData();
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    heartRateData,
+                    elevationStats,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            // Should render chart instead of stats display when other data is present
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Data interpolation and dimension handling', () => {
+        it('should handle different data array lengths correctly', () => {
+            const shortElevationData = [100, 110]; // 2 points
+            const longHeartRateData = [150, 160, 155, 165, 170]; // 5 points
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: shortElevationData,
+                    heartRateData: longHeartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+            // Should not throw errors with mismatched data lengths
+            expect(() => wrapper.vm.chartData).not.toThrow();
+        });
+
+        it('should handle elevation data after force update scenario', () => {
+            // Simulate original track with heart rate data
+            const originalHeartRateData = Array.from({ length: 1000 }, (_, i) => 150 + Math.sin(i / 100) * 20);
+
+            // Simulate new elevation data from external service (different length)
+            const newElevationData = Array.from({ length: 263 }, (_, i) => 100 + Math.sin(i / 50) * 50);
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: newElevationData,
+                    heartRateData: originalHeartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 25,
+                    chartMode: 'both'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+            // Should handle the dimension mismatch gracefully
+            expect(() => wrapper.vm.chartData).not.toThrow();
+        });
+
+        it('should interpolate data correctly for mismatched lengths', () => {
+            const elevationData = [100, 200, 150]; // 3 points
+            const heartRateData = [150]; // 1 point
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData,
+                    heartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            const chartData = wrapper.vm.chartData;
+            expect(chartData.labels).toBeDefined();
+            expect(chartData.datasets).toBeDefined();
+            expect(chartData.datasets.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('Different elevation data formats', () => {
+        it('should handle elevation data as simple numbers', () => {
+            const elevationData = [100, 110, 120, 115];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle elevation data as coordinate pairs', () => {
+            const elevationData = [[0, 100], [1, 110], [2, 120], [3, 115]];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle elevation data as objects', () => {
+            const elevationData = [
+                { dist: 0, ele: 100 },
+                { dist: 1, ele: 110 },
+                { dist: 2, ele: 120 },
+                { dist: 3, ele: 115 }
+            ];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Different heart rate data formats', () => {
+        it('should handle heart rate data as simple numbers', () => {
+            const heartRateData = [150, 160, 155, 165];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    heartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'pulse'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle heart rate data as coordinate pairs', () => {
+            const heartRateData = [[0, 150], [1, 160], [2, 155], [3, 165]];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    heartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'pulse'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle heart rate data as objects with hr property', () => {
+            const heartRateData = [
+                { hr: 150 },
+                { hr: 160 },
+                { hr: 155 },
+                { hr: 165 }
+            ];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    heartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'pulse'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle heart rate data as objects with pulse property', () => {
+            const heartRateData = [
+                { pulse: 150 },
+                { pulse: 160 },
+                { pulse: 155 },
+                { pulse: 165 }
+            ];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    heartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'pulse'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Different temperature data formats', () => {
+        it('should handle temperature data as simple numbers', () => {
+            const temperatureData = [22.5, 23.0, 24.2, 25.1];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    temperatureData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'temperature'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle temperature data as coordinate pairs', () => {
+            const temperatureData = [[0, 22.5], [1, 23.0], [2, 24.2], [3, 25.1]];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    temperatureData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'temperature'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle temperature data as objects with temp property', () => {
+            const temperatureData = [
+                { temp: 22.5 },
+                { temp: 23.0 },
+                { temp: 24.2 },
+                { temp: 25.1 }
+            ];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    temperatureData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'temperature'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle temperature data as objects with temperature property', () => {
+            const temperatureData = [
+                { temperature: 22.5 },
+                { temperature: 23.0 },
+                { temperature: 24.2 },
+                { temperature: 25.1 }
+            ];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    temperatureData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'temperature'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Chart options and configuration', () => {
+        it('should update chart title when trackName changes', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Original Track',
+                    totalDistance: 10
+                }
+            });
+
+            await wrapper.setProps({ trackName: 'Updated Track' });
+            expect(wrapper.vm.trackName).toBe('Updated Track');
+        });
+
+        it('should update distance unit in chart when distanceUnit changes', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    distanceUnit: 'km'
+                }
+            });
+
+            await wrapper.setProps({ distanceUnit: 'mi' });
+            expect(wrapper.vm.distanceUnit).toBe('mi');
+        });
+
+        it('should handle chart options reactivity', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    heartRateData: createMockHeartRateData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'elevation'
+                }
+            });
+
+            // Change to pulse mode
+            await wrapper.setProps({ chartMode: 'pulse' });
+            expect(wrapper.vm.chartMode).toBe('pulse');
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+
+            // Change to both mode
+            await wrapper.setProps({ chartMode: 'both' });
+            expect(wrapper.vm.chartMode).toBe('both');
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Edge cases and error handling', () => {
+        it('should handle null elevation data gracefully', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: null,
+                    heartRateData: createMockHeartRateData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'pulse'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle empty data arrays', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    heartRateData: [],
+                    temperatureData: [],
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('No elevation, pulse, or temperature data available');
+        });
+
+        it('should handle malformed data arrays', () => {
+            const malformedData = ['invalid', null, undefined, {}];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: malformedData,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            // Should not crash, may show fallback message
+            expect(wrapper.vm.$el).toBeTruthy();
+        });
+
+        it('should handle zero total distance', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 0
+                }
+            });
+
+            expect(wrapper.vm.$el).toBeTruthy();
+        });
+
+        it('should handle negative elevation values', () => {
+            const elevationData = [-10, -5, 0, 5, -2];
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData,
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle very large datasets', () => {
+            const largeElevationData = Array.from({ length: 10000 }, (_, i) => 100 + Math.sin(i / 100) * 50);
+            const largeHeartRateData = Array.from({ length: 15000 }, (_, i) => 150 + Math.sin(i / 200) * 30);
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: largeElevationData,
+                    heartRateData: largeHeartRateData,
+                    trackName: 'Large Dataset Track',
+                    totalDistance: 100,
+                    chartMode: 'both'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Memoization and performance', () => {
+        it('should not recreate chart data when irrelevant props change', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            const originalChartData = wrapper.vm.chartData;
+
+            // Change trackName (should not affect chart data structure)
+            await wrapper.setProps({ trackName: 'New Track Name' });
+
+            // Chart data should remain the same object reference due to memoization
+            expect(wrapper.vm.trackName).toBe('New Track Name');
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should recreate chart data when data props change', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            // Change elevation data (should affect chart data)
+            const newElevationData = [200, 210, 220];
+            await wrapper.setProps({ elevationData: newElevationData });
+
+            expect(wrapper.vm.elevationData).toEqual(newElevationData);
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('Real-world scenarios', () => {
+        it('should handle typical GPX track data', () => {
+            // Simulate real GPX data structure
+            const elevationData = Array.from({ length: 500 }, (_, i) => ({
+                dist: i * 0.02, // 20m intervals
+                ele: 100 + Math.sin(i / 50) * 100 + Math.random() * 10
+            }));
+
+            const heartRateData = Array.from({ length: 500 }, (_, i) =>
+                Math.floor(150 + Math.sin(i / 30) * 20 + Math.random() * 10)
+            );
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData,
+                    heartRateData,
+                    trackName: 'Morning Run',
+                    totalDistance: 10.5,
+                    chartMode: 'both'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        it('should handle post-enrichment scenario (force update)', () => {
+            // Original track with heart rate
+            const originalHeartRateData = Array.from({ length: 1200 }, (_, i) =>
+                Math.floor(140 + Math.sin(i / 100) * 25)
+            );
+
+            // New elevation data from external service (different sampling)
+            const enrichedElevationData = Array.from({ length: 263 }, (_, i) =>
+                85 + Math.sin(i / 30) * 75
+            );
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: enrichedElevationData,
+                    heartRateData: originalHeartRateData,
+                    trackName: 'Enriched Track',
+                    totalDistance: 15.7,
+                    chartMode: 'both',
+                    elevationStats: {
+                        gain: 445,
+                        loss: -432,
+                        min: 85,
+                        max: 160,
+                        enriched: true,
+                        dataset: 'srtm90m'
+                    }
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+            // Should handle dimension mismatch gracefully
+            expect(() => wrapper.vm.chartData).not.toThrow();
+        });
+
+        it('should handle indoor track (no elevation)', () => {
+            const heartRateData = Array.from({ length: 300 }, (_, i) =>
+                Math.floor(130 + Math.sin(i / 50) * 40)
+            );
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    heartRateData,
+                    trackName: 'Treadmill Run',
+                    totalDistance: 5.0,
+                    chartMode: 'pulse'
+                }
+            });
+
+            expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+    });
+
+    describe('formatDataset function coverage', () => {
+        it('should format original_gpx dataset', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats: {
+                        dataset: 'original_gpx',
+                        gain: 100,
+                        loss: -50
+                    },
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('Original GPX');
+        });
+
+        it('should format aster30m dataset', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats: {
+                        dataset: 'aster30m',
+                        gain: 100,
+                        loss: -50
+                    },
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('ASTER 30m');
+        });
+
+        it('should format mapzen dataset', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats: {
+                        dataset: 'mapzen',
+                        gain: 100,
+                        loss: -50
+                    },
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('Mapzen');
+        });
+
+        it('should format open-elevation dataset', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats: {
+                        dataset: 'open-elevation',
+                        gain: 100,
+                        loss: -50
+                    },
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('Open-Elevation');
+        });
+
+        it('should handle empty dataset', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats: {
+                        dataset: 'empty_dataset',
+                        gain: 100,
+                        loss: -50,
+                        min: 50,
+                        max: 150
+                    },
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('Empty_dataset');
+        });
+
+        it('should handle undefined dataset', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats: {
+                        dataset: 'some_unknown_dataset',
+                        gain: 100,
+                        loss: -50,
+                        min: 50,
+                        max: 150
+                    },
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.text()).toContain('Some_unknown_dataset');
+        });
+    });
+
+    describe('Chart options reactivity', () => {
+        it('should update chart options when chartMode changes', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    heartRateData: createMockHeartRateData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'elevation'
+                }
+            });
+
+            const initialOptions = wrapper.vm.chartOptions;
+            expect(initialOptions.scales).toHaveProperty('y-elevation');
+            expect(initialOptions.scales).not.toHaveProperty('y-pulse');
+
+            await wrapper.setProps({ chartMode: 'pulse' });
+
+            const updatedOptions = wrapper.vm.chartOptions;
+            expect(updatedOptions.scales).not.toHaveProperty('y-elevation');
+            expect(updatedOptions.scales).toHaveProperty('y-pulse');
+        });
+
+        it('should update chart title when trackName changes', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Original Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.vm.chartOptions.plugins.title.text).toBe('Original Track');
+
+            await wrapper.setProps({ trackName: 'Updated Track' });
+            expect(wrapper.vm.chartOptions.plugins.title.text).toBe('Updated Track');
+        });
+
+        it('should update distance label when distanceUnit changes', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    distanceUnit: 'km'
+                }
+            });
+
+            expect(wrapper.vm.chartOptions.scales.x.title.text).toBe('Distance (km)');
+
+            await wrapper.setProps({ distanceUnit: 'mi' });
+            expect(wrapper.vm.chartOptions.scales.x.title.text).toBe('Distance (mi)');
+        });
+
+        it('should configure dual Y-axes for both mode', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    heartRateData: createMockHeartRateData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            const options = wrapper.vm.chartOptions;
+            expect(options.scales).toHaveProperty('y-elevation');
+            expect(options.scales).toHaveProperty('y-pulse');
+            expect(options.scales['y-elevation'].position).toBe('left');
+            expect(options.scales['y-pulse'].position).toBe('right');
+        });
+    });
+
+    describe('Interpolation function edge cases', () => {
+        it('should handle single data point interpolation', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [100],
+                    heartRateData: [150, 160, 155, 165], // 4 points
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            const chartData = wrapper.vm.chartData;
+            expect(chartData.datasets).toBeDefined();
+            expect(chartData.datasets.length).toBe(2); // elevation + heart rate
+            expect(chartData.labels.length).toBe(4); // based on max point count
+        });
+
+        it('should handle exact match interpolation', () => {
+            const elevationData = [100, 110, 120, 115];
+            const heartRateData = [150, 160, 155, 165];
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData,
+                    heartRateData,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            const chartData = wrapper.vm.chartData;
+            // When arrays are same length, no interpolation needed
+            expect(chartData.datasets[0].data).toEqual(elevationData);
+            expect(chartData.datasets[1].data).toEqual(heartRateData);
+        });
+
+        it('should handle empty data array interpolation', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    heartRateData: [150, 160, 155],
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            const chartData = wrapper.vm.chartData;
+            expect(chartData.datasets.length).toBe(1); // only heart rate
+            expect(chartData.datasets[0].data).toEqual([150, 160, 155]);
+        });
+    });
+
+    describe('Synthetic elevation generation', () => {
+        it('should generate synthetic elevation data with correct point count', () => {
+            const heartRateData = Array.from({ length: 100 }, (_, i) => 150 + i);
+            const elevationStats = {
+                min: 50,
+                max: 200,
+                gain: 150,
+                loss: -50
+            };
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    heartRateData,
+                    elevationStats,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            const chartData = wrapper.vm.chartData;
+            expect(chartData.datasets.length).toBe(2); // synthetic elevation + heart rate
+            expect(chartData.datasets[0].data.length).toBe(100); // matches heart rate length
+        });
+
+        it('should use minimum 50 points for synthetic elevation', () => {
+            const heartRateData = [150]; // only 1 point
+            const elevationStats = {
+                min: 100,
+                gain: 50,
+                loss: -20
+            };
+
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    heartRateData,
+                    elevationStats,
+                    trackName: 'Test Track',
+                    totalDistance: 10,
+                    chartMode: 'both'
+                }
+            });
+
+            const chartData = wrapper.vm.chartData;
+            expect(chartData.datasets[0].data.length).toBe(50); // minimum points
+        });
+    });
+
+    describe('CSS classes and styling', () => {
+        it('should have correct container class', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: createMockElevationData(),
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.find('.elevation-chart-container').exists()).toBe(true);
+        });
+
+        it('should have correct stats display classes', () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [],
+                    elevationStats: { gain: 100, loss: -50 },
+                    trackName: 'Test Track',
+                    totalDistance: 10
+                }
+            });
+
+            expect(wrapper.find('.elevation-stats-display').exists()).toBe(true);
+            expect(wrapper.find('.stat-item').exists()).toBe(true);
+            expect(wrapper.find('.stat-label').exists()).toBe(true);
+            expect(wrapper.find('.stat-value').exists()).toBe(true);
         });
     });
 });

@@ -7,10 +7,9 @@
       <div v-if="data.recorded_at" class="upload-label meta">Recorded: {{ formatDateTime(data.recorded_at) }}</div>
       <div v-if="data.created_at" class="upload-label meta">Added: {{ formatDateTime(data.created_at) }}</div>
       <div v-if="data.updated_at" class="upload-label meta">Updated: {{ formatDateTime(data.updated_at) }}</div>
-      <div v-if="data.avg_hr || data.avg_speed || data.elevation_gain">
-        <div v-if="data.avg_hr" class="upload-label">Average pulse: {{ data.avg_hr }} bpm</div>
-        <div v-if="data.avg_speed" class="upload-label">Average speed: {{ data.avg_speed.toFixed(1) }} km/h</div>
+      <div v-if="data.elevation_gain">
         <div v-if="data.elevation_gain" class="upload-label">Elevation gain: {{ data.elevation_gain }} m</div>
+        <div v-if="data.elevation_dataset" class="upload-label">Data source: {{ formatDataset(data.elevation_dataset) }}</div>
       </div>
       <div v-if="data.categories && data.categories.length" class="upload-label categories-section">
         Categories:
@@ -48,6 +47,26 @@ function formatDateTime(dateString) {
     console.error('Error formatting date:', error);
     return 'Invalid Date';
   }
+}
+
+// Format dataset name for display
+function formatDataset(dataset) {
+  if (!dataset) return 'Unknown';
+  
+  // Handle common dataset names
+  const datasetNames = {
+    'original_gpx': 'Original GPX',
+    'original': 'Original',
+    'aster30m': 'ASTER 30m',
+    'srtm30m': 'SRTM 30m',
+    'srtm90m': 'SRTM 90m',
+    'mapzen': 'Mapzen',
+    'eudem25m': 'EU-DEM 25m',
+    'ned10m': 'NED 10m',
+    'open-elevation': 'Open-Elevation'
+  };
+  
+  return datasetNames[dataset] || dataset.charAt(0).toUpperCase() + dataset.slice(1);
 }
 </script>
 <style scoped>

@@ -75,6 +75,10 @@ describe('TrackFilterControl', () => {
         globalCategories: ['hiking', 'running', 'cycling', 'walking'],
         globalMinLength: 0,
         globalMaxLength: 50,
+        minElevationGain: 0,
+        maxElevationGain: 2000,
+        globalMinElevationGain: 0,
+        globalMaxElevationGain: 2000,
         hasTracksInViewport: true,
         ...overrides
     });
@@ -456,6 +460,7 @@ describe('TrackFilterControl', () => {
                 JSON.stringify({
                     categories: ['hiking'],
                     lengthRange: [0, 50],
+                    elevationGainRange: [0, 2000]
                 })
             );
         });
@@ -484,6 +489,7 @@ describe('TrackFilterControl', () => {
                 JSON.stringify({
                     categories: [],
                     lengthRange: [0, 50],
+                    elevationGainRange: [0, 2000]
                 })
             );
         });
@@ -597,6 +603,7 @@ describe('TrackFilterControl', () => {
                 JSON.stringify({
                     categories: ['hiking', 'running', 'cycling'],
                     lengthRange: [0, 50],
+                    elevationGainRange: [0, 2000]
                 })
             );
         });
@@ -1016,6 +1023,7 @@ describe('TrackFilterControl', () => {
             expect(emitted[emitted.length - 1][0]).toEqual({
                 categories: ['hiking', 'running'],
                 lengthRange: [0, 50],
+                elevationGainRange: [0, 2000]
             });
         });
 
@@ -1124,6 +1132,358 @@ describe('TrackFilterControl', () => {
             expect(hikingCheckbox.element.checked).toBe(false);
             expect(runningCheckbox.element.checked).toBe(true);
             expect(cyclingCheckbox.element.checked).toBe(false);
+
+            wrapper.unmount();
+        });
+    });
+
+    describe('Elevation gain filtering', () => {
+        it('displays elevation gain slider', () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 100,
+                    maxElevationGain: 1500
+                }),
+            });
+
+            const elevationLabel = wrapper.findAll('label').find(label =>
+                label.element.textContent.includes('Elevation gain (m):')
+            );
+            expect(elevationLabel).toBeTruthy();
+            expect(elevationLabel.element.textContent).toContain('Elevation gain (m):');
+
+            // Since we're using the mock, check for slider inputs
+            const sliders = wrapper.findAll('input[type="range"]');
+            expect(sliders.length).toBeGreaterThanOrEqual(4); // 2 for length + 2 for elevation
+        });
+
+        it('sets elevation gain range to global default when no localStorage', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 50,
+                    maxElevationGain: 1200,
+                    globalMinElevationGain: 0,
+                    globalMaxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+
+            expect(wrapper.vm.elevationGainRange).toEqual([0, 2000]);
+        });
+
+        it('handles elevation gain slider changes', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+
+            // Simulate elevation gain min slider change by directly updating reactive data
+            wrapper.vm.elevationGainRange = [200, 2000];
+            await nextTick();
+
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+            expect(emitted[emitted.length - 1][0].elevationGainRange).toEqual([200, 2000]);
+        });
+
+        it('handles elevation gain max slider changes', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+
+            // Simulate elevation gain max slider change
+            wrapper.vm.elevationGainRange = [0, 1500];
+            await nextTick();
+
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+            expect(emitted[emitted.length - 1][0].elevationGainRange).toEqual([0, 1500]);
+        });
+
+        it('saves elevation gain range to localStorage', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    globalCategories: ['hiking'] // Match the viewport for this test
+                }),
+            });
+
+            await nextTick();
+
+            // Change elevation gain range
+            wrapper.vm.elevationGainRange = [300, 1800];
+            await nextTick();
+
+            expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+                LOCAL_STORAGE_KEY,
+                JSON.stringify({
+                    categories: ['hiking'],
+                    lengthRange: [0, 50],
+                    elevationGainRange: [300, 1800]
+                })
+            );
+        });
+
+        it('restores elevation gain range from localStorage', async () => {
+            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+                categories: ['hiking'],
+                lengthRange: [5, 25],
+                elevationGainRange: [150, 1200]
+            }));
+
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+
+            expect(wrapper.vm.elevationGainRange).toEqual([150, 1200]);
+        });
+
+        it('uses global elevation gain values on reset', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 100,
+                    maxElevationGain: 1500,
+                    globalMinElevationGain: 0,
+                    globalMaxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+
+            // Change elevation gain range
+            wrapper.vm.elevationGainRange = [500, 1000];
+            await nextTick();
+
+            // Reset filters
+            const resetButton = wrapper.find('.filter-actions button');
+            await resetButton.trigger('click');
+            await nextTick();
+
+            // Should reset to global values, clamped to viewport bounds
+            expect(wrapper.vm.elevationGainRange).toEqual([0, 2000]);
+        });
+
+        it('clamps elevation gain range to viewport bounds', async () => {
+            // Mock saved range that exceeds new viewport bounds
+            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [50, 2500] // Max exceeds new viewport
+            }));
+
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000 // Lower than saved max
+                }),
+            });
+
+            await nextTick();
+            // Wait for watchers to process the clamping
+            await nextTick();
+
+            // Internal state preserves user's choice (for when they navigate back)
+            expect(wrapper.vm.elevationGainRange).toEqual([50, 2500]);
+
+            // But emitted values should be clamped to viewport bounds
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+            const lastEmit = emitted[emitted.length - 1][0];
+            expect(lastEmit.elevationGainRange).toEqual([50, 2000]);
+        });
+
+        it('preserves elevation gain range when viewport props change', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+
+            // Set custom elevation gain range
+            wrapper.vm.elevationGainRange = [200, 1800];
+            await nextTick();
+
+            // Change viewport props
+            await wrapper.setProps({
+                minElevationGain: 50,
+                maxElevationGain: 1500,
+            });
+
+            await nextTick();
+
+            // Should preserve user selection, not reset to new viewport bounds
+            expect(wrapper.vm.elevationGainRange).toEqual([200, 1800]);
+        });
+
+        it('handles missing elevation gain props gracefully', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: undefined,
+                    maxElevationGain: undefined,
+                    globalMinElevationGain: undefined,
+                    globalMaxElevationGain: undefined
+                }),
+            });
+
+            await nextTick();
+
+            // Should use default values [0, 2000]
+            expect(wrapper.vm.elevationGainRange).toEqual([0, 2000]);
+        });
+
+        it('preserves elevation gain range after page refresh workflow', async () => {
+            // Step 1: Start with fresh app - no localStorage initially
+            mockLocalStorage.getItem.mockReturnValue(null);
+
+            let wrapper1 = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000,
+                    globalCategories: ['hiking'] // Match viewport for this test
+                }),
+            });
+
+            await nextTick();
+
+            // Step 2: User adjusts elevation gain range
+            wrapper1.vm.elevationGainRange = [400, 1600];
+            await nextTick();
+
+            // Step 3: Verify localStorage was updated
+            const savedCalls = mockLocalStorage.setItem.mock.calls
+                .filter(call => call[0] === 'trackFiltersVue')
+                .map(call => ({ key: call[0], value: call[1] }));
+
+            const savedState = savedCalls[savedCalls.length - 1];
+            expect(savedState).toBeTruthy();
+            const parsedState = JSON.parse(savedState.value);
+            expect(parsedState.elevationGainRange).toEqual([400, 1600]);
+
+            wrapper1.unmount();
+
+            // Step 4: Mock page refresh with saved state
+            mockLocalStorage.getItem.mockReturnValue(savedState.value);
+
+            const wrapper2 = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000,
+                    globalCategories: ['hiking']
+                }),
+            });
+
+            await nextTick();
+
+            // Should restore custom elevation gain range
+            expect(wrapper2.vm.elevationGainRange).toEqual([400, 1600]);
+
+            wrapper2.unmount();
+        });
+
+        it('handles invalid elevation gain range in localStorage', async () => {
+            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [2000, 100] // Invalid: min > max
+            }));
+
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+
+            // Should fallback to global values when localStorage data is malformed
+            expect(wrapper.vm.elevationGainRange).toEqual([0, 2000]);
+        });
+
+        it('emits elevation gain range in filter updates', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minElevationGain: 0,
+                    maxElevationGain: 2000
+                }),
+            });
+
+            await nextTick();
+            await nextTick(); // Wait for initial emit
+
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+
+            const lastEmit = emitted[emitted.length - 1][0];
+            expect(lastEmit).toHaveProperty('elevationGainRange');
+            expect(Array.isArray(lastEmit.elevationGainRange)).toBe(true);
+            expect(lastEmit.elevationGainRange.length).toBe(2);
+        });
+
+        it('preserves elevation gain range through viewport changes during app startup', async () => {
+            // Mock localStorage with saved elevation gain range
+            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [300, 1200]
+            }));
+
+            // Step 1: App startup with default/empty elevation values
+            const wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: [],
+                    minElevationGain: 0,
+                    maxElevationGain: 0 // Empty during startup
+                }),
+            });
+
+            await nextTick();
+
+            // Should restore saved range even with 0,0 props
+            expect(wrapper.vm.elevationGainRange).toEqual([300, 1200]);
+
+            // Step 2: Track data loads and elevation bounds update
+            await wrapper.setProps({
+                categories: ['hiking'],
+                minElevationGain: 50,
+                maxElevationGain: 1800,
+            });
+
+            await nextTick();
+
+            // Should preserve user's custom range
+            expect(wrapper.vm.elevationGainRange).toEqual([300, 1200]);
 
             wrapper.unmount();
         });

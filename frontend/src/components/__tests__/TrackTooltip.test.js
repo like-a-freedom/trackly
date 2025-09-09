@@ -219,7 +219,7 @@ describe('TrackTooltip', () => {
     });
 
     describe('Performance metrics display', () => {
-        it('displays average heart rate when provided', () => {
+        it('does not display average heart rate as performance metrics are not shown', () => {
             wrapper = mount(TrackTooltip, {
                 props: {
                     visible: true,
@@ -229,10 +229,11 @@ describe('TrackTooltip', () => {
                 }
             });
 
-            expect(wrapper.text()).toContain('Average pulse: 145 bpm');
+            expect(wrapper.text()).not.toContain('Average pulse');
+            expect(wrapper.text()).not.toContain('145 bpm');
         });
 
-        it('displays average speed when provided', () => {
+        it('does not display average speed as performance metrics are not shown', () => {
             wrapper = mount(TrackTooltip, {
                 props: {
                     visible: true,
@@ -242,10 +243,11 @@ describe('TrackTooltip', () => {
                 }
             });
 
-            expect(wrapper.text()).toContain('Average speed: 12.5 km/h');
+            expect(wrapper.text()).not.toContain('Average speed');
+            expect(wrapper.text()).not.toContain('12.5 km/h');
         });
 
-        it('formats average speed to 1 decimal place', () => {
+        it('does not format average speed as performance metrics are not shown', () => {
             wrapper = mount(TrackTooltip, {
                 props: {
                     visible: true,
@@ -255,7 +257,8 @@ describe('TrackTooltip', () => {
                 }
             });
 
-            expect(wrapper.text()).toContain('Average speed: 12.1 km/h');
+            expect(wrapper.text()).not.toContain('Average speed');
+            expect(wrapper.text()).not.toContain('12.1 km/h');
         });
 
         it('displays elevation gain when provided', () => {

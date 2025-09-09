@@ -41,9 +41,13 @@
       :categories="allCategories"
       :minLength="minTrackLength"
       :maxLength="maxTrackLength"
+      :minElevationGain="minElevationGain"
+      :maxElevationGain="maxElevationGain"
       :globalCategories="globalCategories"
       :globalMinLength="globalMinTrackLength"
       :globalMaxLength="globalMaxTrackLength"
+      :globalMinElevationGain="globalMinElevationGain"
+      :globalMaxElevationGain="globalMaxElevationGain"
       :hasTracksInViewport="!!(props.polylines && props.polylines.length > 0)"
       @update:filter="onFilterChange"
     />
@@ -290,6 +294,7 @@ const allCategories = computed(() => {
 // Use stable min/max length values that don't change with viewport to prevent filter slider jumping
 // Track session-wide range that only expands, never shrinks when new tracks are loaded
 const sessionTrackLengths = ref(new Set());
+const sessionElevationGains = ref(new Set());
 
 // Watch for new tracks and update session range
 watch(() => props.polylines, (newPolylines) => {
@@ -298,6 +303,16 @@ watch(() => props.polylines, (newPolylines) => {
       const length = poly.properties?.length_km;
       if (typeof length === 'number' && length >= 0) {
         sessionTrackLengths.value.add(length);
+      }
+      
+      // Use elevation_gain if available, fallback to elevation_up
+      const elevationGain = poly.properties?.elevation_gain;
+      const elevationUp = poly.properties?.elevation_up;
+      const effectiveGain = (typeof elevationGain === 'number' && elevationGain >= 0) ? elevationGain : 
+                           (typeof elevationUp === 'number' && elevationUp >= 0) ? elevationUp : null;
+      
+      if (effectiveGain !== null) {
+        sessionElevationGains.value.add(effectiveGain);
       }
     });
   }
@@ -328,6 +343,42 @@ const maxTrackLength = computed(() => {
   return 50;
 });
 
+// Elevation gain bounds for current viewport
+// Use elevation_gain if available, fallback to elevation_up for backward compatibility
+const minElevationGain = computed(() => {
+  const polylines = props.polylines || [];
+  const elevationGains = polylines
+    .map(poly => {
+      const gain = poly.properties?.elevation_gain;
+      const up = poly.properties?.elevation_up;
+      // Use elevation_gain if available, fallback to elevation_up
+      return (typeof gain === 'number' && gain >= 0) ? gain : 
+             (typeof up === 'number' && up >= 0) ? up : null;
+    })
+    .filter(gain => gain !== null);
+  if (elevationGains.length > 0) {
+    return Math.min(...elevationGains);
+  }
+  return 0;
+});
+
+const maxElevationGain = computed(() => {
+  const polylines = props.polylines || [];
+  const elevationGains = polylines
+    .map(poly => {
+      const gain = poly.properties?.elevation_gain;
+      const up = poly.properties?.elevation_up;
+      // Use elevation_gain if available, fallback to elevation_up
+      return (typeof gain === 'number' && gain >= 0) ? gain : 
+             (typeof up === 'number' && up >= 0) ? up : null;
+    })
+    .filter(gain => gain !== null);
+  if (elevationGains.length > 0) {
+    return Math.max(...elevationGains);
+  }
+  return 2000;
+});
+
 // Global session-based min/max lengths for reset functionality
 // These represent the full range across all tracks seen in the session
 const globalMinTrackLength = computed(() => {
@@ -346,6 +397,23 @@ const globalMaxTrackLength = computed(() => {
   return 50;
 });
 
+// Global session-based min/max elevation gain for reset functionality
+const globalMinElevationGain = computed(() => {
+  const elevationGains = Array.from(sessionElevationGains.value);
+  if (elevationGains.length > 0) {
+    return Math.min(...elevationGains);
+  }
+  return 0;
+});
+
+const globalMaxElevationGain = computed(() => {
+  const elevationGains = Array.from(sessionElevationGains.value);
+  if (elevationGains.length > 0) {
+    return Math.max(...elevationGains);
+  }
+  return 2000;
+});
+
 // Global session categories for reset functionality
 const globalCategories = computed(() => {
   return Array.from(sessionCategories.value).sort();
@@ -354,7 +422,8 @@ const globalCategories = computed(() => {
 // Initialize filter state properly with watchers to update when track data changes
 const filterState = ref({ 
   categories: [], 
-  lengthRange: [0, 0] 
+  lengthRange: [0, 0],
+  elevationGainRange: [0, 2000]
 });
 
 // Convert polylines to GeoJSON format (no filtering here - use native Leaflet filter)
@@ -431,7 +500,20 @@ function geoJsonFilter(feature, layer) {
       const min = filterState.value.lengthRange[0];
       const max = filterState.value.lengthRange[1];
       const lenMatch = len >= (min - EPSILON) && len <= (max + EPSILON);
-      return catMatch && lenMatch;
+      
+      // Elevation gain filtering with fallback
+      const elevationGain = feature.properties?.elevation_gain;
+      const elevationUp = feature.properties?.elevation_up;
+      const effectiveGain = (typeof elevationGain === 'number') ? elevationGain : 
+                           (typeof elevationUp === 'number') ? elevationUp : null;
+      
+      const elevationMin = filterState.value.elevationGainRange[0];
+      const elevationMax = filterState.value.elevationGainRange[1];
+      const EPSILON_ELEVATION = 10; // Larger tolerance for elevation (10 meters) to handle boundary cases
+      const elevationMatch = effectiveGain === null || 
+        (effectiveGain >= (elevationMin - EPSILON_ELEVATION) && effectiveGain <= (elevationMax + EPSILON_ELEVATION));
+      
+      return catMatch && lenMatch && elevationMatch;
     } else {
       // During transition with no categories selected, show all tracks to prevent cleanup issues
       return true;
@@ -460,7 +542,19 @@ function geoJsonFilter(feature, layer) {
   const max = filterState.value.lengthRange[1];
   const lenMatch = len >= (min - EPSILON) && len <= (max + EPSILON);
   
-  return catMatch && lenMatch;
+  // Elevation gain filtering with fallback and larger tolerance for boundary values
+  const elevationGain = feature.properties?.elevation_gain;
+  const elevationUp = feature.properties?.elevation_up;
+  const effectiveGain = (typeof elevationGain === 'number') ? elevationGain : 
+                       (typeof elevationUp === 'number') ? elevationUp : null;
+  
+  const elevationMin = filterState.value.elevationGainRange[0];
+  const elevationMax = filterState.value.elevationGainRange[1];
+  const EPSILON_ELEVATION = 10; // Larger tolerance for elevation (10 meters) to handle boundary cases
+  const elevationMatch = effectiveGain === null || 
+    (effectiveGain >= (elevationMin - EPSILON_ELEVATION) && effectiveGain <= (elevationMax + EPSILON_ELEVATION));
+  
+  return catMatch && lenMatch && elevationMatch;
 }
 
 // Handle filter changes from the control component
@@ -476,6 +570,15 @@ watch([minTrackLength, maxTrackLength], ([min, max]) => {
   // This prevents overriding manually set filter ranges
   if (filterState.value.lengthRange[0] === 0 && filterState.value.lengthRange[1] === 0) {
     filterState.value.lengthRange = [min, max];
+  }
+}, { immediate: true });
+
+// Watch for changes in elevation gain range and update filter accordingly (only for initialization)
+watch([minElevationGain, maxElevationGain], ([min, max]) => {
+  // Only update if the current range is uninitialized (both are 0 and 2000)
+  // This prevents overriding manually set filter ranges
+  if (filterState.value.elevationGainRange[0] === 0 && filterState.value.elevationGainRange[1] === 2000) {
+    filterState.value.elevationGainRange = [min, max];
   }
 }, { immediate: true });
 
