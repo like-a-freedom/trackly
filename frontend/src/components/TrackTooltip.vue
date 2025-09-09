@@ -8,7 +8,7 @@
       <div v-if="data.created_at" class="upload-label meta">Added: {{ formatDateTime(data.created_at) }}</div>
       <div v-if="data.updated_at" class="upload-label meta">Updated: {{ formatDateTime(data.updated_at) }}</div>
       <div v-if="data.elevation_gain">
-        <div v-if="data.elevation_gain" class="upload-label">Elevation gain: {{ data.elevation_gain }} m</div>
+        <div v-if="data.elevation_gain" class="upload-label">Elevation gain: {{ Math.round(data.elevation_gain) }} m</div>
         <div v-if="data.elevation_dataset" class="upload-label">Data source: {{ formatDataset(data.elevation_dataset) }}</div>
       </div>
       <div v-if="data.categories && data.categories.length" class="upload-label categories-section">
