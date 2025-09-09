@@ -163,6 +163,38 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_kml_with_track() {
+        let kml_track = r#"<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<Placemark>
+<name>Test Track</name>
+<Track>
+<when>2024-01-01T10:00:00Z</when>
+<when>2024-01-01T10:01:00Z</when>
+<coord>37.0 55.0 200</coord>
+<coord>37.1 55.1 210</coord>
+</Track>
+</Placemark>
+</Document>
+</kml>"#;
+        let res = parse_kml(kml_track.as_bytes());
+        if let Err(e) = &res {
+            println!("KML Track parse error: {e:?}");
+        }
+        assert!(res.is_ok());
+        let parsed_data = res.unwrap();
+        assert_eq!(parsed_data.geom_geojson["type"], "LineString");
+        assert!(parsed_data.length_km > 0.0);
+        assert!(parsed_data.time_data.is_some());
+        let time_data = parsed_data.time_data.unwrap();
+        assert_eq!(time_data.len(), 2);
+        assert!(time_data[0].is_some());
+        assert!(time_data[1].is_some());
+        assert!(!parsed_data.hash.is_empty());
+    }
+
+    #[test]
     fn test_parse_gpx_route_only() {
         let gpx_route = r#"<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test">

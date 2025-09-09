@@ -11,7 +11,7 @@
             {{ cancelText }}
           </button>
           <button class="dialog-btn dialog-btn-confirm" @click="onConfirm">
-            {{ confirmText }}https://quiklight.robobloq.cn/download
+            {{ confirmText }}
             
           </button>
         </div>
