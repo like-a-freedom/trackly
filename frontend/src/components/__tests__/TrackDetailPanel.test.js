@@ -3,6 +3,22 @@ import { mount } from '@vue/test-utils';
 import TrackDetailPanel from '../TrackDetailPanel.vue';
 import ElevationChart from '../ElevationChart.vue';
 
+// Mock the useToast composable
+const mockShowToast = vi.fn();
+vi.mock('../../composables/useToast', () => ({
+  useToast: () => ({
+    showToast: mockShowToast
+  })
+}));
+
+// Mock the useConfirm composable
+const mockShowConfirm = vi.fn();
+vi.mock('../../composables/useConfirm', () => ({
+  useConfirm: () => ({
+    showConfirm: mockShowConfirm
+  })
+}));
+
 // Disable debouncing inside this test suite
 vi.mock('../../composables/useAdvancedDebounce', () => ({
   useAdvancedDebounce: (fn) => fn
@@ -1151,10 +1167,9 @@ describe('TrackDetailPanel', () => {
     beforeEach(() => {
       // Mock fetch for elevation enrichment
       global.fetch = vi.fn();
-      // Mock window.confirm and window.alert
-      global.confirm = vi.fn();
-      global.alert = vi.fn();
-      window.alert = global.alert; // Ensure window.alert uses the same mock
+      // Clear the mocks
+      mockShowToast.mockClear();
+      mockShowConfirm.mockClear();
 
       // Mock window.dispatchEvent for global events  
       global.dispatchEvent = vi.fn();
@@ -1191,7 +1206,7 @@ describe('TrackDetailPanel', () => {
     });
 
     it('should show confirmation dialog when track already has elevation data', async () => {
-      global.confirm.mockReturnValue(false); // User cancels
+      mockShowConfirm.mockResolvedValue(false); // User cancels
 
       wrapper = mount(TrackDetailPanel, {
         props: {
@@ -1204,14 +1219,17 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      expect(global.confirm).toHaveBeenCalledWith(
-        'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?'
-      );
+      expect(mockShowConfirm).toHaveBeenCalledWith({
+        title: 'Update Elevation Data',
+        message: 'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?',
+        confirmText: 'Continue',
+        cancelText: 'Cancel'
+      });
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('should proceed with enrichment when user confirms', async () => {
-      global.confirm.mockReturnValue(true); // User confirms
+      mockShowConfirm.mockResolvedValue(true); // User confirms
       global.fetch
         .mockResolvedValueOnce({ // First call for enrichment
           ok: true,
@@ -1248,13 +1266,13 @@ describe('TrackDetailPanel', () => {
       // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(global.confirm).toHaveBeenCalled();
+      expect(mockShowConfirm).toHaveBeenCalled();
       expect(global.fetch).toHaveBeenCalledWith('/tracks/1/enrich-elevation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: 'test-session', force: true })
       });
-      expect(global.alert).toHaveBeenCalledWith('Elevation data updated successfully!');
+      expect(mockShowToast).toHaveBeenCalledWith('Elevation data updated successfully!', 'success');
     });
 
     it('should proceed without confirmation when track has no elevation data', async () => {
@@ -1282,7 +1300,7 @@ describe('TrackDetailPanel', () => {
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(global.confirm).not.toHaveBeenCalled();
+      expect(mockShowConfirm).not.toHaveBeenCalled();
       expect(global.fetch).toHaveBeenCalledWith('/tracks/1/enrich-elevation', expect.any(Object));
     });
 
@@ -1320,7 +1338,7 @@ describe('TrackDetailPanel', () => {
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(global.alert).toHaveBeenCalledWith('You are not allowed to update this track.');
+      expect(mockShowToast).toHaveBeenCalledWith('You are not allowed to update this track.', 'error');
     });
 
     it('should handle 429 rate limit error', async () => {
@@ -1335,7 +1353,7 @@ describe('TrackDetailPanel', () => {
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(global.alert).toHaveBeenCalledWith('API rate limit exceeded. Please try again later.');
+      expect(mockShowToast).toHaveBeenCalledWith('API rate limit exceeded. Please try again later.', 'error');
     });
 
     it('should handle network errors gracefully', async () => {
@@ -1350,7 +1368,7 @@ describe('TrackDetailPanel', () => {
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(global.alert).toHaveBeenCalledWith('Failed to update elevation data. Please try again.');
+      expect(mockShowToast).toHaveBeenCalledWith('Failed to update elevation data. Please try again.', 'error');
     });
 
     it('should update track data with enrichment results', async () => {
@@ -1444,8 +1462,9 @@ describe('TrackDetailPanel', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
       await wrapper.vm.$nextTick();
 
-      expect(global.alert).toHaveBeenCalledWith(
-        'Elevation data was enriched, but failed to refresh the display. Please refresh the page to see the updated data.'
+      expect(mockShowToast).toHaveBeenCalledWith(
+        'Elevation data was enriched, but failed to refresh the display. Please refresh the page to see the updated data.',
+        'error'
       );
     });
 

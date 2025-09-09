@@ -1,15 +1,20 @@
 <template>
-  <router-view v-slot="{ Component, route }">
-    <transition name="page" mode="out-in" appear>
-      <keep-alive :include="['HomeView', 'TrackView']" :max="3">
-        <component :is="Component" :key="route.meta.keepAliveKey || route.fullPath" />
-      </keep-alive>
-    </transition>
-  </router-view>
+  <div id="app-container">
+    <router-view v-slot="{ Component, route }">
+      <transition name="page" mode="out-in" appear>
+        <keep-alive :include="['HomeView', 'TrackView']" :max="3">
+          <component :is="Component" :key="route.meta.keepAliveKey || route.fullPath" />
+        </keep-alive>
+      </transition>
+    </router-view>
+    
+    <!-- Global dialog provider -->
+    <ConfirmDialogProvider />
+  </div>
 </template>
 
 <script setup>
-// App.vue now just renders router views
+import ConfirmDialogProvider from './components/ConfirmDialogProvider.vue';
 </script>
 
 <style>
@@ -24,6 +29,11 @@ html, body, #app {
 #app {
   height: 100vh;
   width: 100vw;
+}
+
+#app-container {
+  height: 100%;
+  width: 100%;
 }
 
 /* Page transition styles for smooth route changes */

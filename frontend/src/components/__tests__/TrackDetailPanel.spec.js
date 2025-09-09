@@ -2,6 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import TrackDetailPanel from '../TrackDetailPanel.vue';
 
+// Mock the useToast composable
+const mockShowToast = vi.fn();
+vi.mock('../../composables/useToast', () => ({
+    useToast: () => ({
+        showToast: mockShowToast
+    })
+}));
+
+// Mock the useConfirm composable
+const mockShowConfirm = vi.fn();
+vi.mock('../../composables/useConfirm', () => ({
+    useConfirm: () => ({
+        showConfirm: mockShowConfirm
+    })
+}));
+
 // Helper to build a minimal track object
 function makeTrack(overrides = {}) {
     return Object.assign({
@@ -35,12 +51,12 @@ function makeTrack(overrides = {}) {
 
 describe('TrackDetailPanel delete behaviour', () => {
     const originalFetch = global.fetch;
-    const originalConfirm = global.confirm;
 
     beforeEach(() => {
         vi.restoreAllMocks();
         global.fetch = vi.fn();
-        global.confirm = vi.fn(() => true); // default confirm OK
+        mockShowConfirm.mockResolvedValue(true); // default confirm OK
+        mockShowToast.mockClear();
     });
 
     it('emits deleted + close and dispatches global event on successful delete', async () => {
@@ -77,7 +93,7 @@ describe('TrackDetailPanel delete behaviour', () => {
 
     it('does not emit deleted if user cancels confirmation', async () => {
         const track = makeTrack();
-        global.confirm = vi.fn(() => false); // user cancels
+        mockShowConfirm.mockResolvedValue(false); // user cancels
 
         const wrapper = mount(TrackDetailPanel, {
             props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
@@ -92,10 +108,9 @@ describe('TrackDetailPanel delete behaviour', () => {
         expect(wrapper.emitted('close')).toBeFalsy();
     });
 
-    it('shows alert on non-204 failure and does not emit deleted', async () => {
+    it('shows toast on non-204 failure and does not emit deleted', async () => {
         const track = makeTrack();
         fetch.mockResolvedValueOnce({ status: 500, ok: false });
-        const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
 
         const wrapper = mount(TrackDetailPanel, {
             props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
@@ -106,12 +121,10 @@ describe('TrackDetailPanel delete behaviour', () => {
         await Promise.resolve();
         await wrapper.vm.$nextTick();
 
-        expect(alertSpy).toHaveBeenCalled();
+        expect(mockShowToast).toHaveBeenCalledWith(
+            'Failed to delete track.',
+            'error'
+        );
         expect(wrapper.emitted('deleted')).toBeFalsy();
-    });
-
-    afterAll(() => {
-        global.fetch = originalFetch;
-        global.confirm = originalConfirm;
     });
 });
