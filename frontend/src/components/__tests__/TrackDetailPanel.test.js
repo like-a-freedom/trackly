@@ -1275,33 +1275,16 @@ describe('TrackDetailPanel', () => {
       expect(mockShowToast).toHaveBeenCalledWith('Elevation data updated successfully!', 'success');
     });
 
-    it('should proceed without confirmation when track has no elevation data', async () => {
-      global.fetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            elevation_gain: 400,
-            elevation_loss: -350
-          })
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ ...mockTrackComplete, elevation_gain: 400 })
-        });
-
-      const trackNoElevation = { ...mockTrackComplete, elevation_enriched: false, elevation_gain: null };
+    it('should not show force update button when track has no elevation data', async () => {
+      const trackNoElevation = { ...mockTrackComplete, elevation_enriched: false, elevation_gain: null, elevation_loss: null, elevation_profile: null };
 
       wrapper = mount(TrackDetailPanel, {
         props: { track: trackNoElevation, isOwner: true, sessionId: 'test-session' }
       });
 
+      // Button should not exist when there's no elevation data
       const forceUpdateBtn = wrapper.find('.force-update-btn');
-      await forceUpdateBtn.trigger('click');
-
-      await new Promise(resolve => setTimeout(resolve, 0));
-
-      expect(mockShowConfirm).not.toHaveBeenCalled();
-      expect(global.fetch).toHaveBeenCalledWith('/tracks/1/enrich-elevation', expect.any(Object));
+      expect(forceUpdateBtn.exists()).toBe(false);
     });
 
     it('should disable button during enrichment process', async () => {
