@@ -105,6 +105,8 @@ const windowHeight = ref(window.innerHeight);
 const lastFetchZoom = ref(null); // Track last zoom used for fetching to avoid duplicates
 const isInitialLoad = ref(true); // Track if this is the first load to prevent redundant fetches
 const currentTrackId = ref(null); // Track current processing track ID to prevent race conditions
+const mapStabilizationTimer = ref(null); // Timer to wait for map stabilization
+const STABILIZATION_DELAY = 3000; // 3 seconds to wait for map auto-zoom to stabilize
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -304,7 +306,22 @@ async function fetchTrack(zoomLevel = null, forceTrackId = null) {
   lastFetchZoom.value = roundedZoom;
   
   await debouncedFetchTrack(id, roundedZoom);
-  isInitialLoad.value = false; // Mark that initial load is complete
+  
+  // Start stabilization timer only on initial load to prevent zoom-triggered fetches
+  if (isInitialLoad.value) {
+    // Clear any existing timer
+    if (mapStabilizationTimer.value) {
+      clearTimeout(mapStabilizationTimer.value);
+    }
+    
+    // Set timer to mark map as stabilized after delay
+    mapStabilizationTimer.value = setTimeout(() => {
+      isInitialLoad.value = false;
+      console.log(`Map stabilization complete for track ${id}`);
+    }, STABILIZATION_DELAY);
+  } else {
+    isInitialLoad.value = false; // Mark that initial load is complete for non-initial fetches
+  }
 }
 
 function calculateBounds(latlngs) {
@@ -372,16 +389,18 @@ function handleZoomUpdate(newZoom) {
   
   // Skip zoom-based fetching during initial load (auto-zoom phase)
   if (isInitialLoad.value) {
-    console.log(`Skip zoom fetch during initial load: ${roundedNewZoom}`);
+    console.log(`Skip zoom fetch during initial load/stabilization: ${roundedNewZoom}`);
     return;
   }
   
-  // Only trigger fetch if zoom changed by at least 3 levels to reduce unnecessary requests
-  if (Math.abs(roundedNewZoom - roundedCurrentZoom) >= 3) {
+  // Only trigger fetch if zoom changed by at least 4 levels to reduce unnecessary requests
+  if (Math.abs(roundedNewZoom - roundedCurrentZoom) >= 4) {
     console.log(`Significant zoom change: ${roundedCurrentZoom} -> ${roundedNewZoom}`);
     // Pass current route track ID to ensure we only update if it's still the current route
     const currentRouteTrackId = route.params.id;
     debouncedZoomUpdate(roundedNewZoom, currentRouteTrackId);
+  } else {
+    console.log(`Ignoring minor zoom change: ${roundedCurrentZoom} -> ${roundedNewZoom} (diff: ${Math.abs(roundedNewZoom - roundedCurrentZoom)})`);
   }
 }
 
@@ -479,7 +498,8 @@ onMounted(async () => {
   console.log('TrackView mounted, trackId:', currentRouteId);
   
   // Only fetch if this component should handle this track and it's not already being processed
-  if (currentRouteId && currentRouteId !== currentTrackId.value) {
+  // AND if the track hasn't been fetched by route watcher already
+  if (currentRouteId && currentRouteId !== currentTrackId.value && !track.value) {
     await fetchTrack(null, currentRouteId); // Pass explicit track ID
   }
   
@@ -499,6 +519,12 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
+  
+  // Clear stabilization timer
+  if (mapStabilizationTimer.value) {
+    clearTimeout(mapStabilizationTimer.value);
+    mapStabilizationTimer.value = null;
+  }
 });
 
 // Handle keep-alive activation
@@ -519,6 +545,12 @@ onDeactivated(() => {
   window.removeEventListener('resize', handleResize);
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
+  
+  // Clear stabilization timer
+  if (mapStabilizationTimer.value) {
+    clearTimeout(mapStabilizationTimer.value);
+    mapStabilizationTimer.value = null;
+  }
 });
 
 // Handle route changes for keep-alive
@@ -533,9 +565,15 @@ watch(() => route.params.id, async (newId, oldId) => {
     // Reset state for new track
     lastFetchZoom.value = null;
     isInitialLoad.value = true;
-    currentTrackId.value = null; // Clear current processing track
+    currentTrackId.value = newId; // Set this immediately to prevent race with onMounted
     center.value = [59.9311, 30.3609]; // Reset to default, will be updated by track data
     loading.value = true; // Set loading state
+    
+    // Clear stabilization timer for old track
+    if (mapStabilizationTimer.value) {
+      clearTimeout(mapStabilizationTimer.value);
+      mapStabilizationTimer.value = null;
+    }
     
     // Small delay to ensure route is fully updated
     await nextTick();
