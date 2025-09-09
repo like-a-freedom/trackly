@@ -3,19 +3,22 @@
 // TODO: switch to https://github.com/georust/kml
 
 use crate::models::ParsedTrackData;
-use crate::track_utils::elevation::{calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data};
+use crate::track_utils::elevation::{
+    calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data,
+};
 use crate::track_utils::geometry::haversine_distance;
-use kml::types::{Geometry, Kml};
+use chrono::{DateTime, Utc};
+use kml::types::{Element, Geometry, Kml};
 use sha2::Digest;
-use std::str::FromStr;
 
 /// Parses a KML file, returns ParsedTrackData
 pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let s = std::str::from_utf8(bytes).map_err(|e| format!("utf8 error: {e}"))?;
-    let kml_doc = Kml::from_str(s).map_err(|e| format!("kml parse error: {e}"))?;
+    let kml_doc: Kml = s.parse().map_err(|e| format!("kml parse error: {e}"))?;
 
     let mut points = Vec::new();
     let mut elevation_profile_data = Vec::new();
+    let mut time_data = Vec::new();
     let mut total_elevation_gain = 0.0;
     let mut total_elevation_loss = 0.0;
     let mut last_elevation: Option<f64> = None;
@@ -111,10 +114,77 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         }
     }
 
+    fn extract_track_data(
+        element: &Element,
+        points: &mut Vec<(f64, f64)>,
+        elevations: &mut Vec<Option<f64>>,
+        time_data: &mut Vec<Option<DateTime<Utc>>>,
+        last_elevation: &mut Option<f64>,
+        total_elevation_gain: &mut f64,
+        total_elevation_loss: &mut f64,
+    ) {
+        let mut whens = Vec::new();
+        let mut coords = Vec::new();
+
+        for child in &element.children {
+            match child.name.as_str() {
+                "when" => {
+                    if let Some(content) = &child.content {
+                        if let Ok(dt) = DateTime::parse_from_rfc3339(content) {
+                            whens.push(Some(dt.with_timezone(&Utc)));
+                        } else {
+                            whens.push(None);
+                        }
+                    }
+                }
+                "coord" | "gx:coord" => {
+                    if let Some(content) = &child.content {
+                        let parts: Vec<&str> = content.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            if let (Ok(lon), Ok(lat)) =
+                                (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+                            {
+                                let elevation = if parts.len() >= 3 {
+                                    parts[2].parse::<f64>().ok()
+                                } else {
+                                    None
+                                };
+                                coords.push((lat, lon, elevation));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Assume whens and coords are in order
+        let len = whens.len().max(coords.len());
+        for i in 0..len {
+            let time = whens.get(i).cloned().flatten();
+            let coord = coords.get(i);
+
+            if let Some((lat, lon, elevation)) = coord {
+                points.push((*lat, *lon));
+                elevations.push(*elevation);
+                time_data.push(time);
+                update_elevation_stats(
+                    *elevation,
+                    last_elevation,
+                    total_elevation_gain,
+                    total_elevation_loss,
+                );
+            } else {
+                time_data.push(time);
+            }
+        }
+    }
+
     fn extract_kml_elements(
         kml_element: &Kml,
         points: &mut Vec<(f64, f64)>,
         elevations: &mut Vec<Option<f64>>,
+        time_data: &mut Vec<Option<DateTime<Utc>>>,
         last_elevation: &mut Option<f64>,
         total_elevation_gain: &mut f64,
         total_elevation_loss: &mut f64,
@@ -131,6 +201,20 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         total_elevation_loss,
                     );
                 }
+                // Also process any children inside Placemark (e.g., Track)
+                for child in &pm.children {
+                    if child.name == "Track" {
+                        extract_track_data(
+                            child,
+                            points,
+                            elevations,
+                            time_data,
+                            last_elevation,
+                            total_elevation_gain,
+                            total_elevation_loss,
+                        );
+                    }
+                }
             }
             Kml::Document { elements, .. } => {
                 for el in elements {
@@ -138,6 +222,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         el,
                         points,
                         elevations,
+                        time_data,
                         last_elevation,
                         total_elevation_gain,
                         total_elevation_loss,
@@ -150,11 +235,27 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         el,
                         points,
                         elevations,
+                        time_data,
                         last_elevation,
                         total_elevation_gain,
                         total_elevation_loss,
                     );
                 }
+            }
+            Kml::Element(element) => {
+                if element.name == "Track" {
+                    extract_track_data(
+                        element,
+                        points,
+                        elevations,
+                        time_data,
+                        last_elevation,
+                        total_elevation_gain,
+                        total_elevation_loss,
+                    );
+                }
+                // For other elements, recursively process children if they are known KML elements
+                // But since Element is for unknown, we skip for now
             }
             _ => {}
         }
@@ -168,6 +269,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                     element,
                     &mut points,
                     &mut elevation_profile_data,
+                    &mut time_data,
                     &mut last_elevation,
                     &mut total_elevation_gain,
                     &mut total_elevation_loss,
@@ -179,6 +281,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                 &kml_doc,
                 &mut points,
                 &mut elevation_profile_data,
+                &mut time_data,
                 &mut last_elevation,
                 &mut total_elevation_gain,
                 &mut total_elevation_loss,
@@ -227,8 +330,11 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         None
     };
 
-    // Calculate average speed and duration using metrics/time_utils if possible (future-proofing)
-    // For now, KML does not provide time/HR, so these remain None
+    let final_time_data = if time_data.iter().any(|t| t.is_some()) {
+        Some(time_data)
+    } else {
+        None
+    };
 
     // Perform automatic track classification
     use crate::track_classifier::{classify_track, TrackMetrics};
@@ -250,7 +356,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         .zip(elevation_profile_data.iter())
         .map(|((lat, lon), elevation)| (*lat, *lon, *elevation))
         .collect();
-    
+
     let elevation_metrics = if has_elevation_data(&track_points_with_elevation) {
         let elevations = extract_elevations_from_track_points(&track_points_with_elevation);
         calculate_elevation_metrics(&elevations)
@@ -264,7 +370,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         elevation_profile: final_elevation_profile,
         hr_data: None,   // KML does not typically contain HR data
         temp_data: None, // KML does not typically contain temperature data
-        time_data: None, // KML does not typically contain time data
+        time_data: final_time_data,
         // New elevation fields from elevation module
         elevation_gain: elevation_metrics.elevation_gain,
         elevation_loss: elevation_metrics.elevation_loss,

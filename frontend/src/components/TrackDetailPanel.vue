@@ -1214,18 +1214,16 @@ async function shareTrack() {
 async function forceEnrichElevation() {
   if (!track.value?.id || enrichingElevation.value) return;
   
-  // Show confirmation dialog if track already has elevation data
-  if (track.value.elevation_enriched && track.value.elevation_gain !== null) {
-    const confirmed = await showConfirm({
-      title: 'Update Elevation Data',
-      message: 'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?',
-      confirmText: 'Continue',
-      cancelText: 'Cancel'
-    });
-    if (!confirmed) return;
-  }
-  
-  enrichingElevation.value = true;
+      // Show confirmation dialog if track already has elevation data
+      if (hasElevationData.value) {
+        const confirmed = await showConfirm({
+          title: 'Update Elevation Data',
+          message: 'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?',
+          confirmText: 'Continue',
+          cancelText: 'Cancel'
+        });
+        if (!confirmed) return;
+      }  enrichingElevation.value = true;
   try {
     const response = await fetch(`/tracks/${track.value.id}/enrich-elevation`, {
       method: 'POST',
