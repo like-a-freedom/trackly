@@ -440,6 +440,8 @@ import { validateSpeedData, formatSpeed, formatPace, calculatePaceFromSpeed } fr
 import { useUnits } from '../composables/useUnits';
 import { useMemoizedComputed } from '../composables/useMemoization';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
+import { useToast } from '../composables/useToast';
+import { useConfirm } from '../composables/useConfirm';
 
 const props = defineProps({
   track: {
@@ -462,6 +464,10 @@ const isClosing = ref(false);
 const isCollapsed = ref(false);
 // Use global unit management
 const { speedUnit, setSpeedUnit, getDistanceUnit, getPaceUnit, convertPace } = useUnits();
+// Use toast notifications
+const { showToast } = useToast();
+// Use confirm dialogs
+const { showConfirm } = useConfirm();
 const chartMode = ref('elevation');
 const flyoutContent = ref(null);
 const descriptionTextarea = ref(null);
@@ -595,7 +601,7 @@ async function pollForElevationData(trackId) {
       stopElevationPolling();
       
       // Show success message
-      alert('Elevation data has been successfully updated!');
+      showToast('Elevation data has been successfully updated!', 'success');
     }
   } catch (error) {
     console.error(`[TrackDetailPanel] Error polling elevation data: ${error.message}`);
@@ -930,7 +936,14 @@ function startEditName() {
 async function confirmDelete() {
   if (deletingTrack.value) return;
   if (!track.value?.id) return;
-  const proceed = window.confirm('Delete track? This action cannot be undone.');
+  
+  const proceed = await showConfirm({
+    title: 'Delete Track',
+    message: 'Delete track? This action cannot be undone.',
+    confirmText: 'Delete',
+    cancelText: 'Cancel'
+  });
+  
   if (!proceed) return;
   try {
     deletingTrack.value = true;
@@ -947,15 +960,15 @@ async function confirmDelete() {
       window.dispatchEvent(new CustomEvent('track-deleted', { detail: { id: deletedId } }));
       emit('close');
     } else if (res.status === 403) {
-      alert('You are not allowed to delete this track.');
+      showToast('You are not allowed to delete this track.', 'error');
     } else if (res.status === 404) {
-      alert('Track not found or already deleted.');
+      showToast('Track not found or already deleted.', 'error');
     } else {
-      alert('Failed to delete track.');
+      showToast('Failed to delete track.', 'error');
     }
   } catch (err) {
     console.error('Delete track error', err);
-    alert('Error deleting track.');
+    showToast('Error deleting track.', 'error');
   } finally {
     deletingTrack.value = false;
   }
@@ -1203,9 +1216,12 @@ async function forceEnrichElevation() {
   
   // Show confirmation dialog if track already has elevation data
   if (track.value.elevation_enriched && track.value.elevation_gain !== null) {
-    const confirmed = window.confirm(
-      'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?'
-    );
+    const confirmed = await showConfirm({
+      title: 'Update Elevation Data',
+      message: 'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?',
+      confirmText: 'Continue',
+      cancelText: 'Cancel'
+    });
     if (!confirmed) return;
   }
   
@@ -1224,10 +1240,10 @@ async function forceEnrichElevation() {
     
     if (!response.ok) {
       if (response.status === 403) {
-        alert('You are not allowed to update this track.');
+        showToast('You are not allowed to update this track.', 'error');
         return;
       } else if (response.status === 429) {
-        alert('API rate limit exceeded. Please try again later.');
+        showToast('API rate limit exceeded. Please try again later.', 'error');
         return;
       } else {
         throw new Error('Failed to update elevation data');
@@ -1267,7 +1283,7 @@ async function forceEnrichElevation() {
     } catch (fetchError) {
       console.error(`[TrackDetailPanel] Failed to fetch updated track data:`, fetchError);
       // Don't start polling - just show a message
-      alert('Elevation data was enriched, but failed to refresh the display. Please refresh the page to see the updated data.');
+      showToast('Elevation data was enriched, but failed to refresh the display. Please refresh the page to see the updated data.', 'error');
     }
     
     // Dispatch global event to update other components (like tooltip)
@@ -1283,11 +1299,11 @@ async function forceEnrichElevation() {
       } 
     }));
     
-    alert('Elevation data updated successfully!');
+    showToast('Elevation data updated successfully!', 'success');
     
   } catch (error) {
     console.error('Elevation enrichment failed:', error);
-    alert('Failed to update elevation data. Please try again.');
+    showToast('Failed to update elevation data. Please try again.', 'error');
   } finally {
     enrichingElevation.value = false;
   }
