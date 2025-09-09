@@ -298,7 +298,33 @@
       <div class="stats-section" v-if="hasElevationOrHeartRateData">
         <div class="section-header">
           <h3>Elevation</h3>
-          <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData">
+          <div class="header-actions">
+            <!-- Force Update Elevation Button -->
+            <button 
+              v-if="isOwner && hasElevationData"
+              class="force-update-btn" 
+              @click="forceEnrichElevation"
+              :disabled="enrichingElevation"
+              title="Force update elevation data from external service"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38"/>
+              </svg>
+            </button>
+            
+            <!-- Stop Polling Button (only shown when polling is active) -->
+            <button 
+              v-if="isPollingForElevation" 
+              class="stop-polling-btn-header" 
+              @click="stopElevationPolling"
+              title="Stop automatic elevation data polling"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+              </svg>
+            </button>
+            
+            <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData">
             <button 
               v-if="hasElevationData"
               class="chart-toggle" 
@@ -331,6 +357,7 @@
             >
               Both
             </button>
+            </div>
           </div>
         </div>
         
@@ -343,22 +370,35 @@
             :trackName="chartTitle"
             :totalDistance="track.length_km"
             :chartMode="chartMode"
+            :distanceUnit="getDistanceUnit()"
+            :elevationStats="{ 
+              gain: track.elevation_gain, 
+              loss: track.elevation_loss, 
+              min: track.elevation_min, 
+              max: track.elevation_max,
+              enriched: track.elevation_enriched,
+              dataset: track.elevation_dataset
+            }"
           />
         </div>
         
         <!-- Elevation Statistics -->
         <div class="elevation-stats" v-if="hasElevationData">
-          <div class="stat-item" v-if="track.elevation_up !== undefined && track.elevation_up !== null">
+          <div class="stat-item" v-if="track.elevation_gain !== undefined && track.elevation_gain !== null">
             <span class="stat-label">Total ascent</span>
-            <span class="stat-value">{{ track.elevation_up.toFixed(0) }} m</span>
+            <span class="stat-value">{{ track.elevation_gain.toFixed(0) }} m</span>
           </div>
-          <div class="stat-item" v-if="track.elevation_down !== undefined && track.elevation_down !== null">
+          <div class="stat-item" v-if="track.elevation_loss !== undefined && track.elevation_loss !== null">
             <span class="stat-label">Total descent</span>
-            <span class="stat-value">{{ Math.abs(track.elevation_down).toFixed(0) }} m</span>
+            <span class="stat-value">{{ Math.abs(track.elevation_loss).toFixed(0) }} m</span>
           </div>
           <div class="stat-item" v-if="elevationGain">
             <span class="stat-label">Net elevation</span>
             <span class="stat-value">{{ elevationGain }} m</span>
+          </div>
+          <div class="stat-item" v-if="track.elevation_dataset">
+            <span class="stat-label">Data source</span>
+            <span class="stat-value">{{ formatDataset(track.elevation_dataset) }}</span>
           </div>
         </div>
       </div>
@@ -388,7 +428,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, onMounted } from 'vue';
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import ElevationChart from './ElevationChart.vue';
 import { 
@@ -437,6 +477,24 @@ const nameError = ref('');
 onMounted(() => {
   isClosing.value = false;
   isCollapsed.value = false;
+  
+  // Auto-start polling for tracks without elevation data on mount
+  if (props.track) {
+    const hasNoElevationData = !props.track.elevation_enriched && 
+                              !props.track.elevation_gain && 
+                              !props.track.elevation_loss &&
+                              !props.track.elevation_profile;
+    
+    if (hasNoElevationData && props.track.length_km > 0 && !isPollingForElevation.value) {
+      console.info(`[TrackDetailPanel] Track ${props.track.id} has no elevation data on mount, starting auto-polling`);
+      startElevationPolling(props.track.id);
+    }
+  }
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopElevationPolling();
 });
 
 // Reset panel state when track changes
@@ -467,6 +525,94 @@ const deletingTrack = ref(false);
 const copyingLink = ref(false);
 const linkCopied = ref(false);
 
+// --- Elevation enrichment state ---
+const enrichingElevation = ref(false);
+
+// --- Elevation enrichment polling ---
+const enrichmentPollingInterval = ref(null);
+const isPollingForElevation = ref(false);
+
+function startElevationPolling(trackId) {
+  if (isPollingForElevation.value) return;
+  
+  isPollingForElevation.value = true;
+  console.info(`[TrackDetailPanel] Starting elevation polling for track ${trackId}`);
+  
+  enrichmentPollingInterval.value = setInterval(async () => {
+    await pollForElevationData(trackId);
+  }, 3000); // Poll every 3 seconds
+}
+
+// Separate polling function for easier testing
+async function pollForElevationData(trackId) {
+  try {
+    const response = await fetch(`/tracks/${trackId || props.track.id}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const updatedTrack = await response.json();
+    
+    // Check if elevation data has been updated
+    const hasNewElevationData = 
+      (updatedTrack.elevation_enriched && !track.value.elevation_enriched) ||
+      (updatedTrack.elevation_gain !== track.value.elevation_gain) ||
+      (updatedTrack.elevation_loss !== track.value.elevation_loss) ||
+      (updatedTrack.elevation_min !== track.value.elevation_min) ||
+      (updatedTrack.elevation_max !== track.value.elevation_max);
+    
+    if (hasNewElevationData) {
+      console.info(`[TrackDetailPanel] Elevation data updated for track ${trackId || props.track.id}`);
+      
+      // Update local track data - create new object to trigger reactivity
+      track.value = {
+        ...track.value,
+        elevation_enriched: updatedTrack.elevation_enriched,
+        elevation_gain: updatedTrack.elevation_gain,
+        elevation_loss: updatedTrack.elevation_loss,
+        elevation_min: updatedTrack.elevation_min,
+        elevation_max: updatedTrack.elevation_max,
+        elevation_dataset: updatedTrack.elevation_dataset,
+        elevation_enriched_at: updatedTrack.elevation_enriched_at,
+        elevation_profile: updatedTrack.elevation_profile
+      };
+      
+      // Dispatch global event for other components
+      window.dispatchEvent(new CustomEvent('track-elevation-updated', { 
+        detail: { 
+          trackId: trackId || props.track.id,
+          elevation_gain: updatedTrack.elevation_gain,
+          elevation_loss: updatedTrack.elevation_loss,
+          elevation_min: updatedTrack.elevation_min,
+          elevation_max: updatedTrack.elevation_max,
+          elevation_dataset: updatedTrack.elevation_dataset,
+          elevation_profile: updatedTrack.elevation_profile,
+          elevation_enriched_at: updatedTrack.elevation_enriched_at
+        } 
+      }));
+      
+      // Stop polling
+      stopElevationPolling();
+      
+      // Show success message
+      alert('Elevation data has been successfully updated!');
+    }
+  } catch (error) {
+    console.error(`[TrackDetailPanel] Error polling elevation data: ${error.message}`);
+    // Continue polling on error
+    throw error; // Re-throw for test handling
+  }
+}
+
+function stopElevationPolling() {
+  if (enrichmentPollingInterval.value) {
+    console.info(`[TrackDetailPanel] Stopping elevation polling`);
+    clearInterval(enrichmentPollingInterval.value);
+    enrichmentPollingInterval.value = null;
+  }
+  isPollingForElevation.value = false;
+}
+
 // Computed properties for data validation and formatting - memoized for performance
 const hasSpeedData = useMemoizedComputed(
   (track) => {
@@ -487,18 +633,18 @@ const hasElevationData = useMemoizedComputed(
     }
     
     // Check for meaningful elevation stats (not just zeros)
-    const hasElevationUp = track?.elevation_up !== undefined && 
-                          track?.elevation_up !== null && 
-                          track?.elevation_up > 0;
-    const hasElevationDown = track?.elevation_down !== undefined && 
-                            track?.elevation_down !== null && 
-                            Math.abs(track?.elevation_down) > 0;
+    const hasElevationGain = track?.elevation_gain !== undefined && 
+                            track?.elevation_gain !== null && 
+                            track?.elevation_gain > 0;
+    const hasElevationLoss = track?.elevation_loss !== undefined && 
+                            track?.elevation_loss !== null && 
+                            Math.abs(track?.elevation_loss) > 0;
     
-    return hasElevationUp || hasElevationDown;
+    return hasElevationGain || hasElevationLoss;
   },
   [() => props.track],
   {
-    keyFn: (deps) => `elevation_${deps[0]?.id}_${deps[0]?.elevation_profile?.length}_${deps[0]?.elevation_up}_${deps[0]?.elevation_down}`
+    keyFn: (deps) => `elevation_${deps[0]?.id}_${deps[0]?.elevation_profile?.length}_${deps[0]?.elevation_gain}_${deps[0]?.elevation_loss}`
   }
 );
 
@@ -574,9 +720,45 @@ const chartTitle = useMemoizedComputed(
 const track = ref(props.track);
 
 // Watch for track changes
-watch(() => props.track, (newTrack) => {
+watch(() => props.track, (newTrack, oldTrack) => {
   track.value = newTrack;
+  
+  // Auto-start polling for tracks without elevation data
+  if (newTrack && newTrack.id !== oldTrack?.id) {
+    // Stop any existing polling first
+    stopElevationPolling();
+    
+    // Check if track has no elevation data but should be enriched automatically
+    const hasNoElevationData = !newTrack.elevation_enriched && 
+                              !newTrack.elevation_gain && 
+                              !newTrack.elevation_loss &&
+                              !newTrack.elevation_profile;
+    
+    if (hasNoElevationData && newTrack.length_km > 0) {
+      console.info(`[TrackDetailPanel] Track ${newTrack.id} has no elevation data, starting auto-polling`);
+      startElevationPolling(newTrack.id);
+    }
+  }
 });
+
+// Watch for elevation data changes in the prop (for updates from parent)
+watch(() => [
+  props.track?.elevation_enriched,
+  props.track?.elevation_gain,
+  props.track?.elevation_loss,
+  props.track?.elevation_profile
+], () => {
+  // Update local track if prop changed
+  if (props.track && props.track !== track.value) {
+    console.info(`[TrackDetailPanel] Elevation data updated via prop for track ${props.track.id}`);
+    track.value = props.track;
+    
+    // Stop polling if elevation data is now available
+    if (props.track.elevation_enriched && isPollingForElevation.value) {
+      stopElevationPolling();
+    }
+  }
+}, { deep: false });
 
 // Processed description with clickable links
 const processedDescription = computed(() => {
@@ -681,15 +863,15 @@ const formattedMovingAvgPace = useMemoizedComputed(
 
 // Elevation calculations - memoized
 const elevationGain = useMemoizedComputed(
-  (elevationUp, elevationDown) => {
-    if (elevationUp === undefined || elevationUp === null || elevationDown === undefined || elevationDown === null) {
+  (elevationGain, elevationLoss) => {
+    if (elevationGain === undefined || elevationGain === null || elevationLoss === undefined || elevationLoss === null) {
       return null;
     }
     
-    const gain = elevationUp - Math.abs(elevationDown);
+    const gain = elevationGain - Math.abs(elevationLoss);
     return gain >= 0 ? `+${gain.toFixed(0)}` : gain.toFixed(0);
   },
-  [() => track.value?.elevation_up, () => track.value?.elevation_down],
+  [() => track.value?.elevation_gain, () => track.value?.elevation_loss],
   {
     keyFn: (deps) => `elevgain_${deps[0]}_${deps[1]}`
   }
@@ -900,20 +1082,39 @@ function formatDate(dateString) {
   }
 }
 
-function formatClassification(classification) {
-  // Convert snake_case to human-readable format
-  return classification
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
 function formatCategory(category) {
   // Format category with proper capitalization
   return category
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+function formatClassification(classification) {
+  // Format classification with proper capitalization
+  return classification
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function formatDataset(dataset) {
+  if (!dataset) return 'Unknown';
+  
+  // Handle common dataset names
+  const datasetNames = {
+    'original_gpx': 'Original GPX',
+    'original': 'Original',
+    'aster30m': 'ASTER 30m',
+    'srtm30m': 'SRTM 30m',
+    'srtm90m': 'SRTM 90m',
+    'mapzen': 'Mapzen',
+    'eudem25m': 'EU-DEM 25m',
+    'ned10m': 'NED 10m',
+    'open-elevation': 'Open-Elevation'
+  };
+  
+  return datasetNames[dataset] || dataset.charAt(0).toUpperCase() + dataset.slice(1);
 }
 
 // Export track as GPX
@@ -996,8 +1197,106 @@ async function shareTrack() {
   }
 }
 
+// Force enrich elevation data
+async function forceEnrichElevation() {
+  if (!track.value?.id || enrichingElevation.value) return;
+  
+  // Show confirmation dialog if track already has elevation data
+  if (track.value.elevation_enriched && track.value.elevation_gain !== null) {
+    const confirmed = window.confirm(
+      'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?'
+    );
+    if (!confirmed) return;
+  }
+  
+  enrichingElevation.value = true;
+  try {
+    const response = await fetch(`/tracks/${track.value.id}/enrich-elevation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        session_id: props.sessionId,
+        force: true
+      })
+    });
+    
+    if (!response.ok) {
+      if (response.status === 403) {
+        alert('You are not allowed to update this track.');
+        return;
+      } else if (response.status === 429) {
+        alert('API rate limit exceeded. Please try again later.');
+        return;
+      } else {
+        throw new Error('Failed to update elevation data');
+      }
+    }
+    
+    const result = await response.json();
+    
+    // Update local track data with new elevation information
+    if (result.elevation_gain !== undefined) track.value.elevation_gain = result.elevation_gain;
+    if (result.elevation_loss !== undefined) track.value.elevation_loss = result.elevation_loss;
+    if (result.elevation_min !== undefined) track.value.elevation_min = result.elevation_min;
+    if (result.elevation_max !== undefined) track.value.elevation_max = result.elevation_max;
+    if (result.elevation_dataset !== undefined) track.value.elevation_dataset = result.elevation_dataset;
+    if (result.enriched_at !== undefined) track.value.elevation_enriched_at = result.enriched_at;
+    track.value.elevation_enriched = true;
+    
+    // Fetch the complete updated track data to get elevation_profile
+    console.info(`[TrackDetailPanel] Fetching updated track data after elevation enrichment`);
+    try {
+      const trackResponse = await fetch(`/tracks/${track.value.id}`);
+      if (trackResponse.ok) {
+        const updatedTrack = await trackResponse.json();
+        
+        // Update all elevation-related fields including the profile
+        track.value.elevation_profile = updatedTrack.elevation_profile;
+        track.value.elevation_gain = updatedTrack.elevation_gain;
+        track.value.elevation_loss = updatedTrack.elevation_loss;
+        track.value.elevation_min = updatedTrack.elevation_min;
+        track.value.elevation_max = updatedTrack.elevation_max;
+        track.value.elevation_dataset = updatedTrack.elevation_dataset;
+        track.value.elevation_enriched_at = updatedTrack.elevation_enriched_at;
+        track.value.elevation_enriched = updatedTrack.elevation_enriched;
+        
+        console.info(`[TrackDetailPanel] Track data updated successfully`);
+      }
+    } catch (fetchError) {
+      console.error(`[TrackDetailPanel] Failed to fetch updated track data:`, fetchError);
+      // Don't start polling - just show a message
+      alert('Elevation data was enriched, but failed to refresh the display. Please refresh the page to see the updated data.');
+    }
+    
+    // Dispatch global event to update other components (like tooltip)
+    window.dispatchEvent(new CustomEvent('track-elevation-updated', { 
+      detail: { 
+        trackId: track.value.id,
+        elevation_gain: track.value.elevation_gain,
+        elevation_loss: track.value.elevation_loss,
+        elevation_min: track.value.elevation_min,
+        elevation_max: track.value.elevation_max,
+        elevation_dataset: track.value.elevation_dataset,
+        elevation_profile: track.value.elevation_profile
+      } 
+    }));
+    
+    alert('Elevation data updated successfully!');
+    
+  } catch (error) {
+    console.error('Elevation enrichment failed:', error);
+    alert('Failed to update elevation data. Please try again.');
+  } finally {
+    enrichingElevation.value = false;
+  }
+}
+
 function handleClose() {
   isClosing.value = true;
+  // Stop any ongoing polling
+  stopElevationPolling();
   setTimeout(() => {
     emit('close');
   }, 300); // Match this with CSS transition duration
@@ -1056,6 +1355,15 @@ watch(() => props.track, (newTrack) => {
     }
   }
 }, { immediate: true });
+
+// Expose methods for testing
+defineExpose({
+  pollForElevationData,
+  startElevationPolling,
+  stopElevationPolling,
+  isPollingForElevation,
+  enrichmentPollingInterval
+});
 </script>
 
 <style scoped>
@@ -1793,6 +2101,81 @@ watch(() => props.track, (newTrack) => {
   cursor: not-allowed;
 }
 
+/* Header Actions Container */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Force Update Button */
+.force-update-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.force-update-btn:hover:not(:disabled) {
+  background: rgba(33, 150, 243, 0.1);
+  color: #1976d2;
+  transform: scale(1.05);
+}
+
+.force-update-btn:active {
+  transform: scale(0.95);
+}
+
+.force-update-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.force-update-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.force-update-btn:hover:not(:disabled) svg {
+  transform: rotate(180deg);
+}
+
+/* Stop Polling Button in Header */
+.stop-polling-btn-header {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.stop-polling-btn-header:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  transform: scale(1.05);
+}
+
+.stop-polling-btn-header:active {
+  transform: scale(0.95);
+}
+
 /* Speed/Pace Grid */
 .speed-pace-grid {
   display: grid;
@@ -1831,7 +2214,7 @@ watch(() => props.track, (newTrack) => {
 /* Elevation Stats */
 .elevation-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-top: 16px;
 }
@@ -1979,6 +2362,10 @@ watch(() => props.track, (newTrack) => {
     grid-template-columns: 1fr;
   }
   
+  .elevation-stats {
+    grid-template-columns: 1fr;
+  }
+  
   .basic-info-grid {
     grid-template-columns: 1fr;
   }
@@ -1993,16 +2380,18 @@ watch(() => props.track, (newTrack) => {
     gap: 12px;
   }
   
+  .header-actions {
+    align-self: flex-end;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
   .unit-toggles {
     align-self: flex-end;
   }
 }
 
 @media (max-width: 500px) {
-  .elevation-stats {
-    grid-template-columns: 1fr;
-  }
-  
   .metadata-grid {
     grid-template-columns: 1fr;
   }

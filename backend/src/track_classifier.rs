@@ -46,8 +46,8 @@ pub struct TrackMetrics {
     pub length_km: f64,
     pub avg_speed: Option<f64>,        // km/h
     pub moving_avg_speed: Option<f64>, // km/h
-    pub elevation_up: Option<f64>,     // meters
-    pub elevation_down: Option<f64>,   // meters
+    pub elevation_gain: Option<f64>,   // meters (unified field)
+    pub elevation_loss: Option<f64>,   // meters (unified field)
     pub moving_time: Option<i32>,      // seconds
     pub duration_seconds: Option<i32>, // total seconds
 }
@@ -120,7 +120,7 @@ impl TrackClassifier {
     fn classify_by_activity_type(metrics: &TrackMetrics) -> Vec<TrackClassification> {
         let mut classifications = Vec::new();
 
-        let elevation_gain = metrics.elevation_up.unwrap_or(0.0);
+        let elevation_gain = metrics.elevation_gain.unwrap_or(0.0);
         let avg_speed = metrics.moving_avg_speed.unwrap_or(0.0);
 
         // Walk: very low speed (< 5 km/h)
@@ -157,8 +157,8 @@ mod tests {
             length_km: 42.2,
             avg_speed: Some(12.0),
             moving_avg_speed: Some(12.0),
-            elevation_up: Some(100.0),
-            elevation_down: Some(100.0),
+            elevation_gain: Some(100.0),
+            elevation_loss: Some(100.0),
             moving_time: Some(3600),
             duration_seconds: Some(3600),
         };
@@ -174,8 +174,8 @@ mod tests {
             length_km: 21.1,
             avg_speed: Some(11.0),
             moving_avg_speed: Some(11.0),
-            elevation_up: Some(50.0),
-            elevation_down: Some(50.0),
+            elevation_gain: Some(50.0),
+            elevation_loss: Some(50.0),
             moving_time: Some(1800),
             duration_seconds: Some(1800),
         };
@@ -191,8 +191,8 @@ mod tests {
             length_km: 5.0,
             avg_speed: Some(7.0),
             moving_avg_speed: Some(7.0),
-            elevation_up: Some(20.0),
-            elevation_down: Some(20.0),
+            elevation_gain: Some(20.0),
+            elevation_loss: Some(20.0),
             moving_time: Some(2571), // ~43 min
             duration_seconds: Some(2571),
         };
@@ -207,8 +207,8 @@ mod tests {
             length_km: 10.0,
             avg_speed: Some(9.0),
             moving_avg_speed: Some(9.0),
-            elevation_up: Some(600.0),
-            elevation_down: Some(600.0),
+            elevation_gain: Some(600.0),
+            elevation_loss: Some(600.0),
             moving_time: Some(4000),
             duration_seconds: Some(4000),
         };
@@ -223,8 +223,8 @@ mod tests {
             length_km: 8.0,
             avg_speed: Some(4.5),
             moving_avg_speed: Some(4.5),
-            elevation_up: Some(400.0),
-            elevation_down: Some(400.0),
+            elevation_gain: Some(400.0),
+            elevation_loss: Some(400.0),
             moving_time: Some(6400),
             duration_seconds: Some(6400),
         };
@@ -239,8 +239,8 @@ mod tests {
             length_km: 3.0,
             avg_speed: Some(4.0),
             moving_avg_speed: Some(4.0),
-            elevation_up: Some(10.0),
-            elevation_down: Some(10.0),
+            elevation_gain: Some(10.0),
+            elevation_loss: Some(10.0),
             moving_time: Some(2700),
             duration_seconds: Some(2700),
         };
@@ -255,8 +255,8 @@ mod tests {
             length_km: 2.0,
             avg_speed: None,
             moving_avg_speed: None,
-            elevation_up: None,
-            elevation_down: None,
+            elevation_gain: None,
+            elevation_loss: None,
             moving_time: None,
             duration_seconds: None,
         };

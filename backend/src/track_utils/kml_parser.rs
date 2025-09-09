@@ -3,6 +3,7 @@
 // TODO: switch to https://github.com/georust/kml
 
 use crate::models::ParsedTrackData;
+use crate::track_utils::elevation::{calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data};
 use crate::track_utils::geometry::haversine_distance;
 use kml::types::{Geometry, Kml};
 use sha2::Digest;
@@ -221,7 +222,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         None
     };
     let final_elevation_profile = if elevation_profile_data.iter().any(|e| e.is_some()) {
-        Some(elevation_profile_data)
+        Some(elevation_profile_data.clone())
     } else {
         None
     };
@@ -235,13 +236,27 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         length_km,
         avg_speed: None,
         moving_avg_speed: None,
-        elevation_up: final_elevation_gain,
-        elevation_down: final_elevation_loss,
+        elevation_gain: final_elevation_gain,
+        elevation_loss: final_elevation_loss,
         moving_time: None,
         duration_seconds: None,
     };
     let classifications = classify_track(&metrics);
     let auto_classifications: Vec<String> = classifications.iter().map(|c| c.to_string()).collect();
+
+    // Calculate new elevation metrics using the elevation module
+    let track_points_with_elevation: Vec<(f64, f64, Option<f64>)> = points
+        .iter()
+        .zip(elevation_profile_data.iter())
+        .map(|((lat, lon), elevation)| (*lat, *lon, *elevation))
+        .collect();
+    
+    let elevation_metrics = if has_elevation_data(&track_points_with_elevation) {
+        let elevations = extract_elevations_from_track_points(&track_points_with_elevation);
+        calculate_elevation_metrics(&elevations)
+    } else {
+        Default::default()
+    };
 
     Ok(ParsedTrackData {
         geom_geojson,
@@ -250,8 +265,11 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         hr_data: None,   // KML does not typically contain HR data
         temp_data: None, // KML does not typically contain temperature data
         time_data: None, // KML does not typically contain time data
-        elevation_up: final_elevation_gain,
-        elevation_down: final_elevation_loss,
+        // New elevation fields from elevation module
+        elevation_gain: elevation_metrics.elevation_gain,
+        elevation_loss: elevation_metrics.elevation_loss,
+        elevation_min: elevation_metrics.elevation_min,
+        elevation_max: elevation_metrics.elevation_max,
         avg_speed: None,
         avg_hr: None, // KML does not typically contain HR data
         hr_min: None,

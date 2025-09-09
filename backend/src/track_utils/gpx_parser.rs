@@ -2,11 +2,13 @@
 // TODO: maybe switch to https://github.com/georust/gpx
 
 use crate::models::ParsedTrackData;
+use crate::track_utils::elevation::{calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data};
 use crate::track_utils::geometry::haversine_distance;
 use crate::track_utils::time_utils::parse_gpx_time;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use sha2::{Digest, Sha256};
+use tracing::info;
 
 /// Parses GPX file, returns ParsedTrackData
 pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
@@ -346,17 +348,22 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     };
 
     let final_elevation_gain = if !points.is_empty() {
-        Some(total_elevation_gain)
+        let gain = if total_elevation_gain > 0.0 { total_elevation_gain } else { 0.0 };
+        info!("GPX parsed elevation_gain: {:.1}m from {} elevation points", gain, elevation_profile_data.iter().filter(|e| e.is_some()).count());
+        Some(gain)
     } else {
+        info!("GPX has no elevation data - no points found");
         None
     };
     let final_elevation_loss = if !points.is_empty() {
-        Some(total_elevation_loss)
+        let loss = if total_elevation_loss > 0.0 { total_elevation_loss } else { 0.0 };
+        info!("GPX parsed elevation_loss: {:.1}m", loss);
+        Some(loss)
     } else {
         None
     };
     let final_elevation_profile = if elevation_profile_data.iter().any(|e| e.is_some()) {
-        Some(elevation_profile_data)
+        Some(elevation_profile_data.clone())
     } else {
         None
     };
@@ -456,13 +463,27 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         length_km,
         avg_speed,
         moving_avg_speed,
-        elevation_up: final_elevation_gain,
-        elevation_down: final_elevation_loss,
+        elevation_gain: final_elevation_gain,
+        elevation_loss: final_elevation_loss,
         moving_time,
         duration_seconds,
     };
     let classifications = classify_track(&metrics);
     let auto_classifications: Vec<String> = classifications.iter().map(|c| c.to_string()).collect();
+
+    // Calculate new elevation metrics using the elevation module
+    let track_points_with_elevation: Vec<(f64, f64, Option<f64>)> = points
+        .iter()
+        .zip(elevation_profile_data.iter())
+        .map(|((lat, lon), elevation)| (*lat, *lon, *elevation))
+        .collect();
+    
+    let elevation_metrics = if has_elevation_data(&track_points_with_elevation) {
+        let elevations = extract_elevations_from_track_points(&track_points_with_elevation);
+        calculate_elevation_metrics(&elevations)
+    } else {
+        Default::default()
+    };
 
     Ok(ParsedTrackData {
         geom_geojson,
@@ -475,8 +496,11 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
             Some(temp_data_points)
         },
         time_data: final_time_data, // Store raw time data points
-        elevation_up: final_elevation_gain,
-        elevation_down: final_elevation_loss,
+        // New elevation fields from elevation module
+        elevation_gain: elevation_metrics.elevation_gain,
+        elevation_loss: elevation_metrics.elevation_loss,
+        elevation_min: elevation_metrics.elevation_min,
+        elevation_max: elevation_metrics.elevation_max,
         avg_speed,            // Calculated average speed
         avg_hr: avg_hr_value, // Calculated average HR
         hr_min,

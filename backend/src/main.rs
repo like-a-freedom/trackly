@@ -81,6 +81,10 @@ async fn main() {
         )
         .route("/tracks/{id}/export", get(handlers::export_track_gpx))
         .route(
+            "/tracks/{id}/enrich-elevation",
+            post(handlers::enrich_elevation),
+        )
+        .route(
             "/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
         )

@@ -90,8 +90,8 @@ describe('TrackDetailPanel', () => {
     moving_avg_speed: 10.5,
     moving_avg_pace: 5.7, // minutes per km
     max_speed: 25.0,
-    elevation_up: 500,
-    elevation_down: -450,
+    elevation_gain: 500,
+    elevation_loss: -450,
     avg_hr: 150,
     hr_max: 180,
     categories: ['Running', 'Marathon'],
@@ -232,8 +232,8 @@ describe('TrackDetailPanel', () => {
     it('handles negative net elevation', () => {
       const trackNegativeElevation = {
         ...mockTrackComplete,
-        elevation_up: 200,
-        elevation_down: -300
+        elevation_gain: 200,
+        elevation_loss: -300
       };
 
       wrapper = mount(TrackDetailPanel, {
@@ -548,7 +548,7 @@ describe('TrackDetailPanel', () => {
       const trackLargeValues = {
         ...mockTrackMinimal,
         avg_speed: 100,
-        elevation_up: 10000,
+        elevation_gain: 10000,
         duration_seconds: 86400 // 24 hours
       };
 
@@ -1144,6 +1144,570 @@ describe('TrackDetailPanel', () => {
       expect(buttonTexts).not.toContain('Both');
       expect(buttonTexts).not.toContain('Elevation');
       expect(buttonTexts).not.toContain('Temperature');
+    });
+  });
+
+  describe('Force Update Elevation functionality', () => {
+    beforeEach(() => {
+      // Mock fetch for elevation enrichment
+      global.fetch = vi.fn();
+      // Mock window.confirm and window.alert
+      global.confirm = vi.fn();
+      global.alert = vi.fn();
+      window.alert = global.alert; // Ensure window.alert uses the same mock
+
+      // Mock window.dispatchEvent for global events  
+      global.dispatchEvent = vi.fn();
+      window.dispatchEvent = global.dispatchEvent; // Ensure window.dispatchEvent uses the same mock
+    });
+
+    it('should not show force update button when not owner', () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: false }
+      });
+
+      expect(wrapper.find('.force-update-btn').exists()).toBe(false);
+    });
+
+    it('should not show force update button when no elevation data', () => {
+      const trackNoElevation = { ...mockTrackMinimal };
+      delete trackNoElevation.elevation_gain;
+      delete trackNoElevation.elevation_loss;
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isOwner: true }
+      });
+
+      expect(wrapper.find('.force-update-btn').exists()).toBe(false);
+    });
+
+    it('should show force update button when owner and has elevation data', () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      expect(wrapper.find('.force-update-btn').exists()).toBe(true);
+      expect(wrapper.find('.force-update-btn').attributes('title')).toBe('Force update elevation data from external service');
+    });
+
+    it('should show confirmation dialog when track already has elevation data', async () => {
+      global.confirm.mockReturnValue(false); // User cancels
+
+      wrapper = mount(TrackDetailPanel, {
+        props: {
+          track: { ...mockTrackComplete, elevation_enriched: true, elevation_gain: 500 },
+          isOwner: true,
+          sessionId: 'test-session'
+        }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      expect(global.confirm).toHaveBeenCalledWith(
+        'This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?'
+      );
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should proceed with enrichment when user confirms', async () => {
+      global.confirm.mockReturnValue(true); // User confirms
+      global.fetch
+        .mockResolvedValueOnce({ // First call for enrichment
+          ok: true,
+          json: () => Promise.resolve({
+            elevation_gain: 600,
+            elevation_loss: -500,
+            elevation_min: 100,
+            elevation_max: 700,
+            elevation_dataset: 'srtm90m',
+            enriched_at: '2024-01-01T12:00:00Z'
+          })
+        })
+        .mockResolvedValueOnce({ // Second call for updated track data
+          ok: true,
+          json: () => Promise.resolve({
+            ...mockTrackComplete,
+            elevation_gain: 600,
+            elevation_loss: -500,
+            elevation_profile: [{ distance: 0, elevation: 100 }]
+          })
+        });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: {
+          track: { ...mockTrackComplete, elevation_enriched: true },
+          isOwner: true,
+          sessionId: 'test-session'
+        }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(global.confirm).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith('/tracks/1/enrich-elevation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: 'test-session', force: true })
+      });
+      expect(global.alert).toHaveBeenCalledWith('Elevation data updated successfully!');
+    });
+
+    it('should proceed without confirmation when track has no elevation data', async () => {
+      global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            elevation_gain: 400,
+            elevation_loss: -350
+          })
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ...mockTrackComplete, elevation_gain: 400 })
+        });
+
+      const trackNoElevation = { ...mockTrackComplete, elevation_enriched: false, elevation_gain: null };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(global.confirm).not.toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith('/tracks/1/enrich-elevation', expect.any(Object));
+    });
+
+    it('should disable button during enrichment process', async () => {
+      // Mock slow fetch response
+      global.fetch.mockImplementation(() =>
+        new Promise(resolve => setTimeout(() => resolve({
+          ok: true,
+          json: () => Promise.resolve({ elevation_gain: 400 })
+        }), 100))
+      );
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      expect(forceUpdateBtn.attributes('disabled')).toBeUndefined();
+
+      await forceUpdateBtn.trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(forceUpdateBtn.attributes('disabled')).toBe('');
+    });
+
+    it('should handle 403 permission error', async () => {
+      global.fetch.mockResolvedValueOnce({ ok: false, status: 403 });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(global.alert).toHaveBeenCalledWith('You are not allowed to update this track.');
+    });
+
+    it('should handle 429 rate limit error', async () => {
+      global.fetch.mockResolvedValueOnce({ ok: false, status: 429 });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(global.alert).toHaveBeenCalledWith('API rate limit exceeded. Please try again later.');
+    });
+
+    it('should handle network errors gracefully', async () => {
+      global.fetch.mockRejectedValueOnce(new Error('Network error'));
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(global.alert).toHaveBeenCalledWith('Failed to update elevation data. Please try again.');
+    });
+
+    it('should update track data with enrichment results', async () => {
+      const enrichmentResult = {
+        elevation_gain: 650,
+        elevation_loss: -600,
+        elevation_min: 90,
+        elevation_max: 740,
+        elevation_dataset: 'aster30m',
+        enriched_at: '2024-01-01T13:00:00Z'
+      };
+
+      global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(enrichmentResult)
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            ...mockTrackComplete,
+            ...enrichmentResult,
+            elevation_profile: [{ distance: 0, elevation: 90 }]
+          })
+        });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      // Check that track data was updated
+      expect(wrapper.vm.track.elevation_gain).toBe(650);
+      expect(wrapper.vm.track.elevation_loss).toBe(-600);
+      expect(wrapper.vm.track.elevation_dataset).toBe('aster30m');
+      expect(wrapper.vm.track.elevation_enriched).toBe(true);
+    });
+
+    it('should dispatch global event after successful enrichment', async () => {
+      global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ elevation_gain: 450 })
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ...mockTrackComplete, elevation_gain: 450 })
+        });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      // Wait for all async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await wrapper.vm.$nextTick();
+
+      expect(global.dispatchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'track-elevation-updated',
+          detail: expect.objectContaining({
+            trackId: mockTrackComplete.id
+          })
+        })
+      );
+    });
+
+    it('should handle failed track data fetch after enrichment', async () => {
+      global.fetch
+        .mockResolvedValueOnce({ // Enrichment succeeds
+          ok: true,
+          json: () => Promise.resolve({ elevation_gain: 450 })
+        })
+        .mockRejectedValueOnce(new Error('Fetch failed')); // Track data fetch fails
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      // Wait for all async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await wrapper.vm.$nextTick();
+
+      expect(global.alert).toHaveBeenCalledWith(
+        'Elevation data was enriched, but failed to refresh the display. Please refresh the page to see the updated data.'
+      );
+    });
+
+    it('should not call API when already enriching', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true, sessionId: 'test-session' }
+      });
+
+      // Set enriching state manually
+      wrapper.vm.enrichingElevation = true;
+      await wrapper.vm.$nextTick();
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should not call API when track has no ID', async () => {
+      const trackNoId = { ...mockTrackComplete };
+      delete trackNoId.id;
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoId, isOwner: true, sessionId: 'test-session' }
+      });
+
+      const forceUpdateBtn = wrapper.find('.force-update-btn');
+      await forceUpdateBtn.trigger('click');
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Elevation Polling functionality', () => {
+    beforeEach(() => {
+      // Mock fetch for polling
+      global.fetch = vi.fn();
+      // Mock timers for polling intervals
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should start elevation polling for tracks without elevation data', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(trackNoElevation)
+      });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true }
+      });
+
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(true);
+    });
+
+    it('should not start polling when track already has elevation data', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isVisible: true }
+      });
+
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+    });
+
+    it('should handle polling state correctly', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true }
+      });
+
+      // Wait for component to mount and auto-start polling
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      // Manually start polling and verify state
+      wrapper.vm.startElevationPolling();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(true);
+
+      // Stop polling and verify state
+      wrapper.vm.stopElevationPolling();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+    });
+
+    it('should manage polling lifecycle correctly', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true }
+      });
+
+      // Start polling and verify interval is set
+      wrapper.vm.startElevationPolling();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(true);
+      expect(wrapper.vm.enrichmentPollingInterval).not.toBe(null);
+
+      // Stop polling and verify cleanup
+      wrapper.vm.stopElevationPolling();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+      expect(wrapper.vm.enrichmentPollingInterval).toBe(null);
+    });
+
+    it('should stop polling when elevation data is detected', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      // Mock fetch to return track with elevation data
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          ...trackNoElevation,
+          elevation_enriched: true,
+          elevation_gain: 300
+        })
+      });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true }
+      });
+
+      // Manually start polling and test the polling function directly
+      wrapper.vm.isPollingForElevation = true;
+      await wrapper.vm.$nextTick();
+
+      // Call the polling method directly to avoid timer issues
+      await wrapper.vm.pollForElevationData();
+      await wrapper.vm.$nextTick();
+
+      // Polling should stop when elevation data is detected
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+    });
+
+    it('should handle polling fetch errors gracefully', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      global.fetch.mockRejectedValue(new Error('Network error'));
+
+      // Mock console.error to avoid test noise
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true }
+      });
+
+      await wrapper.vm.$nextTick();
+
+      // Manually start polling and test error handling
+      wrapper.vm.isPollingForElevation = true;
+
+      // Call polling method directly and handle error
+      try {
+        await wrapper.vm.pollForElevationData();
+      } catch (error) {
+        // Expected to fail
+      }
+      await wrapper.vm.$nextTick();
+
+      // Polling should continue despite error
+      expect(wrapper.vm.isPollingForElevation).toBe(true);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should stop polling when component is unmounted', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true }
+      });
+
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.isPollingForElevation).toBe(true);
+
+      wrapper.unmount();
+
+      // Polling should be stopped after unmount
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+    });
+
+    it('should update track data when polling detects changes', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      const updatedTrackData = {
+        ...trackNoElevation,
+        elevation_enriched: true,
+        elevation_gain: 400,
+        elevation_loss: -350,
+        elevation_profile: [{ distance: 0, elevation: 100 }]
+      };
+
+      // Mock fetch to return updated data
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(updatedTrackData)
+      });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true }
+      });
+
+      await wrapper.vm.$nextTick();
+
+      // Manually start polling and test the update
+      wrapper.vm.isPollingForElevation = true;
+
+      // Call polling method directly to avoid timer issues
+      await wrapper.vm.pollForElevationData();
+      await wrapper.vm.$nextTick();
+
+      // Track data should be updated
+      expect(wrapper.vm.track.elevation_gain).toBe(400);
+      expect(wrapper.vm.track.elevation_enriched).toBe(true);
     });
   });
 

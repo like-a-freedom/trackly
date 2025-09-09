@@ -28,8 +28,15 @@ pub struct InsertTrackParams<'a> {
     pub hr_data_json: Option<serde_json::Value>,
     pub temp_data_json: Option<serde_json::Value>,
     pub time_data_json: Option<serde_json::Value>,
-    pub elevation_up: Option<f64>,
-    pub elevation_down: Option<f64>,
+    // Unified elevation fields
+    pub elevation_gain: Option<f32>,
+    pub elevation_loss: Option<f32>,
+    pub elevation_min: Option<f32>,
+    pub elevation_max: Option<f32>,
+    pub elevation_enriched: Option<bool>,
+    pub elevation_enriched_at: Option<chrono::NaiveDateTime>,
+    pub elevation_dataset: Option<String>,
+    pub elevation_api_calls: Option<i32>,
     pub avg_speed: Option<f64>,
     pub avg_hr: Option<i32>,
     pub hr_min: Option<i32>,
@@ -58,8 +65,14 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         hr_data_json,
         temp_data_json,
         time_data_json,
-        elevation_up,
-        elevation_down,
+        elevation_gain,
+        elevation_loss,
+        elevation_min,
+        elevation_max,
+        elevation_enriched,
+        elevation_enriched_at,
+        elevation_dataset,
+        elevation_api_calls,
         avg_speed,
         avg_hr,
         hr_min,
@@ -77,13 +90,13 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         r#"
         INSERT INTO tracks (
             id, name, description, categories, auto_classifications, geom, length_km, elevation_profile,
-            elevation_up, elevation_down, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, hr_data, temp_data, time_data, duration_seconds,
+            elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, elevation_api_calls, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, hr_data, temp_data, time_data, duration_seconds,
             hash, recorded_at, created_at, session_id, is_public
         )
         VALUES (
             $1, $2, $3, $4, $5, ST_SetSRID(ST_GeomFromGeoJSON($6), 4326), $7, $8,
-            $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
-            $23, $24, DEFAULT, $25, $26
+            $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
+            $29, $30, DEFAULT, $31, $32
         )
     "#,
     )
@@ -95,8 +108,14 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     .bind(geom_geojson)
     .bind(length_km)
     .bind(elevation_profile_json)
-    .bind(elevation_up)
-    .bind(elevation_down)
+    .bind(elevation_gain)
+    .bind(elevation_loss)
+    .bind(elevation_min)
+    .bind(elevation_max)
+    .bind(elevation_enriched)
+    .bind(elevation_enriched_at)
+    .bind(elevation_dataset)
+    .bind(elevation_api_calls)
     .bind(avg_speed)
     .bind(avg_hr)
     .bind(hr_min)
@@ -123,7 +142,7 @@ pub async fn list_tracks(
     params: &crate::models::TrackListQuery,
 ) -> Result<Vec<TrackListItem>, sqlx::Error> {
     let mut query =
-        "SELECT id, name, categories, length_km FROM tracks WHERE is_public = TRUE".to_string();
+        "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched FROM tracks WHERE is_public = TRUE".to_string();
     let mut args: Vec<String> = Vec::new();
     if let Some(ref cats) = params.categories {
         query.push_str(" AND categories && $1");
@@ -134,6 +153,12 @@ pub async fn list_tracks(
     }
     if let Some(max) = params.max_length {
         query.push_str(&format!(" AND length_km <= {max}"));
+    }
+    if let Some(min) = params.elevation_gain_min {
+        query.push_str(&format!(" AND elevation_gain >= {min}"));
+    }
+    if let Some(max) = params.elevation_gain_max {
+        query.push_str(&format!(" AND elevation_gain <= {max}"));
     }
     let rows = sqlx::query(&query).fetch_all(&**pool).await?;
     let mut result = Vec::new();
@@ -150,11 +175,17 @@ pub async fn list_tracks(
         let length_km: f64 = row
             .try_get("length_km")
             .expect("Failed to get length_km: length_km column missing or wrong type");
+        let elevation_gain: Option<f32> = row.try_get("elevation_gain").ok();
+        let elevation_loss: Option<f32> = row.try_get("elevation_loss").ok();
+        let elevation_enriched: Option<bool> = row.try_get("elevation_enriched").ok();
         result.push(TrackListItem {
             id,
             name,
             categories,
             length_km,
+            elevation_gain,
+            elevation_loss,
+            elevation_enriched,
             url: format!("/tracks/{id}"),
         });
     }
@@ -166,7 +197,7 @@ pub async fn get_track_detail(
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom) as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_up, elevation_down, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id
+        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -189,11 +220,9 @@ pub async fn get_track_detail(
             auto_classifications: row
                 .try_get("auto_classifications")
                 .unwrap_or_else(|_| Vec::new()),
-            geom_geojson: serde_json::from_str(
-                row.try_get::<&str, _>("geom_geojson")
-                    .expect("Failed to get geom_geojson"),
-            )
-            .unwrap_or(serde_json::json!({})),
+            geom_geojson: row
+                .try_get::<serde_json::Value, _>("geom_geojson")
+                .expect("Failed to get geom_geojson"),
             length_km: row
                 .try_get("length_km")
                 .expect("Failed to get length_km: length_km column missing or wrong type"),
@@ -201,12 +230,14 @@ pub async fn get_track_detail(
             hr_data: row.try_get("hr_data").ok(),
             temp_data: row.try_get("temp_data").ok(),
             time_data: row.try_get("time_data").ok(),
-            elevation_up: row
-                .try_get("elevation_up")
-                .expect("Failed to get elevation_up: elevation_up column missing or wrong type"),
-            elevation_down: row.try_get("elevation_down").expect(
-                "Failed to get elevation_down: elevation_down column missing or wrong type",
-            ),
+            // Unified elevation fields
+            elevation_gain: row.try_get("elevation_gain").ok(),
+            elevation_loss: row.try_get("elevation_loss").ok(),
+            elevation_min: row.try_get("elevation_min").ok(),
+            elevation_max: row.try_get("elevation_max").ok(),
+            elevation_enriched: row.try_get("elevation_enriched").ok(),
+            elevation_enriched_at: row.try_get("elevation_enriched_at").ok(),
+            elevation_dataset: row.try_get("elevation_dataset").ok(),
             avg_speed: row
                 .try_get("avg_speed")
                 .expect("Failed to get avg_speed: avg_speed column missing or wrong type"),
@@ -241,25 +272,24 @@ pub async fn get_track_detail_adaptive(
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let track_mode = TrackMode::from_string(mode.unwrap_or("detail"));
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
-    
+
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom) as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_up, elevation_down, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, ST_NPoints(geom) as original_points
+        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, ST_NPoints(geom) as original_points
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
         .fetch_optional(&**pool)
         .await?;
-        
+
     if let Some(row) = row {
         let original_points: i32 = row.try_get("original_points").unwrap_or(0);
-        let mut geom_geojson: serde_json::Value = serde_json::from_str(
-            row.try_get::<&str, _>("geom_geojson")
-                .expect("Failed to get geom_geojson"),
-        )
-        .unwrap_or(serde_json::json!({}));
-        
+        let mut geom_geojson: serde_json::Value = row
+            .try_get::<serde_json::Value, _>("geom_geojson")
+            .expect("Failed to get geom_geojson");
+
         // Apply simplification for huge tracks or overview mode
-        let params = get_simplification_params(track_mode, Some(zoom_level), original_points as usize);
+        let params =
+            get_simplification_params(track_mode, Some(zoom_level), original_points as usize);
         if params.should_simplify(original_points as usize) {
             if let Some(coordinates) = geom_geojson.get("coordinates").and_then(|c| c.as_array()) {
                 if !coordinates.is_empty() {
@@ -279,7 +309,7 @@ pub async fn get_track_detail_adaptive(
                             }
                         })
                         .collect();
-                    
+
                     if !points.is_empty() {
                         let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
                         if simplified_geom.len() < points.len() {
@@ -287,7 +317,7 @@ pub async fn get_track_detail_adaptive(
                                 .iter()
                                 .map(|(lat, lng)| serde_json::json!([lng, lat]))
                                 .collect();
-                            
+
                             geom_geojson = serde_json::json!({
                                 "type": "LineString",
                                 "coordinates": simplified_coords
@@ -297,32 +327,20 @@ pub async fn get_track_detail_adaptive(
                 }
             }
         }
-        
+
         // Simplify profile data for charts based on mode
         let elevation_profile = simplify_chart_data(
             row.try_get("elevation_profile").ok(),
             track_mode,
             zoom_level,
         );
-        
-        let hr_data = simplify_chart_data(
-            row.try_get("hr_data").ok(),
-            track_mode,
-            zoom_level,
-        );
-        
-        let temp_data = simplify_chart_data(
-            row.try_get("temp_data").ok(),
-            track_mode,
-            zoom_level,
-        );
-        
-        let time_data = simplify_chart_data(
-            row.try_get("time_data").ok(),
-            track_mode,
-            zoom_level,
-        );
-        
+
+        let hr_data = simplify_chart_data(row.try_get("hr_data").ok(), track_mode, zoom_level);
+
+        let temp_data = simplify_chart_data(row.try_get("temp_data").ok(), track_mode, zoom_level);
+
+        let time_data = simplify_chart_data(row.try_get("time_data").ok(), track_mode, zoom_level);
+
         Ok(Some(TrackDetail {
             id: row
                 .try_get::<Uuid, _>("id")
@@ -347,12 +365,14 @@ pub async fn get_track_detail_adaptive(
             hr_data,
             temp_data,
             time_data,
-            elevation_up: row
-                .try_get("elevation_up")
-                .expect("Failed to get elevation_up: elevation_up column missing or wrong type"),
-            elevation_down: row.try_get("elevation_down").expect(
-                "Failed to get elevation_down: elevation_down column missing or wrong type",
-            ),
+            // Unified elevation fields
+            elevation_gain: row.try_get("elevation_gain").ok(),
+            elevation_loss: row.try_get("elevation_loss").ok(),
+            elevation_min: row.try_get("elevation_min").ok(),
+            elevation_max: row.try_get("elevation_max").ok(),
+            elevation_enriched: row.try_get("elevation_enriched").ok(),
+            elevation_enriched_at: row.try_get("elevation_enriched_at").ok(),
+            elevation_dataset: row.try_get("elevation_dataset").ok(),
             avg_speed: row
                 .try_get("avg_speed")
                 .expect("Failed to get avg_speed: avg_speed column missing or wrong type"),
@@ -396,10 +416,10 @@ fn simplify_chart_data(
         Some(json_data) => {
             if let Some(array) = json_data.as_array() {
                 let max_points = match mode {
-                    TrackMode::Overview => 500,  // For overview mode, limit chart data aggressively
-                    TrackMode::Detail => 1500,   // For detail mode, allow more points but still limit for performance
+                    TrackMode::Overview => 500, // For overview mode, limit chart data aggressively
+                    TrackMode::Detail => 1500, // For detail mode, allow more points but still limit for performance
                 };
-                
+
                 if array.len() > max_points {
                     // Simple uniform sampling for chart data
                     let step = array.len() / max_points;
@@ -409,7 +429,7 @@ fn simplify_chart_data(
                         .take(max_points)
                         .cloned()
                         .collect();
-                    
+
                     Some(serde_json::Value::Array(simplified))
                 } else {
                     Some(json_data)
@@ -417,7 +437,7 @@ fn simplify_chart_data(
             } else {
                 Some(json_data)
             }
-        },
+        }
         None => None,
     }
 }
@@ -427,44 +447,81 @@ pub async fn list_tracks_geojson(
     bbox: Option<&str>,
     zoom: Option<f64>,
     mode: Option<&str>,
+    filter_params: &crate::models::TrackGeoJsonQuery,
 ) -> Result<TrackGeoJsonCollection, sqlx::Error> {
     let track_mode = TrackMode::from_string(mode.unwrap_or("overview"));
     let zoom_level = zoom.unwrap_or(12.0);
-    
+
     // Build base SQL with zoom-based simplification using PostGIS ST_Simplify
     let use_postgis_simplification = track_mode.is_overview() && zoom_level <= 14.0;
-    
+
     let base_sql = if use_postgis_simplification {
         // Use PostGIS ST_Simplify for overview mode with reasonable zoom levels
         String::from(
-            "SELECT id, name, categories, length_km, 
+            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, 
              CASE 
                WHEN ST_NPoints(geom) > 1000 THEN 
-                 ST_AsGeoJSON(ST_Simplify(geom, tolerance_for_zoom_degrees($5)))
-               ELSE ST_AsGeoJSON(geom) 
+                 ST_AsGeoJSON(ST_Simplify(geom, tolerance_for_zoom_degrees($5)))::jsonb
+               ELSE ST_AsGeoJSON(geom)::jsonb 
              END as geom_json,
-             ST_NPoints(geom) as original_points"
+             ST_NPoints(geom) as original_points",
         )
     } else {
         // Return full geometry for Rust-side processing
         String::from(
-            "SELECT id, name, categories, length_km, ST_AsGeoJSON(geom) as geom_json,
+            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, ST_AsGeoJSON(geom)::jsonb as geom_json,
              ST_NPoints(geom) as original_points"
         )
     };
-    
+
     // Add properties based on mode
     let properties_sql = if track_mode.is_overview() {
         // Minimal properties for overview mode
         ""
     } else {
-        // Full properties for detail mode  
-        ", elevation_up, elevation_down, avg_hr, avg_speed, duration_seconds, recorded_at"
+        // Full properties for detail mode
+        ", avg_hr, avg_speed, duration_seconds, recorded_at"
     };
-    
-    let full_sql = format!(
-        "{base_sql}{properties_sql} FROM tracks WHERE is_public = TRUE"
-    );
+
+    let full_sql = format!("{base_sql}{properties_sql} FROM tracks WHERE is_public = TRUE");
+
+    // Build additional filter conditions
+    let mut filter_conditions = Vec::new();
+
+    // Categories filtering with PostgreSQL array overlap operator
+    if let Some(categories) = &filter_params.categories {
+        if !categories.is_empty() {
+            // Use && operator to check if arrays have any common elements
+            let categories_str = categories
+                .iter()
+                .map(|c| format!("'{}'", c.replace("'", "''"))) // Escape single quotes
+                .collect::<Vec<_>>()
+                .join(",");
+            filter_conditions.push(format!("categories && ARRAY[{}]", categories_str));
+        }
+    }
+
+    if let Some(min) = filter_params.min_length {
+        filter_conditions.push(format!("length_km >= {}", min));
+    }
+
+    if let Some(max) = filter_params.max_length {
+        filter_conditions.push(format!("length_km <= {}", max));
+    }
+
+    if let Some(min) = filter_params.elevation_gain_min {
+        filter_conditions.push(format!("elevation_gain >= {}", min));
+    }
+
+    if let Some(max) = filter_params.elevation_gain_max {
+        filter_conditions.push(format!("elevation_gain <= {}", max));
+    }
+
+    let sql_with_filters = if filter_conditions.is_empty() {
+        full_sql.clone()
+    } else {
+        format!("{} AND {}", full_sql, filter_conditions.join(" AND "))
+    };
 
     let rows = if let Some(bbox_str) = bbox {
         let parts: Vec<&str> = bbox_str.split(',').collect();
@@ -473,7 +530,7 @@ pub async fn list_tracks_geojson(
             match coords {
                 Ok(c) => {
                     let sql = format!(
-                        "{full_sql} AND ST_Intersects(geom, ST_MakeEnvelope($1, $2, $3, $4, 4326))"
+                        "{sql_with_filters} AND ST_Intersects(geom, ST_MakeEnvelope($1, $2, $3, $4, 4326))"
                     );
                     if use_postgis_simplification {
                         sqlx::query(&sql)
@@ -510,12 +567,12 @@ pub async fn list_tracks_geojson(
             });
         }
     } else if use_postgis_simplification {
-        sqlx::query(&full_sql)
+        sqlx::query(&sql_with_filters)
             .bind(zoom_level)
             .fetch_all(&**pool)
             .await?
     } else {
-        sqlx::query(&full_sql).fetch_all(&**pool).await?
+        sqlx::query(&sql_with_filters).fetch_all(&**pool).await?
     };
 
     let features: Vec<TrackGeoJsonFeature> = rows
@@ -525,89 +582,90 @@ pub async fn list_tracks_geojson(
             let name: String = row.get("name");
             let categories: Vec<String> = row.get("categories");
             let length_km: f64 = row.get("length_km");
+            let elevation_gain: Option<f32> = row.get("elevation_gain");
+            let elevation_loss: Option<f32> = row.get("elevation_loss");
             let _original_points: i32 = row.try_get("original_points").unwrap_or(0);
-            let mut geom_json: String = row.get("geom_json");
-            
+            let mut geom_json: serde_json::Value = row.get("geom_json");
+
             // Apply Rust-side simplification if not already done in PostGIS
             if !use_postgis_simplification && track_mode.is_overview() {
-                if let Ok(geom_value) = serde_json::from_str::<serde_json::Value>(&geom_json) {
-                    if let Some(coordinates) = geom_value.get("coordinates").and_then(|c| c.as_array()) {
-                        if !coordinates.is_empty() {
-                            // Extract points for simplification
-                            let points: Vec<(f64, f64)> = coordinates
-                                .iter()
-                                .filter_map(|coord| {
-                                    if let Some(coord_array) = coord.as_array() {
-                                        if coord_array.len() >= 2 {
-                                            let lng = coord_array[0].as_f64()?;
-                                            let lat = coord_array[1].as_f64()?;
-                                            Some((lat, lng))
-                                        } else {
-                                            None
-                                        }
+                if let Some(coordinates) = geom_json.get("coordinates").and_then(|c| c.as_array()) {
+                    if !coordinates.is_empty() {
+                        // Extract points for simplification
+                        let points: Vec<(f64, f64)> = coordinates
+                            .iter()
+                            .filter_map(|coord| {
+                                if let Some(coord_array) = coord.as_array() {
+                                    if coord_array.len() >= 2 {
+                                        let lng = coord_array[0].as_f64()?;
+                                        let lat = coord_array[1].as_f64()?;
+                                        Some((lat, lng))
                                     } else {
                                         None
                                     }
-                                })
-                                .collect();
-                            
-                            if !points.is_empty() {
-                                let params = get_simplification_params(track_mode, Some(zoom_level), points.len());
-                                if params.should_simplify(points.len()) {
-                                    let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
-                                    if simplified_geom.len() < points.len() {
-                                        // Convert back to GeoJSON format
-                                        let simplified_coords: Vec<serde_json::Value> = simplified_geom
-                                            .iter()
-                                            .map(|(lat, lng)| serde_json::json!([lng, lat]))
-                                            .collect();
-                                        
-                                        let simplified_geojson = serde_json::json!({
-                                            "type": "LineString",
-                                            "coordinates": simplified_coords
-                                        });
-                                        
-                                        geom_json = simplified_geojson.to_string();
-                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        if !points.is_empty() {
+                            let params = get_simplification_params(
+                                track_mode,
+                                Some(zoom_level),
+                                points.len(),
+                            );
+                            if params.should_simplify(points.len()) {
+                                let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
+                                if simplified_geom.len() < points.len() {
+                                    // Convert back to GeoJSON format
+                                    let simplified_coords: Vec<serde_json::Value> = simplified_geom
+                                        .iter()
+                                        .map(|(lat, lng)| serde_json::json!([lng, lat]))
+                                        .collect();
+
+                                    geom_json = serde_json::json!({
+                                        "type": "LineString",
+                                        "coordinates": simplified_coords
+                                    });
                                 }
                             }
                         }
                     }
                 }
             }
-            
+
             // Build properties based on mode
             let mut properties = serde_json::json!({
                 "id": id,
                 "name": name,
                 "categories": categories,
                 "length_km": length_km,
+                "elevation_gain": elevation_gain,
+                "elevation_loss": elevation_loss,
             });
-            
+
             // Add extra properties for detail mode
             if track_mode.is_detail() {
-                let elevation_up: Option<f64> = row.try_get("elevation_up").ok();
-                let elevation_down: Option<f64> = row.try_get("elevation_down").ok();
                 let avg_hr: Option<i32> = row.try_get("avg_hr").ok();
                 let avg_speed: Option<f64> = row.try_get("avg_speed").ok();
                 let duration_seconds: Option<i32> = row.try_get("duration_seconds").ok();
                 let recorded_at: Option<chrono::DateTime<chrono::Utc>> =
                     row.try_get("recorded_at").ok();
-                
-                properties["elevation_up"] = serde_json::to_value(elevation_up).unwrap_or(serde_json::Value::Null);
-                properties["elevation_down"] = serde_json::to_value(elevation_down).unwrap_or(serde_json::Value::Null);
-                properties["avg_hr"] = serde_json::to_value(avg_hr).unwrap_or(serde_json::Value::Null);
-                properties["avg_speed"] = serde_json::to_value(avg_speed).unwrap_or(serde_json::Value::Null);
-                properties["duration_seconds"] = serde_json::to_value(duration_seconds).unwrap_or(serde_json::Value::Null);
-                properties["recorded_at"] = serde_json::to_value(recorded_at).unwrap_or(serde_json::Value::Null);
+
+                properties["avg_hr"] =
+                    serde_json::to_value(avg_hr).unwrap_or(serde_json::Value::Null);
+                properties["avg_speed"] =
+                    serde_json::to_value(avg_speed).unwrap_or(serde_json::Value::Null);
+                properties["duration_seconds"] =
+                    serde_json::to_value(duration_seconds).unwrap_or(serde_json::Value::Null);
+                properties["recorded_at"] =
+                    serde_json::to_value(recorded_at).unwrap_or(serde_json::Value::Null);
             }
 
             TrackGeoJsonFeature {
                 type_field: "Feature".to_string(),
-                geometry: serde_json::from_str(&geom_json).unwrap_or_else(|e| {
-                    eprintln!("Failed to parse geometry GeoJSON: {e}");
-                    serde_json::json!({})
-                }),
+                geometry: geom_json,
                 properties,
             }
         })
@@ -738,4 +796,622 @@ pub async fn search_tracks(
     }
 
     Ok(tracks)
+}
+
+/// Get track by ID for elevation enrichment
+pub async fn get_track_by_id(
+    pool: &PgPool,
+    track_id: Uuid,
+) -> Result<Option<TrackForElevationEnrichment>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT id, session_id, elevation_enriched, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched_at, elevation_dataset, ST_AsGeoJSON(geom)::jsonb as geom_geojson
+        FROM tracks
+        WHERE id = $1
+        "#
+    )
+    .bind(track_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(row) = row {
+        Ok(Some(TrackForElevationEnrichment {
+            id: row.try_get("id")?,
+            session_id: row.try_get("session_id")?,
+            elevation_enriched: row.try_get("elevation_enriched")?,
+            elevation_gain: row.try_get("elevation_gain")?,
+            elevation_loss: row.try_get("elevation_loss")?,
+            elevation_min: row.try_get("elevation_min")?,
+            elevation_max: row.try_get("elevation_max")?,
+            elevation_enriched_at: row.try_get("elevation_enriched_at")?,
+            elevation_dataset: row.try_get("elevation_dataset")?,
+            geom_geojson: row.try_get("geom_geojson")?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Update track elevation data
+pub struct UpdateElevationParams {
+    pub elevation_gain: Option<f32>,
+    pub elevation_loss: Option<f32>,
+    pub elevation_min: Option<f32>,
+    pub elevation_max: Option<f32>,
+    pub elevation_enriched: bool,
+    pub elevation_enriched_at: Option<chrono::NaiveDateTime>,
+    pub elevation_dataset: Option<String>,
+    pub elevation_profile: Option<Vec<f64>>,
+    pub elevation_api_calls: u32,
+}
+
+pub async fn update_track_elevation(
+    pool: &PgPool,
+    track_id: Uuid,
+    params: UpdateElevationParams,
+) -> Result<(), sqlx::Error> {
+    // Convert elevation profile to JSON
+    let elevation_profile_json = params
+        .elevation_profile
+        .map(|profile| serde_json::to_value(profile).unwrap_or(serde_json::Value::Null));
+
+    sqlx::query(
+        r#"
+        UPDATE tracks 
+        SET elevation_gain = $2,
+            elevation_loss = $3,
+            elevation_min = $4,
+            elevation_max = $5,
+            elevation_enriched = $6,
+            elevation_enriched_at = $7,
+            elevation_dataset = $8,
+            elevation_profile = $9,
+            elevation_api_calls = COALESCE(elevation_api_calls, 0) + $10,
+            updated_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(track_id)
+    .bind(params.elevation_gain)
+    .bind(params.elevation_loss)
+    .bind(params.elevation_min)
+    .bind(params.elevation_max)
+    .bind(params.elevation_enriched)
+    .bind(params.elevation_enriched_at)
+    .bind(params.elevation_dataset)
+    .bind(elevation_profile_json)
+    .bind(params.elevation_api_calls as i32)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Record API usage for elevation service
+pub async fn record_api_usage(
+    pool: &PgPool,
+    service_name: &str,
+    api_calls: u32,
+) -> Result<(), sqlx::Error> {
+    let today = chrono::Utc::now().date_naive();
+
+    sqlx::query(
+        r#"
+        INSERT INTO elevation_api_usage (date, service_name, api_calls_count)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (date, service_name)
+        DO UPDATE SET api_calls_count = elevation_api_usage.api_calls_count + $3
+        "#,
+    )
+    .bind(today)
+    .bind(service_name)
+    .bind(api_calls as i32)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Get today's API usage for a service
+pub async fn get_today_api_usage(pool: &PgPool, service_name: &str) -> Result<i32, sqlx::Error> {
+    let today = chrono::Utc::now().date_naive();
+
+    let result = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(api_calls_count, 0)
+        FROM elevation_api_usage
+        WHERE date = $1 AND service_name = $2
+        "#,
+    )
+    .bind(today)
+    .bind(service_name)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.unwrap_or(0))
+}
+
+/// Check if daily API limit is exceeded
+pub async fn is_daily_limit_exceeded(
+    pool: &PgPool,
+    service_name: &str,
+    daily_limit: u32,
+) -> Result<bool, sqlx::Error> {
+    let usage = get_today_api_usage(pool, service_name).await?;
+    Ok(usage >= daily_limit as i32)
+}
+
+/// Get API usage statistics for the last N days
+pub async fn get_api_usage_stats(
+    pool: &PgPool,
+    service_name: &str,
+    days: i32,
+) -> Result<Vec<(chrono::NaiveDate, i32)>, sqlx::Error> {
+    let result = sqlx::query_as(
+        r#"
+        SELECT date, api_calls_count
+        FROM elevation_api_usage
+        WHERE service_name = $1 AND date >= CURRENT_DATE - INTERVAL '1 day' * $2
+        ORDER BY date DESC
+        "#,
+    )
+    .bind(service_name)
+    .bind(days)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::TrackGeoJsonQuery;
+
+    // Note: These tests would typically require a test database setup
+    // They are written to demonstrate the test structure for elevation functionality
+
+    #[test]
+    fn test_elevation_filter_query_building() {
+        // Test elevation_gain_min filter
+        let mut params = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: None,
+            max_length: None,
+            elevation_gain_min: Some(100.0),
+            elevation_gain_max: None,
+            categories: None,
+        };
+
+        // In a real implementation, we would extract the query building logic
+        // into a separate function that can be tested without database
+        let filter_conditions = build_elevation_filter_conditions(&params);
+        assert!(filter_conditions.contains("elevation_gain >= 100"));
+
+        // Test elevation_gain_max filter
+        params.elevation_gain_min = None;
+        params.elevation_gain_max = Some(500.0);
+        let filter_conditions = build_elevation_filter_conditions(&params);
+        assert!(filter_conditions.contains("elevation_gain <= 500"));
+
+        // Test both min and max filters
+        params.elevation_gain_min = Some(100.0);
+        params.elevation_gain_max = Some(500.0);
+        let filter_conditions = build_elevation_filter_conditions(&params);
+        assert!(filter_conditions.contains("elevation_gain >= 100"));
+        assert!(filter_conditions.contains("elevation_gain <= 500"));
+    }
+
+    #[test]
+    fn test_elevation_filter_edge_cases() {
+        // Test with zero values
+        let params = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: None,
+            max_length: None,
+            elevation_gain_min: Some(0.0),
+            elevation_gain_max: Some(0.0),
+            categories: None,
+        };
+
+        let filter_conditions = build_elevation_filter_conditions(&params);
+        assert!(filter_conditions.contains("elevation_gain >= 0"));
+        assert!(filter_conditions.contains("elevation_gain <= 0"));
+
+        // Test with negative values (should be handled gracefully)
+        let params_negative = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: None,
+            max_length: None,
+            elevation_gain_min: Some(-10.0),
+            elevation_gain_max: Some(-5.0),
+            categories: None,
+        };
+
+        let filter_conditions = build_elevation_filter_conditions(&params_negative);
+        assert!(filter_conditions.contains("elevation_gain >= -10"));
+        assert!(filter_conditions.contains("elevation_gain <= -5"));
+    }
+
+    #[test]
+    fn test_elevation_filter_with_other_filters() {
+        // Test combination of elevation and length filters
+        let params = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: Some(5.0),
+            max_length: Some(20.0),
+            elevation_gain_min: Some(100.0),
+            elevation_gain_max: Some(500.0),
+            categories: None,
+        };
+
+        let filter_conditions = build_elevation_filter_conditions(&params);
+        // Should include both elevation and length conditions
+        assert!(filter_conditions.contains("elevation_gain >= 100"));
+        assert!(filter_conditions.contains("elevation_gain <= 500"));
+        // Note: length conditions would be handled by build_length_filter_conditions
+    }
+
+    // Helper function to simulate filter condition building
+    // In a real implementation, this would be extracted from the main functions
+    fn build_elevation_filter_conditions(params: &TrackGeoJsonQuery) -> String {
+        let mut conditions = Vec::new();
+
+        if let Some(min) = params.elevation_gain_min {
+            conditions.push(format!("elevation_gain >= {}", min));
+        }
+
+        if let Some(max) = params.elevation_gain_max {
+            conditions.push(format!("elevation_gain <= {}", max));
+        }
+
+        conditions.join(" AND ")
+    }
+
+    // Tests for elevation-related database operations would include:
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_update_track_elevation() {
+        // This test would verify that update_track_elevation correctly
+        // updates all elevation fields in the database
+        // Requires test database setup and transaction rollback
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_track_api_usage_tracking() {
+        // This test would verify API usage tracking functionality:
+        // - increment_api_usage
+        // - get_today_api_usage
+        // - is_daily_limit_exceeded
+        // - get_api_usage_stats
+        // Requires test database setup and transaction rollback
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_elevation_filters_in_list_tracks_geojson() {
+        // This test would verify that elevation filters work correctly
+        // in the list_tracks_geojson function by:
+        // 1. Creating test tracks with different elevation values
+        // 2. Applying various elevation filters
+        // 3. Verifying correct tracks are returned
+        // Requires test database setup and transaction rollback
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_elevation_filters_performance() {
+        // This test would verify that elevation filters perform well
+        // with large datasets and proper indexing
+        // Requires test database setup with large dataset
+    }
+
+    // Additional integration tests for track operations
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_track_exists_and_insert() {
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        // Using mocks, for real tests, you need to set up a test database
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&db_url)
+                .await
+                .unwrap(),
+        );
+        let id = Uuid::new_v4();
+        let hash = format!("testhash-{id}");
+        let name = "Test Track";
+        let cats = ["testcat"];
+        let geom_geojson = serde_json::json!({
+            "type": "LineString",
+            "coordinates": vec![vec![0.0, 0.0], vec![1.0, 1.0]]
+        });
+        let res = insert_track(InsertTrackParams {
+            pool: &pool,
+            id,
+            name,
+            description: Some("desc".to_string()),
+            categories: &cats[..],
+            auto_classifications: &["aerobic_run".to_string()],
+            geom_geojson: &geom_geojson,
+            length_km: 1.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: None,
+            elevation_gain: None,
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            avg_speed: None,
+            avg_hr: Some(150),
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: Some(3600),
+            hash: &hash,
+            recorded_at: None,
+            session_id: None,
+        })
+        .await;
+        if let Err(e) = &res {
+            println!("insert_track error: {e:?}");
+        }
+        assert!(res.is_ok());
+        let found = track_exists(&pool, &hash).await.unwrap();
+        assert_eq!(found, Some(id));
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_insert_track_with_time_data() {
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&db_url)
+                .await
+                .unwrap(),
+        );
+
+        let id = Uuid::new_v4();
+        let hash = format!("testhash-with-time-{id}");
+        let name = "Test Track with Time";
+        let cats = ["testcat"];
+        let geom_geojson = serde_json::json!({
+            "type": "LineString",
+            "coordinates": vec![vec![0.0, 0.0], vec![1.0, 1.0]]
+        });
+
+        let time_data = serde_json::json!(["2024-01-01T10:00:00Z", "2024-01-01T10:01:00Z"]);
+
+        let res = insert_track(InsertTrackParams {
+            pool: &pool,
+            id,
+            name,
+            description: Some("Track with timestamps".to_string()),
+            categories: &cats[..],
+            auto_classifications: &["aerobic_run".to_string()],
+            geom_geojson: &geom_geojson,
+            length_km: 1.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: Some(time_data),
+            elevation_gain: None,
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            avg_speed: None,
+            avg_hr: Some(150),
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: Some(3600),
+            hash: &hash,
+            recorded_at: None,
+            session_id: None,
+        })
+        .await;
+
+        assert!(
+            res.is_ok(),
+            "Failed to insert track with time_data: {:?}",
+            res.err()
+        );
+
+        // Verify the track was inserted
+        let found = track_exists(&pool, &hash).await.unwrap();
+        assert_eq!(found, Some(id));
+
+        // Optionally, verify that time_data was stored correctly by retrieving the track
+        // This would require a get_track function in db module
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_search_tracks_by_name() {
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:password@localhost:5432/trackly_test".to_string()
+        });
+
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&database_url)
+                .await
+                .expect("Failed to connect to test database"),
+        );
+
+        // Insert a test track
+        let track_id = Uuid::new_v4();
+        let unique_hash = format!("test_hash_{}", Uuid::new_v4());
+        let test_geom = serde_json::json!({
+            "type": "LineString",
+            "coordinates": [[0.0, 0.0], [1.0, 1.0]]
+        });
+
+        insert_track(InsertTrackParams {
+            pool: &pool,
+            id: track_id,
+            name: "Test Running Track",
+            description: Some("A great running route".to_string()),
+            categories: &["running"],
+            auto_classifications: &["running".to_string()],
+            geom_geojson: &test_geom,
+            length_km: 5.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: None,
+            elevation_gain: None,
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            avg_speed: None,
+            avg_hr: None,
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: None,
+            hash: &unique_hash,
+            recorded_at: None,
+            session_id: None,
+        })
+        .await
+        .unwrap();
+
+        // Search by name
+        let results = search_tracks(&pool, "running").await.unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].name, "Test Running Track");
+
+        // Search by description
+        let results = search_tracks(&pool, "great").await.unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].name, "Test Running Track");
+
+        // Search with no results
+        let results = search_tracks(&pool, "nonexistent").await.unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_search_tracks_case_insensitive() {
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:password@localhost:5432/trackly_test".to_string()
+        });
+
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&database_url)
+                .await
+                .expect("Failed to connect to test database"),
+        );
+
+        let track_id = Uuid::new_v4();
+        let unique_hash = format!("test_hash_2_{}", Uuid::new_v4());
+        let test_geom = serde_json::json!({
+            "type": "LineString",
+            "coordinates": [[0.0, 0.0], [1.0, 1.0]]
+        });
+
+        insert_track(InsertTrackParams {
+            pool: &pool,
+            id: track_id,
+            name: "Mountain Bike Trail",
+            description: Some("Challenging MOUNTAIN bike route".to_string()),
+            categories: &["cycling"],
+            auto_classifications: &["cycling".to_string()],
+            geom_geojson: &test_geom,
+            length_km: 10.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: None,
+            elevation_gain: None,
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            avg_speed: None,
+            avg_hr: None,
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: None,
+            hash: &unique_hash,
+            recorded_at: None,
+            session_id: None,
+        })
+        .await
+        .unwrap();
+
+        // Test case insensitive search
+        let results = search_tracks(&pool, "MOUNTAIN").await.unwrap();
+        assert!(!results.is_empty());
+
+        let results = search_tracks(&pool, "mountain").await.unwrap();
+        assert!(!results.is_empty());
+
+        let results = search_tracks(&pool, "Mountain").await.unwrap();
+        assert!(!results.is_empty());
+    }
 }

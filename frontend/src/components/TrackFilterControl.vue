@@ -79,6 +79,19 @@
               :range="true"
             />
           </div>
+          <div class="filter-section">
+            <label>Elevation gain (m):</label>
+            <Slider
+              v-model="elevationGainRange"
+              :min="minElevationGain"
+              :max="maxElevationGain"
+              :step="10"
+              :tooltip="true"
+              :lazy="true"
+              :format="val => `${Math.round(val)}m`"
+              :range="true"
+            />
+          </div>
           <div class="filter-actions">
             <button @click="resetFilters">Reset</button>
           </div>
@@ -108,9 +121,13 @@ const props = defineProps({
   categories: Array, // All available categories (viewport-based)
   minLength: Number, // Minimum track length in km (viewport-based)
   maxLength: Number, // Maximum track length in km (viewport-based)
+  minElevationGain: Number, // Minimum elevation gain in meters (viewport-based)
+  maxElevationGain: Number, // Maximum elevation gain in meters (viewport-based)
   globalCategories: Array, // All session categories for reset functionality
   globalMinLength: Number, // Global session minimum track length for reset functionality
   globalMaxLength: Number, // Global session maximum track length for reset functionality
+  globalMinElevationGain: Number, // Global session minimum elevation gain for reset functionality
+  globalMaxElevationGain: Number, // Global session maximum elevation gain for reset functionality
   hasTracksInViewport: Boolean, // Whether there are actual tracks in the current viewport
 });
 
@@ -130,6 +147,7 @@ const LOCAL_UI_KEY = 'trackFiltersVueOpen';
 
 const selectedCategories = ref([]); // Will be set in onMounted
 const lengthRange = ref([props.minLength, props.maxLength]);
+const elevationGainRange = ref([props.minElevationGain, props.maxElevationGain]);
 const isOpen = ref(true);
 
 // Flag to track if values were restored from localStorage
@@ -153,6 +171,7 @@ onMounted(() => {
   // Initialize with global session values if no saved preferences exist
   let initialCategories = props.globalCategories ? [...props.globalCategories] : [];
   let initialLengthRange = [props.globalMinLength, props.globalMaxLength];
+  let initialElevationGainRange = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
   
   const savedFiltersRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
   if (savedFiltersRaw) {
@@ -170,6 +189,14 @@ onMounted(() => {
           restoredFromLocalStorage.value = true;
         }
       }
+      if (Array.isArray(savedFilters.elevationGainRange) && savedFilters.elevationGainRange.length === 2) {
+        const [min, max] = savedFilters.elevationGainRange;
+        // Validate that the range makes sense (min <= max)
+        if (typeof min === 'number' && typeof max === 'number' && min <= max) {
+          initialElevationGainRange = [...savedFilters.elevationGainRange];
+          restoredFromLocalStorage.value = true;
+        }
+      }
     } catch (e) {
       console.error('Failed to parse filter state from localStorage:', e);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -178,11 +205,13 @@ onMounted(() => {
   
   selectedCategories.value = initialCategories;
   lengthRange.value = initialLengthRange;
+  elevationGainRange.value = initialElevationGainRange;
 
   // Emit initial filter state
   emit('update:filter', {
     categories: selectedCategories.value,
     lengthRange: lengthRange.value,
+    elevationGainRange: elevationGainRange.value,
   });
 });
 
@@ -198,49 +227,69 @@ watch(() => props.categories, (newCategories) => {
   emit('update:filter', {
     categories: validCategories,
     lengthRange: lengthRange.value,
+    elevationGainRange: elevationGainRange.value,
   });
 });
 
 let prevMinLength = props.minLength;
 let prevMaxLength = props.maxLength;
+let prevMinElevationGain = props.minElevationGain;
+let prevMaxElevationGain = props.maxElevationGain;
 
 watch(
-  () => [props.minLength, props.maxLength],
-  ([newMin, newMax], [oldMin, oldMax]) => {
+  () => [props.minLength, props.maxLength, props.minElevationGain, props.maxElevationGain],
+  ([newMinLength, newMaxLength, newMinElevationGain, newMaxElevationGain], [oldMinLength, oldMaxLength, oldMinElevationGain, oldMaxElevationGain]) => {
     // Don't automatically change user selections based on viewport changes
     // The main watcher will clamp values when emitting to parent
-    prevMinLength = newMin;
-    prevMaxLength = newMax;
+    prevMinLength = newMinLength;
+    prevMaxLength = newMaxLength;
+    prevMinElevationGain = newMinElevationGain;
+    prevMaxElevationGain = newMaxElevationGain;
   }
 );
 
-watch([selectedCategories, lengthRange], ([cats, range], [oldCats, oldRange]) => {
+watch([selectedCategories, lengthRange, elevationGainRange], ([cats, lengthRange, elevationGainRange], [oldCats, oldLengthRange, oldElevationGainRange]) => {
   // Emit validated values (filtered to what's available in current viewport)
   const validCategories = props.categories ? cats.filter(cat => props.categories.includes(cat)) : cats;
-  let validRange = range;
+  let validLengthRange = lengthRange;
+  let validElevationGainRange = elevationGainRange;
   
-  // Clamp range to current viewport bounds
+  // Clamp length range to current viewport bounds
   if (props.minLength !== undefined && props.maxLength !== undefined) {
-    const [min, max] = range;
+    const [min, max] = lengthRange;
     const clampedMin = Math.max(props.minLength, Math.min(props.maxLength, min));
     const clampedMax = Math.max(props.minLength, Math.min(props.maxLength, max));
     if (clampedMin <= clampedMax) {
-      validRange = [clampedMin, clampedMax];
+      validLengthRange = [clampedMin, clampedMax];
     } else {
-      validRange = [props.minLength, props.maxLength];
+      validLengthRange = [props.minLength, props.maxLength];
+    }
+  }
+  
+  // Clamp elevation gain range to current viewport bounds
+  if (props.minElevationGain !== undefined && props.maxElevationGain !== undefined) {
+    const [min, max] = elevationGainRange;
+    const clampedMin = Math.max(props.minElevationGain, Math.min(props.maxElevationGain, min));
+    const clampedMax = Math.max(props.minElevationGain, Math.min(props.maxElevationGain, max));
+    if (clampedMin <= clampedMax) {
+      validElevationGainRange = [clampedMin, clampedMax];
+    } else {
+      validElevationGainRange = [props.minElevationGain, props.maxElevationGain];
     }
   }
   
   emit('update:filter', {
     categories: validCategories,
-    lengthRange: validRange,
+    lengthRange: validLengthRange,
+    elevationGainRange: validElevationGainRange,
   });
   
   // Always persist user's actual choice (not the clamped values)
-  if (cats !== null && cats !== undefined && range && range.length === 2) {
+  if (cats !== null && cats !== undefined && lengthRange && lengthRange.length === 2 && elevationGainRange && elevationGainRange.length === 2) {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
       categories: cats,
-      lengthRange: range,
+      lengthRange: lengthRange,
+      elevationGainRange: elevationGainRange,
     }));
   }
 }, { deep: true });
@@ -250,10 +299,12 @@ function resetFilters() {
   // This ensures that reset doesn't change when user zooms in/out
   selectedCategories.value = props.globalCategories ? [...props.globalCategories] : [];
   lengthRange.value = [props.globalMinLength || 0, props.globalMaxLength || 50];
+  elevationGainRange.value = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
   // Immediately persist reset state
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
     categories: selectedCategories.value,
     lengthRange: lengthRange.value,
+    elevationGainRange: elevationGainRange.value,
   }));
 }
 
