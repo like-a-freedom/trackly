@@ -1,6 +1,7 @@
 FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:slim AS builder
 RUN apt update && apt install -y --no-install-recommends \
     musl-tools musl-dev clang llvm perl cmake libc6-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y gcc-i686-linux-gnu gcc-x86-64-linux-gnu \
     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc++-dev
