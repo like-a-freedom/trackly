@@ -85,6 +85,14 @@ async fn main() {
             post(handlers::enrich_elevation),
         )
         .route(
+            "/tracks/{id}/slope-profile",
+            get(handlers::get_track_slope_profile),
+        )
+        .route(
+            "/tracks/{id}/recalculate-slopes",
+            post(handlers::recalculate_track_slopes),
+        )
+        .route(
             "/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
         )

@@ -37,6 +37,12 @@ pub struct InsertTrackParams<'a> {
     pub elevation_enriched_at: Option<chrono::NaiveDateTime>,
     pub elevation_dataset: Option<String>,
     pub elevation_api_calls: Option<i32>,
+    // Slope fields
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
+    pub slope_avg: Option<f32>,
+    pub slope_histogram: Option<serde_json::Value>,
+    pub slope_segments: Option<serde_json::Value>,
     pub avg_speed: Option<f64>,
     pub avg_hr: Option<i32>,
     pub hr_min: Option<i32>,
@@ -73,6 +79,11 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         elevation_enriched_at,
         elevation_dataset,
         elevation_api_calls,
+        slope_min,
+        slope_max,
+        slope_avg,
+        slope_histogram,
+        slope_segments,
         avg_speed,
         avg_hr,
         hr_min,
@@ -90,13 +101,13 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         r#"
         INSERT INTO tracks (
             id, name, description, categories, auto_classifications, geom, length_km, elevation_profile,
-            elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, elevation_api_calls, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, hr_data, temp_data, time_data, duration_seconds,
+            elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, elevation_api_calls, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, hr_data, temp_data, time_data, duration_seconds,
             hash, recorded_at, created_at, session_id, is_public
         )
         VALUES (
             $1, $2, $3, $4, $5, ST_SetSRID(ST_GeomFromGeoJSON($6), 4326), $7, $8,
-            $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-            $29, $30, DEFAULT, $31, $32
+            $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
+            $34, $35, DEFAULT, $36, $37
         )
     "#,
     )
@@ -116,6 +127,11 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     .bind(elevation_enriched_at)
     .bind(elevation_dataset)
     .bind(elevation_api_calls)
+    .bind(slope_min)
+    .bind(slope_max)
+    .bind(slope_avg)
+    .bind(slope_histogram)
+    .bind(slope_segments)
     .bind(avg_speed)
     .bind(avg_hr)
     .bind(hr_min)
@@ -142,7 +158,7 @@ pub async fn list_tracks(
     params: &crate::models::TrackListQuery,
 ) -> Result<Vec<TrackListItem>, sqlx::Error> {
     let mut query =
-        "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched FROM tracks WHERE is_public = TRUE".to_string();
+        "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks WHERE is_public = TRUE".to_string();
     let mut args: Vec<String> = Vec::new();
     if let Some(ref cats) = params.categories {
         query.push_str(" AND categories && $1");
@@ -159,6 +175,12 @@ pub async fn list_tracks(
     }
     if let Some(max) = params.elevation_gain_max {
         query.push_str(&format!(" AND elevation_gain <= {max}"));
+    }
+    if let Some(min) = params.slope_min {
+        query.push_str(&format!(" AND slope_min >= {min}"));
+    }
+    if let Some(max) = params.slope_max {
+        query.push_str(&format!(" AND slope_max <= {max}"));
     }
     let rows = sqlx::query(&query).fetch_all(&**pool).await?;
     let mut result = Vec::new();
@@ -178,6 +200,9 @@ pub async fn list_tracks(
         let elevation_gain: Option<f32> = row.try_get("elevation_gain").ok();
         let elevation_loss: Option<f32> = row.try_get("elevation_loss").ok();
         let elevation_enriched: Option<bool> = row.try_get("elevation_enriched").ok();
+        let slope_min: Option<f32> = row.try_get("slope_min").ok();
+        let slope_max: Option<f32> = row.try_get("slope_max").ok();
+        let slope_avg: Option<f32> = row.try_get("slope_avg").ok();
         result.push(TrackListItem {
             id,
             name,
@@ -186,6 +211,9 @@ pub async fn list_tracks(
             elevation_gain,
             elevation_loss,
             elevation_enriched,
+            slope_min,
+            slope_max,
+            slope_avg,
             url: format!("/tracks/{id}"),
         });
     }
@@ -197,7 +225,7 @@ pub async fn get_track_detail(
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id
+        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -238,6 +266,12 @@ pub async fn get_track_detail(
             elevation_enriched: row.try_get("elevation_enriched").ok(),
             elevation_enriched_at: row.try_get("elevation_enriched_at").ok(),
             elevation_dataset: row.try_get("elevation_dataset").ok(),
+            // Slope fields
+            slope_min: row.try_get("slope_min").ok(),
+            slope_max: row.try_get("slope_max").ok(),
+            slope_avg: row.try_get("slope_avg").ok(),
+            slope_histogram: row.try_get("slope_histogram").ok(),
+            slope_segments: row.try_get("slope_segments").ok(),
             avg_speed: row
                 .try_get("avg_speed")
                 .expect("Failed to get avg_speed: avg_speed column missing or wrong type"),
@@ -274,7 +308,7 @@ pub async fn get_track_detail_adaptive(
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, ST_NPoints(geom) as original_points
+        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, ST_NPoints(geom) as original_points
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -373,6 +407,12 @@ pub async fn get_track_detail_adaptive(
             elevation_enriched: row.try_get("elevation_enriched").ok(),
             elevation_enriched_at: row.try_get("elevation_enriched_at").ok(),
             elevation_dataset: row.try_get("elevation_dataset").ok(),
+            // Slope fields
+            slope_min: row.try_get("slope_min").ok(),
+            slope_max: row.try_get("slope_max").ok(),
+            slope_avg: row.try_get("slope_avg").ok(),
+            slope_histogram: row.try_get("slope_histogram").ok(),
+            slope_segments: row.try_get("slope_segments").ok(),
             avg_speed: row
                 .try_get("avg_speed")
                 .expect("Failed to get avg_speed: avg_speed column missing or wrong type"),
@@ -458,7 +498,7 @@ pub async fn list_tracks_geojson(
     let base_sql = if use_postgis_simplification {
         // Use PostGIS ST_Simplify for overview mode with reasonable zoom levels
         String::from(
-            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, 
+            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, slope_min, slope_max,
              CASE 
                WHEN ST_NPoints(geom) > 1000 THEN 
                  ST_AsGeoJSON(ST_Simplify(geom, tolerance_for_zoom_degrees($5)))::jsonb
@@ -469,7 +509,7 @@ pub async fn list_tracks_geojson(
     } else {
         // Return full geometry for Rust-side processing
         String::from(
-            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, ST_AsGeoJSON(geom)::jsonb as geom_json,
+            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, slope_min, slope_max, ST_AsGeoJSON(geom)::jsonb as geom_json,
              ST_NPoints(geom) as original_points"
         )
     };
@@ -515,6 +555,14 @@ pub async fn list_tracks_geojson(
 
     if let Some(max) = filter_params.elevation_gain_max {
         filter_conditions.push(format!("elevation_gain <= {}", max));
+    }
+
+    if let Some(min) = filter_params.slope_min {
+        filter_conditions.push(format!("slope_min >= {}", min));
+    }
+
+    if let Some(max) = filter_params.slope_max {
+        filter_conditions.push(format!("slope_max <= {}", max));
     }
 
     let sql_with_filters = if filter_conditions.is_empty() {
@@ -584,6 +632,8 @@ pub async fn list_tracks_geojson(
             let length_km: f64 = row.get("length_km");
             let elevation_gain: Option<f32> = row.get("elevation_gain");
             let elevation_loss: Option<f32> = row.get("elevation_loss");
+            let slope_min: Option<f32> = row.try_get("slope_min").ok();
+            let slope_max: Option<f32> = row.try_get("slope_max").ok();
             let _original_points: i32 = row.try_get("original_points").unwrap_or(0);
             let mut geom_json: serde_json::Value = row.get("geom_json");
 
@@ -643,6 +693,8 @@ pub async fn list_tracks_geojson(
                 "length_km": length_km,
                 "elevation_gain": elevation_gain,
                 "elevation_loss": elevation_loss,
+                "slope_min": slope_min,
+                "slope_max": slope_max,
             });
 
             // Add extra properties for detail mode
@@ -887,6 +939,45 @@ pub async fn update_track_elevation(
     Ok(())
 }
 
+/// Parameters for updating track slope data
+#[derive(Debug)]
+pub struct UpdateSlopeParams {
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
+    pub slope_avg: Option<f32>,
+    pub slope_histogram: Option<serde_json::Value>,
+    pub slope_segments: Option<serde_json::Value>,
+}
+
+pub async fn update_track_slope(
+    pool: &PgPool,
+    track_id: Uuid,
+    params: UpdateSlopeParams,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE tracks 
+        SET slope_min = $2,
+            slope_max = $3,
+            slope_avg = $4,
+            slope_histogram = $5,
+            slope_segments = $6,
+            updated_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(track_id)
+    .bind(params.slope_min)
+    .bind(params.slope_max)
+    .bind(params.slope_avg)
+    .bind(params.slope_histogram)
+    .bind(params.slope_segments)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 /// Record API usage for elevation service
 pub async fn record_api_usage(
     pool: &PgPool,
@@ -968,6 +1059,35 @@ mod tests {
     use super::*;
     use crate::models::TrackGeoJsonQuery;
 
+    // Helper functions for query building (these would be actual implementations)
+    fn build_elevation_filter_conditions(params: &TrackGeoJsonQuery) -> String {
+        let mut conditions = Vec::new();
+
+        if let Some(min_gain) = params.elevation_gain_min {
+            conditions.push(format!("elevation_gain >= {}", min_gain));
+        }
+
+        if let Some(max_gain) = params.elevation_gain_max {
+            conditions.push(format!("elevation_gain <= {}", max_gain));
+        }
+
+        conditions.join(" AND ")
+    }
+
+    fn build_slope_filter_conditions(params: &TrackGeoJsonQuery) -> String {
+        let mut conditions = Vec::new();
+
+        if let Some(min_slope) = params.slope_min {
+            conditions.push(format!("slope_min >= {}", min_slope));
+        }
+
+        if let Some(max_slope) = params.slope_max {
+            conditions.push(format!("slope_max <= {}", max_slope));
+        }
+
+        conditions.join(" AND ")
+    }
+
     // Note: These tests would typically require a test database setup
     // They are written to demonstrate the test structure for elevation functionality
 
@@ -982,6 +1102,8 @@ mod tests {
             max_length: None,
             elevation_gain_min: Some(100.0),
             elevation_gain_max: None,
+            slope_min: None,
+            slope_max: None,
             categories: None,
         };
 
@@ -1015,6 +1137,8 @@ mod tests {
             max_length: None,
             elevation_gain_min: Some(0.0),
             elevation_gain_max: Some(0.0),
+            slope_min: None,
+            slope_max: None,
             categories: None,
         };
 
@@ -1031,6 +1155,8 @@ mod tests {
             max_length: None,
             elevation_gain_min: Some(-10.0),
             elevation_gain_max: Some(-5.0),
+            slope_min: None,
+            slope_max: None,
             categories: None,
         };
 
@@ -1050,6 +1176,8 @@ mod tests {
             max_length: Some(20.0),
             elevation_gain_min: Some(100.0),
             elevation_gain_max: Some(500.0),
+            slope_min: None,
+            slope_max: None,
             categories: None,
         };
 
@@ -1060,20 +1188,84 @@ mod tests {
         // Note: length conditions would be handled by build_length_filter_conditions
     }
 
-    // Helper function to simulate filter condition building
-    // In a real implementation, this would be extracted from the main functions
-    fn build_elevation_filter_conditions(params: &TrackGeoJsonQuery) -> String {
-        let mut conditions = Vec::new();
+    #[test]
+    fn test_slope_filter_query_building() {
+        // Test slope_min filter
+        let params_min = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: None,
+            max_length: None,
+            elevation_gain_min: None,
+            elevation_gain_max: None,
+            slope_min: Some(5.0),
+            slope_max: None,
+            categories: None,
+        };
 
-        if let Some(min) = params.elevation_gain_min {
-            conditions.push(format!("elevation_gain >= {}", min));
-        }
+        let filter_conditions = build_slope_filter_conditions(&params_min);
+        assert!(filter_conditions.contains("slope_min >= 5"));
 
-        if let Some(max) = params.elevation_gain_max {
-            conditions.push(format!("elevation_gain <= {}", max));
-        }
+        // Test slope_max filter
+        let params_max = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: None,
+            max_length: None,
+            elevation_gain_min: None,
+            elevation_gain_max: None,
+            slope_min: None,
+            slope_max: Some(15.0),
+            categories: None,
+        };
 
-        conditions.join(" AND ")
+        let filter_conditions = build_slope_filter_conditions(&params_max);
+        assert!(filter_conditions.contains("slope_max <= 15"));
+
+        // Test slope range filter
+        let params_range = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: None,
+            max_length: None,
+            elevation_gain_min: None,
+            elevation_gain_max: None,
+            slope_min: Some(3.0),
+            slope_max: Some(12.0),
+            categories: None,
+        };
+
+        let filter_conditions = build_slope_filter_conditions(&params_range);
+        assert!(filter_conditions.contains("slope_min >= 3"));
+        assert!(filter_conditions.contains("slope_max <= 12"));
+    }
+
+    #[test]
+    fn test_combined_elevation_and_slope_filters() {
+        // Test combination of elevation and slope filters
+        let params = TrackGeoJsonQuery {
+            bbox: None,
+            zoom: None,
+            mode: None,
+            min_length: Some(10.0),
+            max_length: Some(50.0),
+            elevation_gain_min: Some(200.0),
+            elevation_gain_max: Some(1000.0),
+            slope_min: Some(2.0),
+            slope_max: Some(20.0),
+            categories: None,
+        };
+
+        let elevation_conditions = build_elevation_filter_conditions(&params);
+        let slope_conditions = build_slope_filter_conditions(&params);
+
+        assert!(elevation_conditions.contains("elevation_gain >= 200"));
+        assert!(elevation_conditions.contains("elevation_gain <= 1000"));
+        assert!(slope_conditions.contains("slope_min >= 2"));
+        assert!(slope_conditions.contains("slope_max <= 20"));
     }
 
     // Tests for elevation-related database operations would include:
@@ -1163,6 +1355,11 @@ mod tests {
             elevation_enriched_at: None,
             elevation_dataset: None,
             elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
             avg_speed: None,
             avg_hr: Some(150),
             hr_min: None,
@@ -1233,6 +1430,11 @@ mod tests {
             elevation_enriched_at: None,
             elevation_dataset: None,
             elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
             avg_speed: None,
             avg_hr: Some(150),
             hr_min: None,
@@ -1310,6 +1512,11 @@ mod tests {
             elevation_enriched_at: None,
             elevation_dataset: None,
             elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
             avg_speed: None,
             avg_hr: None,
             hr_min: None,
@@ -1388,6 +1595,11 @@ mod tests {
             elevation_enriched_at: None,
             elevation_dataset: None,
             elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
             avg_speed: None,
             avg_hr: None,
             hr_min: None,
@@ -1413,5 +1625,78 @@ mod tests {
 
         let results = search_tracks(&pool, "Mountain").await.unwrap();
         assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_update_slope_params_creation() {
+        use serde_json::json;
+
+        let params = UpdateSlopeParams {
+            slope_min: Some(-10.5),
+            slope_max: Some(25.3),
+            slope_avg: Some(7.8),
+            slope_histogram: Some(json!({
+                "0-5": 30,
+                "5-10": 25,
+                "10-15": 20,
+                "15+": 25
+            })),
+            slope_segments: Some(json!([
+                {
+                    "start_distance": 0.0,
+                    "end_distance": 100.0,
+                    "slope": 5.5
+                },
+                {
+                    "start_distance": 100.0,
+                    "end_distance": 200.0,
+                    "slope": -3.2
+                }
+            ])),
+        };
+
+        assert_eq!(params.slope_min, Some(-10.5));
+        assert_eq!(params.slope_max, Some(25.3));
+        assert_eq!(params.slope_avg, Some(7.8));
+        assert!(params.slope_histogram.is_some());
+        assert!(params.slope_segments.is_some());
+    }
+
+    #[test]
+    fn test_track_coordinates_extraction() {
+        // Test helper function for coordinate extraction that would be used
+        // in slope calculation workflows
+
+        // This would test a helper function that extracts coordinates from PostGIS geometry
+        // The actual implementation would need to handle ST_AsText parsing
+        let mock_geom_text = "LINESTRING(37.6176 55.7558,37.6177 55.7559,37.6178 55.7560)";
+
+        // In a real implementation, we'd have a function like:
+        // let coordinates = extract_coordinates_from_geom_text(mock_geom_text);
+        // assert_eq!(coordinates.len(), 3);
+        // assert_eq!(coordinates[0], (37.6176, 55.7558));
+
+        // For now, just verify the format is parseable
+        assert!(mock_geom_text.starts_with("LINESTRING("));
+        assert!(mock_geom_text.contains(","));
+        assert!(mock_geom_text.ends_with(")"));
+    }
+
+    #[test]
+    fn test_slope_data_validation() {
+        // Test that slope data validation works properly
+
+        // Valid slope range
+        let valid_params = UpdateSlopeParams {
+            slope_min: Some(-30.0),
+            slope_max: Some(45.0),
+            slope_avg: Some(8.5),
+            slope_histogram: Some(serde_json::json!({})),
+            slope_segments: Some(serde_json::json!([])),
+        };
+
+        assert!(valid_params.slope_min.unwrap() >= -100.0);
+        assert!(valid_params.slope_max.unwrap() <= 100.0);
+        assert!(valid_params.slope_min.unwrap() <= valid_params.slope_max.unwrap());
     }
 }

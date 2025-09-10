@@ -6,10 +6,13 @@ use crate::track_utils::{
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    response::IntoResponse,
     Json,
 };
 use axum_extra::extract::multipart::Multipart as AxumMultipart;
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -394,6 +397,11 @@ pub async fn upload_track(
         elevation_enriched_at: None,
         elevation_dataset: Some("original_gpx".to_string()), // Mark as original data from GPX/KML
         elevation_api_calls: Some(0),                        // No API calls used initially
+        slope_min: parsed_data.slope_min,
+        slope_max: parsed_data.slope_max,
+        slope_avg: parsed_data.slope_avg,
+        slope_histogram: parsed_data.slope_histogram,
+        slope_segments: parsed_data.slope_segments,
         avg_speed: parsed_data.avg_speed,
         avg_hr: parsed_data.avg_hr,
         hr_min: parsed_data.hr_min,
@@ -457,7 +465,10 @@ pub async fn upload_track(
         tokio::spawn(async move {
             let enrichment_service = ElevationEnrichmentService::new();
 
-            match enrichment_service.enrich_track_elevation(coordinates).await {
+            match enrichment_service
+                .enrich_track_elevation(coordinates.clone())
+                .await
+            {
                 Ok(result) => {
                     // Update track with enriched elevation data
                     if let Err(e) = db::update_track_elevation(
@@ -471,7 +482,7 @@ pub async fn upload_track(
                             elevation_enriched: true,
                             elevation_enriched_at: Some(result.enriched_at.naive_utc()),
                             elevation_dataset: Some(result.dataset.clone()),
-                            elevation_profile: result.elevation_profile,
+                            elevation_profile: result.elevation_profile.clone(),
                             elevation_api_calls: result.api_calls_used,
                         },
                     )
@@ -485,6 +496,48 @@ pub async fn upload_track(
                             result.metrics.elevation_gain.unwrap_or(0.0),
                             result.metrics.elevation_loss.unwrap_or(0.0)
                         );
+
+                        // Calculate and update slope data if elevation enrichment was successful
+                        if let Some(elevation_profile) = result.elevation_profile {
+                            use crate::track_utils::slope::recalculate_slope_metrics;
+
+                            // Use universal slope calculation function
+                            let slope_result = recalculate_slope_metrics(
+                                &coordinates,
+                                &elevation_profile,
+                                &format!("Track {}", track_id),
+                            );
+
+                            // Update track with slope data
+                            if let Err(e) = db::update_track_slope(
+                                &pool_clone,
+                                track_id,
+                                db::UpdateSlopeParams {
+                                    slope_min: slope_result.slope_min,
+                                    slope_max: slope_result.slope_max,
+                                    slope_avg: slope_result.slope_avg,
+                                    slope_histogram: slope_result.slope_histogram,
+                                    slope_segments: slope_result.slope_segments,
+                                },
+                            )
+                            .await
+                            {
+                                error!(?track_id, "Failed to update slope data: {}", e);
+                            } else {
+                                info!(
+                                    ?track_id,
+                                    "Successfully calculated slope data: min={:.1}%, max={:.1}%, avg={:.1}%",
+                                    slope_result.slope_min.unwrap_or(0.0),
+                                    slope_result.slope_max.unwrap_or(0.0),
+                                    slope_result.slope_avg.unwrap_or(0.0)
+                                );
+                            }
+                        } else {
+                            error!(
+                                ?track_id,
+                                "No elevation profile available for slope calculation"
+                            );
+                        }
                     }
                 }
                 Err(e) => {
@@ -571,6 +624,12 @@ pub async fn get_track_simplified(
                 elevation_enriched: track.elevation_enriched,
                 elevation_enriched_at: track.elevation_enriched_at,
                 elevation_dataset: track.elevation_dataset,
+                // Slope fields
+                slope_min: track.slope_min,
+                slope_max: track.slope_max,
+                slope_avg: track.slope_avg,
+                slope_histogram: track.slope_histogram,
+                slope_segments: track.slope_segments,
                 avg_speed: track.avg_speed,
                 avg_hr: track.avg_hr,
                 hr_min: track.hr_min,
@@ -807,7 +866,10 @@ pub async fn enrich_elevation(
     );
 
     // Enrich elevation data
-    let enrichment_result = match enrichment_service.enrich_track_elevation(coordinates).await {
+    let enrichment_result = match enrichment_service
+        .enrich_track_elevation(coordinates.clone())
+        .await
+    {
         Ok(result) => result,
         Err(e) => {
             error!("Failed to enrich elevation for track {}: {}", id, e);
@@ -827,7 +889,7 @@ pub async fn enrich_elevation(
             elevation_enriched: true,
             elevation_enriched_at: Some(enrichment_result.enriched_at.naive_utc()),
             elevation_dataset: Some(enrichment_result.dataset.clone()),
-            elevation_profile: enrichment_result.elevation_profile,
+            elevation_profile: enrichment_result.elevation_profile.clone(),
             elevation_api_calls: enrichment_result.api_calls_used,
         },
     )
@@ -835,6 +897,40 @@ pub async fn enrich_elevation(
     {
         error!("Failed to update elevation data for track {}: {}", id, e);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // Calculate and update slope data
+    if let Some(elevation_profile) = &enrichment_result.elevation_profile {
+        use crate::track_utils::slope::recalculate_slope_metrics;
+
+        // Use universal slope calculation function
+        let slope_result =
+            recalculate_slope_metrics(&coordinates, elevation_profile, &format!("Track {}", id));
+
+        // Update track with slope data
+        if let Err(e) = db::update_track_slope(
+            &pool,
+            id,
+            db::UpdateSlopeParams {
+                slope_min: slope_result.slope_min,
+                slope_max: slope_result.slope_max,
+                slope_avg: slope_result.slope_avg,
+                slope_histogram: slope_result.slope_histogram,
+                slope_segments: slope_result.slope_segments,
+            },
+        )
+        .await
+        {
+            error!("Failed to update slope data for track {}: {}", id, e);
+        } else {
+            info!(
+                "Successfully calculated slope data for track {}: min={:.1}%, max={:.1}%, avg={:.1}%",
+                id,
+                slope_result.slope_min.unwrap_or(0.0),
+                slope_result.slope_max.unwrap_or(0.0),
+                slope_result.slope_avg.unwrap_or(0.0)
+            );
+        }
     }
 
     info!(
@@ -1079,6 +1175,12 @@ mod tests {
             elevation_enriched: Some(false),
             elevation_enriched_at: None,
             elevation_dataset: None,
+            // Slope fields
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
             avg_speed: Some(10.0),
             avg_hr: Some(122),
             hr_min: Some(120),
@@ -1129,6 +1231,12 @@ mod tests {
             elevation_enriched: Some(false),
             elevation_enriched_at: None,
             elevation_dataset: None,
+            // Slope fields
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
             avg_speed: Some(10.0),
             avg_hr: Some(122),
             hr_min: Some(120),
@@ -1317,6 +1425,12 @@ mod tests {
             elevation_enriched: Some(true),
             elevation_enriched_at: None,
             elevation_dataset: Some("srtm90m".to_string()),
+            // Slope fields
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
             avg_speed: Some(10.0),
             avg_hr: Some(130),
             hr_min: Some(110),
@@ -1380,4 +1494,362 @@ mod tests {
     // Integration tests would go here for testing the full enrich_elevation handler
     // However, they require database setup and external API mocking, so we'll
     // keep them in the existing test files under tests/ directory for now
+
+    #[test]
+    fn test_slope_profile_point_serialization() {
+        let point = SlopeProfilePoint {
+            distance_m: 100.0,
+            slope_percent: 5.5,
+            length_m: 50.0,
+        };
+
+        let serialized = serde_json::to_string(&point).unwrap();
+        let deserialized: SlopeProfilePoint = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(point.distance_m, deserialized.distance_m);
+        assert_eq!(point.slope_percent, deserialized.slope_percent);
+        assert_eq!(point.length_m, deserialized.length_m);
+    }
+
+    #[test]
+    fn test_slope_segment_deserialization() {
+        let json_data = r#"{
+            "start_distance": 0.0,
+            "end_distance": 100.0,
+            "slope": 5.5
+        }"#;
+
+        let segment: SlopeSegment = serde_json::from_str(json_data).unwrap();
+
+        assert_eq!(segment.start_distance, 0.0);
+        assert_eq!(segment.end_distance, 100.0);
+        assert_eq!(segment.slope, 5.5);
+    }
+
+    #[test]
+    fn test_slope_profile_point_creation() {
+        let segment = SlopeSegment {
+            start_distance: 100.0,
+            end_distance: 200.0,
+            slope: -3.2,
+        };
+
+        let point = SlopeProfilePoint {
+            distance_m: segment.start_distance,
+            slope_percent: segment.slope,
+            length_m: segment.end_distance - segment.start_distance,
+        };
+
+        assert_eq!(point.distance_m, 100.0);
+        assert_eq!(point.slope_percent, -3.2);
+        assert_eq!(point.length_m, 100.0);
+    }
+
+    #[test]
+    fn test_multiple_slope_segments_conversion() {
+        let segments_json = json!([
+            {
+                "start_distance": 0.0,
+                "end_distance": 100.0,
+                "slope": 5.0
+            },
+            {
+                "start_distance": 100.0,
+                "end_distance": 250.0,
+                "slope": -2.5
+            },
+            {
+                "start_distance": 250.0,
+                "end_distance": 300.0,
+                "slope": 8.1
+            }
+        ]);
+
+        let segments: Vec<SlopeSegment> = serde_json::from_value(segments_json).unwrap();
+
+        assert_eq!(segments.len(), 3);
+
+        let profile: Vec<SlopeProfilePoint> = segments
+            .into_iter()
+            .map(|segment| SlopeProfilePoint {
+                distance_m: segment.start_distance,
+                slope_percent: segment.slope,
+                length_m: segment.end_distance - segment.start_distance,
+            })
+            .collect();
+
+        assert_eq!(profile.len(), 3);
+        assert_eq!(profile[0].distance_m, 0.0);
+        assert_eq!(profile[0].slope_percent, 5.0);
+        assert_eq!(profile[0].length_m, 100.0);
+
+        assert_eq!(profile[1].distance_m, 100.0);
+        assert_eq!(profile[1].slope_percent, -2.5);
+        assert_eq!(profile[1].length_m, 150.0);
+
+        assert_eq!(profile[2].distance_m, 250.0);
+        assert_eq!(profile[2].slope_percent, 8.1);
+        assert_eq!(profile[2].length_m, 50.0);
+    }
+
+    #[test]
+    fn test_slope_profile_point_vec_serialization() {
+        let points = vec![
+            SlopeProfilePoint {
+                distance_m: 0.0,
+                slope_percent: 5.0,
+                length_m: 100.0,
+            },
+            SlopeProfilePoint {
+                distance_m: 100.0,
+                slope_percent: -2.5,
+                length_m: 150.0,
+            },
+        ];
+
+        let json = serde_json::to_string(&points).unwrap();
+        let deserialized: Vec<SlopeProfilePoint> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.len(), 2);
+        assert_eq!(deserialized[0].distance_m, 0.0);
+        assert_eq!(deserialized[1].slope_percent, -2.5);
+    }
+
+    #[test]
+    fn test_empty_slope_segments() {
+        let empty_segments: Vec<SlopeSegment> = vec![];
+        let profile: Vec<SlopeProfilePoint> = empty_segments
+            .into_iter()
+            .map(|segment| SlopeProfilePoint {
+                distance_m: segment.start_distance,
+                slope_percent: segment.slope,
+                length_m: segment.end_distance - segment.start_distance,
+            })
+            .collect();
+
+        assert!(profile.is_empty());
+    }
+
+    #[test]
+    fn test_slope_segment_edge_cases() {
+        // Test zero-length segment
+        let zero_segment = SlopeSegment {
+            start_distance: 100.0,
+            end_distance: 100.0,
+            slope: 5.0,
+        };
+
+        let point = SlopeProfilePoint {
+            distance_m: zero_segment.start_distance,
+            slope_percent: zero_segment.slope,
+            length_m: zero_segment.end_distance - zero_segment.start_distance,
+        };
+
+        assert_eq!(point.length_m, 0.0);
+
+        // Test extreme slope values
+        let extreme_segment = SlopeSegment {
+            start_distance: 0.0,
+            end_distance: 100.0,
+            slope: 60.0, // Maximum expected slope
+        };
+
+        let extreme_point = SlopeProfilePoint {
+            distance_m: extreme_segment.start_distance,
+            slope_percent: extreme_segment.slope,
+            length_m: extreme_segment.end_distance - extreme_segment.start_distance,
+        };
+
+        assert_eq!(extreme_point.slope_percent, 60.0);
+    }
+}
+
+/// Get detailed slope profile for track visualization
+///
+/// Returns slope segments in format: [{distance_m: float, slope_percent: float, length_m: float}]
+/// This endpoint provides the data needed for detailed slope visualization in ElevationChart.vue
+pub async fn get_track_slope_profile(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // Get track with slope data
+    let track = match db::get_track_detail_adaptive(&pool, id, None, None)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        Some(track) => track,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    // Check if slope data is available
+    let slope_segments = match track.slope_segments {
+        Some(segments) => segments,
+        None => {
+            // If no slope segments, try to calculate from existing data
+            return Ok(Json(json!({
+                "error": "Slope data not available for this track. Track may not have elevation data or slope calculation may be pending."
+            })).into_response());
+        }
+    };
+
+    // Parse slope segments from JSON
+    let segments: Vec<SlopeSegment> = match serde_json::from_value(slope_segments) {
+        Ok(segments) => segments,
+        Err(e) => {
+            tracing::error!("Failed to parse slope segments for track {}: {}", id, e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Convert to API format
+    let profile: Vec<SlopeProfilePoint> = segments
+        .into_iter()
+        .map(|segment| SlopeProfilePoint {
+            distance_m: segment.start_distance,
+            slope_percent: segment.slope,
+            length_m: segment.end_distance - segment.start_distance,
+        })
+        .collect();
+
+    Ok(Json(profile).into_response())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SlopeProfilePoint {
+    distance_m: f64,
+    slope_percent: f64,
+    length_m: f64,
+}
+
+// This struct should match the one in slope.rs
+#[derive(Debug, Deserialize)]
+struct SlopeSegment {
+    start_distance: f64,
+    end_distance: f64,
+    slope: f64,
+}
+
+/// Recalculate slopes for a track with improved algorithm
+/// This endpoint allows recalculating slopes with the updated algorithm that includes:
+/// - Better noise filtering
+/// - Anomaly detection and smoothing
+/// - More realistic slope limits
+pub async fn recalculate_track_slopes(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateTrackNameRequest>, // Reuse existing struct for session_id
+) -> Result<impl IntoResponse, StatusCode> {
+    use crate::track_utils::slope::recalculate_slope_metrics;
+
+    // Get track with geometry and elevation data
+    let track = match db::get_track_detail_adaptive(&pool, id, None, None)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        Some(track) => track,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    // Check session ownership (reuse existing auth logic)
+    if track.session_id != Some(request.session_id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Extract coordinates from geometry
+    let geom_str = match track.geom_geojson.get("coordinates") {
+        Some(coords) => coords.to_string(),
+        None => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    // Parse coordinates - for LineString GeoJSON format
+    let coordinates: Vec<(f64, f64)> = match serde_json::from_str::<Vec<Vec<f64>>>(&geom_str) {
+        Ok(coords) => coords
+            .into_iter()
+            .filter_map(|coord| {
+                if coord.len() >= 2 {
+                    Some((coord[1], coord[0])) // Convert from [lon, lat] to (lat, lon)
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        Err(_) => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    if coordinates.len() < 2 {
+        return Ok(Json(json!({
+            "error": "Track does not have sufficient coordinates for slope calculation"
+        }))
+        .into_response());
+    }
+
+    // Extract elevation profile
+    let elevation_profile: Vec<f64> = match &track.elevation_profile {
+        Some(profile) => match profile.as_array() {
+            Some(arr) => arr.iter().filter_map(|v| v.as_f64()).collect(),
+            None => {
+                return Ok(Json(json!({
+                    "error": "Invalid elevation profile format"
+                }))
+                .into_response());
+            }
+        },
+        None => {
+            return Ok(Json(json!({
+                "error": "Track does not have elevation data for slope calculation"
+            }))
+            .into_response());
+        }
+    };
+
+    if elevation_profile.len() != coordinates.len() {
+        return Ok(Json(json!({
+            "error": "Mismatch between coordinates and elevation data"
+        }))
+        .into_response());
+    }
+
+    // Recalculate slopes with improved algorithm
+    let slope_metrics = recalculate_slope_metrics(&coordinates, &elevation_profile, &track.name);
+
+    // Update track in database
+    let update_result = sqlx::query(
+        r#"
+        UPDATE tracks 
+        SET 
+            slope_min = $1,
+            slope_max = $2,
+            slope_avg = $3,
+            slope_histogram = $4,
+            slope_segments = $5,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $6
+        "#,
+    )
+    .bind(slope_metrics.slope_min)
+    .bind(slope_metrics.slope_max)
+    .bind(slope_metrics.slope_avg)
+    .bind(slope_metrics.slope_histogram)
+    .bind(slope_metrics.slope_segments)
+    .bind(id)
+    .execute(&*pool)
+    .await;
+
+    match update_result {
+        Ok(_) => {
+            tracing::info!("Successfully recalculated slopes for track {}", id);
+            Ok(Json(json!({
+                "id": id,
+                "message": "Slopes recalculated successfully with improved algorithm",
+                "slope_min": slope_metrics.slope_min,
+                "slope_max": slope_metrics.slope_max,
+                "slope_avg": slope_metrics.slope_avg
+            }))
+            .into_response())
+        }
+        Err(e) => {
+            tracing::error!("Failed to update track slopes: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }

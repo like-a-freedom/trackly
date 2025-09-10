@@ -260,12 +260,27 @@ describe('TrackDetailPanel', () => {
     });
 
     it('hides elevation section when no elevation data available', () => {
-      const trackNoElevation = { ...mockTrackMinimal };
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        // Explicitly remove all slope and elevation data with null values  
+        slope_min: null,
+        slope_max: null,
+        slope_avg: null,
+        slope_histogram: null,
+        slope_segments: null,
+        elevation_gain: null,
+        elevation_loss: null,
+        elevation_profile: null,
+        elevation_points: [],
+        heart_rate_points: [],
+        temperature_points: []
+      };
       wrapper = mount(TrackDetailPanel, {
         props: { track: trackNoElevation }
       });
 
-      expect(wrapper.text()).not.toContain('Elevation');
+      // Chart section should not exist when no chart data available
+      expect(wrapper.find('.chart-section').exists()).toBe(false);
     });
   });
 
@@ -354,18 +369,33 @@ describe('TrackDetailPanel', () => {
         props: { track: trackNoProfile, isVisible: true }
       });
 
-      // Should not show chart section or placeholder when no data
-      expect(wrapper.find('.chart-section').exists()).toBe(false);
+      // Chart section still exists because track has slope data
+      expect(wrapper.find('.chart-section').exists()).toBe(true);
       expect(wrapper.find('.elevation-profile-placeholder').exists()).toBe(false);
     });
 
     it('hides elevation section when no elevation data available', () => {
-      const trackNoElevation = { ...mockTrackMinimal };
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        // Explicitly remove all slope and elevation data with null values  
+        slope_min: null,
+        slope_max: null,
+        slope_avg: null,
+        slope_histogram: null,
+        slope_segments: null,
+        elevation_gain: null,
+        elevation_loss: null,
+        elevation_profile: null,
+        elevation_points: [],
+        heart_rate_points: [],
+        temperature_points: []
+      };
       wrapper = mount(TrackDetailPanel, {
         props: { track: trackNoElevation }
       });
 
-      expect(wrapper.text()).not.toContain('Elevation');
+      // Chart section should not exist when no chart data available
+      expect(wrapper.find('.chart-section').exists()).toBe(false);
       expect(wrapper.find('.elevation-profile-placeholder').exists()).toBe(false);
     });
 

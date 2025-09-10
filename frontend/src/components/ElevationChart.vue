@@ -1,6 +1,9 @@
 <template>
   <div class="elevation-chart-container">
-    <Line v-if="chartData.datasets && chartData.datasets.length > 0" :data="chartData" :options="chartOptions" />
+    <Line v-if="chartData.datasets && chartData.datasets.length > 0" 
+          :key="`chart-${props.chartMode}`"
+          :data="chartData" 
+          :options="chartOptions" />
     <div v-else-if="elevationStats.gain !== undefined || elevationStats.loss !== undefined" class="elevation-stats-display">
       <div class="stat-item">
         <span class="stat-label">Elevation Gain</span>
@@ -28,7 +31,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, shallowRef } from 'vue';
+import { ref, computed, watch, shallowRef, onUnmounted, onMounted, onBeforeUnmount } from 'vue';
+import { useRouter } from 'vue-router';
 import { Line } from 'vue-chartjs';
 import {
   Chart as ChartJS,
@@ -42,6 +46,7 @@ import {
   Filler
 } from 'chart.js';
 import { useMemoizedComputed } from '../composables/useMemoization';
+import { getSlopeColor, getSlopeCategory } from '../utils/slopeColors.js';
 
 ChartJS.register(
   Title,
@@ -67,6 +72,10 @@ const props = defineProps({
     type: Array,
     default: undefined // Optional
   },
+  slopeData: {
+    type: Array,
+    default: () => []
+  },
   trackName: {
     type: String,
     default: 'Elevation Profile'
@@ -86,8 +95,32 @@ const props = defineProps({
   distanceUnit: {
     type: String,
     default: 'km'
+  },
+  timeData: {
+    type: Array,
+    default: () => []
   }
 });
+
+// Router for detecting route changes
+const router = useRouter();
+
+// Utility function to clean up tooltip
+function cleanupTooltip() {
+  const tooltipEl = document.getElementById('elevation-chart-tooltip');
+  if (tooltipEl) {
+    tooltipEl.style.opacity = '0';
+    tooltipEl.style.transform = 'translateY(-10px)';
+    tooltipEl.style.visibility = 'hidden';
+    tooltipEl.style.pointerEvents = 'none';
+    // Remove after animation
+    setTimeout(() => {
+      if (tooltipEl && tooltipEl.parentNode) {
+        tooltipEl.remove();
+      }
+    }, 200);
+  }
+}
 
 const hasPulse = useMemoizedComputed(
   (heartRateData) => {
@@ -115,7 +148,12 @@ const hasPulse = useMemoizedComputed(
   },
   [() => props.heartRateData],
   {
-    keyFn: (deps) => `pulse_${deps[0]?.length}_${JSON.stringify(deps[0]?.slice(0, 5))}`
+    keyFn: (deps) => {
+      const data = deps[0];
+      if (!data) return 'pulse_null';
+      const dataHash = `${data.length}_${JSON.stringify(data.slice(0, 2))}_${JSON.stringify(data.slice(-2))}`;
+      return `pulse_${dataHash}`;
+    }
   }
 );
 
@@ -145,12 +183,17 @@ const hasTemperature = useMemoizedComputed(
   },
   [() => props.temperatureData],
   {
-    keyFn: (deps) => `temp_${deps[0]?.length}_${JSON.stringify(deps[0]?.slice(0, 5))}`
+    keyFn: (deps) => {
+      const data = deps[0];
+      if (!data) return 'temp_null';
+      const dataHash = `${data.length}_${JSON.stringify(data.slice(0, 2))}_${JSON.stringify(data.slice(-2))}`;
+      return `temp_${dataHash}`;
+    }
   }
 );
 
 const chartData = useMemoizedComputed(
-  (elevationData, heartRateData, temperatureData, hasPulseValue, hasTemperatureValue, totalDistance, chartMode, elevationStats, distanceUnit) => {
+  (elevationData, heartRateData, temperatureData, slopeData, hasPulseValue, hasTemperatureValue, totalDistance, chartMode, elevationStats, distanceUnit) => {
     if ((!elevationData || elevationData.length === 0) && (!hasPulseValue) && (!hasTemperatureValue) && (!elevationStats.gain && !elevationStats.loss)) {
       return {};
     }
@@ -202,6 +245,53 @@ const chartData = useMemoizedComputed(
       pulsePointCount = pulse.length;
     }
     
+    // Slope extraction - only process if needed for elevation-with-slope mode
+    let slope = [];
+    let slopePointCount = 0;
+    
+    if (chartMode === 'elevation-with-slope' && slopeData && slopeData.length > 0) {
+      if (slopeData.every(p => typeof p === 'number' || p === null)) {
+        slope = slopeData;
+      } else if (slopeData.every(p => Array.isArray(p) && p.length === 2)) {
+        slope = slopeData.map(p => p[1]);
+      } else if (slopeData.every(p => typeof p === 'object' && p !== null && 'dist' in p && 'slope' in p)) {
+        slope = slopeData.map(p => p.slope);
+      } else if (slopeData.every(p => typeof p === 'object' && p !== null && 'distance_m' in p && 'slope_percent' in p)) {
+        // Handle slope_segments format from our API
+        slope = slopeData.map(p => p.slope_percent);
+      }
+      
+      // Apply adaptive granularity for slope data to prevent overly detailed charts
+      // Cap slope points at a reasonable maximum for readability
+      const MAX_SLOPE_POINTS = 300; // Golden mean between detail and readability
+      if (slope.length > MAX_SLOPE_POINTS) {
+        // Downsample slope data using averaging to preserve overall trends
+        const downsampledSlope = [];
+        const factor = slope.length / MAX_SLOPE_POINTS;
+        
+        for (let i = 0; i < MAX_SLOPE_POINTS; i++) {
+          const startIdx = Math.floor(i * factor);
+          const endIdx = Math.min(Math.floor((i + 1) * factor), slope.length);
+          
+          // Average the slope values in this segment
+          let sum = 0;
+          let count = 0;
+          for (let j = startIdx; j < endIdx; j++) {
+            if (slope[j] !== null && slope[j] !== undefined) {
+              sum += slope[j];
+              count++;
+            }
+          }
+          
+          downsampledSlope.push(count > 0 ? sum / count : null);
+        }
+        
+        slope = downsampledSlope;
+      }
+      
+      slopePointCount = slope.length;
+    }
+    
     // Temperature extraction
     let temperature = [];
     let temperaturePointCount = 0;
@@ -216,34 +306,28 @@ const chartData = useMemoizedComputed(
       temperaturePointCount = temperature.length;
     }
     
-    // Use the maximum point count for labels, but keep original data arrays
-    const maxPointCount = Math.max(
+    // Use the maximum point count for labels, but exclude slope from driving the granularity
+    // since slope now has its own adaptive granularity control
+    let targetPointCount = Math.max(
       elevationPointCount,
       pulsePointCount,
       temperaturePointCount,
       2 // minimum for stats display
     );
     
-    // Debug logging for data dimensions
-    console.log(`[ElevationChart] Data dimensions:`, {
-      elevationPoints: elevationPointCount,
-      pulsePoints: pulsePointCount,
-      temperaturePoints: temperaturePointCount,
-      maxPointCount,
-      chartMode,
-      hasElevationData: elevationPointCount > 0,
-      hasPulseValue,
-      hasTemperatureValue
-    });
+    // In elevation-with-slope mode, use slope's controlled granularity as the target
+    if (chartMode === 'elevation-with-slope' && slopePointCount > 0) {
+      targetPointCount = slopePointCount;
+    }
     
-    if (maxPointCount === 0) return {};
-    
+    if (targetPointCount === 0) return {};
+
     // Convert distance to appropriate unit
     const distanceInTargetUnit = distanceUnit === 'mi' ? totalDistance * 0.621371 : totalDistance;
     const unitLabel = distanceUnit === 'mi' ? ' mi' : ' km';
-    
-    const step = maxPointCount === 2 ? distanceInTargetUnit : distanceInTargetUnit / (maxPointCount - 1);
-    const labels = Array.from({ length: maxPointCount }, (_, i) => ((i === maxPointCount - 1
+
+    const step = targetPointCount === 2 ? distanceInTargetUnit : distanceInTargetUnit / (targetPointCount - 1);
+    const labels = Array.from({ length: targetPointCount }, (_, i) => ((i === targetPointCount - 1
       ? distanceInTargetUnit
       : i * step) || 0
     ).toFixed(2) + unitLabel);
@@ -272,24 +356,85 @@ const chartData = useMemoizedComputed(
     };
     
     // Interpolate all data to match label count
-    const interpolatedElevation = interpolateToLabelCount(elevation, maxPointCount);
-    const interpolatedPulse = interpolateToLabelCount(pulse, maxPointCount);
-    const interpolatedTemperature = interpolateToLabelCount(temperature, maxPointCount);
+    const interpolatedElevation = interpolateToLabelCount(elevation, targetPointCount);
+    const interpolatedPulse = interpolateToLabelCount(pulse, targetPointCount);
+    const interpolatedTemperature = interpolateToLabelCount(temperature, targetPointCount);
+    // For slope data, use it directly since it already has controlled granularity
+    const interpolatedSlope = chartMode === 'elevation-with-slope' && slope.length > 0 ? slope : [];
 
-    const datasets = [];
-    if (chartMode === 'elevation' || chartMode === 'both') {
+    // Function for slope-based segment coloring (similar to gpx.studio)
+    // Only define this if we're in elevation-with-slope mode and have slope data
+    const slopeFillCallback = chartMode === 'elevation-with-slope' && slopePointCount > 0 ? 
+      (context) => {
+        // Get slope data for this segment
+        const pointIndex = context.p0DataIndex;
+        const slopeValue = interpolatedSlope[pointIndex];
+        return getSlopeColor(slopeValue);
+      } : 
+      null;
+
+    // Debug logging for data dimensions (only in development)
+    if (import.meta.env.DEV) {
+      console.log(`[ElevationChart] Mode: ${chartMode}, Slope processing:`, {
+        elevationPoints: elevationPointCount,
+        slopePoints: slopePointCount,
+        willProcessSlope: chartMode === 'elevation-with-slope' && slopePointCount > 0,
+        hasSlopeFillCallback: !!slopeFillCallback,
+        exactChartMode: JSON.stringify(chartMode),
+        isElevationWithSlope: chartMode === 'elevation-with-slope',
+        isElevation: chartMode === 'elevation',
+        datasetCount: 0 // will be updated below
+      });
+    }    const datasets = [];
+    
+    if (chartMode === 'elevation' || chartMode === 'both' || chartMode === 'elevation-with-slope') {
       if (elevationPointCount > 0) {
-        datasets.push({
-          label: 'Elevation (m)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          borderColor: 'rgba(75, 192, 192, 1)',
-          borderWidth: 2,
-          tension: 0.3,
-          fill: true,
-          pointRadius: 0,
-          data: interpolatedElevation,
-          yAxisID: 'y-elevation',
-        });
+        // Create a completely new dataset object for each mode to ensure Chart.js updates
+        let elevationDataset;
+        
+        if (chartMode === 'elevation-with-slope' && slopePointCount > 0 && slopeFillCallback) {
+          // Elevation + Slope mode
+          elevationDataset = {
+            label: 'Elevation (m)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 2,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 0,
+            yAxisID: 'y-elevation',
+            data: interpolatedElevation.map((elev, index) => ({
+              x: labels[index],
+              y: elev,
+              slope: interpolatedSlope[index] || 0, // Include slope data for tooltips
+              slopeCategory: getSlopeCategory(interpolatedSlope[index] || 0)
+            })),
+            segment: {
+              backgroundColor: slopeFillCallback,
+              // Keep solid border color for the line on top
+              borderColor: 'rgba(75, 192, 192, 1)',
+            }
+          };
+        } else {
+          // Regular elevation mode
+          elevationDataset = {
+            label: 'Elevation (m)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 2,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 0,
+            yAxisID: 'y-elevation',
+            data: interpolatedElevation.map((elev, index) => ({
+              x: labels[index],
+              y: elev
+            }))
+            // No segment property for regular mode
+          };
+        }
+        
+        datasets.push(elevationDataset);
       }
       // Note: elevation stats are shown in template only when no chart data exists
     }
@@ -319,12 +464,23 @@ const chartData = useMemoizedComputed(
         yAxisID: 'y-temperature',
       });
     }
+    
+    // Update debug info with final dataset count
+    if (import.meta.env.DEV && datasets.length > 0) {
+      console.log(`[ElevationChart] Final datasets:`, {
+        count: datasets.length,
+        elevationDataset: datasets.find(d => d.yAxisID === 'y-elevation'),
+        chartMode: chartMode
+      });
+    }
+    
     return { labels, datasets };
   },
   [
     () => props.elevationData,
     () => props.heartRateData,
     () => props.temperatureData,
+    () => props.slopeData,
     () => hasPulse.value,
     () => hasTemperature.value,
     () => props.totalDistance,
@@ -334,8 +490,16 @@ const chartData = useMemoizedComputed(
   ],
   {
     keyFn: (deps) => {
-      const [elevData, hrData, tempData, hasPulseVal, hasTempVal, totalDist, mode, elevStats, distUnit] = deps;
-      return `chartdata_${elevData?.length || 0}_${hrData?.length || 0}_${tempData?.length || 0}_${hasPulseVal}_${hasTempVal}_${totalDist}_${mode}_${JSON.stringify(elevStats)}_${distUnit}`;
+      const [elevData, hrData, tempData, slopeData, hasPulseVal, hasTempVal, totalDist, mode, elevStats, distUnit] = deps;
+      
+      // Create more precise hash for elevation data
+      const elevHash = elevData ? `${elevData.length}_${JSON.stringify(elevData.slice(0, 3))}_${JSON.stringify(elevData.slice(-3))}` : 'null';
+      const hrHash = hrData ? `${hrData.length}_${JSON.stringify(hrData.slice(0, 3))}` : 'null';
+      const tempHash = tempData ? `${tempData.length}_${JSON.stringify(tempData.slice(0, 3))}` : 'null';
+      const slopeHash = slopeData ? `${slopeData.length}_${JSON.stringify(slopeData.slice(0, 3))}` : 'null';
+      const statsHash = elevStats ? `${elevStats.gain}_${elevStats.loss}_${elevStats.dataset}_${elevStats.enriched}_${elevStats.enriched_at}_${elevStats._lastUpdated || '0'}` : 'null';
+      
+      return `chartdata_${elevHash}_${hrHash}_${tempHash}_${slopeHash}_${hasPulseVal}_${hasTempVal}_${totalDist}_${mode}_${statsHash}_${distUnit}`;
     }
   }
 );
@@ -348,18 +512,150 @@ watch([
   () => props.chartMode,
   () => hasPulse.value,
   () => hasTemperature.value,
+  () => props.slopeData,
   () => props.trackName,
-  () => props.distanceUnit
+  () => props.distanceUnit,
+  () => props.timeData
 ], () => {
-  const showElevation = props.chartMode === 'elevation' || props.chartMode === 'both';
+  const showElevation = props.chartMode === 'elevation' || props.chartMode === 'both' || props.chartMode === 'elevation-with-slope';
   const showPulse = (props.chartMode === 'pulse' || props.chartMode === 'both') && hasPulse.value;
   const showTemperature = (props.chartMode === 'temperature' || props.chartMode === 'both') && hasTemperature.value;
   
   const distanceLabel = props.distanceUnit === 'mi' ? 'Distance (mi)' : 'Distance (km)';
   
+  // Custom external tooltip function with access to Vue context
+  const externalTooltipHandler = function(context) {
+    // Use custom HTML tooltip instead of default Canvas tooltip
+    let tooltipEl = document.getElementById('elevation-chart-tooltip');
+    
+    if (!tooltipEl) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.id = 'elevation-chart-tooltip';
+      tooltipEl.className = 'elevation-tooltip';
+      document.body.appendChild(tooltipEl);
+    }
+    
+    const tooltipModel = context.tooltip;
+    
+    if (tooltipModel.opacity === 0) {
+      tooltipEl.style.opacity = '0';
+      tooltipEl.style.transform = 'translateY(-5px)';
+      tooltipEl.style.pointerEvents = 'none';
+      // Hide tooltip after fade out animation and ensure complete cleanup
+      setTimeout(() => {
+        if (tooltipEl && tooltipEl.style.opacity === '0') {
+          tooltipEl.style.visibility = 'hidden';
+        }
+      }, 200);
+      return;
+    }
+    
+    // Build tooltip content
+    if (tooltipModel.body) {
+      const titleLines = tooltipModel.title || [];
+      const bodyLines = tooltipModel.body.map(b => b.lines);
+      const dataPoints = tooltipModel.dataPoints || [];
+      
+      let innerHtml = '<div class="tooltip-header">';
+      
+      // Distance information
+      if (dataPoints.length > 0) {
+        const xValue = dataPoints[0].label;
+        innerHtml += `<div class="tooltip-distance">📍 ${xValue}</div>`;
+        
+        // Add time information if available
+        const pointIndex = dataPoints[0].dataIndex;
+        if (props.timeData && props.timeData[pointIndex]) {
+          const timeValue = props.timeData[pointIndex];
+          const timeFormatted = formatTime(timeValue);
+          innerHtml += `<div class="tooltip-time">⏱️ ${timeFormatted}</div>`;
+        }
+      }
+      
+      innerHtml += '</div><div class="tooltip-body">';
+      
+      // Process each data point
+      dataPoints.forEach((dataPoint, index) => {
+        const dataset = dataPoint.dataset;
+        const rawData = dataPoint.raw;
+        const value = dataPoint.parsed.y;
+        
+        if (dataset.yAxisID === 'y-elevation') {
+          innerHtml += `<div class="tooltip-row elevation">`;
+          innerHtml += `<span class="tooltip-icon">⛰️</span>`;
+          innerHtml += `<span class="tooltip-label">Elevation:</span>`;
+          innerHtml += `<span class="tooltip-value">${value.toFixed(0)} m</span>`;
+          innerHtml += `</div>`;
+          
+          // Add slope information if available
+          if (rawData && typeof rawData === 'object' && rawData.slope !== undefined && props.chartMode === 'elevation-with-slope') {
+            const slopeValue = rawData.slope;
+            const slopeCategory = rawData.slopeCategory || getSlopeCategory(slopeValue);
+            const slopeColor = getSlopeColor(slopeValue);
+            
+            innerHtml += `<div class="tooltip-row slope">`;
+            innerHtml += `<span class="tooltip-icon">📐</span>`;
+            innerHtml += `<span class="tooltip-label">Slope:</span>`;
+            innerHtml += `<span class="tooltip-value slope-value" style="color: ${slopeColor}">${slopeValue.toFixed(1)}%</span>`;
+            innerHtml += `</div>`;
+            innerHtml += `<div class="tooltip-slope-category" style="background-color: ${slopeColor}20; border-left: 3px solid ${slopeColor}">`;
+            innerHtml += `${slopeCategory}`;
+            innerHtml += `</div>`;
+          }
+        } else if (dataset.yAxisID === 'y-pulse') {
+          innerHtml += `<div class="tooltip-row pulse">`;
+          innerHtml += `<span class="tooltip-icon">💗</span>`;
+          innerHtml += `<span class="tooltip-label">Heart Rate:</span>`;
+          innerHtml += `<span class="tooltip-value">${value.toFixed(0)} bpm</span>`;
+          innerHtml += `</div>`;
+        } else if (dataset.yAxisID === 'y-temperature') {
+          innerHtml += `<div class="tooltip-row temperature">`;
+          innerHtml += `<span class="tooltip-icon">🌡️</span>`;
+          innerHtml += `<span class="tooltip-label">Temperature:</span>`;
+          innerHtml += `<span class="tooltip-value">${value.toFixed(1)} °C</span>`;
+          innerHtml += `</div>`;
+        }
+      });
+      
+      innerHtml += '</div>';
+      tooltipEl.innerHTML = innerHtml;
+    }
+    
+    // Position tooltip
+    const position = context.chart.canvas.getBoundingClientRect();
+    
+    // Show and animate tooltip
+    tooltipEl.style.visibility = 'visible';
+    tooltipEl.style.opacity = '1';
+    tooltipEl.style.transform = 'translateY(0)';
+    tooltipEl.style.position = 'absolute';
+    tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+    tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+    tooltipEl.style.pointerEvents = 'none';
+    tooltipEl.style.zIndex = '9999';
+    
+    // Adjust position if tooltip would go off screen
+    const tooltipRect = tooltipEl.getBoundingClientRect();
+    if (tooltipRect.right > window.innerWidth) {
+      tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX - tooltipRect.width - 10 + 'px';
+    }
+    if (tooltipRect.bottom > window.innerHeight) {
+      tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY - tooltipRect.height - 10 + 'px';
+    }
+  };
+  
   chartOptions.value = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'nearest',
+      axis: 'x',
+      intersect: false,
+    },
+    onHover: (event, elements) => {
+      // Change cursor to crosshair when hovering over chart
+      event.native.target.style.cursor = elements.length > 0 ? 'crosshair' : 'default';
+    },
     plugins: {
       legend: {
         display: true
@@ -369,22 +665,8 @@ watch([
         text: props.trackName
       },
       tooltip: {
-        callbacks: {
-          label: function(context) {
-            let label = context.dataset.label || '';
-            if (label) label += ': ';
-            if (context.parsed.y !== null) {
-              if (context.dataset.yAxisID === 'y-elevation') {
-                label += context.parsed.y.toFixed(0) + ' m';
-              } else if (context.dataset.yAxisID === 'y-pulse') {
-                label += context.parsed.y.toFixed(0) + ' bpm';
-              } else if (context.dataset.yAxisID === 'y-temperature') {
-                label += context.parsed.y.toFixed(1) + ' °C';
-              }
-            }
-            return label;
-          }
-        }
+        enabled: false, // Disable default tooltip completely
+        external: externalTooltipHandler
       }
     },
     scales: {
@@ -440,6 +722,28 @@ watch([
   };
 }, { immediate: true });
 
+// Additional watch to force chart update on mode changes
+watch(() => props.chartMode, (newMode, oldMode) => {
+  console.log('Chart mode change:', oldMode, '->', newMode);
+  // Clean up tooltip when chart mode changes
+  cleanupTooltip();
+}, { immediate: false });
+
+// Watch for elevation data changes to force chart update
+watch(() => [
+  props.elevationData?.length,
+  props.elevationStats?.enriched,
+  props.elevationStats?.dataset,
+  props.elevationStats?._lastUpdated,
+  props.slopeData?.length
+], (newVals, oldVals) => {
+  if (newVals && oldVals && JSON.stringify(newVals) !== JSON.stringify(oldVals)) {
+    console.log('[ElevationChart] Data updated, forcing chart refresh');
+    // Force reactive update by accessing the computed property
+    const _ = chartData.value;
+  }
+}, { immediate: false, deep: false });
+
 function formatDataset(dataset) {
   if (!dataset) return 'Unknown';
   
@@ -458,6 +762,72 @@ function formatDataset(dataset) {
   
   return datasetNames[dataset] || dataset.charAt(0).toUpperCase() + dataset.slice(1);
 }
+
+function formatTime(timeValue) {
+  if (!timeValue) return 'Unknown';
+  
+  // Handle different time formats
+  if (typeof timeValue === 'string') {
+    // ISO string or similar
+    const date = new Date(timeValue);
+    return date.toLocaleTimeString();
+  } else if (typeof timeValue === 'number') {
+    // Unix timestamp or elapsed seconds
+    if (timeValue > 1000000000) {
+      // Looks like Unix timestamp
+      return new Date(timeValue * 1000).toLocaleTimeString();
+    } else {
+      // Elapsed seconds from start
+      const hours = Math.floor(timeValue / 3600);
+      const minutes = Math.floor((timeValue % 3600) / 60);
+      const seconds = Math.floor(timeValue % 60);
+      
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+    }
+  } else if (timeValue instanceof Date) {
+    return timeValue.toLocaleTimeString();
+  }
+  
+  return 'Unknown';
+}
+
+// ESC key handler to hide tooltip
+function handleEscapeKey(event) {
+  if (event.key === 'Escape' || event.keyCode === 27) {
+    cleanupTooltip();
+  }
+}
+
+// Route change handler to clean tooltip
+function handleRouteChange() {
+  cleanupTooltip();
+}
+
+// Setup event listeners
+onMounted(() => {
+  // Listen for ESC key globally
+  document.addEventListener('keydown', handleEscapeKey);
+  
+  // Listen for route changes
+  router.afterEach(handleRouteChange);
+});
+
+onBeforeUnmount(() => {
+  // Remove event listeners
+  document.removeEventListener('keydown', handleEscapeKey);
+  
+  // Clean up tooltip before unmounting
+  cleanupTooltip();
+});
+
+// Cleanup custom tooltip on component unmount
+onUnmounted(() => {
+  cleanupTooltip();
+});
 </script>
 
 <style scoped>
@@ -496,5 +866,121 @@ function formatDataset(dataset) {
   font-size: 1.1em;
   font-weight: 600;
   color: #1a1a1a;
+}
+</style>
+
+<style>
+/* Global styles for custom tooltip */
+.elevation-tooltip {
+  background: #ffffff;
+  border: none;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  min-width: 180px;
+  max-width: 260px;
+  transition: all 0.15s ease;
+  transform: translateY(-5px);
+  opacity: 0;
+  visibility: hidden;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.tooltip-header {
+  background: #f8f9fa;
+  border-bottom: none;
+  padding: 8px 12px;
+  border-radius: 6px 6px 0 0;
+  font-weight: 500;
+}
+
+.tooltip-distance {
+  font-weight: 500;
+  color: #1a1a1a;
+  font-size: 12px;
+}
+
+.tooltip-time {
+  font-weight: 400;
+  color: #666;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.tooltip-body {
+  padding: 8px 12px;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  min-height: 24px;
+  border-radius: 4px;
+  transition: all 0.1s ease;
+  position: relative;
+}
+
+.tooltip-row:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.tooltip-row.elevation {
+  border-left: 2px solid rgba(75, 192, 192, 1);
+  padding-left: 8px;
+  margin-left: -2px;
+}
+
+.tooltip-row.pulse {
+  border-left: 2px solid rgba(255, 99, 132, 1);
+  padding-left: 8px;
+  margin-left: -2px;
+}
+
+.tooltip-row.temperature {
+  border-left: 2px solid rgba(255, 165, 0, 1);
+  padding-left: 8px;
+  margin-left: -2px;
+}
+
+.tooltip-icon {
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+.tooltip-label {
+  font-weight: 400;
+  color: #666;
+  flex: 1;
+  font-size: 11px;
+}
+
+.tooltip-value {
+  font-weight: 500;
+  color: #1a1a1a;
+  text-align: right;
+  font-size: 11px;
+  transition: color 0.1s ease;
+}
+
+.tooltip-value.slope-value {
+  font-weight: 600;
+}
+
+.tooltip-slope-category {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+  color: #1a1a1a;
+  transition: all 0.1s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 </style>

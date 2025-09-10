@@ -20,6 +20,8 @@ pub struct TrackListQuery {
     pub max_length: Option<f64>,
     pub elevation_gain_min: Option<f32>,
     pub elevation_gain_max: Option<f32>,
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -31,6 +33,9 @@ pub struct TrackListItem {
     pub elevation_gain: Option<f32>,
     pub elevation_loss: Option<f32>,
     pub elevation_enriched: Option<bool>,
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
+    pub slope_avg: Option<f32>,
     pub url: String,
 }
 
@@ -54,6 +59,12 @@ pub struct TrackDetail {
     pub elevation_enriched: Option<bool>,
     pub elevation_enriched_at: Option<chrono::NaiveDateTime>,
     pub elevation_dataset: Option<String>,
+    // Slope fields
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
+    pub slope_avg: Option<f32>,
+    pub slope_histogram: Option<serde_json::Value>,
+    pub slope_segments: Option<serde_json::Value>,
     pub avg_speed: Option<f64>,
     pub avg_hr: Option<i32>,
     pub hr_min: Option<i32>,
@@ -91,6 +102,12 @@ pub struct TrackSimplified {
     pub elevation_enriched: Option<bool>,
     pub elevation_enriched_at: Option<chrono::NaiveDateTime>,
     pub elevation_dataset: Option<String>,
+    // Slope fields
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
+    pub slope_avg: Option<f32>,
+    pub slope_histogram: Option<serde_json::Value>,
+    pub slope_segments: Option<serde_json::Value>,
     pub avg_speed: Option<f64>,
     pub avg_hr: Option<i32>,
     pub hr_min: Option<i32>,
@@ -134,6 +151,8 @@ pub struct TrackGeoJsonQuery {
     pub max_length: Option<f64>,
     pub elevation_gain_min: Option<f32>,
     pub elevation_gain_max: Option<f32>,
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
 }
 
 // Custom deserializer to handle both comma-separated string and array formats
@@ -198,6 +217,12 @@ pub struct ParsedTrackData {
     pub elevation_loss: Option<f32>,
     pub elevation_min: Option<f32>,
     pub elevation_max: Option<f32>,
+    // Slope fields
+    pub slope_min: Option<f32>,
+    pub slope_max: Option<f32>,
+    pub slope_avg: Option<f32>,
+    pub slope_histogram: Option<serde_json::Value>,
+    pub slope_segments: Option<serde_json::Value>,
     pub avg_speed: Option<f64>,
     pub avg_hr: Option<i32>,
     pub hr_min: Option<i32>,
@@ -318,6 +343,8 @@ mod tests {
             max_length: None,
             elevation_gain_min: None,
             elevation_gain_max: None,
+            slope_min: None,
+            slope_max: None,
         };
 
         assert_eq!(query_overview.zoom, Some(10.0));
@@ -332,6 +359,8 @@ mod tests {
             max_length: None,
             elevation_gain_min: None,
             elevation_gain_max: None,
+            slope_min: None,
+            slope_max: None,
         };
 
         assert_eq!(query_detail.zoom, Some(15.0));

@@ -35,7 +35,7 @@
         :options-style="geoJsonStyle"
       />
     </template>
-    <TrackFilterControl
+        <TrackFilterControl
       v-if="!props.selectedTrackDetail"
       class="map-filter-control"
       :categories="allCategories"
@@ -43,11 +43,17 @@
       :maxLength="maxTrackLength"
       :minElevationGain="minElevationGain"
       :maxElevationGain="maxElevationGain"
+      :minSlope="minSlope"
+      :maxSlope="maxSlope"
       :globalCategories="globalCategories"
       :globalMinLength="globalMinTrackLength"
       :globalMaxLength="globalMaxTrackLength"
       :globalMinElevationGain="globalMinElevationGain"
       :globalMaxElevationGain="globalMaxElevationGain"
+      :globalMinSlope="globalMinSlope"
+      :globalMaxSlope="globalMaxSlope"
+      :hasElevationData="hasElevationData"
+      :hasSlopeData="hasSlopeData"
       :hasTracksInViewport="!!(props.polylines && props.polylines.length > 0)"
       @update:filter="onFilterChange"
     />
@@ -295,6 +301,7 @@ const allCategories = computed(() => {
 // Track session-wide range that only expands, never shrinks when new tracks are loaded
 const sessionTrackLengths = ref(new Set());
 const sessionElevationGains = ref(new Set());
+const sessionSlopeValues = ref(new Set());
 
 // Watch for new tracks and update session range
 watch(() => props.polylines, (newPolylines) => {
@@ -313,6 +320,16 @@ watch(() => props.polylines, (newPolylines) => {
       
       if (effectiveGain !== null) {
         sessionElevationGains.value.add(effectiveGain);
+      }
+      
+      // Track slope values
+      const slopeMin = poly.properties?.slope_min;
+      const slopeMax = poly.properties?.slope_max;
+      if (typeof slopeMin === 'number') {
+        sessionSlopeValues.value.add(slopeMin);
+      }
+      if (typeof slopeMax === 'number') {
+        sessionSlopeValues.value.add(slopeMax);
       }
     });
   }
@@ -379,6 +396,29 @@ const maxElevationGain = computed(() => {
   return 2000;
 });
 
+// Slope bounds for current viewport
+const minSlope = computed(() => {
+  const polylines = props.polylines || [];
+  const slopes = polylines
+    .map(poly => poly.properties?.slope_min)
+    .filter(slope => slope !== null && slope !== undefined && typeof slope === 'number');
+  if (slopes.length > 0) {
+    return Math.min(...slopes);
+  }
+  return 0;
+});
+
+const maxSlope = computed(() => {
+  const polylines = props.polylines || [];
+  const slopes = polylines
+    .map(poly => poly.properties?.slope_max)
+    .filter(slope => slope !== null && slope !== undefined && typeof slope === 'number');
+  if (slopes.length > 0) {
+    return Math.max(...slopes);
+  }
+  return 20;
+});
+
 // Global session-based min/max lengths for reset functionality
 // These represent the full range across all tracks seen in the session
 const globalMinTrackLength = computed(() => {
@@ -414,16 +454,50 @@ const globalMaxElevationGain = computed(() => {
   return 2000;
 });
 
+// Global session-based slope bounds for reset functionality
+const globalMinSlope = computed(() => {
+  const slopes = Array.from(sessionSlopeValues.value);
+  if (slopes.length > 0) {
+    return Math.min(...slopes);
+  }
+  return 0;
+});
+
+const globalMaxSlope = computed(() => {
+  const slopes = Array.from(sessionSlopeValues.value);
+  if (slopes.length > 0) {
+    return Math.max(...slopes);
+  }
+  return 20;
+});
+
 // Global session categories for reset functionality
 const globalCategories = computed(() => {
   return Array.from(sessionCategories.value).sort();
+});
+
+// Check if there's elevation data available in tracks
+const hasElevationData = computed(() => {
+  if (!props.polylines || !props.polylines.length) return false;
+  return props.polylines.some(track => track.properties && track.properties.elevation_gain != null);
+});
+
+// Check if there's slope data available in tracks
+const hasSlopeData = computed(() => {
+  if (!props.polylines || !props.polylines.length) return false;
+  return props.polylines.some(track => track.properties && (
+    track.properties.slope_min != null || 
+    track.properties.slope_max != null || 
+    track.properties.slope_avg != null
+  ));
 });
 
 // Initialize filter state properly with watchers to update when track data changes
 const filterState = ref({ 
   categories: [], 
   lengthRange: [0, 0],
-  elevationGainRange: [0, 2000]
+  elevationGainRange: [0, 2000],
+  slopeRange: [0, 20]
 });
 
 // Convert polylines to GeoJSON format (no filtering here - use native Leaflet filter)
@@ -513,7 +587,23 @@ function geoJsonFilter(feature, layer) {
       const elevationMatch = effectiveGain === null || 
         (effectiveGain >= (elevationMin - EPSILON_ELEVATION) && effectiveGain <= (elevationMax + EPSILON_ELEVATION));
       
-      return catMatch && lenMatch && elevationMatch;
+      // Slope filtering
+      const slopeMin = feature.properties?.slope_min;
+      const slopeMax = feature.properties?.slope_max;
+      const slopeFilterMin = filterState.value.slopeRange?.[0] ?? 0;
+      const slopeFilterMax = filterState.value.slopeRange?.[1] ?? 20;
+      const EPSILON_SLOPE = 0.1; // Small tolerance for slope (0.1%) to handle boundary cases
+      
+      // Track matches if its slope range overlaps with the filter range
+      const slopeMatch = (slopeMin === null || slopeMin === undefined || slopeMax === null || slopeMax === undefined) ||
+        (slopeMax >= (slopeFilterMin - EPSILON_SLOPE) && slopeMin <= (slopeFilterMax + EPSILON_SLOPE));
+      
+      // Debug logging for slope filtering
+      if (feature.properties?.name && feature.properties.name.includes('алма')) {
+        console.log(`Track "${feature.properties.name}": slope[${slopeMin}, ${slopeMax}], filter[${slopeFilterMin}, ${slopeFilterMax}], match: ${slopeMatch}`);
+      }
+      
+      return catMatch && lenMatch && elevationMatch && slopeMatch;
     } else {
       // During transition with no categories selected, show all tracks to prevent cleanup issues
       return true;
@@ -554,11 +644,23 @@ function geoJsonFilter(feature, layer) {
   const elevationMatch = effectiveGain === null || 
     (effectiveGain >= (elevationMin - EPSILON_ELEVATION) && effectiveGain <= (elevationMax + EPSILON_ELEVATION));
   
-  return catMatch && lenMatch && elevationMatch;
+  // Slope filtering
+  const slopeMin = feature.properties?.slope_min;
+  const slopeMax = feature.properties?.slope_max;
+  const slopeFilterMin = filterState.value.slopeRange?.[0] ?? 0;
+  const slopeFilterMax = filterState.value.slopeRange?.[1] ?? 20;
+  const EPSILON_SLOPE = 0.1; // Small tolerance for slope (0.1%) to handle boundary cases
+  
+  // Track matches if its slope range overlaps with the filter range
+  const slopeMatch = (slopeMin === null || slopeMin === undefined || slopeMax === null || slopeMax === undefined) ||
+    (slopeMax >= (slopeFilterMin - EPSILON_SLOPE) && slopeMin <= (slopeFilterMax + EPSILON_SLOPE));
+  
+  return catMatch && lenMatch && elevationMatch && slopeMatch;
 }
 
 // Handle filter changes from the control component
 function onFilterChange(newFilterState) {
+  console.log('Filter change received:', newFilterState);
   filterState.value = { ...newFilterState };
   // Use debounced filter update to prevent excessive re-renders
   debouncedFilterUpdate();
@@ -579,6 +681,18 @@ watch([minElevationGain, maxElevationGain], ([min, max]) => {
   // This prevents overriding manually set filter ranges
   if (filterState.value.elevationGainRange[0] === 0 && filterState.value.elevationGainRange[1] === 2000) {
     filterState.value.elevationGainRange = [min, max];
+  }
+}, { immediate: true });
+
+// Watch for changes in slope range and update filter accordingly (only for initialization)
+watch([minSlope, maxSlope], ([min, max]) => {
+  // Only update if the current range is uninitialized (both are 0 and 20)
+  // This prevents overriding manually set filter ranges
+  if ((filterState.value.slopeRange?.[0] ?? 0) === 0 && (filterState.value.slopeRange?.[1] ?? 20) === 20) {
+    if (!filterState.value.slopeRange) {
+      filterState.value.slopeRange = [0, 20];
+    }
+    filterState.value.slopeRange = [min, max];
   }
 }, { immediate: true });
 
@@ -1271,7 +1385,11 @@ async function handleTrackDeselected() {
 
 watch(() => props.selectedTrackDetail, async (newDetail, oldDetail) => {
   if (newDetail && newDetail.id) {
-    await handleTrackSelected(newDetail);
+    // Only handle track selection if it's a different track ID
+    // This prevents map zoom changes during data updates for the same track
+    if (!oldDetail || oldDetail.id !== newDetail.id) {
+      await handleTrackSelected(newDetail);
+    }
   } else if (!newDetail && oldDetail) {
     // Set transitioning state to prevent L-geo-json rendering during cleanup
     isTransitioning.value = true;

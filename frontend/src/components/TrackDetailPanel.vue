@@ -324,12 +324,12 @@
               </svg>
             </button>
             
-            <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData">
+            <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasSlopeData">
             <button 
               v-if="hasElevationData"
               class="chart-toggle" 
               :class="{ active: chartMode === 'elevation' }"
-              @click="chartMode = 'elevation'"
+              @click="() => { chartMode = 'elevation'; console.log('[TrackDetailPanel] Changed to elevation mode'); }"
             >
               Elevation
             </button>
@@ -350,6 +350,16 @@
               Temperature
             </button>
             <button 
+              v-if="hasSlopeData && hasElevationData"
+              class="chart-toggle" 
+              :class="{ active: chartMode === 'elevation-with-slope' }"
+              @click="() => { chartMode = 'elevation-with-slope'; console.log('[TrackDetailPanel] Changed to elevation-with-slope mode'); }"
+              title="Elevation profile with slope gradient overlay"
+              data-testid="elevation-slope-toggle"
+            >
+              Elevation + Slope
+            </button>
+            <button 
               v-if="(hasHeartRateData || hasTemperatureData) && hasElevationData"
               class="chart-toggle" 
               :class="{ active: chartMode === 'both' }"
@@ -362,11 +372,13 @@
         </div>
         
         <!-- Elevation Chart -->
-        <div class="chart-section" v-if="hasElevationData || hasHeartRateData || hasTemperatureData">
+        <div class="chart-section" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasSlopeData">
           <ElevationChart 
+            :key="`chart-${track.id}-${track.elevation_enriched_at || track.updated_at || 'default'}-${chartMode}-${chartUpdateKey}`"
             :elevationData="track.elevation_profile"
             :heartRateData="track.hr_data"
             :temperatureData="track.temp_data"
+            :slopeData="track.slope_segments"
             :trackName="chartTitle"
             :totalDistance="track.length_km"
             :chartMode="chartMode"
@@ -399,6 +411,37 @@
           <div class="stat-item" v-if="track.elevation_dataset">
             <span class="stat-label">Data source</span>
             <span class="stat-value">{{ formatDataset(track.elevation_dataset) }}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Slope Analysis Section -->
+      <div class="stats-section" v-if="hasSlopeData" data-testid="slope-section">
+        <h3 data-testid="slope-analysis-title">Slope Analysis</h3>
+        <div class="slope-stats-grid" data-testid="slope-stats-grid">
+          <div class="stat-item" v-if="track.slope_max !== undefined && track.slope_max !== null" data-testid="max-uphill-slope">
+            <span class="stat-label">Max uphill slope</span>
+            <span class="stat-value">+{{ Math.abs(track.slope_max).toFixed(1) }}%</span>
+          </div>
+          <div class="stat-item" v-if="track.slope_min !== undefined && track.slope_min !== null" data-testid="max-downhill-slope">
+            <span class="stat-label">Max downhill slope</span>
+            <span class="stat-value">{{ track.slope_min.toFixed(1) }}%</span>
+          </div>
+          <div class="stat-item" v-if="track.slope_avg !== undefined && track.slope_avg !== null" data-testid="avg-slope">
+            <span class="stat-label">Avg slope</span>
+            <span class="stat-value">{{ track.slope_avg >= 0 ? '+' : '' }}{{ track.slope_avg.toFixed(1) }}%</span>
+          </div>
+          <div class="stat-item" v-if="slopeDistributionStats.uphillPercent !== undefined" data-testid="uphill-distance">
+            <span class="stat-label">Uphill distance</span>
+            <span class="stat-value">{{ slopeDistributionStats.uphillPercent.toFixed(1) }}%</span>
+          </div>
+          <div class="stat-item" v-if="slopeDistributionStats.steepUphillPercent !== undefined" data-testid="steep-uphill">
+            <span class="stat-label">Steep uphill (>8%)</span>
+            <span class="stat-value">{{ slopeDistributionStats.steepUphillPercent.toFixed(1) }}%</span>
+          </div>
+          <div class="stat-item" v-if="slopeDistributionStats.steepDownhillPercent !== undefined" data-testid="steep-downhill">
+            <span class="stat-label">Steep downhill (&lt;-8%)</span>
+            <span class="stat-value">{{ slopeDistributionStats.steepDownhillPercent.toFixed(1) }}%</span>
           </div>
         </div>
       </div>
@@ -439,6 +482,7 @@ import {
 import { validateSpeedData, formatSpeed, formatPace, calculatePaceFromSpeed } from '../composables/useTracks';
 import { useUnits } from '../composables/useUnits';
 import { useMemoizedComputed } from '../composables/useMemoization';
+import { clearCacheByPattern } from '../composables/useMemoization';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 import { useToast } from '../composables/useToast';
 import { useConfirm } from '../composables/useConfirm';
@@ -469,6 +513,7 @@ const { showToast } = useToast();
 // Use confirm dialogs
 const { showConfirm } = useConfirm();
 const chartMode = ref('elevation');
+const chartUpdateKey = ref(Date.now()); // Force chart updates
 const flyoutContent = ref(null);
 const descriptionTextarea = ref(null);
 const nameInput = ref(null);
@@ -565,10 +610,18 @@ async function pollForElevationData(trackId) {
       (updatedTrack.elevation_gain !== track.value.elevation_gain) ||
       (updatedTrack.elevation_loss !== track.value.elevation_loss) ||
       (updatedTrack.elevation_min !== track.value.elevation_min) ||
-      (updatedTrack.elevation_max !== track.value.elevation_max);
+      (updatedTrack.elevation_max !== track.value.elevation_max) ||
+      (updatedTrack.slope_min !== track.value.slope_min) ||
+      (updatedTrack.slope_max !== track.value.slope_max) ||
+      (updatedTrack.slope_segments?.length !== track.value.slope_segments?.length);
     
     if (hasNewElevationData) {
       console.info(`[TrackDetailPanel] Elevation data updated for track ${trackId || props.track.id}`);
+      
+      // Force cache invalidation before updating track data
+      clearCacheByPattern(`elevation_${trackId || props.track.id}`);
+      clearCacheByPattern(`chartdata_`);
+      chartUpdateKey.value = Date.now();
       
       // Update local track data - create new object to trigger reactivity
       track.value = {
@@ -580,7 +633,14 @@ async function pollForElevationData(trackId) {
         elevation_max: updatedTrack.elevation_max,
         elevation_dataset: updatedTrack.elevation_dataset,
         elevation_enriched_at: updatedTrack.elevation_enriched_at,
-        elevation_profile: updatedTrack.elevation_profile
+        elevation_profile: updatedTrack.elevation_profile,
+        slope_min: updatedTrack.slope_min,
+        slope_max: updatedTrack.slope_max,
+        slope_avg: updatedTrack.slope_avg,
+        slope_segments: updatedTrack.slope_segments,
+        slope_histogram: updatedTrack.slope_histogram,
+        // Add timestamp to force chart update
+        _lastUpdated: Date.now()
       };
       
       // Dispatch global event for other components
@@ -593,9 +653,15 @@ async function pollForElevationData(trackId) {
           elevation_max: updatedTrack.elevation_max,
           elevation_dataset: updatedTrack.elevation_dataset,
           elevation_profile: updatedTrack.elevation_profile,
-          elevation_enriched_at: updatedTrack.elevation_enriched_at
+          elevation_enriched_at: updatedTrack.elevation_enriched_at,
+          slope_min: updatedTrack.slope_min,
+          slope_max: updatedTrack.slope_max,
+          slope_segments: updatedTrack.slope_segments
         } 
       }));
+      
+      // Force reactivity with nextTick
+      await nextTick();
       
       // Stop polling
       stopElevationPolling();
@@ -650,7 +716,12 @@ const hasElevationData = useMemoizedComputed(
   },
   [() => props.track],
   {
-    keyFn: (deps) => `elevation_${deps[0]?.id}_${deps[0]?.elevation_profile?.length}_${deps[0]?.elevation_gain}_${deps[0]?.elevation_loss}`
+    keyFn: (deps) => {
+      const track = deps[0];
+      if (!track) return 'elevation_null';
+      const profileHash = track.elevation_profile ? `${track.elevation_profile.length}_${JSON.stringify(track.elevation_profile.slice(0, 2))}` : 'null';
+      return `elevation_${track.id}_${profileHash}_${track.elevation_gain}_${track.elevation_loss}_${track.elevation_enriched}_${track.elevation_enriched_at}_${track._lastUpdated || '0'}`;
+    }
   }
 );
 
@@ -673,7 +744,12 @@ const hasHeartRateData = useMemoizedComputed(
   },
   [() => props.track],
   {
-    keyFn: (deps) => `hr_${deps[0]?.id}_${deps[0]?.hr_data?.length}_${deps[0]?.avg_hr}_${deps[0]?.max_hr}`
+    keyFn: (deps) => {
+      const track = deps[0];
+      if (!track) return 'hr_null';
+      const hrDataHash = track.hr_data ? `${track.hr_data.length}_${JSON.stringify(track.hr_data.slice(0, 2))}` : 'null';
+      return `hr_${track.id}_${hrDataHash}_${track.avg_hr}_${track.max_hr}`;
+    }
   }
 );
 
@@ -687,13 +763,92 @@ const hasTemperatureData = useMemoizedComputed(
   },
   [() => props.track],
   {
-    keyFn: (deps) => `temp_${deps[0]?.id}_${deps[0]?.temp_data?.length}_${JSON.stringify(deps[0]?.temp_data?.slice(0, 5))}`
+    keyFn: (deps) => {
+      const track = deps[0];
+      if (!track) return 'temp_null';
+      const tempDataHash = track.temp_data ? `${track.temp_data.length}_${JSON.stringify(track.temp_data.slice(0, 2))}` : 'null';
+      return `temp_${track.id}_${tempDataHash}`;
+    }
   }
 );
 
+const hasSlopeData = computed(() => {
+  const track = props.track;
+  
+  // Check for slope segments data
+  if (track?.slope_segments && track?.slope_segments.length > 0) {
+    const hasSlope = track.slope_segments.some(segment => 
+      segment && typeof segment === 'object' && 
+      typeof segment.slope_percent === 'number'
+    );
+    return hasSlope;
+  }
+  
+  // Check if slope metrics are available
+  const hasMetrics = track?.slope_min !== null && track?.slope_max !== null;
+  return hasMetrics;
+});
+
+// Calculate slope distribution statistics from histogram
+const slopeDistributionStats = computed(() => {
+  const track = props.track;
+  
+  if (!track?.slope_histogram || !Array.isArray(track.slope_histogram)) {
+    return {
+      uphillPercent: undefined,
+      steepUphillPercent: undefined,
+      steepDownhillPercent: undefined
+    };
+  }
+  
+  let totalDistance = 0;
+  let uphillDistance = 0;
+  let steepUphillDistance = 0; // >8%
+  let steepDownhillDistance = 0; // <-8%
+  
+  track.slope_histogram.forEach(bucket => {
+    if (bucket && typeof bucket.distance_m === 'number') {
+      const distance = bucket.distance_m;
+      const bucketFrom = bucket.bucket_from || 0;
+      const bucketTo = bucket.bucket_to || 0;
+      
+      totalDistance += distance;
+      
+      // Count uphill (positive slope)
+      if (bucketFrom > 0 || bucketTo > 0) {
+        uphillDistance += distance;
+      }
+      
+      // Count steep uphill (>8%)
+      if (bucketFrom > 8) {
+        steepUphillDistance += distance;
+      }
+      
+      // Count steep downhill (<-8%)
+      if (bucketTo < -8) {
+        steepDownhillDistance += distance;
+      }
+    }
+  });
+  
+  if (totalDistance === 0) {
+    return {
+      uphillPercent: undefined,
+      steepUphillPercent: undefined,
+      steepDownhillPercent: undefined
+    };
+  }
+  
+  return {
+    uphillPercent: (uphillDistance / totalDistance) * 100,
+    steepUphillPercent: (steepUphillDistance / totalDistance) * 100,
+    steepDownhillPercent: (steepDownhillDistance / totalDistance) * 100
+  };
+});
+
 // Combined check for elevation section visibility
 const hasElevationOrHeartRateData = computed(() => {
-  return hasElevationData.value || hasHeartRateData.value || hasTemperatureData.value;
+  return hasElevationData.value || hasHeartRateData.value || hasTemperatureData.value || hasSlopeData.value;
 });
 
 // Dynamic chart title based on available data - memoized
@@ -752,17 +907,26 @@ watch(() => [
   props.track?.elevation_enriched,
   props.track?.elevation_gain,
   props.track?.elevation_loss,
-  props.track?.elevation_profile
-], () => {
+  props.track?.elevation_profile,
+  props.track?.slope_segments,
+  props.track?.slope_min,
+  props.track?.slope_max
+], (newVals, oldVals) => {
   // Update local track if prop changed
   if (props.track && props.track !== track.value) {
-    console.info(`[TrackDetailPanel] Elevation data updated via prop for track ${props.track.id}`);
-    track.value = props.track;
+    console.info(`[TrackDetailPanel] Data updated via prop for track ${props.track.id}`);
+    
+    // Force complete track update with new object reference
+    track.value = { ...props.track };
     
     // Stop polling if elevation data is now available
     if (props.track.elevation_enriched && isPollingForElevation.value) {
       stopElevationPolling();
     }
+  } else if (newVals && oldVals && JSON.stringify(newVals) !== JSON.stringify(oldVals)) {
+    // If the reference is the same but data changed, force reactivity
+    console.info(`[TrackDetailPanel] Data values changed for track ${props.track?.id}`);
+    track.value = { ...props.track };
   }
 }, { deep: false });
 
@@ -1259,24 +1423,44 @@ async function forceEnrichElevation() {
     if (result.enriched_at !== undefined) track.value.elevation_enriched_at = result.enriched_at;
     track.value.elevation_enriched = true;
     
-    // Fetch the complete updated track data to get elevation_profile
+    // Fetch the complete updated track data to get elevation_profile and slope data
     console.info(`[TrackDetailPanel] Fetching updated track data after elevation enrichment`);
     try {
       const trackResponse = await fetch(`/tracks/${track.value.id}`);
       if (trackResponse.ok) {
         const updatedTrack = await trackResponse.json();
         
-        // Update all elevation-related fields including the profile
-        track.value.elevation_profile = updatedTrack.elevation_profile;
-        track.value.elevation_gain = updatedTrack.elevation_gain;
-        track.value.elevation_loss = updatedTrack.elevation_loss;
-        track.value.elevation_min = updatedTrack.elevation_min;
-        track.value.elevation_max = updatedTrack.elevation_max;
-        track.value.elevation_dataset = updatedTrack.elevation_dataset;
-        track.value.elevation_enriched_at = updatedTrack.elevation_enriched_at;
-        track.value.elevation_enriched = updatedTrack.elevation_enriched;
+        // Force cache invalidation
+        clearCacheByPattern(`elevation_${track.value.id}`);
+        clearCacheByPattern(`chartdata_`);
+        
+        // Force chart update
+        chartUpdateKey.value = Date.now();
+        
+        // Force complete track update with new object reference
+        track.value = {
+          ...track.value,
+          elevation_profile: updatedTrack.elevation_profile,
+          elevation_gain: updatedTrack.elevation_gain,
+          elevation_loss: updatedTrack.elevation_loss,
+          elevation_min: updatedTrack.elevation_min,
+          elevation_max: updatedTrack.elevation_max,
+          elevation_dataset: updatedTrack.elevation_dataset,
+          elevation_enriched_at: updatedTrack.elevation_enriched_at,
+          elevation_enriched: updatedTrack.elevation_enriched,
+          slope_min: updatedTrack.slope_min,
+          slope_max: updatedTrack.slope_max,
+          slope_avg: updatedTrack.slope_avg,
+          slope_segments: updatedTrack.slope_segments,
+          slope_histogram: updatedTrack.slope_histogram,
+          // Add timestamp to force chart update
+          _lastUpdated: Date.now()
+        };
         
         console.info(`[TrackDetailPanel] Track data updated successfully`);
+        
+        // Force reactivity with nextTick
+        await nextTick();
       }
     } catch (fetchError) {
       console.error(`[TrackDetailPanel] Failed to fetch updated track data:`, fetchError);
@@ -1354,18 +1538,40 @@ watch(() => props.track, (newTrack) => {
     const hasElevation = hasElevationData.value;
     const hasHR = hasHeartRateData.value;
     const hasTemp = hasTemperatureData.value;
+    const hasSlope = hasSlopeData.value;
+    
+    if (import.meta.env.DEV) {
+      console.log('[TrackDetailPanel] Chart mode logic:', {
+        currentMode: chartMode.value,
+        hasElevation,
+        hasSlope,
+        hasHR,
+        hasTemp
+      });
+    }
     
     if (hasElevation && (hasHR || hasTemp)) {
       // If elevation and at least one other type are available, keep current mode or default to 'both'
-      if (!['elevation', 'pulse', 'temperature', 'both'].includes(chartMode.value)) {
+      if (!['elevation', 'pulse', 'temperature', 'elevation-with-slope', 'both'].includes(chartMode.value)) {
         chartMode.value = 'both';
       }
+    } else if (hasElevation && hasSlope) {
+      // If we have both elevation and slope, only set elevation-with-slope if no valid mode is set
+      if (!['elevation', 'elevation-with-slope'].includes(chartMode.value)) {
+        chartMode.value = 'elevation-with-slope';
+      }
     } else if (hasElevation) {
-      chartMode.value = 'elevation';
+      if (!['elevation'].includes(chartMode.value)) {
+        chartMode.value = 'elevation';
+      }
     } else if (hasHR) {
       chartMode.value = 'pulse';
     } else if (hasTemp) {
       chartMode.value = 'temperature';
+    }
+    
+    if (import.meta.env.DEV) {
+      console.log('[TrackDetailPanel] Final chart mode:', chartMode.value);
     }
   }
 }, { immediate: true });
@@ -2231,6 +2437,13 @@ defineExpose({
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-top: 16px;
+}
+
+/* Slope Stats Grid */
+.slope-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
 /* Chart Section within stats */

@@ -61,6 +61,17 @@ class MemoCache {
 
 const globalCache = new MemoCache();
 
+// Function to clear cache for specific patterns
+export function clearCacheByPattern(pattern) {
+    const keys = Array.from(globalCache.cache.keys());
+    const matchingKeys = keys.filter(key =>
+        typeof pattern === 'string' ? key.includes(pattern) : pattern.test(key)
+    );
+
+    matchingKeys.forEach(key => globalCache.delete(key));
+    console.log(`[useMemoization] Cleared ${matchingKeys.length} cache entries matching pattern:`, pattern);
+}
+
 export function useMemoizedComputed(computeFn, dependencies, options = {}) {
     const {
         cache = globalCache,

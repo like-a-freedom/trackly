@@ -2,7 +2,9 @@
 // TODO: maybe switch to https://github.com/georust/gpx
 
 use crate::models::ParsedTrackData;
-use crate::track_utils::elevation::{calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data};
+use crate::track_utils::elevation::{
+    calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data,
+};
 use crate::track_utils::geometry::haversine_distance;
 use crate::track_utils::time_utils::parse_gpx_time;
 use quick_xml::events::Event;
@@ -348,15 +350,30 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     };
 
     let final_elevation_gain = if !points.is_empty() {
-        let gain = if total_elevation_gain > 0.0 { total_elevation_gain } else { 0.0 };
-        info!("GPX parsed elevation_gain: {:.1}m from {} elevation points", gain, elevation_profile_data.iter().filter(|e| e.is_some()).count());
+        let gain = if total_elevation_gain > 0.0 {
+            total_elevation_gain
+        } else {
+            0.0
+        };
+        info!(
+            "GPX parsed elevation_gain: {:.1}m from {} elevation points",
+            gain,
+            elevation_profile_data
+                .iter()
+                .filter(|e| e.is_some())
+                .count()
+        );
         Some(gain)
     } else {
         info!("GPX has no elevation data - no points found");
         None
     };
     let final_elevation_loss = if !points.is_empty() {
-        let loss = if total_elevation_loss > 0.0 { total_elevation_loss } else { 0.0 };
+        let loss = if total_elevation_loss > 0.0 {
+            total_elevation_loss
+        } else {
+            0.0
+        };
         info!("GPX parsed elevation_loss: {:.1}m", loss);
         Some(loss)
     } else {
@@ -477,10 +494,19 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         .zip(elevation_profile_data.iter())
         .map(|((lat, lon), elevation)| (*lat, *lon, *elevation))
         .collect();
-    
+
     let elevation_metrics = if has_elevation_data(&track_points_with_elevation) {
         let elevations = extract_elevations_from_track_points(&track_points_with_elevation);
         calculate_elevation_metrics(&elevations)
+    } else {
+        Default::default()
+    };
+
+    // Calculate slope metrics if elevation data is available
+    let slope_result = if let Some(elevation_profile) = &final_elevation_profile {
+        use crate::track_utils::slope::calculate_slope_metrics;
+
+        calculate_slope_metrics(&points, elevation_profile, "GPX Track")
     } else {
         Default::default()
     };
@@ -501,6 +527,12 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         elevation_loss: elevation_metrics.elevation_loss,
         elevation_min: elevation_metrics.elevation_min,
         elevation_max: elevation_metrics.elevation_max,
+        // Slope fields from universal calculator
+        slope_min: slope_result.slope_min,
+        slope_max: slope_result.slope_max,
+        slope_avg: slope_result.slope_avg,
+        slope_histogram: slope_result.slope_histogram,
+        slope_segments: slope_result.slope_segments,
         avg_speed,            // Calculated average speed
         avg_hr: avg_hr_value, // Calculated average HR
         hr_min,
