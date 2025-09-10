@@ -18,6 +18,19 @@ vi.mock('../../composables/useConfirm', () => ({
     })
 }));
 
+// Mock useMemoizedComputed
+vi.mock('../../composables/useMemoization', () => ({
+    useMemoizedComputed: (fn, deps, options) => {
+        return {
+            get value() {
+                const depValues = deps.map(dep => dep());
+                return fn(...depValues);
+            }
+        };
+    },
+    clearCacheByPattern: vi.fn()
+}));
+
 // Helper to build a minimal track object
 function makeTrack(overrides = {}) {
     return Object.assign({

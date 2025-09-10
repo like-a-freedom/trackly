@@ -24,7 +24,7 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
 
     let mut points = Vec::new();
     let mut recorded_at: Option<String> = None;
-    
+
     // State variables (simplified for minimal parsing)
     let mut lat: Option<f64> = None;
     let mut lon: Option<f64> = None;
@@ -32,7 +32,7 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
     let mut capture_text = false;
     let mut text_target: Option<String> = None;
     let mut found_metadata_time = false;
-    
+
     // Fallback: store points from rtept if no trkpt found
     let mut rte_points = Vec::new();
 
@@ -42,7 +42,7 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 let tag_stripped = tag.split(':').next_back().unwrap_or(&tag);
                 element_stack.push(tag_stripped.to_string());
-                
+
                 match tag_stripped {
                     "trkpt" => {
                         lat = e.attributes().find_map(|a| {

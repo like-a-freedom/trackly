@@ -30,22 +30,88 @@
       >
         <div class="panel-header">
           <span class="panel-title">Filters</span>
-          <button
-            class="collapse-btn"
-            type="button"
-            title="Collapse"
-            aria-label="Collapse filters"
-            @click="toggleOpen"
-          >
-            <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <!-- Same arrow as UploadForm and TrackDetailPanel -->
-              <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
-            </svg>
-          </button>
+          <div class="header-controls">
+            <button
+              class="filter-options-btn"
+              type="button"
+              title="Filter options"
+              aria-label="Toggle filter options"
+              @click="showFilterOptions = !showFilterOptions"
+            >
+              <svg class="options-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z" />
+              </svg>
+            </button>
+            <button
+              class="collapse-btn"
+              type="button"
+              title="Collapse"
+              aria-label="Collapse filters"
+              @click="toggleOpen"
+            >
+              <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <!-- Same arrow as UploadForm and TrackDetailPanel -->
+                <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Filter options dropdown -->
+        <div v-if="showFilterOptions" class="filter-options-panel">
+          <div class="options-header">
+            <span class="options-title">Show filters:</span>
+          </div>
+          <div class="options-checkboxes">
+            <div class="checkbox-item">
+              <input
+                id="show-categories"
+                v-model="showCategories"
+                type="checkbox"
+                class="option-checkbox"
+              />
+              <label for="show-categories" class="checkbox-label">Categories</label>
+            </div>
+            <div class="checkbox-item">
+              <input
+                id="show-length"
+                v-model="showLength"
+                type="checkbox"
+                class="option-checkbox"
+              />
+              <label for="show-length" class="checkbox-label">Track length</label>
+            </div>
+            <div class="checkbox-item">
+              <input
+                id="show-elevation"
+                v-model="showElevation"
+                type="checkbox"
+                class="option-checkbox"
+                :disabled="!hasElevationData"
+              />
+              <label for="show-elevation" class="checkbox-label" :class="{ disabled: !hasElevationData }">
+                Elevation gain
+                <span v-if="!hasElevationData" class="disabled-hint">(no data)</span>
+              </label>
+            </div>
+            <div class="checkbox-item">
+              <input
+                id="show-slope"
+                v-model="showSlope"
+                type="checkbox"
+                class="option-checkbox"
+                :disabled="!hasSlopeData"
+              />
+              <label for="show-slope" class="checkbox-label" :class="{ disabled: !hasSlopeData }">
+                Slope
+                <span v-if="!hasSlopeData" class="disabled-hint">(no data)</span>
+              </label>
+            </div>
+          </div>
         </div>
         <!-- Show filters when there are tracks in the area -->
         <template v-if="hasTracksInArea">
-          <div class="filter-section">
+          <div v-if="showCategories" class="filter-section">
             <label>Categories:</label>
             <div class="category-checkboxes">
               <div 
@@ -66,7 +132,7 @@
               </div>
             </div>
           </div>
-          <div class="filter-section">
+          <div v-if="showLength" class="filter-section">
             <label>Track length (km):</label>
             <Slider
               v-model="lengthRange"
@@ -79,7 +145,7 @@
               :range="true"
             />
           </div>
-          <div class="filter-section">
+          <div v-if="showElevation && hasElevationData" class="filter-section">
             <label>Elevation gain (m):</label>
             <Slider
               v-model="elevationGainRange"
@@ -89,6 +155,19 @@
               :tooltip="true"
               :lazy="true"
               :format="val => `${Math.round(val)}m`"
+              :range="true"
+            />
+          </div>
+          <div v-if="showSlope && hasSlopeData" class="filter-section">
+            <label>Slope (%):</label>
+            <Slider
+              v-model="slopeRange"
+              :min="minSlope"
+              :max="maxSlope"
+              :step="0.1"
+              :tooltip="true"
+              :lazy="true"
+              :format="val => `${val.toFixed(1)}%`"
               :range="true"
             />
           </div>
@@ -112,7 +191,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, computed } from 'vue';
+import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue';
 import Slider from '@vueform/slider';
 import '@vueform/slider/themes/default.css';
 import { useUnits } from '../composables/useUnits';
@@ -123,12 +202,18 @@ const props = defineProps({
   maxLength: Number, // Maximum track length in km (viewport-based)
   minElevationGain: Number, // Minimum elevation gain in meters (viewport-based)
   maxElevationGain: Number, // Maximum elevation gain in meters (viewport-based)
+  minSlope: Number, // Minimum track slope in percent (viewport-based)
+  maxSlope: Number, // Maximum track slope in percent (viewport-based)
   globalCategories: Array, // All session categories for reset functionality
   globalMinLength: Number, // Global session minimum track length for reset functionality
   globalMaxLength: Number, // Global session maximum track length for reset functionality
   globalMinElevationGain: Number, // Global session minimum elevation gain for reset functionality
   globalMaxElevationGain: Number, // Global session maximum elevation gain for reset functionality
+  globalMinSlope: Number, // Global session minimum slope for reset functionality
+  globalMaxSlope: Number, // Global session maximum slope for reset functionality
   hasTracksInViewport: Boolean, // Whether there are actual tracks in the current viewport
+  hasElevationData: Boolean, // Whether any tracks in viewport have elevation data
+  hasSlopeData: Boolean, // Whether any tracks in viewport have slope data
 });
 
 const emit = defineEmits(['update:filter']);
@@ -144,11 +229,20 @@ const hasTracksInArea = computed(() => {
 
 const LOCAL_STORAGE_KEY = 'trackFiltersVue';
 const LOCAL_UI_KEY = 'trackFiltersVueOpen';
+const LOCAL_FILTER_OPTIONS_KEY = 'trackFilterOptions';
 
 const selectedCategories = ref([]); // Will be set in onMounted
 const lengthRange = ref([props.minLength, props.maxLength]);
 const elevationGainRange = ref([props.minElevationGain, props.maxElevationGain]);
+const slopeRange = ref([props.minSlope, props.maxSlope]);
 const isOpen = ref(true);
+
+// Filter visibility options
+const showFilterOptions = ref(false);
+const showCategories = ref(true);
+const showLength = ref(true);
+const showElevation = ref(true);
+const showSlope = ref(true);
 
 // Flag to track if values were restored from localStorage
 const restoredFromLocalStorage = ref(false);
@@ -168,10 +262,23 @@ onMounted(() => {
     }
   } catch {}
 
+  // Load filter visibility options
+  try {
+    const savedOptions = localStorage.getItem(LOCAL_FILTER_OPTIONS_KEY);
+    if (savedOptions) {
+      const options = JSON.parse(savedOptions);
+      showCategories.value = options.showCategories ?? true;
+      showLength.value = options.showLength ?? true;
+      showElevation.value = options.showElevation ?? true;
+      showSlope.value = options.showSlope ?? true;
+    }
+  } catch {}
+
   // Initialize with global session values if no saved preferences exist
   let initialCategories = props.globalCategories ? [...props.globalCategories] : [];
   let initialLengthRange = [props.globalMinLength, props.globalMaxLength];
   let initialElevationGainRange = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
+  let initialSlopeRange = [props.globalMinSlope || 0, props.globalMaxSlope || 20];
   
   const savedFiltersRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
   if (savedFiltersRaw) {
@@ -197,6 +304,14 @@ onMounted(() => {
           restoredFromLocalStorage.value = true;
         }
       }
+      if (Array.isArray(savedFilters.slopeRange) && savedFilters.slopeRange.length === 2) {
+        const [min, max] = savedFilters.slopeRange;
+        // Validate that the range makes sense (min <= max)
+        if (typeof min === 'number' && typeof max === 'number' && min <= max) {
+          initialSlopeRange = [...savedFilters.slopeRange];
+          restoredFromLocalStorage.value = true;
+        }
+      }
     } catch (e) {
       console.error('Failed to parse filter state from localStorage:', e);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -206,17 +321,31 @@ onMounted(() => {
   selectedCategories.value = initialCategories;
   lengthRange.value = initialLengthRange;
   elevationGainRange.value = initialElevationGainRange;
+  slopeRange.value = initialSlopeRange;
 
   // Emit initial filter state
   emit('update:filter', {
     categories: selectedCategories.value,
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
+    slopeRange: slopeRange.value,
   });
 });
 
 watch(isOpen, (val) => {
   try { localStorage.setItem(LOCAL_UI_KEY, String(val)); } catch {}
+});
+
+// Save filter visibility options
+watch([showCategories, showLength, showElevation, showSlope], () => {
+  try {
+    localStorage.setItem(LOCAL_FILTER_OPTIONS_KEY, JSON.stringify({
+      showCategories: showCategories.value,
+      showLength: showLength.value,
+      showElevation: showElevation.value,
+      showSlope: showSlope.value,
+    }));
+  } catch {}
 });
 
 watch(() => props.categories, (newCategories) => {
@@ -228,6 +357,7 @@ watch(() => props.categories, (newCategories) => {
     categories: validCategories,
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
+    slopeRange: slopeRange.value,
   });
 });
 
@@ -235,24 +365,29 @@ let prevMinLength = props.minLength;
 let prevMaxLength = props.maxLength;
 let prevMinElevationGain = props.minElevationGain;
 let prevMaxElevationGain = props.maxElevationGain;
+let prevMinSlope = props.minSlope;
+let prevMaxSlope = props.maxSlope;
 
 watch(
-  () => [props.minLength, props.maxLength, props.minElevationGain, props.maxElevationGain],
-  ([newMinLength, newMaxLength, newMinElevationGain, newMaxElevationGain], [oldMinLength, oldMaxLength, oldMinElevationGain, oldMaxElevationGain]) => {
+  () => [props.minLength, props.maxLength, props.minElevationGain, props.maxElevationGain, props.minSlope, props.maxSlope],
+  ([newMinLength, newMaxLength, newMinElevationGain, newMaxElevationGain, newMinSlope, newMaxSlope], [oldMinLength, oldMaxLength, oldMinElevationGain, oldMaxElevationGain, oldMinSlope, oldMaxSlope]) => {
     // Don't automatically change user selections based on viewport changes
     // The main watcher will clamp values when emitting to parent
     prevMinLength = newMinLength;
     prevMaxLength = newMaxLength;
     prevMinElevationGain = newMinElevationGain;
     prevMaxElevationGain = newMaxElevationGain;
+    prevMinSlope = newMinSlope;
+    prevMaxSlope = newMaxSlope;
   }
 );
 
-watch([selectedCategories, lengthRange, elevationGainRange], ([cats, lengthRange, elevationGainRange], [oldCats, oldLengthRange, oldElevationGainRange]) => {
+watch([selectedCategories, lengthRange, elevationGainRange, slopeRange], ([cats, lengthRange, elevationGainRange, slopeRange], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange]) => {
   // Emit validated values (filtered to what's available in current viewport)
   const validCategories = props.categories ? cats.filter(cat => props.categories.includes(cat)) : cats;
   let validLengthRange = lengthRange;
   let validElevationGainRange = elevationGainRange;
+  let validSlopeRange = slopeRange;
   
   // Clamp length range to current viewport bounds
   if (props.minLength !== undefined && props.maxLength !== undefined) {
@@ -278,18 +413,32 @@ watch([selectedCategories, lengthRange, elevationGainRange], ([cats, lengthRange
     }
   }
   
+  // Clamp slope range to current viewport bounds
+  if (props.minSlope !== undefined && props.maxSlope !== undefined) {
+    const [min, max] = slopeRange;
+    const clampedMin = Math.max(props.minSlope, Math.min(props.maxSlope, min));
+    const clampedMax = Math.max(props.minSlope, Math.min(props.maxSlope, max));
+    if (clampedMin <= clampedMax) {
+      validSlopeRange = [clampedMin, clampedMax];
+    } else {
+      validSlopeRange = [props.minSlope, props.maxSlope];
+    }
+  }
+  
   emit('update:filter', {
     categories: validCategories,
     lengthRange: validLengthRange,
     elevationGainRange: validElevationGainRange,
+    slopeRange: validSlopeRange,
   });
   
   // Always persist user's actual choice (not the clamped values)
-  if (cats !== null && cats !== undefined && lengthRange && lengthRange.length === 2 && elevationGainRange && elevationGainRange.length === 2) {
+  if (cats !== null && cats !== undefined && lengthRange && lengthRange.length === 2 && elevationGainRange && elevationGainRange.length === 2 && slopeRange && slopeRange.length === 2) {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
       categories: cats,
       lengthRange: lengthRange,
       elevationGainRange: elevationGainRange,
+      slopeRange: slopeRange,
     }));
   }
 }, { deep: true });
@@ -300,17 +449,38 @@ function resetFilters() {
   selectedCategories.value = props.globalCategories ? [...props.globalCategories] : [];
   lengthRange.value = [props.globalMinLength || 0, props.globalMaxLength || 50];
   elevationGainRange.value = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
+  slopeRange.value = [props.globalMinSlope || 0, props.globalMaxSlope || 20];
   // Immediately persist reset state
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
     categories: selectedCategories.value,
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
+    slopeRange: slopeRange.value,
   }));
 }
 
 function toggleOpen() {
   isOpen.value = !isOpen.value;
+  // Close filter options when collapsing the panel
+  if (!isOpen.value) {
+    showFilterOptions.value = false;
+  }
 }
+
+// Close filter options when clicking outside
+function handleClickOutside(event) {
+  if (showFilterOptions.value && !event.target.closest('.filter-options-panel') && !event.target.closest('.filter-options-btn')) {
+    showFilterOptions.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <style scoped>
@@ -383,11 +553,20 @@ function toggleOpen() {
   padding: 8px;
   border-bottom: 1px solid rgba(0,0,0,0.06);
 }
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .panel-title {
   font-size: 0.95rem;
   font-weight: 600;
   color: #333;
 }
+
+.filter-options-btn,
 .collapse-btn {
   display: inline-flex;
   align-items: center;
@@ -401,10 +580,78 @@ function toggleOpen() {
   cursor: pointer;
   transition: background 0.2s, transform 0.2s, color 0.2s;
 }
-.collapse-btn:hover { background: #f5f5f5; color: #333; transform: translateY(-1px); }
+
+.filter-options-btn:hover,
+.collapse-btn:hover { 
+  background: #f5f5f5; 
+  color: #333; 
+  transform: translateY(-1px); 
+}
+
+.options-icon,
 .collapse-icon { 
   display: block;
   flex-shrink: 0;
+}
+
+/* Filter options panel */
+.filter-options-panel {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  animation: fadeInDown 0.2s ease;
+}
+
+.options-header {
+  margin-bottom: 10px;
+}
+
+.options-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.options-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.option-checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.option-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.checkbox-label.disabled {
+  color: #999;
+  cursor: not-allowed;
+}
+
+.disabled-hint {
+  font-size: 0.75rem;
+  color: #999;
+  font-style: italic;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .filter-section {
   margin-bottom: 12px;

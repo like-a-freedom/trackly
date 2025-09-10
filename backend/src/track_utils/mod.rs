@@ -10,6 +10,7 @@ pub mod kml_parser;
 pub mod metrics;
 pub mod optimized_gpx_parser;
 pub mod simplification;
+pub mod slope;
 pub mod time_utils;
 pub mod types;
 pub mod zoom_adaptation;
@@ -28,6 +29,9 @@ pub use simplification::{
     get_simplification_stats, get_tolerance_for_zoom, simplify_json_array,
     simplify_profile_array_adaptive, simplify_profile_data, simplify_track,
     simplify_track_for_zoom,
+};
+pub use slope::{
+    calculate_slope_metrics, can_calculate_slopes, recalculate_slope_metrics, SlopeMetrics,
 };
 pub use zoom_adaptation::{get_simplification_params, tolerance_for_zoom, SimplificationParams};
 

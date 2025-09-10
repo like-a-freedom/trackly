@@ -79,6 +79,12 @@ describe('TrackFilterControl', () => {
         maxElevationGain: 2000,
         globalMinElevationGain: 0,
         globalMaxElevationGain: 2000,
+        minSlope: 0,
+        maxSlope: 20,
+        globalMinSlope: 0,
+        globalMaxSlope: 20,
+        hasElevationData: true,
+        hasSlopeData: true,
         hasTracksInViewport: true,
         ...overrides
     });
@@ -460,7 +466,8 @@ describe('TrackFilterControl', () => {
                 JSON.stringify({
                     categories: ['hiking'],
                     lengthRange: [0, 50],
-                    elevationGainRange: [0, 2000]
+                    elevationGainRange: [0, 2000],
+                    slopeRange: [0, 20]
                 })
             );
         });
@@ -489,7 +496,8 @@ describe('TrackFilterControl', () => {
                 JSON.stringify({
                     categories: [],
                     lengthRange: [0, 50],
-                    elevationGainRange: [0, 2000]
+                    elevationGainRange: [0, 2000],
+                    slopeRange: [0, 20]
                 })
             );
         });
@@ -603,7 +611,8 @@ describe('TrackFilterControl', () => {
                 JSON.stringify({
                     categories: ['hiking', 'running', 'cycling'],
                     lengthRange: [0, 50],
-                    elevationGainRange: [0, 2000]
+                    elevationGainRange: [0, 2000],
+                    slopeRange: [0, 20]
                 })
             );
         });
@@ -1023,7 +1032,8 @@ describe('TrackFilterControl', () => {
             expect(emitted[emitted.length - 1][0]).toEqual({
                 categories: ['hiking', 'running'],
                 lengthRange: [0, 50],
-                elevationGainRange: [0, 2000]
+                elevationGainRange: [0, 2000],
+                slopeRange: [0, 20]
             });
         });
 
@@ -1233,7 +1243,8 @@ describe('TrackFilterControl', () => {
                 JSON.stringify({
                     categories: ['hiking'],
                     lengthRange: [0, 50],
-                    elevationGainRange: [300, 1800]
+                    elevationGainRange: [300, 1800],
+                    slopeRange: [0, 20]
                 })
             );
         });
@@ -1577,6 +1588,297 @@ describe('TrackFilterControl', () => {
             expect(lastEmit.lengthRange).toEqual([2.0, 8.0]); // Should match user selection, not forcibly clamped
 
             wrapper.unmount();
+        });
+    });
+
+    describe('Slope filtering', () => {
+        it('displays slope slider', () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minSlope: 0,
+                    maxSlope: 15,
+                    hasSlopeData: true
+                }),
+            });
+
+            const slopeLabel = wrapper.findAll('label').find(label =>
+                label.element.textContent.includes('Slope (%):')
+            );
+            expect(slopeLabel).toBeTruthy();
+            expect(slopeLabel.element.textContent).toContain('Slope (%):');
+
+            // Since we're using the mock, check for slider inputs
+            const sliders = wrapper.findAll('input[type="range"]');
+            expect(sliders.length).toBeGreaterThanOrEqual(4); // 2 for length + 2 for slope
+        });
+
+        it('sets slope range to global default when no localStorage', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minSlope: 0,
+                    maxSlope: 15,
+                    globalMinSlope: 0,
+                    globalMaxSlope: 15,
+                    hasSlopeData: true
+                }),
+            });
+
+            await nextTick();
+
+            expect(wrapper.vm.slopeRange).toEqual([0, 15]);
+        });
+
+        it('handles slope slider changes', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minSlope: 0,
+                    maxSlope: 20,
+                    hasSlopeData: true
+                }),
+            });
+
+            wrapper.vm.slopeRange = [2, 18];
+            await nextTick();
+
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+            const lastEmit = emitted[emitted.length - 1][0];
+            expect(lastEmit.slopeRange).toEqual([2, 18]);
+        });
+
+        it('saves slope range to localStorage', async () => {
+            const mockSetItem = vi.fn();
+            Object.defineProperty(window, 'localStorage', {
+                value: { ...mockLocalStorage, setItem: mockSetItem },
+                writable: true
+            });
+
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minSlope: 0,
+                    maxSlope: 20,
+                    hasSlopeData: true
+                }),
+            });
+
+            wrapper.vm.slopeRange = [3, 17];
+            await nextTick();
+
+            expect(mockSetItem).toHaveBeenCalledWith(
+                'trackFiltersVue',
+                expect.stringContaining('"slopeRange":[3,17]')
+            );
+        });
+
+        it('restores slope range from localStorage', async () => {
+            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+                categories: ['hiking'],
+                lengthRange: [0, 50],
+                elevationGainRange: [0, 2000],
+                slopeRange: [5, 15]
+            }));
+
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minSlope: 0,
+                    maxSlope: 20,
+                    hasSlopeData: true
+                }),
+            });
+
+            await nextTick();
+
+            expect(wrapper.vm.slopeRange).toEqual([5, 15]);
+        });
+
+        it('uses global slope values on reset', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minSlope: 2,
+                    maxSlope: 18,
+                    globalMinSlope: 0,
+                    globalMaxSlope: 20,
+                    hasSlopeData: true,
+                    hasTracksInViewport: true
+                }),
+            });
+
+            await nextTick();
+
+            // Open the filter panel first
+            const compactButton = wrapper.find('.filter-button-compact');
+            await compactButton.trigger('click');
+            await nextTick();
+
+            // Change slope range
+            wrapper.vm.slopeRange = [5, 15];
+            await nextTick();
+
+            // Reset filters - find the Reset button specifically
+            const resetButton = wrapper.findAll('button').find(btn =>
+                btn.element.textContent.includes('Reset')
+            );
+            expect(resetButton).toBeTruthy();
+            await resetButton.trigger('click');
+            await nextTick();
+
+            expect(wrapper.vm.slopeRange).toEqual([0, 20]);
+        });
+
+        it('emits slope range in filter updates', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    categories: ['hiking'],
+                    minSlope: 0,
+                    maxSlope: 20,
+                    hasSlopeData: true
+                }),
+            });
+
+            await nextTick();
+            await nextTick(); // Wait for initial emit
+
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+
+            const lastEmit = emitted[emitted.length - 1][0];
+            expect(lastEmit).toHaveProperty('slopeRange');
+            expect(Array.isArray(lastEmit.slopeRange)).toBe(true);
+            expect(lastEmit.slopeRange.length).toBe(2);
+        });
+    });
+
+    describe('Optional Filter Visibility', () => {
+        it('shows elevation filter when hasElevationData is true', () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasElevationData: true,
+                    hasTracksInViewport: true
+                }),
+            });
+
+            const elevationLabel = wrapper.findAll('label').find(label =>
+                label.element.textContent.includes('Elevation gain (m):')
+            );
+            expect(elevationLabel).toBeTruthy();
+        });
+
+        it('hides elevation filter when hasElevationData is false', () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasElevationData: false,
+                    hasTracksInViewport: true
+                }),
+            });
+
+            const elevationLabel = wrapper.findAll('label').find(label =>
+                label.element.textContent.includes('Elevation gain (m):')
+            );
+            expect(elevationLabel).toBeFalsy();
+        });
+
+        it('shows slope filter when hasSlopeData is true', () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasSlopeData: true,
+                    hasTracksInViewport: true
+                }),
+            });
+
+            const slopeLabel = wrapper.findAll('label').find(label =>
+                label.element.textContent.includes('Slope (%):')
+            );
+            expect(slopeLabel).toBeTruthy();
+        });
+
+        it('hides slope filter when hasSlopeData is false', () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasSlopeData: false,
+                    hasTracksInViewport: true
+                }),
+            });
+
+            const slopeLabel = wrapper.findAll('label').find(label =>
+                label.element.textContent.includes('Slope (%):')
+            );
+            expect(slopeLabel).toBeFalsy();
+        });
+
+        it('shows filter options button when panel is open', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasTracksInViewport: true
+                }),
+            });
+
+            // Open the panel by clicking the compact button
+            const compactButton = wrapper.find('.filter-button-compact');
+            await compactButton.trigger('click');
+
+            const optionsButton = wrapper.find('.filter-options-btn');
+            expect(optionsButton.exists()).toBe(true);
+        });
+
+        it('toggles filter options panel', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasTracksInViewport: true
+                }),
+            });
+
+            // Open the main panel
+            const compactButton = wrapper.find('.filter-button-compact');
+            await compactButton.trigger('click');
+
+            const optionsButton = wrapper.find('.filter-options-btn');
+            await optionsButton.trigger('click');
+
+            const optionsPanel = wrapper.find('.filter-options-panel');
+            expect(optionsPanel.exists()).toBe(true);
+        });
+
+        it('saves filter visibility preferences to localStorage', async () => {
+            const mockLocalStorage = {
+                getItem: vi.fn(() => null),
+                setItem: vi.fn(),
+                removeItem: vi.fn(),
+                clear: vi.fn()
+            };
+            Object.defineProperty(window, 'localStorage', {
+                value: mockLocalStorage,
+                writable: true
+            });
+
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasTracksInViewport: true
+                }),
+            });
+
+            // Open panels
+            const compactButton = wrapper.find('.filter-button-compact');
+            await compactButton.trigger('click');
+            const optionsButton = wrapper.find('.filter-options-btn');
+            await optionsButton.trigger('click');
+
+            // Toggle elevation filter visibility
+            const elevationToggle = wrapper.find('#show-elevation');
+
+            expect(elevationToggle.exists()).toBe(true);
+            await elevationToggle.setChecked(false);
+            await nextTick();
+
+            expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+                'trackFilterOptions',
+                expect.any(String)
+            );
         });
     });
 });

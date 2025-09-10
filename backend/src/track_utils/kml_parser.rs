@@ -364,6 +364,15 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         Default::default()
     };
 
+    // Calculate slope metrics if elevation data is available
+    let slope_result = if let Some(elevation_profile) = &final_elevation_profile {
+        use crate::track_utils::slope::calculate_slope_metrics;
+
+        calculate_slope_metrics(&points, elevation_profile, "KML Track")
+    } else {
+        Default::default()
+    };
+
     Ok(ParsedTrackData {
         geom_geojson,
         length_km,
@@ -376,6 +385,12 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         elevation_loss: elevation_metrics.elevation_loss,
         elevation_min: elevation_metrics.elevation_min,
         elevation_max: elevation_metrics.elevation_max,
+        // Slope fields from universal calculator
+        slope_min: slope_result.slope_min,
+        slope_max: slope_result.slope_max,
+        slope_avg: slope_result.slope_avg,
+        slope_histogram: slope_result.slope_histogram,
+        slope_segments: slope_result.slope_segments,
         avg_speed: None,
         avg_hr: None, // KML does not typically contain HR data
         hr_min: None,
