@@ -1206,6 +1206,8 @@ mod tests {
             created_at: Some(Utc::now()),
             updated_at: Some(Utc::now()),
             session_id: Some(Uuid::new_v4()),
+            speed_data: Some(json!([10.0, 10.5])),
+            pace_data: Some(json!([6.0, 5.7])),
         };
 
         let gpx = generate_gpx_from_track(&track);
@@ -1262,6 +1264,8 @@ mod tests {
             created_at: Some(Utc::now()),
             updated_at: Some(Utc::now()),
             session_id: Some(Uuid::new_v4()),
+            speed_data: Some(json!([10.0, 10.5])),
+            pace_data: Some(json!([6.0, 5.7])),
         };
 
         let gpx = generate_gpx_from_track(&track);
@@ -1456,6 +1460,8 @@ mod tests {
             created_at: None,
             updated_at: None,
             session_id: None,
+            speed_data: Some(json!([8.0, 9.0, 10.0, 11.0])),
+            pace_data: Some(json!([7.5, 6.7, 6.0, 5.5])),
         };
 
         // Directly invoke logic as db::get_track_detail would return track.
