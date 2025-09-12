@@ -324,7 +324,7 @@
               </svg>
             </button>
             
-            <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasSlopeData">
+            <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasPaceData || hasSlopeData">
             <button 
               v-if="hasElevationData"
               class="chart-toggle" 
@@ -350,6 +350,14 @@
               Temperature
             </button>
             <button 
+              v-if="hasPaceData"
+              class="chart-toggle" 
+              :class="{ active: chartMode === 'pace' }"
+              @click="chartMode = 'pace'"
+            >
+              Pace
+            </button>
+            <button 
               v-if="hasSlopeData && hasElevationData"
               class="chart-toggle" 
               :class="{ active: chartMode === 'elevation-with-slope' }"
@@ -360,7 +368,7 @@
               Elevation + Slope
             </button>
             <button 
-              v-if="(hasHeartRateData || hasTemperatureData) && hasElevationData"
+              v-if="(hasHeartRateData || hasTemperatureData || hasPaceData) && hasElevationData"
               class="chart-toggle" 
               :class="{ active: chartMode === 'both' }"
               @click="chartMode = 'both'"
@@ -372,13 +380,19 @@
         </div>
         
         <!-- Elevation Chart -->
-        <div class="chart-section" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasSlopeData">
+        <div class="chart-section" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasPaceData || hasSlopeData">
           <ElevationChart 
             :key="`chart-${track.id}-${track.elevation_enriched_at || track.updated_at || 'default'}-${chartMode}-${chartUpdateKey}`"
             :elevationData="track.elevation_profile"
             :heartRateData="track.hr_data"
             :temperatureData="track.temp_data"
             :slopeData="track.slope_segments"
+            :speedData="track.speed_data"
+            :paceData="track.pace_data"
+            :coordinateData="track.geom_geojson?.coordinates"
+            :timeData="parsedTimeData"
+            :avgSpeed="track.avg_speed"
+            :movingAvgSpeed="track.moving_avg_speed"
             :trackName="chartTitle"
             :totalDistance="track.length_km"
             :chartMode="chartMode"
@@ -685,7 +699,27 @@ function stopElevationPolling() {
   isPollingForElevation.value = false;
 }
 
-// Computed properties for data validation and formatting - memoized for performance
+// Computed property to safely parse time data
+const parsedTimeData = computed(() => {
+  const timeData = track.value?.time_data;
+  if (!timeData) return [];
+  
+  if (Array.isArray(timeData)) {
+    return timeData;
+  }
+  
+  if (typeof timeData === 'string') {
+    try {
+      const parsed = JSON.parse(timeData);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.warn('[TrackDetailPanel] Failed to parse time_data string:', e);
+      return [];
+    }
+  }
+  
+  return [];
+});
 const hasSpeedData = useMemoizedComputed(
   (track) => {
     return (track?.avg_speed !== undefined && track?.avg_speed !== null) ||
@@ -772,6 +806,45 @@ const hasTemperatureData = useMemoizedComputed(
   }
 );
 
+const hasPaceData = useMemoizedComputed(
+  (track) => {
+    console.log('[TrackDetailPanel] Checking pace data for track:', track?.id, {
+      paceData: track?.pace_data ? 'present' : 'missing',
+      avgSpeed: track?.avg_speed,
+      movingAvgSpeed: track?.moving_avg_speed
+    });
+    
+    // Check for backend-calculated pace data first
+    if (track?.pace_data && Array.isArray(track.pace_data) && track.pace_data.length > 0) {
+      console.log('[TrackDetailPanel] Found backend-calculated pace data:', track.pace_data.length, 'points');
+      return true;
+    }
+    
+    // Fallback: check if we have aggregate speed data that frontend can use to estimate pace
+    if (track?.avg_speed && track?.avg_speed > 0) {
+      console.log('[TrackDetailPanel] Found avg_speed for pace calculation:', track.avg_speed);
+      return true;
+    }
+    
+    if (track?.moving_avg_speed && track?.moving_avg_speed > 0) {
+      console.log('[TrackDetailPanel] Found moving_avg_speed for pace calculation:', track.moving_avg_speed);
+      return true;
+    }
+    
+    console.log('[TrackDetailPanel] No suitable pace data found');
+    return false;
+  },
+  [() => props.track],
+  {
+    keyFn: (deps) => {
+      const [track] = deps;
+      if (!track) return 'pace_null';
+      const paceDataHash = track.pace_data ? `pace_array_${track.pace_data.length}` : 'null';
+      return `pace_${track.id}_${paceDataHash}_${track.avg_speed}_${track.moving_avg_speed}`;
+    }
+  }
+);
+
 const hasSlopeData = computed(() => {
   const track = props.track;
   
@@ -848,16 +921,17 @@ const slopeDistributionStats = computed(() => {
 
 // Combined check for elevation section visibility
 const hasElevationOrHeartRateData = computed(() => {
-  return hasElevationData.value || hasHeartRateData.value || hasTemperatureData.value || hasSlopeData.value;
+  return hasElevationData.value || hasHeartRateData.value || hasTemperatureData.value || hasPaceData.value || hasSlopeData.value;
 });
 
 // Dynamic chart title based on available data - memoized
 const chartTitle = useMemoizedComputed(
-  (hasElevation, hasHR, hasTemp, trackName) => {
+  (hasElevation, hasHR, hasTemp, hasPace, trackName) => {
     const dataTypes = [];
     if (hasElevation) dataTypes.push('Elevation');
     if (hasHR) dataTypes.push('Heart Rate');
     if (hasTemp) dataTypes.push('Temperature');
+    if (hasPace) dataTypes.push('Pace');
     
     if (dataTypes.length > 1) {
       return `${trackName} - ${dataTypes.join(' & ')}`;
@@ -871,6 +945,7 @@ const chartTitle = useMemoizedComputed(
     () => hasElevationData.value,
     () => hasHeartRateData.value, 
     () => hasTemperatureData.value,
+    () => hasPaceData.value,
     () => props.track?.name || 'Unnamed Track'
   ],
   {
@@ -1538,6 +1613,7 @@ watch(() => props.track, (newTrack) => {
     const hasElevation = hasElevationData.value;
     const hasHR = hasHeartRateData.value;
     const hasTemp = hasTemperatureData.value;
+    const hasPace = hasPaceData.value;
     const hasSlope = hasSlopeData.value;
     
     if (import.meta.env.DEV) {
@@ -1546,13 +1622,14 @@ watch(() => props.track, (newTrack) => {
         hasElevation,
         hasSlope,
         hasHR,
-        hasTemp
+        hasTemp,
+        hasPace
       });
     }
     
-    if (hasElevation && (hasHR || hasTemp)) {
+    if (hasElevation && (hasHR || hasTemp || hasPace)) {
       // If elevation and at least one other type are available, keep current mode or default to 'both'
-      if (!['elevation', 'pulse', 'temperature', 'elevation-with-slope', 'both'].includes(chartMode.value)) {
+      if (!['elevation', 'pulse', 'temperature', 'pace', 'elevation-with-slope', 'both'].includes(chartMode.value)) {
         chartMode.value = 'both';
       }
     } else if (hasElevation && hasSlope) {
@@ -1568,6 +1645,8 @@ watch(() => props.track, (newTrack) => {
       chartMode.value = 'pulse';
     } else if (hasTemp) {
       chartMode.value = 'temperature';
+    } else if (hasPace) {
+      chartMode.value = 'pace';
     }
     
     if (import.meta.env.DEV) {

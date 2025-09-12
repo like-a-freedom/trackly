@@ -376,6 +376,14 @@ pub async fn upload_track(
         Some(temp_data) => serde_json::to_value(temp_data).ok(),
         None => None,
     };
+    let speed_data_json = match parsed_data.speed_data {
+        Some(speed_data) => serde_json::to_value(speed_data).ok(),
+        None => None,
+    };
+    let pace_data_json = match parsed_data.pace_data {
+        Some(pace_data) => serde_json::to_value(pace_data).ok(),
+        None => None,
+    };
     db::insert_track(db::InsertTrackParams {
         pool: &pool,
         id,
@@ -414,6 +422,8 @@ pub async fn upload_track(
         hash: &parsed_data.hash,
         recorded_at: parsed_data.recorded_at,
         session_id,
+        speed_data_json,
+        pace_data_json,
     })
     .await
     .map_err(|e| {
@@ -644,6 +654,8 @@ pub async fn get_track_simplified(
                 updated_at: track.updated_at,
                 session_id: track.session_id,
                 auto_classifications: track.auto_classifications,
+                speed_data: track.speed_data,
+                pace_data: track.pace_data,
             };
 
             tracing::info!(
@@ -1194,6 +1206,8 @@ mod tests {
             created_at: Some(Utc::now()),
             updated_at: Some(Utc::now()),
             session_id: Some(Uuid::new_v4()),
+            speed_data: Some(json!([10.0, 10.5])),
+            pace_data: Some(json!([6.0, 5.7])),
         };
 
         let gpx = generate_gpx_from_track(&track);
@@ -1250,6 +1264,8 @@ mod tests {
             created_at: Some(Utc::now()),
             updated_at: Some(Utc::now()),
             session_id: Some(Uuid::new_v4()),
+            speed_data: Some(json!([10.0, 10.5])),
+            pace_data: Some(json!([6.0, 5.7])),
         };
 
         let gpx = generate_gpx_from_track(&track);
@@ -1444,6 +1460,8 @@ mod tests {
             created_at: None,
             updated_at: None,
             session_id: None,
+            speed_data: Some(json!([8.0, 9.0, 10.0, 11.0])),
+            pace_data: Some(json!([7.5, 6.7, 6.0, 5.5])),
         };
 
         // Directly invoke logic as db::get_track_detail would return track.
