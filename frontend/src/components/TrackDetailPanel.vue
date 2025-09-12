@@ -324,7 +324,7 @@
               </svg>
             </button>
             
-            <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasSlopeData">
+            <div class="chart-toggles" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasPaceData || hasSlopeData">
             <button 
               v-if="hasElevationData"
               class="chart-toggle" 
@@ -350,6 +350,14 @@
               Temperature
             </button>
             <button 
+              v-if="hasPaceData"
+              class="chart-toggle" 
+              :class="{ active: chartMode === 'pace' }"
+              @click="chartMode = 'pace'"
+            >
+              Pace
+            </button>
+            <button 
               v-if="hasSlopeData && hasElevationData"
               class="chart-toggle" 
               :class="{ active: chartMode === 'elevation-with-slope' }"
@@ -360,7 +368,7 @@
               Elevation + Slope
             </button>
             <button 
-              v-if="(hasHeartRateData || hasTemperatureData) && hasElevationData"
+              v-if="(hasHeartRateData || hasTemperatureData || hasPaceData) && hasElevationData"
               class="chart-toggle" 
               :class="{ active: chartMode === 'both' }"
               @click="chartMode = 'both'"
@@ -372,13 +380,16 @@
         </div>
         
         <!-- Elevation Chart -->
-        <div class="chart-section" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasSlopeData">
+        <div class="chart-section" v-if="hasElevationData || hasHeartRateData || hasTemperatureData || hasPaceData || hasSlopeData">
           <ElevationChart 
             :key="`chart-${track.id}-${track.elevation_enriched_at || track.updated_at || 'default'}-${chartMode}-${chartUpdateKey}`"
             :elevationData="track.elevation_profile"
             :heartRateData="track.hr_data"
             :temperatureData="track.temp_data"
             :slopeData="track.slope_segments"
+            :speedData="track.speed_data"
+            :coordinateData="track.geom_geojson?.coordinates"
+            :timeData="track.time_data"
             :trackName="chartTitle"
             :totalDistance="track.length_km"
             :chartMode="chartMode"
@@ -772,6 +783,35 @@ const hasTemperatureData = useMemoizedComputed(
   }
 );
 
+const hasPaceData = useMemoizedComputed(
+  (track) => {
+    // Check for direct speed data
+    if (track?.speed_data && track?.speed_data.length > 0) {
+      return track.speed_data.some(speed => speed !== null && speed !== undefined && typeof speed === 'number' && speed > 0);
+    }
+    
+    // Check if we can calculate pace from coordinate and time data
+    if (track?.geom_geojson?.coordinates && track?.time_data && 
+        track.geom_geojson.coordinates.length > 1 && track.time_data.length > 1 &&
+        track.geom_geojson.coordinates.length === track.time_data.length) {
+      return true;
+    }
+    
+    return false;
+  },
+  [() => props.track],
+  {
+    keyFn: (deps) => {
+      const track = deps[0];
+      if (!track) return 'pace_null';
+      const speedDataHash = track.speed_data ? `${track.speed_data.length}_${JSON.stringify(track.speed_data.slice(0, 2))}` : 'null';
+      const coordDataHash = track.geom_geojson?.coordinates ? `${track.geom_geojson.coordinates.length}_${JSON.stringify(track.geom_geojson.coordinates.slice(0, 2))}` : 'null';
+      const timeDataHash = track.time_data ? `${track.time_data.length}_${JSON.stringify(track.time_data.slice(0, 2))}` : 'null';
+      return `pace_${track.id}_${speedDataHash}_${coordDataHash}_${timeDataHash}`;
+    }
+  }
+);
+
 const hasSlopeData = computed(() => {
   const track = props.track;
   
@@ -848,16 +888,17 @@ const slopeDistributionStats = computed(() => {
 
 // Combined check for elevation section visibility
 const hasElevationOrHeartRateData = computed(() => {
-  return hasElevationData.value || hasHeartRateData.value || hasTemperatureData.value || hasSlopeData.value;
+  return hasElevationData.value || hasHeartRateData.value || hasTemperatureData.value || hasPaceData.value || hasSlopeData.value;
 });
 
 // Dynamic chart title based on available data - memoized
 const chartTitle = useMemoizedComputed(
-  (hasElevation, hasHR, hasTemp, trackName) => {
+  (hasElevation, hasHR, hasTemp, hasPace, trackName) => {
     const dataTypes = [];
     if (hasElevation) dataTypes.push('Elevation');
     if (hasHR) dataTypes.push('Heart Rate');
     if (hasTemp) dataTypes.push('Temperature');
+    if (hasPace) dataTypes.push('Pace');
     
     if (dataTypes.length > 1) {
       return `${trackName} - ${dataTypes.join(' & ')}`;
@@ -871,6 +912,7 @@ const chartTitle = useMemoizedComputed(
     () => hasElevationData.value,
     () => hasHeartRateData.value, 
     () => hasTemperatureData.value,
+    () => hasPaceData.value,
     () => props.track?.name || 'Unnamed Track'
   ],
   {
@@ -1538,6 +1580,7 @@ watch(() => props.track, (newTrack) => {
     const hasElevation = hasElevationData.value;
     const hasHR = hasHeartRateData.value;
     const hasTemp = hasTemperatureData.value;
+    const hasPace = hasPaceData.value;
     const hasSlope = hasSlopeData.value;
     
     if (import.meta.env.DEV) {
@@ -1546,13 +1589,14 @@ watch(() => props.track, (newTrack) => {
         hasElevation,
         hasSlope,
         hasHR,
-        hasTemp
+        hasTemp,
+        hasPace
       });
     }
     
-    if (hasElevation && (hasHR || hasTemp)) {
+    if (hasElevation && (hasHR || hasTemp || hasPace)) {
       // If elevation and at least one other type are available, keep current mode or default to 'both'
-      if (!['elevation', 'pulse', 'temperature', 'elevation-with-slope', 'both'].includes(chartMode.value)) {
+      if (!['elevation', 'pulse', 'temperature', 'pace', 'elevation-with-slope', 'both'].includes(chartMode.value)) {
         chartMode.value = 'both';
       }
     } else if (hasElevation && hasSlope) {
@@ -1568,6 +1612,8 @@ watch(() => props.track, (newTrack) => {
       chartMode.value = 'pulse';
     } else if (hasTemp) {
       chartMode.value = 'temperature';
+    } else if (hasPace) {
+      chartMode.value = 'pace';
     }
     
     if (import.meta.env.DEV) {
