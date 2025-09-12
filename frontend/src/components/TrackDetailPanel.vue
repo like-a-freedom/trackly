@@ -388,6 +388,7 @@
             :temperatureData="track.temp_data"
             :slopeData="track.slope_segments"
             :speedData="track.speed_data"
+            :paceData="track.pace_data"
             :coordinateData="track.geom_geojson?.coordinates"
             :timeData="parsedTimeData"
             :avgSpeed="track.avg_speed"
@@ -806,22 +807,20 @@ const hasTemperatureData = useMemoizedComputed(
 );
 
 const hasPaceData = useMemoizedComputed(
-  (track, parsedTime) => {
+  (track) => {
     console.log('[TrackDetailPanel] Checking pace data for track:', track?.id, {
-      speedData: track?.speed_data ? 'present' : 'missing',
+      paceData: track?.pace_data ? 'present' : 'missing',
       avgSpeed: track?.avg_speed,
-      movingAvgSpeed: track?.moving_avg_speed,
-      coordinates: track?.geom_geojson?.coordinates?.length || 0,
-      timeData: parsedTime?.length || 0,
-      durationsSeconds: track?.duration_seconds
+      movingAvgSpeed: track?.moving_avg_speed
     });
     
-    // Check for direct speed data
-    if (track?.speed_data && track?.speed_data.length > 0) {
-      return track.speed_data.some(speed => speed !== null && speed !== undefined && typeof speed === 'number' && speed > 0);
+    // Check for backend-calculated pace data first
+    if (track?.pace_data && Array.isArray(track.pace_data) && track.pace_data.length > 0) {
+      console.log('[TrackDetailPanel] Found backend-calculated pace data:', track.pace_data.length, 'points');
+      return true;
     }
     
-    // Check if we have aggregate speed data that we can use to estimate pace
+    // Fallback: check if we have aggregate speed data that frontend can use to estimate pace
     if (track?.avg_speed && track?.avg_speed > 0) {
       console.log('[TrackDetailPanel] Found avg_speed for pace calculation:', track.avg_speed);
       return true;
@@ -832,26 +831,16 @@ const hasPaceData = useMemoizedComputed(
       return true;
     }
     
-    // Check if we can calculate pace from coordinate and time data
-    if (track?.geom_geojson?.coordinates && parsedTime && 
-        track.geom_geojson.coordinates.length > 1 && parsedTime.length > 1 &&
-        track.geom_geojson.coordinates.length === parsedTime.length) {
-      console.log('[TrackDetailPanel] Found coordinate and time data for pace calculation');
-      return true;
-    }
-    
     console.log('[TrackDetailPanel] No suitable pace data found');
     return false;
   },
-  [() => props.track, () => parsedTimeData.value],
+  [() => props.track],
   {
     keyFn: (deps) => {
-      const [track, parsedTime] = deps;
+      const [track] = deps;
       if (!track) return 'pace_null';
-      const speedDataHash = track.speed_data ? `${track.speed_data.length}_${JSON.stringify(track.speed_data.slice(0, 2))}` : 'null';
-      const coordDataHash = track.geom_geojson?.coordinates ? `${track.geom_geojson.coordinates.length}_${JSON.stringify(track.geom_geojson.coordinates.slice(0, 2))}` : 'null';
-      const timeDataHash = parsedTime ? `${parsedTime.length}_${JSON.stringify(parsedTime.slice(0, 2))}` : 'null';
-      return `pace_${track.id}_${speedDataHash}_${coordDataHash}_${timeDataHash}_${track.avg_speed}_${track.moving_avg_speed}`;
+      const paceDataHash = track.pace_data ? `pace_array_${track.pace_data.length}` : 'null';
+      return `pace_${track.id}_${paceDataHash}_${track.avg_speed}_${track.moving_avg_speed}`;
     }
   }
 );

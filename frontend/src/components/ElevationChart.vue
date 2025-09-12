@@ -48,22 +48,6 @@ import {
 import { useMemoizedComputed } from '../composables/useMemoization';
 import { getSlopeColor, getSlopeCategory } from '../utils/slopeColors.js';
 
-// Haversine distance calculation for pace computation
-function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = lat1 * Math.PI / 180; // φ, λ in radians
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c; // Distance in meters
-}
-
 ChartJS.register(
   Title,
   Tooltip,
@@ -120,6 +104,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  paceData: {
+    type: Array,
+    default: () => []
+  },
   coordinateData: {
     type: Array,
     default: () => []
@@ -155,45 +143,48 @@ function cleanupTooltip() {
 }
 
 const hasPace = useMemoizedComputed(
-  (speedData, coordinateData, timeData, avgSpeed, movingAvgSpeed) => {
+  (speedData, paceData, avgSpeed, movingAvgSpeed) => {
     console.log('[ElevationChart] Checking pace data:', {
+      paceData: paceData ? (Array.isArray(paceData) ? paceData.length : 'non-array') : 'missing',
       speedData: speedData ? (Array.isArray(speedData) ? speedData.length : 'non-array') : 'missing',
       avgSpeed,
-      movingAvgSpeed,
-      coordinates: coordinateData ? (Array.isArray(coordinateData) ? coordinateData.length : 'non-array') : 'missing',
-      timeData: timeData ? (Array.isArray(timeData) ? timeData.length : 'non-array') : 'missing'
+      movingAvgSpeed
     });
     
-    // Check if we have speed data directly
+    // Check if we have backend-calculated pace data
+    if (Array.isArray(paceData) && paceData.length > 0) {
+      const hasValidPace = paceData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
+      if (hasValidPace) {
+        console.log('[ElevationChart] Found backend-calculated pace data');
+        return true;
+      }
+    }
+    
+    // Check if we have speed data that we can convert to pace
     if (Array.isArray(speedData) && speedData.length > 0) {
-      return speedData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
+      const hasValidSpeed = speedData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
+      if (hasValidSpeed) {
+        console.log('[ElevationChart] Found speed data for pace conversion');
+        return true;
+      }
     }
     
-    // Check if we have aggregate speed data
+    // Check if we have aggregate speed data for fallback pace estimation
     if ((avgSpeed && avgSpeed > 0) || (movingAvgSpeed && movingAvgSpeed > 0)) {
-      console.log('[ElevationChart] Found aggregate speed data for pace');
-      return true;
-    }
-    
-    // Check if we can calculate pace from coordinate and time data
-    if (Array.isArray(coordinateData) && coordinateData.length > 1 && 
-        Array.isArray(timeData) && timeData.length > 1 && 
-        coordinateData.length === timeData.length) {
-      console.log('[ElevationChart] Found coordinate and time data for pace calculation');
+      console.log('[ElevationChart] Found aggregate speed data for pace estimation');
       return true;
     }
     
     console.log('[ElevationChart] No suitable pace data found');
     return false;
   },
-  [() => props.speedData, () => props.coordinateData, () => props.timeData, () => props.avgSpeed, () => props.movingAvgSpeed],
+  [() => props.speedData, () => props.paceData, () => props.avgSpeed, () => props.movingAvgSpeed],
   {
     keyFn: (deps) => {
-      const [speedData, coordData, timeData, avgSpeed, movingAvgSpeed] = deps;
+      const [speedData, paceData, avgSpeed, movingAvgSpeed] = deps;
       const speedHash = speedData ? `${speedData.length}_${JSON.stringify(speedData.slice(0, 2))}` : 'null';
-      const coordHash = coordData ? `${coordData.length}_${JSON.stringify(coordData.slice(0, 2))}` : 'null';
-      const timeHash = timeData ? `${timeData.length}_${JSON.stringify(timeData.slice(0, 2))}` : 'null';
-      return `pace_${speedHash}_${coordHash}_${timeHash}_${avgSpeed}_${movingAvgSpeed}`;
+      const paceHash = paceData ? `${paceData.length}_${JSON.stringify(paceData.slice(0, 2))}` : 'null';
+      return `pace_${speedHash}_${paceHash}_${avgSpeed}_${movingAvgSpeed}`;
     }
   }
 );
@@ -269,7 +260,7 @@ const hasTemperature = useMemoizedComputed(
 );
 
 const chartData = useMemoizedComputed(
-  (elevationData, heartRateData, temperatureData, slopeData, speedData, coordinateData, timeData, avgSpeed, movingAvgSpeed, hasPulseValue, hasTemperatureValue, hasPaceValue, totalDistance, chartMode, elevationStats, distanceUnit) => {
+  (elevationData, heartRateData, temperatureData, slopeData, speedData, paceData, coordinateData, timeData, avgSpeed, movingAvgSpeed, hasPulseValue, hasTemperatureValue, hasPaceValue, totalDistance, chartMode, elevationStats, distanceUnit) => {
     if ((!elevationData || elevationData.length === 0) && (!hasPulseValue) && (!hasTemperatureValue) && (!hasPaceValue) && (!elevationStats.gain && !elevationStats.loss)) {
       return {};
     }
@@ -382,36 +373,33 @@ const chartData = useMemoizedComputed(
       temperaturePointCount = temperature.length;
     }
     
-    // Pace extraction and calculation
+    // Pace extraction - simplified to use backend-calculated data
     let pace = [];
     let pacePointCount = 0;
     if (hasPaceValue) {
-      // Try to use direct speed data first
-      if (speedData && speedData.length > 0) {
+      // Try to use backend-calculated pace data first
+      if (paceData && paceData.length > 0) {
+        if (paceData.every(p => typeof p === 'number' || p === null)) {
+          pace = paceData.slice(); // Use backend-calculated pace directly
+          pacePointCount = pace.length;
+          console.log('[ElevationChart] Using backend-calculated pace data:', pacePointCount, 'points');
+        }
+      }
+      // Fallback: convert speed data to pace if no backend pace data
+      else if (speedData && speedData.length > 0) {
         if (speedData.every(p => typeof p === 'number' || p === null)) {
           // Convert speed (km/h) to pace (min/km)
           pace = speedData.map(speed => {
             if (speed === null || speed === undefined || speed <= 0) return null;
             return 60 / speed; // min/km
           });
-        } else if (speedData.every(p => Array.isArray(p) && p.length >= 2)) {
-          pace = speedData.map(p => {
-            const speed = p[1];
-            if (speed === null || speed === undefined || speed <= 0) return null;
-            return 60 / speed;
-          });
-        } else if (speedData.every(p => typeof p === 'object' && p !== null && ('speed' in p || 'velocity' in p))) {
-          pace = speedData.map(p => {
-            const speed = p.speed ?? p.velocity;
-            if (speed === null || speed === undefined || speed <= 0) return null;
-            return 60 / speed;
-          });
+          pacePointCount = pace.length;
+          console.log('[ElevationChart] Converted speed data to pace:', pacePointCount, 'points');
         }
-        pacePointCount = pace.length;
-      } 
-      // If no detailed speed data, try to use aggregate speed data to generate synthetic pace line
+      }
+      // Last resort: use aggregate speed data to generate synthetic pace line
       else if ((props.avgSpeed && props.avgSpeed > 0) || (props.movingAvgSpeed && props.movingAvgSpeed > 0)) {
-        console.log('[ElevationChart] Using aggregate speed for pace line');
+        console.log('[ElevationChart] Using aggregate speed for synthetic pace line');
         
         // Use the better speed metric available
         const useSpeed = props.movingAvgSpeed || props.avgSpeed;
@@ -434,70 +422,6 @@ const chartData = useMemoizedComputed(
         
         pacePointCount = pace.length;
         console.log('[ElevationChart] Generated synthetic pace data:', { basePace, points: pacePointCount });
-      }
-      // Calculate pace from coordinate and time data
-      else if (coordinateData && timeData && coordinateData.length === timeData.length && coordinateData.length > 1) {
-        pace = [];
-        for (let i = 1; i < coordinateData.length; i++) {
-          const coord1 = coordinateData[i - 1];
-          const coord2 = coordinateData[i];
-          const time1 = timeData[i - 1];
-          const time2 = timeData[i];
-          
-          if (!coord1 || !coord2 || !time1 || !time2) {
-            pace.push(null);
-            continue;
-          }
-          
-          // Extract coordinates (handle different formats)
-          let lat1, lon1, lat2, lon2;
-          if (Array.isArray(coord1)) {
-            [lat1, lon1] = coord1;
-            [lat2, lon2] = coord2;
-          } else if (typeof coord1 === 'object') {
-            lat1 = coord1.lat || coord1.latitude;
-            lon1 = coord1.lon || coord1.longitude;
-            lat2 = coord2.lat || coord2.latitude;
-            lon2 = coord2.lon || coord2.longitude;
-          } else {
-            pace.push(null);
-            continue;
-          }
-          
-          // Calculate time difference in hours
-          let timeDiffHours;
-          if (typeof time1 === 'string' && typeof time2 === 'string') {
-            const date1 = new Date(time1);
-            const date2 = new Date(time2);
-            timeDiffHours = (date2.getTime() - date1.getTime()) / (1000 * 60 * 60);
-          } else if (typeof time1 === 'number' && typeof time2 === 'number') {
-            // Assume elapsed seconds from start
-            timeDiffHours = (time2 - time1) / 3600;
-          } else {
-            pace.push(null);
-            continue;
-          }
-          
-          if (timeDiffHours <= 0 || timeDiffHours > 1) { // Sanity check: max 1 hour between points
-            pace.push(null);
-            continue;
-          }
-          
-          // Calculate distance using Haversine formula
-          const distance = haversineDistance(lat1, lon1, lat2, lon2); // in meters
-          const distanceKm = distance / 1000;
-          const speedKmh = distanceKm / timeDiffHours;
-          
-          if (speedKmh <= 0 || speedKmh > 200) { // Sanity check: reasonable speed range
-            pace.push(null);
-          } else {
-            pace.push(60 / speedKmh); // min/km
-          }
-        }
-        
-        // Add first point as null since we can't calculate pace for the first point
-        pace.unshift(null);
-        pacePointCount = pace.length;
       }
     }
     
@@ -692,6 +616,7 @@ const chartData = useMemoizedComputed(
     () => props.temperatureData,
     () => props.slopeData,
     () => props.speedData,
+    () => props.paceData,
     () => props.coordinateData,
     () => props.timeData,
     () => props.avgSpeed,
@@ -706,7 +631,7 @@ const chartData = useMemoizedComputed(
   ],
   {
     keyFn: (deps) => {
-      const [elevData, hrData, tempData, slopeData, speedData, coordData, timeData, avgSpeed, movingAvgSpeed, hasPulseVal, hasTempVal, hasPaceVal, totalDist, mode, elevStats, distUnit] = deps;
+      const [elevData, hrData, tempData, slopeData, speedData, paceData, coordData, timeData, avgSpeed, movingAvgSpeed, hasPulseVal, hasTempVal, hasPaceVal, totalDist, mode, elevStats, distUnit] = deps;
       
       // Create more precise hash for elevation data
       const elevHash = elevData ? `${elevData.length}_${JSON.stringify(elevData.slice(0, 3))}_${JSON.stringify(elevData.slice(-3))}` : 'null';
@@ -714,11 +639,12 @@ const chartData = useMemoizedComputed(
       const tempHash = tempData ? `${tempData.length}_${JSON.stringify(tempData.slice(0, 3))}` : 'null';
       const slopeHash = slopeData ? `${slopeData.length}_${JSON.stringify(slopeData.slice(0, 3))}` : 'null';
       const speedHash = speedData ? `${speedData.length}_${JSON.stringify(speedData.slice(0, 3))}` : 'null';
+      const paceHash = paceData ? `${paceData.length}_${JSON.stringify(paceData.slice(0, 3))}` : 'null';
       const coordHash = coordData ? `${coordData.length}_${JSON.stringify(coordData.slice(0, 3))}` : 'null';
       const timeHash = timeData ? `${timeData.length}_${JSON.stringify(timeData.slice(0, 3))}` : 'null';
       const statsHash = elevStats ? `${elevStats.gain}_${elevStats.loss}_${elevStats.dataset}_${elevStats.enriched}_${elevStats.enriched_at}_${elevStats._lastUpdated || '0'}` : 'null';
       
-      return `chartdata_${elevHash}_${hrHash}_${tempHash}_${slopeHash}_${speedHash}_${coordHash}_${timeHash}_${avgSpeed}_${movingAvgSpeed}_${hasPulseVal}_${hasTempVal}_${hasPaceVal}_${totalDist}_${mode}_${statsHash}_${distUnit}`;
+      return `chartdata_${elevHash}_${hrHash}_${tempHash}_${slopeHash}_${speedHash}_${paceHash}_${coordHash}_${timeHash}_${avgSpeed}_${movingAvgSpeed}_${hasPulseVal}_${hasTempVal}_${hasPaceVal}_${totalDist}_${mode}_${statsHash}_${distUnit}`;
     }
   }
 );
