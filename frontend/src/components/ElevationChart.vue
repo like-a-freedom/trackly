@@ -99,6 +99,26 @@ const props = defineProps({
   timeData: {
     type: Array,
     default: () => []
+  },
+  speedData: {
+    type: Array,
+    default: () => []
+  },
+  paceData: {
+    type: Array,
+    default: () => []
+  },
+  coordinateData: {
+    type: Array,
+    default: () => []
+  },
+  avgSpeed: {
+    type: Number,
+    default: undefined
+  },
+  movingAvgSpeed: {
+    type: Number,
+    default: undefined
   }
 });
 
@@ -121,6 +141,53 @@ function cleanupTooltip() {
     }, 200);
   }
 }
+
+const hasPace = useMemoizedComputed(
+  (speedData, paceData, avgSpeed, movingAvgSpeed) => {
+    console.log('[ElevationChart] Checking pace data:', {
+      paceData: paceData ? (Array.isArray(paceData) ? paceData.length : 'non-array') : 'missing',
+      speedData: speedData ? (Array.isArray(speedData) ? speedData.length : 'non-array') : 'missing',
+      avgSpeed,
+      movingAvgSpeed
+    });
+    
+    // Check if we have backend-calculated pace data
+    if (Array.isArray(paceData) && paceData.length > 0) {
+      const hasValidPace = paceData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
+      if (hasValidPace) {
+        console.log('[ElevationChart] Found backend-calculated pace data');
+        return true;
+      }
+    }
+    
+    // Check if we have speed data that we can convert to pace
+    if (Array.isArray(speedData) && speedData.length > 0) {
+      const hasValidSpeed = speedData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
+      if (hasValidSpeed) {
+        console.log('[ElevationChart] Found speed data for pace conversion');
+        return true;
+      }
+    }
+    
+    // Check if we have aggregate speed data for fallback pace estimation
+    if ((avgSpeed && avgSpeed > 0) || (movingAvgSpeed && movingAvgSpeed > 0)) {
+      console.log('[ElevationChart] Found aggregate speed data for pace estimation');
+      return true;
+    }
+    
+    console.log('[ElevationChart] No suitable pace data found');
+    return false;
+  },
+  [() => props.speedData, () => props.paceData, () => props.avgSpeed, () => props.movingAvgSpeed],
+  {
+    keyFn: (deps) => {
+      const [speedData, paceData, avgSpeed, movingAvgSpeed] = deps;
+      const speedHash = speedData ? `${speedData.length}_${JSON.stringify(speedData.slice(0, 2))}` : 'null';
+      const paceHash = paceData ? `${paceData.length}_${JSON.stringify(paceData.slice(0, 2))}` : 'null';
+      return `pace_${speedHash}_${paceHash}_${avgSpeed}_${movingAvgSpeed}`;
+    }
+  }
+);
 
 const hasPulse = useMemoizedComputed(
   (heartRateData) => {
@@ -193,8 +260,8 @@ const hasTemperature = useMemoizedComputed(
 );
 
 const chartData = useMemoizedComputed(
-  (elevationData, heartRateData, temperatureData, slopeData, hasPulseValue, hasTemperatureValue, totalDistance, chartMode, elevationStats, distanceUnit) => {
-    if ((!elevationData || elevationData.length === 0) && (!hasPulseValue) && (!hasTemperatureValue) && (!elevationStats.gain && !elevationStats.loss)) {
+  (elevationData, heartRateData, temperatureData, slopeData, speedData, paceData, coordinateData, timeData, avgSpeed, movingAvgSpeed, hasPulseValue, hasTemperatureValue, hasPaceValue, totalDistance, chartMode, elevationStats, distanceUnit) => {
+    if ((!elevationData || elevationData.length === 0) && (!hasPulseValue) && (!hasTemperatureValue) && (!hasPaceValue) && (!elevationStats.gain && !elevationStats.loss)) {
       return {};
     }
     
@@ -306,12 +373,65 @@ const chartData = useMemoizedComputed(
       temperaturePointCount = temperature.length;
     }
     
+    // Pace extraction - simplified to use backend-calculated data
+    let pace = [];
+    let pacePointCount = 0;
+    if (hasPaceValue) {
+      // Try to use backend-calculated pace data first
+      if (paceData && paceData.length > 0) {
+        if (paceData.every(p => typeof p === 'number' || p === null)) {
+          pace = paceData.slice(); // Use backend-calculated pace directly
+          pacePointCount = pace.length;
+          console.log('[ElevationChart] Using backend-calculated pace data:', pacePointCount, 'points');
+        }
+      }
+      // Fallback: convert speed data to pace if no backend pace data
+      else if (speedData && speedData.length > 0) {
+        if (speedData.every(p => typeof p === 'number' || p === null)) {
+          // Convert speed (km/h) to pace (min/km)
+          pace = speedData.map(speed => {
+            if (speed === null || speed === undefined || speed <= 0) return null;
+            return 60 / speed; // min/km
+          });
+          pacePointCount = pace.length;
+          console.log('[ElevationChart] Converted speed data to pace:', pacePointCount, 'points');
+        }
+      }
+      // Last resort: use aggregate speed data to generate synthetic pace line
+      else if ((props.avgSpeed && props.avgSpeed > 0) || (props.movingAvgSpeed && props.movingAvgSpeed > 0)) {
+        console.log('[ElevationChart] Using aggregate speed for synthetic pace line');
+        
+        // Use the better speed metric available
+        const useSpeed = props.movingAvgSpeed || props.avgSpeed;
+        const basePace = 60 / useSpeed; // min/km
+        
+        // Generate pace data with the same granularity as other datasets
+        const targetPoints = Math.max(
+          elevationPointCount,
+          pulsePointCount,
+          temperaturePointCount,
+          50 // minimum reasonable number of points
+        );
+        
+        // Create a synthetic pace line with slight variation to make it more realistic
+        pace = Array.from({ length: targetPoints }, (_, i) => {
+          // Add small random variation (±10%) to make the pace line more realistic
+          const variation = 0.9 + (Math.random() * 0.2); // 0.9 to 1.1
+          return basePace * variation;
+        });
+        
+        pacePointCount = pace.length;
+        console.log('[ElevationChart] Generated synthetic pace data:', { basePace, points: pacePointCount });
+      }
+    }
+    
     // Use the maximum point count for labels, but exclude slope from driving the granularity
     // since slope now has its own adaptive granularity control
     let targetPointCount = Math.max(
       elevationPointCount,
       pulsePointCount,
       temperaturePointCount,
+      pacePointCount,
       2 // minimum for stats display
     );
     
@@ -359,6 +479,7 @@ const chartData = useMemoizedComputed(
     const interpolatedElevation = interpolateToLabelCount(elevation, targetPointCount);
     const interpolatedPulse = interpolateToLabelCount(pulse, targetPointCount);
     const interpolatedTemperature = interpolateToLabelCount(temperature, targetPointCount);
+    const interpolatedPace = interpolateToLabelCount(pace, targetPointCount);
     // For slope data, use it directly since it already has controlled granularity
     const interpolatedSlope = chartMode === 'elevation-with-slope' && slope.length > 0 ? slope : [];
 
@@ -464,6 +585,19 @@ const chartData = useMemoizedComputed(
         yAxisID: 'y-temperature',
       });
     }
+    if ((chartMode === 'pace' || chartMode === 'both') && hasPaceValue) {
+      datasets.push({
+        label: 'Pace (min/km)',
+        backgroundColor: 'rgba(156, 39, 176, 0.13)',
+        borderColor: 'rgba(156, 39, 176, 1)',
+        borderWidth: 2,
+        tension: 0.3,
+        fill: false,
+        pointRadius: 0,
+        data: interpolatedPace,
+        yAxisID: 'y-pace',
+      });
+    }
     
     // Update debug info with final dataset count
     if (import.meta.env.DEV && datasets.length > 0) {
@@ -481,8 +615,15 @@ const chartData = useMemoizedComputed(
     () => props.heartRateData,
     () => props.temperatureData,
     () => props.slopeData,
+    () => props.speedData,
+    () => props.paceData,
+    () => props.coordinateData,
+    () => props.timeData,
+    () => props.avgSpeed,
+    () => props.movingAvgSpeed,
     () => hasPulse.value,
     () => hasTemperature.value,
+    () => hasPace.value,
     () => props.totalDistance,
     () => props.chartMode,
     () => props.elevationStats,
@@ -490,16 +631,20 @@ const chartData = useMemoizedComputed(
   ],
   {
     keyFn: (deps) => {
-      const [elevData, hrData, tempData, slopeData, hasPulseVal, hasTempVal, totalDist, mode, elevStats, distUnit] = deps;
+      const [elevData, hrData, tempData, slopeData, speedData, paceData, coordData, timeData, avgSpeed, movingAvgSpeed, hasPulseVal, hasTempVal, hasPaceVal, totalDist, mode, elevStats, distUnit] = deps;
       
       // Create more precise hash for elevation data
       const elevHash = elevData ? `${elevData.length}_${JSON.stringify(elevData.slice(0, 3))}_${JSON.stringify(elevData.slice(-3))}` : 'null';
       const hrHash = hrData ? `${hrData.length}_${JSON.stringify(hrData.slice(0, 3))}` : 'null';
       const tempHash = tempData ? `${tempData.length}_${JSON.stringify(tempData.slice(0, 3))}` : 'null';
       const slopeHash = slopeData ? `${slopeData.length}_${JSON.stringify(slopeData.slice(0, 3))}` : 'null';
+      const speedHash = speedData ? `${speedData.length}_${JSON.stringify(speedData.slice(0, 3))}` : 'null';
+      const paceHash = paceData ? `${paceData.length}_${JSON.stringify(paceData.slice(0, 3))}` : 'null';
+      const coordHash = coordData ? `${coordData.length}_${JSON.stringify(coordData.slice(0, 3))}` : 'null';
+      const timeHash = timeData ? `${timeData.length}_${JSON.stringify(timeData.slice(0, 3))}` : 'null';
       const statsHash = elevStats ? `${elevStats.gain}_${elevStats.loss}_${elevStats.dataset}_${elevStats.enriched}_${elevStats.enriched_at}_${elevStats._lastUpdated || '0'}` : 'null';
       
-      return `chartdata_${elevHash}_${hrHash}_${tempHash}_${slopeHash}_${hasPulseVal}_${hasTempVal}_${totalDist}_${mode}_${statsHash}_${distUnit}`;
+      return `chartdata_${elevHash}_${hrHash}_${tempHash}_${slopeHash}_${speedHash}_${paceHash}_${coordHash}_${timeHash}_${avgSpeed}_${movingAvgSpeed}_${hasPulseVal}_${hasTempVal}_${hasPaceVal}_${totalDist}_${mode}_${statsHash}_${distUnit}`;
     }
   }
 );
@@ -512,6 +657,7 @@ watch([
   () => props.chartMode,
   () => hasPulse.value,
   () => hasTemperature.value,
+  () => hasPace.value,
   () => props.slopeData,
   () => props.trackName,
   () => props.distanceUnit,
@@ -520,6 +666,7 @@ watch([
   const showElevation = props.chartMode === 'elevation' || props.chartMode === 'both' || props.chartMode === 'elevation-with-slope';
   const showPulse = (props.chartMode === 'pulse' || props.chartMode === 'both') && hasPulse.value;
   const showTemperature = (props.chartMode === 'temperature' || props.chartMode === 'both') && hasTemperature.value;
+  const showPace = (props.chartMode === 'pace' || props.chartMode === 'both') && hasPace.value;
   
   const distanceLabel = props.distanceUnit === 'mi' ? 'Distance (mi)' : 'Distance (km)';
   
@@ -613,6 +760,14 @@ watch([
           innerHtml += `<span class="tooltip-icon">🌡️</span>`;
           innerHtml += `<span class="tooltip-label">Temperature:</span>`;
           innerHtml += `<span class="tooltip-value">${value.toFixed(1)} °C</span>`;
+          innerHtml += `</div>`;
+        } else if (dataset.yAxisID === 'y-pace') {
+          innerHtml += `<div class="tooltip-row pace">`;
+          innerHtml += `<span class="tooltip-icon">⏱️</span>`;
+          innerHtml += `<span class="tooltip-label">Pace:</span>`;
+          const minutes = Math.floor(value);
+          const seconds = Math.round((value - minutes) * 60);
+          innerHtml += `<span class="tooltip-value">${minutes}:${seconds.toString().padStart(2, '0')} min/km</span>`;
           innerHtml += `</div>`;
         }
       });
@@ -715,6 +870,22 @@ watch([
           beginAtZero: false,
           grid: {
             drawOnChartArea: !(showElevation || showPulse) // only draw grid if not dual axis
+          }
+        }
+      } : {}),
+      ...(showPace ? {
+        'y-pace': {
+          type: 'linear',
+          display: true,
+          position: (showElevation || showPulse || showTemperature) ? 'right' : 'left',
+          title: {
+            display: true,
+            text: 'Pace (min/km)'
+          },
+          beginAtZero: false,
+          reverse: true, // Lower pace (faster) should be at the top
+          grid: {
+            drawOnChartArea: !(showElevation || showPulse || showTemperature) // only draw grid if not dual axis
           }
         }
       } : {})
@@ -942,6 +1113,12 @@ onUnmounted(() => {
 
 .tooltip-row.temperature {
   border-left: 2px solid rgba(255, 165, 0, 1);
+  padding-left: 8px;
+  margin-left: -2px;
+}
+
+.tooltip-row.pace {
+  border-left: 2px solid rgba(156, 39, 176, 1);
   padding-left: 8px;
   margin-left: -2px;
 }

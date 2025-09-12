@@ -10,7 +10,7 @@ use crate::track_utils::time_utils::parse_gpx_time;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use sha2::{Digest, Sha256};
-use tracing::info;
+use tracing::{debug, info};
 
 /// Parses GPX file, returns ParsedTrackData
 pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
@@ -392,15 +392,25 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     };
 
     // Calculate moving/pause time and moving speed/pace
-    // Heuristic: consider as moving if speed > 1 km/h between points
+    // Also calculate point-by-point speed and pace data
     let mut total_moving_secs: f64 = 0.0;
     let mut total_pause_secs: f64 = 0.0;
     let mut moving_distance: f64 = 0.0;
+    let mut speed_data_points: Vec<Option<f64>> = Vec::new();
+    let mut pace_data_points: Vec<Option<f64>> = Vec::new();
+    let mut time_diff_data: Vec<Option<f64>> = Vec::new();
 
     if points.len() > 1 && time_points.len() == points.len() {
+        // First point has no speed/pace since we need two points to calculate
+        speed_data_points.push(None);
+        pace_data_points.push(None);
+        time_diff_data.push(None);
+        
         for i in 1..points.len() {
             if let (Some(time1), Some(time2)) = (&time_points[i - 1], &time_points[i]) {
                 let time_diff_secs = (time2.timestamp() - time1.timestamp()) as f64;
+                time_diff_data.push(Some(time_diff_secs));
+                
                 if time_diff_secs > 0.0 && time_diff_secs < 3600.0 {
                     // Sanity check: < 1 hour between points
                     let dist_m = haversine_distance(
@@ -409,6 +419,16 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                     );
                     let speed_kmh = (dist_m / 1000.0) / (time_diff_secs / 3600.0);
 
+                    // Store speed and calculate pace (basic filtering still applied)
+                    if speed_kmh > 0.0 && speed_kmh < 200.0 {
+                        // Sanity check: reasonable speed range
+                        speed_data_points.push(Some(speed_kmh));
+                        pace_data_points.push(Some(60.0 / speed_kmh)); // min/km
+                    } else {
+                        speed_data_points.push(None);
+                        pace_data_points.push(None);
+                    }
+
                     // Consider moving if speed > 1 km/h
                     if speed_kmh > 1.0 {
                         total_moving_secs += time_diff_secs;
@@ -416,7 +436,14 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                     } else {
                         total_pause_secs += time_diff_secs;
                     }
+                } else {
+                    speed_data_points.push(None);
+                    pace_data_points.push(None);
                 }
+            } else {
+                speed_data_points.push(None);
+                pace_data_points.push(None);
+                time_diff_data.push(None);
             }
         }
     }
@@ -511,6 +538,28 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         Default::default()
     };
 
+    // Apply adaptive pace filtering based on track classification
+    let filtered_pace_data = if !pace_data_points.is_empty() && pace_data_points.iter().any(|p| p.is_some()) {
+        use crate::track_utils::pace_filter::filter_pace_data;
+        debug!("Applying adaptive pace filtering with {} classifications", classifications.len());
+        filter_pace_data(&pace_data_points, &speed_data_points, &time_diff_data, &classifications)
+    } else {
+        pace_data_points
+    };
+
+    // Create final speed and pace data arrays if we have time data
+    let final_speed_data = if !speed_data_points.is_empty() && speed_data_points.iter().any(|s| s.is_some()) {
+        Some(speed_data_points)
+    } else {
+        None
+    };
+    
+    let final_pace_data = if !filtered_pace_data.is_empty() && filtered_pace_data.iter().any(|p| p.is_some()) {
+        Some(filtered_pace_data)
+    } else {
+        None
+    };
+
     Ok(ParsedTrackData {
         geom_geojson,
         length_km,
@@ -545,5 +594,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         hash,
         recorded_at,
         auto_classifications, // Add automatic classifications
+        speed_data: final_speed_data, // Add calculated speed data
+        pace_data: final_pace_data, // Add calculated pace data
     })
 }

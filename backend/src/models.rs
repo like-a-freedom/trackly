@@ -79,6 +79,8 @@ pub struct TrackDetail {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     pub session_id: Option<Uuid>, // Add session_id for owner check
     pub auto_classifications: Vec<String>, // Automatically determined track classifications
+    pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
+    pub pace_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
 }
 
 #[derive(Debug, Serialize)]
@@ -122,6 +124,8 @@ pub struct TrackSimplified {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     pub session_id: Option<Uuid>,
     pub auto_classifications: Vec<String>,
+    pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb  
+    pub pace_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
 }
 
 #[derive(Serialize)]
@@ -235,6 +239,8 @@ pub struct ParsedTrackData {
     pub hash: String,
     pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
     pub auto_classifications: Vec<String>, // Result of automatic track classification
+    pub speed_data: Option<Vec<Option<f64>>>, // Point-by-point speed data (km/h)
+    pub pace_data: Option<Vec<Option<f64>>>, // Point-by-point pace data (min/km)
 }
 
 #[derive(Debug, Deserialize)]
