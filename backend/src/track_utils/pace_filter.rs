@@ -31,26 +31,26 @@ impl Default for PaceFilterConfig {
 
 /// Get activity-specific pace filter configuration
 pub fn get_pace_filter_config(classifications: &[TrackClassification]) -> PaceFilterConfig {
-    // Prioritize more specific classifications
-    for classification in classifications {
+    // Use the first classification to determine configuration
+    if let Some(classification) = classifications.first() {
         match classification {
             TrackClassification::Hiking => {
-                return PaceFilterConfig {
+                PaceFilterConfig {
                     spike_multiplier: get_env_f64("PACE_SPIKE_MULTIPLIER_HIKING", 2.5),
                     max_pace: get_env_f64("PACE_MAX_HIKING", 30.0),
                     min_pace: get_env_f64("PACE_MIN_HIKING", 3.0),
                     max_time_gap: get_env_u32("PACE_MAX_TIME_GAP_HIKING", 120),
                     ..Default::default()
-                };
+                }
             }
             TrackClassification::Walk => {
-                return PaceFilterConfig {
+                PaceFilterConfig {
                     spike_multiplier: get_env_f64("PACE_SPIKE_MULTIPLIER_WALKING", 2.0),
                     max_pace: get_env_f64("PACE_MAX_WALKING", 20.0),
                     min_pace: get_env_f64("PACE_MIN_WALKING", 5.0),
                     max_time_gap: get_env_u32("PACE_MAX_TIME_GAP_WALKING", 60),
                     ..Default::default()
-                };
+                }
             }
             TrackClassification::Trail
             | TrackClassification::Marathon
@@ -61,18 +61,18 @@ pub fn get_pace_filter_config(classifications: &[TrackClassification]) -> PaceFi
             | TrackClassification::TempoRun
             | TrackClassification::AerobicRun
             | TrackClassification::RecoveryRun => {
-                return PaceFilterConfig {
+                PaceFilterConfig {
                     spike_multiplier: get_env_f64("PACE_SPIKE_MULTIPLIER_RUNNING", 3.0),
                     max_pace: get_env_f64("PACE_MAX_RUNNING", 15.0),
                     min_pace: get_env_f64("PACE_MIN_RUNNING", 2.0),
                     max_time_gap: get_env_u32("PACE_MAX_TIME_GAP_RUNNING", 30),
                     ..Default::default()
-                };
+                }
             }
         }
+    } else {
+        PaceFilterConfig::default()
     }
-
-    PaceFilterConfig::default()
 }
 
 /// Detect if track might be cycling based on speed patterns and return appropriate config
