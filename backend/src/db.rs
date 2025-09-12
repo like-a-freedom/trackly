@@ -1382,6 +1382,8 @@ mod tests {
             hash: &hash,
             recorded_at: None,
             session_id: None,
+            speed_data_json: None,
+            pace_data_json: None,
         })
         .await;
         if let Err(e) = &res {
@@ -1457,6 +1459,8 @@ mod tests {
             hash: &hash,
             recorded_at: None,
             session_id: None,
+            speed_data_json: None,
+            pace_data_json: None,
         })
         .await;
 
@@ -1539,6 +1543,8 @@ mod tests {
             hash: &unique_hash,
             recorded_at: None,
             session_id: None,
+            speed_data_json: None,
+            pace_data_json: None,
         })
         .await
         .unwrap();
@@ -1622,6 +1628,8 @@ mod tests {
             hash: &unique_hash,
             recorded_at: None,
             session_id: None,
+            speed_data_json: None,
+            pace_data_json: None,
         })
         .await
         .unwrap();
