@@ -71,6 +71,7 @@ describe('Pace Functionality', () => {
         speedData: [],
         coordinateData: coordinateData,
         timeData: timeData,
+        avgSpeed: 12.5, // Provide average speed for pace calculation (backend-calculated)
         trackName: 'Test Track',
         totalDistance: 5.0,
         chartMode: 'pace',
@@ -79,7 +80,7 @@ describe('Pace Functionality', () => {
       }
     });
 
-    // Check if pace data is detected from coordinate/time data
+    // Check if pace data is detected from average speed (backend approach)
     expect(wrapper.vm.hasPace).toBe(true);
   });
 
