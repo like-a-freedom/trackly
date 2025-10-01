@@ -1321,12 +1321,17 @@ describe('TrackDetailPanel', () => {
       // Mock showConfirm to return true (user confirms)
       mockShowConfirm.mockResolvedValueOnce(true);
       
-      // Mock slow fetch response
-      global.fetch.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve({
+      // Mock slow fetch response - use mockResolvedValueOnce to avoid polluting other tests
+      let resolveEnrichment;
+      const enrichmentPromise = new Promise(resolve => {
+        resolveEnrichment = resolve;
+      });
+      
+      global.fetch.mockReturnValueOnce(
+        enrichmentPromise.then(() => ({
           ok: true,
           json: () => Promise.resolve({ elevation_gain: 400 })
-        }), 100))
+        }))
       );
 
       wrapper = mount(TrackDetailPanel, {
@@ -1340,6 +1345,10 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       expect(forceUpdateBtn.attributes('disabled')).toBe('');
+      
+      // Clean up - resolve the promise so it doesn't leak
+      resolveEnrichment();
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
 
     it('should handle 403 permission error', async () => {
