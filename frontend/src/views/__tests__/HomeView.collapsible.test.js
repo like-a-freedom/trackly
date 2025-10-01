@@ -37,6 +37,10 @@ vi.mock('../../utils/session', () => ({
 vi.mock('vue-router', () => ({
     useRouter: vi.fn(() => ({
         currentRoute: ref({ path: '/' })
+    })),
+    useRoute: vi.fn(() => ({
+        query: {},
+        path: '/',
     }))
 }));
 

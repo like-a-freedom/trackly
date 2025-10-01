@@ -9,9 +9,14 @@ vi.mock('vue-router', async (importOriginal) => {
         ...actual,
         useRouter: () => ({
             push: vi.fn(),
+            replace: vi.fn().mockResolvedValue(undefined),
             currentRoute: {
-                value: { path: '/' }
+                value: { path: '/', query: {} }
             }
+        }),
+        useRoute: () => ({
+            query: {},
+            path: '/',
         })
     };
 });
