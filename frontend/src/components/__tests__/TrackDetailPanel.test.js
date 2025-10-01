@@ -1197,9 +1197,9 @@ describe('TrackDetailPanel', () => {
     beforeEach(() => {
       // Mock fetch for elevation enrichment
       global.fetch = vi.fn();
-      // Clear the mocks
-      mockShowToast.mockClear();
-      mockShowConfirm.mockClear();
+      // Reset the mocks (clears both call history and implementation)
+      mockShowToast.mockReset();
+      mockShowConfirm.mockReset();
 
       // Mock window.dispatchEvent for global events  
       global.dispatchEvent = vi.fn();
@@ -1318,12 +1318,20 @@ describe('TrackDetailPanel', () => {
     });
 
     it('should disable button during enrichment process', async () => {
-      // Mock slow fetch response
-      global.fetch.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve({
+      // Mock showConfirm to return true (user confirms)
+      mockShowConfirm.mockResolvedValueOnce(true);
+      
+      // Mock slow fetch response - use mockResolvedValueOnce to avoid polluting other tests
+      let resolveEnrichment;
+      const enrichmentPromise = new Promise(resolve => {
+        resolveEnrichment = resolve;
+      });
+      
+      global.fetch.mockReturnValueOnce(
+        enrichmentPromise.then(() => ({
           ok: true,
           json: () => Promise.resolve({ elevation_gain: 400 })
-        }), 100))
+        }))
       );
 
       wrapper = mount(TrackDetailPanel, {
@@ -1337,9 +1345,16 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       expect(forceUpdateBtn.attributes('disabled')).toBe('');
+      
+      // Clean up - resolve the promise so it doesn't leak
+      resolveEnrichment();
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
 
     it('should handle 403 permission error', async () => {
+      // Mock showConfirm to return true (user confirms)
+      mockShowConfirm.mockResolvedValueOnce(true);
+      
       global.fetch.mockResolvedValueOnce({ ok: false, status: 403 });
 
       wrapper = mount(TrackDetailPanel, {
@@ -1355,6 +1370,9 @@ describe('TrackDetailPanel', () => {
     });
 
     it('should handle 429 rate limit error', async () => {
+      // Mock showConfirm to return true (user confirms)
+      mockShowConfirm.mockResolvedValueOnce(true);
+      
       global.fetch.mockResolvedValueOnce({ ok: false, status: 429 });
 
       wrapper = mount(TrackDetailPanel, {
@@ -1370,6 +1388,9 @@ describe('TrackDetailPanel', () => {
     });
 
     it('should handle network errors gracefully', async () => {
+      // Mock showConfirm to return true (user confirms)
+      mockShowConfirm.mockResolvedValueOnce(true);
+      
       global.fetch.mockRejectedValueOnce(new Error('Network error'));
 
       wrapper = mount(TrackDetailPanel, {
@@ -1393,6 +1414,9 @@ describe('TrackDetailPanel', () => {
         elevation_dataset: 'aster30m',
         enriched_at: '2024-01-01T13:00:00Z'
       };
+
+      // Mock showConfirm to return true (user confirms the update)
+      mockShowConfirm.mockResolvedValueOnce(true);
 
       global.fetch
         .mockResolvedValueOnce({
@@ -1425,6 +1449,9 @@ describe('TrackDetailPanel', () => {
     });
 
     it('should dispatch global event after successful enrichment', async () => {
+      // Mock showConfirm to return true (user confirms)
+      mockShowConfirm.mockResolvedValueOnce(true);
+      
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
@@ -1457,6 +1484,9 @@ describe('TrackDetailPanel', () => {
     });
 
     it('should handle failed track data fetch after enrichment', async () => {
+      // Mock showConfirm to return true (user confirms)
+      mockShowConfirm.mockResolvedValueOnce(true);
+      
       global.fetch
         .mockResolvedValueOnce({ // Enrichment succeeds
           ok: true,
