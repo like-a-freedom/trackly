@@ -41,7 +41,11 @@ const mockRouter = {
 };
 
 vi.mock('vue-router', () => ({
-    useRouter: () => mockRouter
+    useRouter: () => mockRouter,
+    useRoute: () => ({
+        query: {},
+        path: '/',
+    })
 }));
 
 describe('HomeView', () => {

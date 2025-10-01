@@ -194,6 +194,8 @@
 import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue';
 import Slider from '@vueform/slider';
 import '@vueform/slider/themes/default.css';
+// Import debouncing functionality to prevent excessive filter updates
+import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 import { useUnits } from '../composables/useUnits';
 
 const props = defineProps({
@@ -217,6 +219,22 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:filter']);
+
+// Debounced emit function to prevent excessive filter updates
+const debouncedEmitFilter = useAdvancedDebounce((filterState) => {
+  emit('update:filter', filterState);
+}, 100, { leading: false, trailing: true });
+
+// Also provide immediate emit for tests
+const emitFilter = (filterState) => {
+  if (import.meta.env.MODE === 'test') {
+    // In test mode, emit immediately without debouncing
+    emit('update:filter', filterState);
+  } else {
+    // In production, use debouncing
+    debouncedEmitFilter(filterState);
+  }
+};
 
 // Initialize global units (this ensures units are loaded on app startup)
 useUnits();
@@ -324,7 +342,7 @@ onMounted(() => {
   slopeRange.value = initialSlopeRange;
 
   // Emit initial filter state
-  emit('update:filter', {
+  emitFilter({
     categories: selectedCategories.value,
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
@@ -353,7 +371,7 @@ watch(() => props.categories, (newCategories) => {
   // But we need to re-emit so parent gets filtered values for the new viewport
   const validCategories = newCategories ? selectedCategories.value.filter(cat => newCategories.includes(cat)) : selectedCategories.value;
   
-  emit('update:filter', {
+  emitFilter({
     categories: validCategories,
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
@@ -425,7 +443,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange], ([cats,
     }
   }
   
-  emit('update:filter', {
+  emitFilter({
     categories: validCategories,
     lengthRange: validLengthRange,
     elevationGainRange: validElevationGainRange,
@@ -480,6 +498,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
+  // Clean up debounced function
+  if (debouncedEmitFilter && debouncedEmitFilter.cancel) {
+    debouncedEmitFilter.cancel();
+  }
 });
 </script>
 

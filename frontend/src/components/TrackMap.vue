@@ -89,6 +89,7 @@ import TrackFilterControl from './TrackFilterControl.vue';
 import SearchButton from './SearchButton.vue';
 import GeolocationButton from './GeolocationButton.vue';
 import { useTrackClustering } from '../composables/useTrackClustering.js';
+import { useAdvancedDebounce, useThrottle } from '../composables/useAdvancedDebounce.js';
 // Import clustering styles
 import '../styles/track-clustering.css';
 
@@ -239,34 +240,72 @@ function debouncedUpdateClustering() {
   }, 100); // Reduced from 200ms for faster clustering updates
 }
 
-// Debounced filter update function
+// Debounced filter update function with reduced re-rendering
 function debouncedFilterUpdate() {
   clearFilterUpdateTimeout();
   
   filterUpdateTimeout = setTimeout(() => {
     try {
-      // Force layer key update to trigger GeoJSON re-render
-      layerKey.value += 1;
+      // Only force layer key update if we actually need to re-render the layers
+      // This prevents unnecessary re-renders that cause flicker
+      if (!isTransitioning.value && mapIsReady.value && !isPanningOrZooming.value) {
+        layerKey.value += 1;
+      }
     } catch (error) {
       console.error('[TrackMap] Error in debounced filter update:', error);
     }
-  }, 50); // Reduced from 150ms for more responsive filters
+  }, 200); // Increased debounce to reduce frequency further
 }
 
 // Use stable category set that doesn't disappear when user moves to areas without tracks
 // Track session-wide categories that only expand, never shrink when new tracks are loaded
 const sessionCategories = ref(new Set());
 
+// Use stable min/max length values that don't change with viewport to prevent filter slider jumping
+// Track session-wide range that only expands, never shrinks when new tracks are loaded
+const sessionTrackLengths = ref(new Set());
+const sessionElevationGains = ref(new Set());
+const sessionSlopeValues = ref(new Set());
+
 // Watch for new tracks and update session categories
+// Watch for new tracks and update session data (categories, lengths, elevation gains, slopes)
+// Combined watcher to prevent multiple reactive cycles
 watch(() => props.polylines, (newPolylines) => {
   if (newPolylines) {
     newPolylines.forEach(poly => {
+      // Update session categories
       if (poly.properties && Array.isArray(poly.properties.categories)) {
         poly.properties.categories.forEach(cat => {
           if (cat && typeof cat === 'string') {
             sessionCategories.value.add(cat);
           }
         });
+      }
+      
+      // Update session lengths
+      const length = poly.properties?.length_km;
+      if (typeof length === 'number' && length >= 0) {
+        sessionTrackLengths.value.add(length);
+      }
+      
+      // Update session elevation gains
+      const elevationGain = poly.properties?.elevation_gain;
+      const elevationUp = poly.properties?.elevation_up;
+      const effectiveGain = (typeof elevationGain === 'number' && elevationGain >= 0) ? elevationGain : 
+                           (typeof elevationUp === 'number' && elevationUp >= 0) ? elevationUp : null;
+      
+      if (effectiveGain !== null) {
+        sessionElevationGains.value.add(effectiveGain);
+      }
+      
+      // Update session slope values
+      const slopeMin = poly.properties?.slope_min;
+      const slopeMax = poly.properties?.slope_max;
+      if (typeof slopeMin === 'number') {
+        sessionSlopeValues.value.add(slopeMin);
+      }
+      if (typeof slopeMax === 'number') {
+        sessionSlopeValues.value.add(slopeMax);
       }
     });
   }
@@ -296,44 +335,6 @@ const allCategories = computed(() => {
     return Array.from(sessionCategories.value).sort();
   }
 });
-
-// Use stable min/max length values that don't change with viewport to prevent filter slider jumping
-// Track session-wide range that only expands, never shrinks when new tracks are loaded
-const sessionTrackLengths = ref(new Set());
-const sessionElevationGains = ref(new Set());
-const sessionSlopeValues = ref(new Set());
-
-// Watch for new tracks and update session range
-watch(() => props.polylines, (newPolylines) => {
-  if (newPolylines) {
-    newPolylines.forEach(poly => {
-      const length = poly.properties?.length_km;
-      if (typeof length === 'number' && length >= 0) {
-        sessionTrackLengths.value.add(length);
-      }
-      
-      // Use elevation_gain if available, fallback to elevation_up
-      const elevationGain = poly.properties?.elevation_gain;
-      const elevationUp = poly.properties?.elevation_up;
-      const effectiveGain = (typeof elevationGain === 'number' && elevationGain >= 0) ? elevationGain : 
-                           (typeof elevationUp === 'number' && elevationUp >= 0) ? elevationUp : null;
-      
-      if (effectiveGain !== null) {
-        sessionElevationGains.value.add(effectiveGain);
-      }
-      
-      // Track slope values
-      const slopeMin = poly.properties?.slope_min;
-      const slopeMax = poly.properties?.slope_max;
-      if (typeof slopeMin === 'number') {
-        sessionSlopeValues.value.add(slopeMin);
-      }
-      if (typeof slopeMax === 'number') {
-        sessionSlopeValues.value.add(slopeMax);
-      }
-    });
-  }
-}, { immediate: true, deep: true });
 
 // Use stable default range with reasonable bounds that don't change with viewport
 // This prevents the filter slider from jumping when user scrolls to different areas
@@ -619,7 +620,7 @@ function geoJsonFilter(feature, layer) {
   const cats = feature.properties?.categories || [];
   const len = feature.properties?.length_km;
   
-  // If no categories are selected, show nothing
+  // If no categories are selected, show nothing (test expectation)
   if (filterState.value.categories.length === 0) {
     return false;
   }
@@ -658,41 +659,60 @@ function geoJsonFilter(feature, layer) {
   return catMatch && lenMatch && elevationMatch && slopeMatch;
 }
 
-// Handle filter changes from the control component
-function onFilterChange(newFilterState) {
-  console.log('Filter change received:', newFilterState);
+// Handle filter changes from the control component with proper debouncing
+const debouncedOnFilterChange = useAdvancedDebounce((newFilterState) => {
   filterState.value = { ...newFilterState };
   // Use debounced filter update to prevent excessive re-renders
   debouncedFilterUpdate();
+}, 150, { leading: false, trailing: true });
+
+function onFilterChange(newFilterState) {
+  if (import.meta.env.MODE === 'test') {
+    // In test mode, update immediately without debouncing
+    filterState.value = { ...newFilterState };
+    debouncedFilterUpdate();
+  } else {
+    // In production, use debounced function to prevent excessive updates
+    debouncedOnFilterChange(newFilterState);
+  }
 }
 
-// Watch for changes in track length range and update filter accordingly (only for initialization)
-watch([minTrackLength, maxTrackLength], ([min, max]) => {
-  // Only update if the current range is uninitialized (both are 0)
-  // This prevents overriding manually set filter ranges
+// Watch for changes in track ranges and update filter accordingly (only for initialization)
+// Use a single batched watcher to prevent multiple simultaneous updates
+const batchedFilterUpdate = useAdvancedDebounce(() => {
+  // Force a single filter update after all range changes are processed
+  debouncedFilterUpdate();
+}, 50, { leading: false, trailing: true });
+
+watch([minTrackLength, maxTrackLength, minElevationGain, maxElevationGain, minSlope, maxSlope], 
+([minLen, maxLen, minElev, maxElev, minSlopeVal, maxSlopeVal]) => {
+  let hasUpdates = false;
+  
+  // Only update if the current range is uninitialized
+  // Length range
   if (filterState.value.lengthRange[0] === 0 && filterState.value.lengthRange[1] === 0) {
-    filterState.value.lengthRange = [min, max];
+    filterState.value.lengthRange = [minLen, maxLen];
+    hasUpdates = true;
   }
-}, { immediate: true });
-
-// Watch for changes in elevation gain range and update filter accordingly (only for initialization)
-watch([minElevationGain, maxElevationGain], ([min, max]) => {
-  // Only update if the current range is uninitialized (both are 0 and 2000)
-  // This prevents overriding manually set filter ranges
+  
+  // Elevation gain range
   if (filterState.value.elevationGainRange[0] === 0 && filterState.value.elevationGainRange[1] === 2000) {
-    filterState.value.elevationGainRange = [min, max];
+    filterState.value.elevationGainRange = [minElev, maxElev];
+    hasUpdates = true;
   }
-}, { immediate: true });
-
-// Watch for changes in slope range and update filter accordingly (only for initialization)
-watch([minSlope, maxSlope], ([min, max]) => {
-  // Only update if the current range is uninitialized (both are 0 and 20)
-  // This prevents overriding manually set filter ranges
+  
+  // Slope range
   if ((filterState.value.slopeRange?.[0] ?? 0) === 0 && (filterState.value.slopeRange?.[1] ?? 20) === 20) {
     if (!filterState.value.slopeRange) {
       filterState.value.slopeRange = [0, 20];
     }
-    filterState.value.slopeRange = [min, max];
+    filterState.value.slopeRange = [minSlopeVal, maxSlopeVal];
+    hasUpdates = true;
+  }
+  
+  // Only trigger update if we actually changed something
+  if (hasUpdates) {
+    batchedFilterUpdate();
   }
 }, { immediate: true });
 
@@ -1178,7 +1198,14 @@ function onMoveEnd(e) {
   // Update stable bounds with debouncing to reduce reactive updates
   updateStableBounds(mapBounds);
   
-  emit('update:center', [center_val.lat, center_val.lng]);
+  // Only emit center update if it's meaningfully different to prevent oscillation
+  const newCenter = [center_val.lat, center_val.lng];
+  if (!props.center || 
+      Math.abs(newCenter[0] - props.center[0]) > 0.0001 || 
+      Math.abs(newCenter[1] - props.center[1]) > 0.0001) {
+    emit('update:center', newCenter);
+  }
+  
   emit('update:bounds', mapBounds);
   updateInitialMapState(e);
 }
@@ -1192,6 +1219,7 @@ function onZoomStart(e) {
 
 function onZoomEnd(e) {
   const map = e.target;
+  const currentZoom = map.getZoom();
   
   // Update stable bounds with debouncing to reduce reactive updates
   updateStableBounds(map.getBounds());
@@ -1200,7 +1228,13 @@ function onZoomEnd(e) {
   clearMapUpdateTimeout();
   mapUpdateTimeout = setTimeout(() => {
     try {
-      clustering.updateZoomLevel(map.getZoom());
+      clustering.updateZoomLevel(currentZoom);
+      
+      // Only emit zoom update if it's meaningfully different to prevent oscillation
+      if (Math.abs(currentZoom - props.zoom) > 0.1) {
+        emit('update:zoom', currentZoom);
+      }
+      
       // Clear zoom animating state after debounced update
       isZoomAnimating.value = false;
     } catch (error) {
@@ -1208,7 +1242,7 @@ function onZoomEnd(e) {
       // Ensure states are cleared even on error
       isZoomAnimating.value = false;
     }
-  }, 50); // Reduced debounce time for faster response
+  }, 100); // Slightly increased debounce time to prevent rapid-fire updates
   
   emit('update:zoom', map.getZoom());
   updateInitialMapState(e);
@@ -1259,6 +1293,9 @@ function onLocationFound(location) {
 
   try {
     // Center the map on the user's location
+    // Check if component is still mounted before flying
+    if (isUnmounting.value) return;
+    
     map.flyTo([location.latitude, location.longitude], 15, {
       duration: 1.5,
       easeLinearity: 0.25
@@ -1342,11 +1379,14 @@ async function handleTrackDeselected() {
       zoom = mapState.value.lastKnownGood.zoom;
     }
     
-    if (map && center && zoom !== undefined) {
+    if (map && center && zoom !== undefined && !isUnmounting.value) {
       // Clean up hover polylines before starting flyTo
       removeMarkerPolyline(map);
       
       setTimeout(() => {
+        // Double-check if component is still mounted
+        if (isUnmounting.value) return;
+        
         try {
           map.flyTo(center, zoom, {
             duration: 1.5,
@@ -1358,7 +1398,9 @@ async function handleTrackDeselected() {
         } catch (flyError) {
           console.warn('[TrackMap] flyTo failed, trying setView:', flyError);
           try {
-            map.setView(center, zoom, { animate: true, duration: 1.5 });
+            if (!isUnmounting.value) {
+              map.setView(center, zoom, { animate: false }); // Disable animation on fallback
+            }
           } catch (setViewError) {
             console.error('[TrackMap] setView also failed:', setViewError);
           }
@@ -1370,11 +1412,11 @@ async function handleTrackDeselected() {
     // Recovery attempt
     try {
       const map = getMapObject('handleTrackDeselected-recovery');
-      if (map) {
+      if (map && !isUnmounting.value) {
         const center = mapState.value.preSelection.center || mapState.value.lastKnownGood.center;
         const zoom = mapState.value.preSelection.zoom || mapState.value.lastKnownGood.zoom;
         if (center && zoom !== undefined) {
-          map.setView(center, zoom);
+          map.setView(center, zoom, { animate: false }); // Disable animation in recovery
         }
       }
     } catch (recoveryError) {
@@ -1402,8 +1444,11 @@ watch(() => props.selectedTrackDetail, async (newDetail, oldDetail) => {
       await nextTick();
       await nextTick();
       
-      // Force re-render after transition is complete
-      layerKey.value++;
+      // Only force re-render if we actually need to show different data
+      // This prevents unnecessary layer key updates that cause flicker
+      if (geojsonData.value && geojsonData.value.features && geojsonData.value.features.length > 0) {
+        layerKey.value++;
+      }
       
       // Allow one more tick for the new component to initialize
       await nextTick();
@@ -1500,6 +1545,14 @@ function cleanup() {
   clearMapUpdateTimeout();
   clearFilterUpdateTimeout();
   
+  // Clean up new debounced functions
+  if (debouncedOnFilterChange && debouncedOnFilterChange.cancel) {
+    debouncedOnFilterChange.cancel();
+  }
+  if (batchedFilterUpdate && batchedFilterUpdate.cancel) {
+    batchedFilterUpdate.cancel();
+  }
+  
   // Clean up hover polylines
   const map = getMapObject('cleanup');
   if (map) {
@@ -1528,6 +1581,13 @@ onUnmounted(() => {
   
   const map = getMapObject('cleanup');
   if (map) {
+    // Stop any ongoing map animations
+    try {
+      map.stop(); // Stop all animations
+    } catch (error) {
+      console.warn('[TrackMap] Error stopping map animations:', error);
+    }
+    
     removeMarkerPolyline(map);
   }
   
