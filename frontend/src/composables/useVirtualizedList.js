@@ -9,7 +9,9 @@ export function useVirtualizedList(items, itemHeight = 50, containerHeight = 400
 
     // Calculate visible range
     const visibleRange = computed(() => {
-        const start = Math.floor(scrollTop.value / itemHeight);
+        // Clamp scrollTop to non-negative values
+        const clampedScrollTop = Math.max(0, scrollTop.value);
+        const start = Math.floor(clampedScrollTop / itemHeight);
         const visibleCount = Math.ceil(containerHeight / itemHeight) + 2; // Buffer
         const end = Math.min(start + visibleCount, items.value?.length || 0);
 

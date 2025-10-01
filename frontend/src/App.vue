@@ -3,7 +3,7 @@
     <router-view v-slot="{ Component, route }">
       <transition name="page" mode="out-in" appear>
         <keep-alive :include="['HomeView', 'TrackView']" :max="3">
-          <component :is="Component" :key="route.meta.keepAliveKey || route.fullPath" />
+          <component :is="Component" :key="getComponentKey(route)" />
         </keep-alive>
       </transition>
     </router-view>
@@ -15,6 +15,27 @@
 
 <script setup>
 import ConfirmDialogProvider from './components/ConfirmDialogProvider.vue';
+
+// Generate component key that ignores URL query params to prevent unnecessary rerenders
+// This prevents map flicker when URL parameters like zoom, lat, lng change
+function getComponentKey(route) {
+  if (route.meta.keepAliveKey) {
+    return route.meta.keepAliveKey;
+  }
+  
+  // For HomeView, ignore query params to prevent rerender on map state changes
+  if (route.name === 'Home') {
+    return 'home-view';
+  }
+  
+  // For TrackView, use path with ID but ignore query params
+  if (route.name === 'Track') {
+    return `track-view-${route.params.id}`;
+  }
+  
+  // Fallback to route path
+  return route.path;
+}
 </script>
 
 <style>

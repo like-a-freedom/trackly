@@ -88,7 +88,7 @@
 
 <script setup>
 // Import the logic from App.vue
-import { ref, reactive, watch, shallowRef, computed, provide, onActivated, onDeactivated, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, watch, shallowRef, computed, provide, onActivated, onDeactivated, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import TrackMap from '../components/TrackMap.vue';
 import TrackTooltip from '../components/TrackTooltip.vue';
@@ -98,6 +98,7 @@ import TrackSearch from '../components/TrackSearch.vue';
 import { useTracks } from '../composables/useTracks';
 import { useToast } from '../composables/useToast';
 import { useSearchState } from '../composables/useSearchState';
+import { useMapUrlState } from '../composables/useMapUrlState';
 import { getSessionId } from '../utils/session';
 import { useAdvancedDebounce, useThrottle } from '../composables/useAdvancedDebounce';
 
@@ -113,8 +114,26 @@ const attribution = '&copy; <a target="_blank" href="http://osm.org/copyright">O
 
 // Load saved map position or use defaults
 const savedPosition = loadMapPosition();
-const zoom = shallowRef(savedPosition?.zoom || 11);
-const center = shallowRef(savedPosition?.center || [56.04028, 37.83185]);
+const defaultZoom = savedPosition?.zoom || 11;
+const defaultCenter = savedPosition?.center || [56.04028, 37.83185];
+
+// Initialize URL state management
+const mapUrlState = useMapUrlState({
+  initialZoom: defaultZoom,
+  initialCenter: defaultCenter,
+  debounceMs: 300
+});
+
+// Initialize from URL parameters or fallback to saved/default values
+const initialState = mapUrlState.initializeFromUrl();
+const zoom = shallowRef(initialState.zoom);
+const center = shallowRef(initialState.center);
+
+// Flags to prevent reactive cycles during programmatic updates
+const isUpdatingProgrammatically = ref(false);
+const isUpdatingFromUrl = ref(false);
+const lastUserZoom = ref(null);
+const lastUserCenter = ref(null);
 
 const pendingZoomRestore = ref(null);
 const markerLatLng = ref(center.value);
@@ -209,7 +228,14 @@ function isValidLatLng(val) {
 function isValidZoom(val) {
   return typeof val === 'number' && !isNaN(val);
 }
-const mapReadyToShow = computed(() => isValidLatLng(center.value) && isValidZoom(zoom.value));
+// Stable map render check - prevents excessive re-renders
+const mapReadyToShow = computed(() => {
+  return isValidLatLng(center.value) && 
+         isValidZoom(zoom.value) && 
+         center.value.length === 2 && 
+         typeof center.value[0] === 'number' && 
+         typeof center.value[1] === 'number';
+});
 // --- End gating logic ---
 
 // Provide toast for child components
@@ -230,8 +256,8 @@ onActivated(() => {
 onDeactivated(() => {
   // Clear tooltip state to prevent it from appearing when returning
   hideTooltip();
-  // Save current map position when component is deactivated
-  saveMapPosition(center.value, zoom.value);
+  // Save current map position when component is deactivated (debounced)
+  debouncedSavePosition();
 });
 
 watch(error, (val) => {
@@ -243,10 +269,28 @@ watch(() => router.currentRoute.value.path, (newPath) => {
   if (newPath !== '/') {
     // Clear tooltip when leaving home page
     hideTooltip();
-    // Save current map position when leaving home page
-    saveMapPosition(center.value, zoom.value);
+    // Save current map position when leaving home page (debounced)
+    debouncedSavePosition();
   }
 });
+
+// Watch for URL parameter changes to update map state without causing flicker
+watch(() => router.currentRoute.value.query, (newQuery, oldQuery) => {
+  // Only process URL changes if they're different and not from our own updates
+  if (!isUpdatingProgrammatically.value && !isUpdatingFromUrl.value) {
+    const urlState = mapUrlState.parseUrlParams();
+    
+    // Only update if there are meaningful changes to prevent oscillation
+    const zoomChanged = urlState.zoom && Math.abs(urlState.zoom - zoom.value) > 0.1;
+    const centerChanged = urlState.center && 
+      (Math.abs(urlState.center[0] - center.value[0]) > 0.0001 || 
+       Math.abs(urlState.center[1] - center.value[1]) > 0.0001);
+    
+    if (urlState.hasValidParams && (zoomChanged || centerChanged)) {
+      updateMapStateProgrammatically(urlState.zoom, urlState.center);
+    }
+  }
+}, { deep: true });
 
 function onMapReady(e) {
   const map = e.target || e;
@@ -259,6 +303,11 @@ function onMapReady(e) {
 }
 
 function onBoundsUpdate(newBounds) {
+  // Skip bounds updates during programmatic changes to prevent excessive API calls
+  if (isUpdatingProgrammatically.value) {
+    return;
+  }
+  
   // Update bounds immediately for visual responsiveness
   bounds.value = newBounds;
   
@@ -367,22 +416,70 @@ function handleDrop(event) {
   // The UploadForm will handle the file processing
 }
 
-function handleZoomUpdate(val) {
-  // Only update if valid
-  if (isValidZoom(val)) {
-    zoom.value = val;
-    // Save position to localStorage with debouncing
+// Debounced state update to prevent excessive URL updates and map flicker
+const debouncedStateUpdate = useAdvancedDebounce((newZoom, newCenter) => {
+  if (!isUpdatingProgrammatically.value) {
+    mapUrlState.updateMapState(newZoom, newCenter);
+    // Save position only once after state is updated
     debouncedSavePosition();
+  }
+}, 300, { leading: false, trailing: true });
+
+function handleZoomUpdate(val) {
+  // Only update if valid and not already updating programmatically
+  if (isValidZoom(val) && !isUpdatingProgrammatically.value && !isUpdatingFromUrl.value) {
+    // Prevent oscillation by checking if this is a meaningful change
+    if (lastUserZoom.value !== null && Math.abs(val - lastUserZoom.value) < 0.1) {
+      return; // Too small change, likely from oscillation
+    }
+    
+    lastUserZoom.value = val;
+    zoom.value = val;
+    // Use debounced update to prevent flicker
+    debouncedStateUpdate(val, center.value);
   }
 }
 
 function handleCenterUpdate(val) {
-  // Only update if valid
-  if (isValidLatLng(val)) {
+  // Only update if valid and not already updating programmatically  
+  if (isValidLatLng(val) && !isUpdatingProgrammatically.value && !isUpdatingFromUrl.value) {
+    // Prevent oscillation by checking if this is a meaningful change
+    if (lastUserCenter.value !== null && 
+        Math.abs(val[0] - lastUserCenter.value[0]) < 0.0001 &&
+        Math.abs(val[1] - lastUserCenter.value[1]) < 0.0001) {
+      return; // Too small change, likely from oscillation
+    }
+    
+    lastUserCenter.value = [...val];
     center.value = val;
-    // Save position to localStorage with debouncing
-    debouncedSavePosition();
+    // Use debounced update to prevent flicker
+    debouncedStateUpdate(zoom.value, val);
   }
+}
+
+// Function to update map state programmatically (from URL changes, navigation, etc)
+// without triggering URL updates or causing reactive cycles
+function updateMapStateProgrammatically(newZoom, newCenter) {
+  isUpdatingProgrammatically.value = true;
+  isUpdatingFromUrl.value = true;
+  
+  if (isValidZoom(newZoom) && Math.abs(newZoom - zoom.value) > 0.1) {
+    lastUserZoom.value = newZoom;
+    zoom.value = newZoom;
+  }
+  
+  if (isValidLatLng(newCenter) && 
+      (Math.abs(newCenter[0] - center.value[0]) > 0.0001 || 
+       Math.abs(newCenter[1] - center.value[1]) > 0.0001)) {
+    lastUserCenter.value = [...newCenter];
+    center.value = [...newCenter];  // Create new array to trigger reactivity
+  }
+  
+  // Reset flags after a delay to allow all updates to complete
+  setTimeout(() => {
+    isUpdatingProgrammatically.value = false;
+    isUpdatingFromUrl.value = false;
+  }, 100);
 }
 
 
@@ -441,7 +538,28 @@ function handleTrackDeleted(event) {
 
 // Save map position before page unload
 function handleBeforeUnload() {
+  // Use immediate save for page unload (no debouncing needed)
   saveMapPosition(center.value, zoom.value);
+}
+
+// Handle URL state changes from browser navigation or direct URL changes
+function handleUrlStateChange(event) {
+  const { zoom: newZoom, center: newCenter, source } = event.detail;
+  
+  if (source === 'url' && !mapUrlState.isUpdatingFromUrl.value) {
+    // Update local state from URL change (browser back/forward, direct navigation)
+    if (mapUrlState.isValidZoom(newZoom) && newZoom !== zoom.value) {
+      zoom.value = newZoom;
+    }
+    
+    if (mapUrlState.isValidLatLng(newCenter) && 
+        (newCenter[0] !== center.value[0] || newCenter[1] !== center.value[1])) {
+      center.value = [...newCenter];
+    }
+    
+    // Also save to localStorage for consistency (debounced)
+    debouncedSavePosition();
+  }
 }
 
 onMounted(() => {
@@ -449,6 +567,9 @@ onMounted(() => {
   window.addEventListener('track-name-updated', handleTrackNameUpdated);
   window.addEventListener('track-description-updated', handleTrackDescriptionUpdated);
   window.addEventListener('beforeunload', handleBeforeUnload);
+  
+  // Listen for URL state changes (browser back/forward, direct URL changes)
+  window.addEventListener('mapUrlStateChanged', handleUrlStateChange);
 });
 
 onBeforeUnmount(() => {
@@ -456,7 +577,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('track-name-updated', handleTrackNameUpdated);
   window.removeEventListener('track-description-updated', handleTrackDescriptionUpdated);
   window.removeEventListener('beforeunload', handleBeforeUnload);
-  // Save final position before unmounting
+  window.removeEventListener('mapUrlStateChanged', handleUrlStateChange);
+  // Save final position before unmounting (immediate, no debouncing needed)  
   saveMapPosition(center.value, zoom.value);
 });
 </script>
