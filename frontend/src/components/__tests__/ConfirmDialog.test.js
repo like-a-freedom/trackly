@@ -512,7 +512,7 @@ describe('ConfirmDialogProvider.vue', () => {
             }
         });
 
-        const { showConfirm } = useConfirm();
+        const { showConfirm, confirmDialogs } = useConfirm();
 
         // Clear any existing dialogs first
         confirmDialogs.value = [];
@@ -544,7 +544,7 @@ describe('ConfirmDialogProvider.vue', () => {
             }
         });
 
-        const { showConfirm } = useConfirm();
+        const { showConfirm, confirmDialogs } = useConfirm();
 
         // Clear any existing dialogs first
         confirmDialogs.value = [];
