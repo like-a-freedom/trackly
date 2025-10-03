@@ -1,5 +1,5 @@
 <template>
-  <div class="track-detail-flyout" :class="{ 'closing': isClosing, 'collapsed': isCollapsed }" @wheel="handleWheel" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
+  <div class="track-detail-flyout" :class="{ 'closing': isClosing, 'collapsed': isCollapsed }" @wheel="handleWheel" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
     <!-- Panel Controls "Tab" - только когда свернута -->
     <div class="panel-controls-tab" v-show="isCollapsed">
       <button class="collapse-toggle-btn" @click="toggleCollapse" 
@@ -12,7 +12,7 @@
       </button>
     </div>
     
-    <div class="flyout-content" ref="flyoutContent" @wheel="handleContentWheel" @mousedown.stop @mouseup.stop @selectstart.stop @dragstart.prevent>
+    <div class="flyout-content" ref="flyoutContent" @wheel="handleContentWheel" @touchstart.stop @touchmove="handleContentTouchMove" @touchend.stop @mousedown.stop @mouseup.stop @selectstart.stop @dragstart.prevent>
       <!-- Collapsible content -->
       <div class="collapsible-content" v-show="!isCollapsed">
       
@@ -1579,6 +1579,10 @@ function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value;
 }
 
+// Touch handling state
+const touchStartY = ref(0);
+const touchStartScrollTop = ref(0);
+
 // Prevent scroll propagation to the map behind
 function handleWheel(event) {
   // Allow wheel events to bubble up only if the flyout-content can't scroll
@@ -1597,6 +1601,55 @@ function handleWheel(event) {
 function handleContentWheel(event) {
   // Always stop propagation for content area
   event.stopPropagation();
+}
+
+// Touch event handlers for mobile devices
+function handleTouchStart(event) {
+  // Record the initial touch position and scroll position
+  if (flyoutContent.value && event.touches.length === 1) {
+    touchStartY.value = event.touches[0].clientY;
+    touchStartScrollTop.value = flyoutContent.value.scrollTop;
+  }
+}
+
+function handleTouchMove(event) {
+  // Prevent default only if we're at the scroll boundaries
+  if (!flyoutContent.value || event.touches.length !== 1) return;
+  
+  const touchY = event.touches[0].clientY;
+  const touchDeltaY = touchStartY.value - touchY;
+  const { scrollTop, scrollHeight, clientHeight } = flyoutContent.value;
+  
+  const isAtTop = scrollTop === 0;
+  const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1; // -1 for rounding
+  
+  // Prevent propagation if scrolling within bounds
+  if ((!isAtTop || touchDeltaY > 0) && (!isAtBottom || touchDeltaY < 0)) {
+    event.stopPropagation();
+  }
+}
+
+function handleTouchEnd(event) {
+  // Reset touch tracking
+  touchStartY.value = 0;
+  touchStartScrollTop.value = 0;
+}
+
+function handleContentTouchMove(event) {
+  // Always stop propagation for content area to prevent map interaction
+  if (!flyoutContent.value) return;
+  
+  const { scrollTop, scrollHeight, clientHeight } = flyoutContent.value;
+  const canScroll = scrollHeight > clientHeight;
+  
+  if (canScroll) {
+    // Let the content scroll naturally, but prevent map interaction
+    event.stopPropagation();
+  } else {
+    // If content can't scroll, prevent the touch event entirely
+    event.preventDefault();
+    event.stopPropagation();
+  }
 }
 
 // Watch for changes in editedDescription to auto-resize textarea
@@ -1688,6 +1741,8 @@ defineExpose({
   color: #333;
   box-sizing: border-box;
   transition: transform 0.3s cubic-bezier(.4,1.4,.6,1), opacity 0.3s ease;
+  /* Prevent touch actions from propagating to map */
+  touch-action: none;
 }
 
 .track-detail-flyout.closing {
@@ -1711,6 +1766,10 @@ defineExpose({
   overflow-y: auto;
   flex: 1;
   scroll-behavior: smooth;
+  /* Allow vertical scrolling only within content */
+  touch-action: pan-y;
+  /* Enable momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 .track-detail-flyout.collapsed .flyout-content {

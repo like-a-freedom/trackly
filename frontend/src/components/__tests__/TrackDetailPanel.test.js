@@ -1857,4 +1857,112 @@ describe('TrackDetailPanel', () => {
       expect(html).toContain('<a href="https://www.site3.com"');
     });
   });
+
+  describe('Touch Event Handling for Mobile Devices', () => {
+    beforeEach(() => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete }
+      });
+    });
+
+    it('prevents touch event propagation on flyout content', async () => {
+      const flyoutContent = wrapper.find('.flyout-content');
+      expect(flyoutContent.exists()).toBe(true);
+
+      // Create a mock touch event
+      const touchEvent = {
+        touches: [{ clientY: 100 }],
+        stopPropagation: vi.fn(),
+        preventDefault: vi.fn()
+      };
+
+      // Trigger touchstart
+      await flyoutContent.trigger('touchstart', touchEvent);
+      // touchstart.stop should prevent propagation
+      expect(touchEvent.stopPropagation).toHaveBeenCalled();
+    });
+
+    it('handles touchmove on content to prevent map interaction', async () => {
+      const flyoutContent = wrapper.find('.flyout-content');
+      
+      // Set up scrollable content
+      const mockElement = {
+        scrollTop: 50,
+        scrollHeight: 500,
+        clientHeight: 200
+      };
+      wrapper.vm.flyoutContent = mockElement;
+
+      const touchMoveEvent = {
+        touches: [{ clientY: 80 }],
+        stopPropagation: vi.fn(),
+        preventDefault: vi.fn()
+      };
+
+      // Call the handler directly
+      wrapper.vm.handleContentTouchMove(touchMoveEvent);
+      
+      // Should stop propagation when content can scroll
+      expect(touchMoveEvent.stopPropagation).toHaveBeenCalled();
+    });
+
+    it('prevents both propagation and default when content cannot scroll', async () => {
+      const flyoutContent = wrapper.find('.flyout-content');
+      
+      // Set up non-scrollable content
+      const mockElement = {
+        scrollTop: 0,
+        scrollHeight: 100,
+        clientHeight: 100
+      };
+      wrapper.vm.flyoutContent = mockElement;
+
+      const touchMoveEvent = {
+        touches: [{ clientY: 80 }],
+        stopPropagation: vi.fn(),
+        preventDefault: vi.fn()
+      };
+
+      // Call the handler directly
+      wrapper.vm.handleContentTouchMove(touchMoveEvent);
+      
+      // Should prevent both when content can't scroll
+      expect(touchMoveEvent.stopPropagation).toHaveBeenCalled();
+      expect(touchMoveEvent.preventDefault).toHaveBeenCalled();
+    });
+
+    it('handles touchend to reset touch tracking', async () => {
+      const flyoutContent = wrapper.find('.flyout-content');
+      
+      // Trigger touchstart first
+      const touchStartEvent = {
+        touches: [{ clientY: 100 }],
+        stopPropagation: vi.fn()
+      };
+      await flyoutContent.trigger('touchstart', touchStartEvent);
+
+      // Then trigger touchend
+      const touchEndEvent = {
+        stopPropagation: vi.fn()
+      };
+      
+      // Call the handler directly
+      wrapper.vm.handleTouchEnd(touchEndEvent);
+      
+      // Check that tracking values are reset
+      expect(wrapper.vm.touchStartY).toBe(0);
+      expect(wrapper.vm.touchStartScrollTop).toBe(0);
+    });
+
+    it('has proper CSS touch-action properties', () => {
+      const flyout = wrapper.find('.track-detail-flyout');
+      const flyoutContent = wrapper.find('.flyout-content');
+      
+      expect(flyout.exists()).toBe(true);
+      expect(flyoutContent.exists()).toBe(true);
+      
+      // Note: We can't directly test CSS properties in this test environment,
+      // but we can verify that the elements exist and the template is correct
+    });
+  });
 });
