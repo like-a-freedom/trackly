@@ -39,7 +39,7 @@
         <span>Searching...</span>
       </div>
       
-      <div v-else-if="searchResults.length > 0" class="search-results">
+      <div v-else-if="searchResults.length > 0" class="search-results" @touchstart.stop @touchmove.stop @touchend.stop>
         <div 
           v-for="track in searchResults" 
           :key="track.id"
@@ -205,6 +205,8 @@ const closeSearch = () => {
   max-width: 600px;
   max-height: 70vh;
   overflow: hidden;
+  /* Prevent touch actions from propagating to map */
+  touch-action: none;
 }
 
 .search-input-container {
@@ -277,6 +279,10 @@ const closeSearch = () => {
 .search-results {
   max-height: 400px;
   overflow-y: auto;
+  /* Allow vertical scrolling only within search results */
+  touch-action: pan-y;
+  /* Enable momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 .search-result-item {

@@ -113,7 +113,7 @@
         <template v-if="hasTracksInArea">
           <div v-if="showCategories" class="filter-section">
             <label>Categories:</label>
-            <div class="category-checkboxes">
+            <div class="category-checkboxes" @touchstart.stop @touchmove.stop @touchend.stop>
               <div 
                 v-for="category in categories" 
                 :key="category" 
@@ -723,6 +723,10 @@ onUnmounted(() => {
   margin-top: 6px;
   max-height: 200px;
   overflow-y: auto;
+  /* Allow vertical scrolling only within this container */
+  touch-action: pan-y;
+  /* Enable momentum scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 .checkbox-item {
