@@ -192,10 +192,46 @@ impl PoiDeduplicationService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ParsedWaypoint;
 
     #[test]
     fn test_poi_deduplication_service_exists() {
         // Ensure the service can be instantiated
         let _service = PoiDeduplicationService;
+    }
+
+    #[test]
+    fn test_parsed_waypoint_creation() {
+        let waypoint = ParsedWaypoint {
+            name: "Test Summit".to_string(),
+            description: Some("A beautiful mountain peak".to_string()),
+            category: Some("Summit".to_string()),
+            lat: 55.7558,
+            lon: 37.6173,
+            elevation: Some(2500.0),
+        };
+
+        assert_eq!(waypoint.name, "Test Summit");
+        assert_eq!(waypoint.lat, 55.7558);
+        assert_eq!(waypoint.lon, 37.6173);
+        assert_eq!(waypoint.elevation, Some(2500.0));
+    }
+
+    #[test]
+    fn test_parsed_waypoint_minimal() {
+        // Test with minimal data (no description, category, or elevation)
+        let waypoint = ParsedWaypoint {
+            name: "Minimal POI".to_string(),
+            description: None,
+            category: None,
+            lat: 50.0,
+            lon: 10.0,
+            elevation: None,
+        };
+
+        assert_eq!(waypoint.name, "Minimal POI");
+        assert!(waypoint.description.is_none());
+        assert!(waypoint.category.is_none());
+        assert!(waypoint.elevation.is_none());
     }
 }
