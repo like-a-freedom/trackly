@@ -117,6 +117,7 @@ const isInitialLoad = ref(true); // Track if this is the first load to prevent r
 const currentTrackId = ref(null); // Track current processing track ID to prevent race conditions
 const mapStabilizationTimer = ref(null); // Timer to wait for map stabilization
 const STABILIZATION_DELAY = 3000; // 3 seconds to wait for map auto-zoom to stabilize
+const lastPoiFetchedTrackId = ref(null); // Track which track ID has had POIs fetched to prevent duplicates
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -189,9 +190,10 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
         }
       }
       
-      // Fetch POIs for this track
-      if (track.value && track.value.id) {
+      // Fetch POIs for this track (only once per track)
+      if (track.value && track.value.id && lastPoiFetchedTrackId.value !== track.value.id) {
         console.log(`[TrackView] Fetching POIs for track ${track.value.id}`);
+        lastPoiFetchedTrackId.value = track.value.id; // Mark as fetched
         fetchTrackPois(track.value.id).catch(err => {
           console.error('[TrackView] Failed to fetch POIs:', err);
           // Don't fail the whole view if POI fetch fails
@@ -603,6 +605,7 @@ watch(() => route.params.id, async (newId, oldId) => {
     lastFetchZoom.value = null;
     isInitialLoad.value = true;
     currentTrackId.value = newId; // Set this immediately to prevent race with onMounted
+    lastPoiFetchedTrackId.value = null; // Reset POI fetch tracking for new track
     center.value = [59.9311, 30.3609]; // Reset to default, will be updated by track data
     loading.value = true; // Set loading state
     
