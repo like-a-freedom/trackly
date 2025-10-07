@@ -27,6 +27,14 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let mut total_elevation_loss = 0.0;
     let mut last_elevation: Option<f64> = None;
 
+    // Waypoint tracking
+    let mut waypoints = Vec::new();
+    let mut in_wpt = false;
+    let mut wpt_name: Option<String> = None;
+    let mut wpt_desc: Option<String> = None;
+    let mut wpt_type: Option<String> = None;
+    let mut wpt_sym: Option<String> = None;
+
     // State variables
     let mut in_trkpt = false;
     let mut in_rtept = false;
@@ -108,8 +116,58 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         hr = None;
                         temp = None;
                     }
+                    "wpt" => {
+                        in_wpt = true;
+                        lat = e.attributes().find_map(|a| {
+                            a.ok().and_then(|attr| {
+                                if attr.key.as_ref() == b"lat" {
+                                    std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+                        lon = e.attributes().find_map(|a| {
+                            a.ok().and_then(|attr| {
+                                if attr.key.as_ref() == b"lon" {
+                                    std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+                        ele = None;
+                        wpt_name = None;
+                        wpt_desc = None;
+                        wpt_type = None;
+                        wpt_sym = None;
+                    }
+                    "name" => {
+                        if in_wpt {
+                            capture_text = true;
+                            text_target = Some("wpt_name".to_string());
+                        }
+                    }
+                    "desc" => {
+                        if in_wpt {
+                            capture_text = true;
+                            text_target = Some("wpt_desc".to_string());
+                        }
+                    }
+                    "type" => {
+                        if in_wpt {
+                            capture_text = true;
+                            text_target = Some("wpt_type".to_string());
+                        }
+                    }
+                    "sym" => {
+                        if in_wpt {
+                            capture_text = true;
+                            text_target = Some("wpt_sym".to_string());
+                        }
+                    }
                     "ele" => {
-                        if in_trkpt || in_rtept {
+                        if in_trkpt || in_rtept || in_wpt {
                             capture_text = true;
                             text_target = Some("ele".to_string());
                         }
@@ -195,6 +253,22 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                                     recorded_at = Some(time_str);
                                 }
                             }
+                            "wpt_name" => {
+                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                wpt_name = Some(text.to_string());
+                            }
+                            "wpt_desc" => {
+                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                wpt_desc = Some(text.to_string());
+                            }
+                            "wpt_type" => {
+                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                wpt_type = Some(text.to_string());
+                            }
+                            "wpt_sym" => {
+                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                wpt_sym = Some(text.to_string());
+                            }
                             _ => {}
                         }
                     }
@@ -269,6 +343,29 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         point_time = None; // Reset point time
                         in_extensions = false;
                         in_trackpoint_extension = false;
+                    }
+                    "wpt" => {
+                        // Store waypoint if we have required data
+                        if let (Some(lat), Some(lon), Some(name)) = (lat, lon, wpt_name.clone()) {
+                            use crate::models::ParsedWaypoint;
+                            
+                            waypoints.push(ParsedWaypoint {
+                                name: name.trim().to_string(),
+                                description: wpt_desc.clone(),
+                                category: wpt_type.clone().or(wpt_sym.clone()),
+                                lat,
+                                lon,
+                                elevation: ele.map(|e| e as f32),
+                            });
+                        }
+                        in_wpt = false;
+                        lat = None;
+                        lon = None;
+                        ele = None;
+                        wpt_name = None;
+                        wpt_desc = None;
+                        wpt_type = None;
+                        wpt_sym = None;
                     }
                     "extensions" => {
                         in_extensions = false;
@@ -596,5 +693,6 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         auto_classifications, // Add automatic classifications
         speed_data: final_speed_data, // Add calculated speed data
         pace_data: final_pace_data, // Add calculated pace data
+        waypoints, // Add parsed waypoints
     })
 }
