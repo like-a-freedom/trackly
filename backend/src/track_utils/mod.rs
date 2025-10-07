@@ -13,7 +13,6 @@ pub mod pace_filter;
 pub mod simplification;
 pub mod slope;
 pub mod time_utils;
-pub mod types;
 pub mod zoom_adaptation;
 
 pub use elevation::{
