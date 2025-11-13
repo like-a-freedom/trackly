@@ -405,5 +405,6 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         auto_classifications, // Add automatic classifications
         speed_data: None, // KML typically doesn't contain speed data
         pace_data: None,  // KML typically doesn't contain pace data
+        waypoints: Vec::new(), // KML waypoints support can be added later
     })
 }

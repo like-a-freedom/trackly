@@ -96,6 +96,17 @@ async fn main() {
             "/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
         )
+        // POI routes
+        .route("/pois", get(handlers::get_pois).post(handlers::create_poi))
+        .route(
+            "/pois/{id}",
+            get(handlers::get_poi).delete(handlers::delete_poi),
+        )
+        .route("/tracks/{track_id}/pois", get(handlers::get_track_pois))
+        .route(
+            "/tracks/{track_id}/pois/{poi_id}",
+            axum::routing::delete(handlers::unlink_track_poi),
+        )
         .layer(DefaultBodyLimit::max(max_body_size))
         .with_state(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));

@@ -16,6 +16,14 @@
       @update:center="handleCenterUpdate"
       @update:zoom="handleZoomUpdate"
     >
+      <!-- POI Markers -->
+      <PoiMarker
+        v-for="poi in pois"
+        :key="poi.poi?.id || poi.id"
+        :poi="poi"
+        @click="handlePoiClick"
+      />
+      
       <Toast
         :message="(toast.value && toast.value.message) || ''"
         :type="(toast.value && toast.value.type) || 'info'"
@@ -52,8 +60,10 @@ import { useRouter, useRoute } from 'vue-router';
 import TrackMap from '../components/TrackMap.vue';
 import Toast from '../components/Toast.vue';
 import TrackDetailPanel from '../components/TrackDetailPanel.vue';
+import PoiMarker from '../components/PoiMarker.vue';
 import { useToast } from '../composables/useToast';
 import { useTracks } from '../composables/useTracks';
+import { usePois } from '../composables/usePois';
 import { useSearchState } from '../composables/useSearchState';
 import { getSessionId } from '../utils/session';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
@@ -107,9 +117,13 @@ const isInitialLoad = ref(true); // Track if this is the first load to prevent r
 const currentTrackId = ref(null); // Track current processing track ID to prevent race conditions
 const mapStabilizationTimer = ref(null); // Timer to wait for map stabilization
 const STABILIZATION_DELAY = 3000; // 3 seconds to wait for map auto-zoom to stabilize
+const lastPoiFetchedTrackId = ref(null); // Track which track ID has had POIs fetched to prevent duplicates
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
+
+// Use POIs composable
+const { pois, fetchTrackPois } = usePois();
 
 // Use search state to determine where to return
 const { hasSearchState, restoreSearchState } = useSearchState();
@@ -174,6 +188,16 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
           else if (maxRange > 0.01) zoom.value = 14;
           else zoom.value = 16;
         }
+      }
+      
+      // Fetch POIs for this track (only once per track)
+      if (track.value && track.value.id && lastPoiFetchedTrackId.value !== track.value.id) {
+        console.log(`[TrackView] Fetching POIs for track ${track.value.id}`);
+        lastPoiFetchedTrackId.value = track.value.id; // Mark as fetched
+        fetchTrackPois(track.value.id).catch(err => {
+          console.error('[TrackView] Failed to fetch POIs:', err);
+          // Don't fail the whole view if POI fetch fails
+        });
       }
     }
   } catch (error) {
@@ -492,6 +516,21 @@ function handleNameUpdated(newName) {
   }
 }
 
+function handlePoiClick(poi) {
+  console.log('[TrackView] POI clicked:', poi);
+  // You can add more functionality here, like showing a popup with POI details
+  const poiData = poi.poi || poi;
+  const name = poiData.name || 'Unknown POI';
+  const description = poiData.description || '';
+  const category = poiData.category || '';
+  
+  let message = `${name}`;
+  if (category) message += ` (${category})`;
+  if (description) message += `: ${description}`;
+  
+  showToast(message, 'info', 5000);
+}
+
 // Initialize
 onMounted(async () => {
   const currentRouteId = route.params.id;
@@ -566,6 +605,7 @@ watch(() => route.params.id, async (newId, oldId) => {
     lastFetchZoom.value = null;
     isInitialLoad.value = true;
     currentTrackId.value = newId; // Set this immediately to prevent race with onMounted
+    lastPoiFetchedTrackId.value = null; // Reset POI fetch tracking for new track
     center.value = [59.9311, 30.3609]; // Reset to default, will be updated by track data
     loading.value = true; // Set loading state
     

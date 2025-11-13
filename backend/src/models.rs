@@ -241,6 +241,7 @@ pub struct ParsedTrackData {
     pub auto_classifications: Vec<String>, // Result of automatic track classification
     pub speed_data: Option<Vec<Option<f64>>>, // Point-by-point speed data (km/h)
     pub pace_data: Option<Vec<Option<f64>>>, // Point-by-point pace data (min/km)
+    pub waypoints: Vec<ParsedWaypoint>, // Waypoints/POIs from GPX file
 }
 
 #[derive(Debug, Deserialize)]
@@ -455,4 +456,80 @@ mod tests {
         // Detail mode should have more data (larger JSON)
         assert!(detail_json.len() > overview_json.len());
     }
+}
+
+// ============================================================================
+// POI (Points of Interest) Models
+// ============================================================================
+
+/// POI structure from database
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Poi {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub category: Option<String>,
+    pub elevation: Option<f32>,
+    #[sqlx(skip)]
+    #[serde(skip_deserializing)]
+    pub geom: serde_json::Value, // GeoJSON Point
+    pub session_id: Option<Uuid>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// POI with distance and sequence information from track association
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PoiWithDistance {
+    #[serde(flatten)]
+    pub poi: Poi,
+    pub distance_from_start_m: Option<f32>,
+    pub sequence_order: Option<i32>,
+}
+
+/// Request to create a new POI
+#[derive(Debug, Deserialize)]
+pub struct CreatePoiRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub category: Option<String>,
+    pub elevation: Option<f32>,
+    pub lat: f64,
+    pub lon: f64,
+    pub session_id: Option<Uuid>,
+}
+
+/// Query parameters for listing POIs
+#[derive(Debug, Deserialize)]
+pub struct PoiQuery {
+    pub bbox: Option<String>,        // "minLon,minLat,maxLon,maxLat"
+    pub categories: Option<Vec<String>>,
+    pub track_id: Option<Uuid>,
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+/// Response for POI list endpoint
+#[derive(Debug, Serialize)]
+pub struct PoiListResponse {
+    pub pois: Vec<Poi>,
+    pub total: i64,
+}
+
+/// Waypoint parsed from GPX file
+#[derive(Debug, Clone)]
+pub struct ParsedWaypoint {
+    pub name: String,
+    pub description: Option<String>,
+    pub category: Option<String>,
+    pub lat: f64,
+    pub lon: f64,
+    pub elevation: Option<f32>,
+}
+
+/// Request to delete a POI
+#[derive(Debug, Deserialize)]
+pub struct DeletePoiRequest {
+    pub session_id: Option<Uuid>,
 }
