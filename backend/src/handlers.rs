@@ -557,6 +557,27 @@ pub async fn upload_track(
         });
     }
 
+    // Process waypoints from GPX file
+    if !parsed_data.waypoints.is_empty() {
+        info!(
+            ?id,
+            "[upload_track] Processing {} waypoints from GPX",
+            parsed_data.waypoints.len()
+        );
+        
+        use crate::poi_deduplication::PoiDeduplicationService;
+        
+        match PoiDeduplicationService::link_pois_to_track(&pool, id, parsed_data.waypoints).await {
+            Ok(linked_count) => {
+                info!(?id, "[upload_track] Linked {} POIs to track", linked_count);
+            }
+            Err(e) => {
+                // Log error but don't fail the upload if POI linking fails
+                error!(?id, ?e, "[upload_track] Failed to link POIs, continuing anyway");
+            }
+        }
+    }
+
     Ok(Json(TrackUploadResponse {
         id,
         url: format!("/tracks/{id}"),
@@ -1870,4 +1891,320 @@ pub async fn recalculate_track_slopes(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+// ============================================================================
+// POI Handlers
+// ============================================================================
+
+/// GET /pois - List POIs with optional filtering
+pub async fn get_pois(
+    State(pool): State<Arc<PgPool>>,
+    Query(params): Query<PoiQuery>,
+) -> Result<Json<PoiListResponse>, StatusCode> {
+    let limit = params.limit.unwrap_or(100).min(1000);
+    let offset = params.offset.unwrap_or(0);
+
+    // Build query based on filters
+    let pois = if let Some(bbox_str) = &params.bbox {
+        // Parse bbox: "minLon,minLat,maxLon,maxLat"
+        let bbox_parts: Vec<f64> = bbox_str
+            .split(',')
+            .filter_map(|s| s.parse().ok())
+            .collect();
+
+        if bbox_parts.len() != 4 {
+            error!("Invalid bbox format: {}", bbox_str);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        sqlx::query_as::<_, Poi>(
+            r#"
+            SELECT 
+                id, name, description, category, elevation,
+                ST_AsGeoJSON(geom::geometry)::jsonb as geom,
+                session_id, created_at, updated_at
+            FROM pois
+            WHERE ST_Intersects(
+                geom::geometry, 
+                ST_MakeEnvelope($1, $2, $3, $4, 4326)
+            )
+            ORDER BY created_at DESC
+            LIMIT $5
+            OFFSET $6
+            "#,
+        )
+        .bind(bbox_parts[0])
+        .bind(bbox_parts[1])
+        .bind(bbox_parts[2])
+        .bind(bbox_parts[3])
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch POIs: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+    } else if let Some(track_id) = params.track_id {
+        // Get POIs for a specific track
+        sqlx::query_as::<_, Poi>(
+            r#"
+            SELECT 
+                p.id, p.name, p.description, p.category, p.elevation,
+                ST_AsGeoJSON(p.geom::geometry)::jsonb as geom,
+                p.session_id, p.created_at, p.updated_at
+            FROM pois p
+            JOIN track_pois tp ON p.id = tp.poi_id
+            WHERE tp.track_id = $1
+            ORDER BY tp.sequence_order
+            LIMIT $2
+            OFFSET $3
+            "#,
+        )
+        .bind(track_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch track POIs: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+    } else {
+        // Get all POIs (with limit)
+        sqlx::query_as::<_, Poi>(
+            r#"
+            SELECT 
+                id, name, description, category, elevation,
+                ST_AsGeoJSON(geom::geometry)::jsonb as geom,
+                session_id, created_at, updated_at
+            FROM pois
+            ORDER BY created_at DESC
+            LIMIT $1
+            OFFSET $2
+            "#,
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch POIs: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+    };
+
+    let total = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM pois")
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| {
+            error!("Failed to count POIs: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(PoiListResponse { pois, total }))
+}
+
+/// GET /pois/:id - Get POI details
+pub async fn get_poi(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<i32>,
+) -> Result<Json<Poi>, StatusCode> {
+    let poi = sqlx::query_as::<_, Poi>(
+        r#"
+        SELECT 
+            id, name, description, category, elevation,
+            ST_AsGeoJSON(geom::geometry)::jsonb as geom,
+            session_id, created_at, updated_at
+        FROM pois
+        WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to fetch POI: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    Ok(Json(poi))
+}
+
+/// GET /tracks/:track_id/pois - Get POIs for a track with distance info
+pub async fn get_track_pois(
+    State(pool): State<Arc<PgPool>>,
+    Path(track_id): Path<Uuid>,
+) -> Result<Json<Vec<PoiWithDistance>>, StatusCode> {
+    let rows = sqlx::query(
+        r#"
+        SELECT 
+            p.id, p.name, p.description, p.category, p.elevation,
+            ST_AsGeoJSON(p.geom::geometry)::jsonb as geom,
+            p.session_id, p.created_at, p.updated_at,
+            tp.distance_from_start_m, tp.sequence_order
+        FROM pois p
+        JOIN track_pois tp ON p.id = tp.poi_id
+        WHERE tp.track_id = $1
+        ORDER BY tp.sequence_order
+        "#,
+    )
+    .bind(track_id)
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to fetch track POIs: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let pois: Vec<PoiWithDistance> = rows
+        .into_iter()
+        .map(|row| {
+            use sqlx::Row;
+            PoiWithDistance {
+                poi: Poi {
+                    id: row.get("id"),
+                    name: row.get("name"),
+                    description: row.get("description"),
+                    category: row.get("category"),
+                    elevation: row.get("elevation"),
+                    geom: row.get("geom"),
+                    session_id: row.get("session_id"),
+                    created_at: row.get("created_at"),
+                    updated_at: row.get("updated_at"),
+                },
+                distance_from_start_m: row.get("distance_from_start_m"),
+                sequence_order: row.get("sequence_order"),
+            }
+        })
+        .collect();
+
+    Ok(Json(pois))
+}
+
+/// POST /pois - Create manual POI
+pub async fn create_poi(
+    State(pool): State<Arc<PgPool>>,
+    Json(request): Json<CreatePoiRequest>,
+) -> Result<Json<Poi>, StatusCode> {
+    // Validate inputs
+    if request.name.trim().is_empty() {
+        error!("POI name cannot be empty");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    validate_text_field(&request.name, MAX_NAME_LENGTH, "name")?;
+
+    if let Some(ref desc) = request.description {
+        validate_text_field(desc, MAX_DESCRIPTION_LENGTH, "description")?;
+    }
+
+    let poi = sqlx::query_as::<_, Poi>(
+        r#"
+        INSERT INTO pois (name, description, category, elevation, geom, session_id)
+        VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326)::geography, $7)
+        RETURNING 
+            id, name, description, category, elevation,
+            ST_AsGeoJSON(geom::geometry)::jsonb as geom,
+            session_id, created_at, updated_at
+        "#,
+    )
+    .bind(request.name.trim())
+    .bind(request.description)
+    .bind(request.category)
+    .bind(request.elevation)
+    .bind(request.lon)
+    .bind(request.lat)
+    .bind(request.session_id)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to create POI: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    info!("Created POI {} (id: {})", poi.name, poi.id);
+    Ok(Json(poi))
+}
+
+/// DELETE /tracks/:track_id/pois/:poi_id - Unlink POI from track
+pub async fn unlink_track_poi(
+    State(pool): State<Arc<PgPool>>,
+    Path((track_id, poi_id)): Path<(Uuid, i32)>,
+) -> Result<StatusCode, StatusCode> {
+    let result = sqlx::query("DELETE FROM track_pois WHERE track_id = $1 AND poi_id = $2")
+        .bind(track_id)
+        .bind(poi_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| {
+            error!("Failed to unlink POI: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    info!("Unlinked POI {} from track {}", poi_id, track_id);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// DELETE /pois/:id - Delete POI (only if not used and user is owner)
+pub async fn delete_poi(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<i32>,
+    Json(request): Json<DeletePoiRequest>,
+) -> Result<StatusCode, StatusCode> {
+    // Check ownership and usage
+    let poi_info = sqlx::query(
+        r#"
+        SELECT 
+            session_id,
+            (SELECT COUNT(*) FROM track_pois WHERE poi_id = $1) as usage_count
+        FROM pois
+        WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to check POI: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    use sqlx::Row;
+    let usage_count: i64 = poi_info.get("usage_count");
+    let owner_id: Option<Uuid> = poi_info.get("session_id");
+
+    // Only allow deletion if:
+    // 1. POI is not used in any track
+    // 2. User is the owner (session_id matches) or POI has no owner (auto-created)
+    if usage_count > 0 {
+        error!("Cannot delete POI {}: used in {} tracks", id, usage_count);
+        return Err(StatusCode::CONFLICT); // 409: POI is in use
+    }
+
+    if let Some(owner_session_id) = owner_id {
+        if Some(owner_session_id) != request.session_id {
+            error!("Cannot delete POI {}: not the owner", id);
+            return Err(StatusCode::FORBIDDEN); // 403: Not the owner
+        }
+    }
+
+    sqlx::query("DELETE FROM pois WHERE id = $1")
+        .bind(id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| {
+            error!("Failed to delete POI: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    info!("Deleted POI {}", id);
+    Ok(StatusCode::NO_CONTENT)
 }
