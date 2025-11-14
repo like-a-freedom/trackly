@@ -2,7 +2,7 @@ name: trackly
 services:
   db:
     container_name: trackly_db
-    image: imresamu/postgis:17-3.5.2-alpine3.21 # Use community image for ARM64 because official PostGIS image does not support ARM64 yet: https://github.com/postgis/docker-postgis/issues/216
+    image: imresamu/postgis:17-3.6.0-alpine3.21 # Use community image for ARM64 because official PostGIS image does not support ARM64 yet: https://github.com/postgis/docker-postgis/issues/216
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-trackly}
