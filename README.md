@@ -382,6 +382,7 @@ The project uses **GitHub Actions** for automated testing and deployment:
 
 - 🐳 **Build workflow** — Publishes Docker images on releases
 - 🏗️ **Multi-arch support** — Both `linux/amd64` and `linux/arm64`
+- ☁️ **Cloud agents** — Automated task delegation to cloud-based agents (see `.github/agents/`)
 
 ---
 
