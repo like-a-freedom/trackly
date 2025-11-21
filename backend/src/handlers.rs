@@ -1,7 +1,12 @@
 use crate::db;
+use crate::input_validation::{
+    validate_file_size, validate_text_field, MAX_CATEGORIES, MAX_CATEGORY_LENGTH,
+    MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE, MAX_NAME_LENGTH,
+};
 use crate::models::*;
+use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
 use crate::track_utils::{
-    self, calculate_file_hash, parse_gpx_full, parse_gpx_minimal, ElevationEnrichmentService,
+    calculate_file_hash, extract_coordinates_from_geojson, ElevationEnrichmentService,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -15,65 +20,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio;
 use tracing::{debug, error, info};
 use uuid::Uuid;
-
-// Security constants
-static MAX_FILE_SIZE: Lazy<usize> = Lazy::new(|| {
-    std::env::var("MAX_FILE_SIZE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(50 * 1024 * 1024) // Default 50MB
-});
-const MAX_FIELD_SIZE: usize = 10 * 1024; // 10KB for text fields
-const MAX_CATEGORIES: usize = 50;
-const MAX_CATEGORY_LENGTH: usize = 100;
-const MAX_NAME_LENGTH: usize = 256;
-const MAX_DESCRIPTION_LENGTH: usize = 50000;
-const ALLOWED_EXTENSIONS: &[&str] = &["gpx", "kml"];
-
-// Security validation functions
-fn validate_file_size(size: usize) -> Result<(), StatusCode> {
-    if size > *MAX_FILE_SIZE {
-        error!("File size {} exceeds maximum {}", size, *MAX_FILE_SIZE);
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
-    }
-    Ok(())
-}
-
-fn validate_text_field(text: &str, max_len: usize, field_name: &str) -> Result<(), StatusCode> {
-    if text.len() > max_len {
-        error!(
-            "{} length {} exceeds maximum {}",
-            field_name,
-            text.len(),
-            max_len
-        );
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    Ok(())
-}
-
-fn validate_file_extension(filename: &str) -> Result<String, StatusCode> {
-    let ext = filename.split('.').next_back().unwrap_or("").to_lowercase();
-    if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {
-        error!("File extension '{}' not allowed", ext);
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    Ok(ext)
-}
-
-fn sanitize_input(input: &str) -> String {
-    input
-        .trim()
-        .chars()
-        .filter(|c| c.is_alphanumeric() || " .,;:!?-_()[]{}".contains(*c))
-        .collect()
-}
 
 // Safe error handling - don't expose internal details
 fn handle_db_error(err: sqlx::Error) -> StatusCode {
@@ -250,20 +200,14 @@ pub async fn upload_track(
                         StatusCode::PAYLOAD_TOO_LARGE
                     })?;
 
-                    // Validate file size
                     validate_file_size(bytes.len())?;
-
-                    // Validate file extension if filename is provided
-                    if let Some(ref fname) = file_name {
-                        validate_file_extension(fname)?;
-                    }
-
                     file_bytes = Some(bytes);
                 }
                 _ => {}
             }
         }
     }
+
     let file_bytes = match file_bytes {
         Some(b) => b,
         None => {
@@ -279,10 +223,6 @@ pub async fn upload_track(
         }
     };
 
-    // Validate and sanitize inputs
-    let ext = validate_file_extension(&file_name)?;
-
-    // Validate text fields
     if let Some(ref n) = name {
         validate_text_field(n, MAX_NAME_LENGTH, "name")?;
     }
@@ -301,287 +241,18 @@ pub async fn upload_track(
         validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
     }
 
-    // Phase 1: Fast minimal parsing for duplicate check (GPX only for now)
-    // This dramatically improves performance for large files
-    let parsed_data = if ext == "gpx" {
-        // First do minimal parsing for duplicate check
-        let minimal_data = parse_gpx_minimal(&file_bytes).map_err(|e| {
-            error!(?e, "[upload_track] failed to parse gpx minimally");
-            StatusCode::UNPROCESSABLE_ENTITY
-        })?;
-
-        // Check for duplicates using the hash from minimal parsing
-        if db::track_exists(&pool, &minimal_data.hash)
-            .await
-            .map_err(|e| {
-                error!(?e, "[upload_track] db error on dedup");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?
-            .is_some()
-        {
-            return Err(StatusCode::CONFLICT);
-        }
-
-        // Phase 2: Full parsing only if not a duplicate
-        parse_gpx_full(&file_bytes).map_err(|e| {
-            error!(?e, "[upload_track] failed to parse gpx fully");
-            StatusCode::UNPROCESSABLE_ENTITY
-        })?
-    } else if ext == "kml" {
-        // KML still uses old approach for now
-        let parsed = track_utils::parse_kml(&file_bytes).map_err(|e| {
-            error!(?e, "[upload_track] failed to parse kml");
-            StatusCode::UNPROCESSABLE_ENTITY
-        })?;
-
-        // Check for duplicates
-        if db::track_exists(&pool, &parsed.hash)
-            .await
-            .map_err(|e| {
-                error!(?e, "[upload_track] db error on dedup");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?
-            .is_some()
-        {
-            return Err(StatusCode::CONFLICT);
-        }
-
-        parsed
-    } else {
-        error!("[upload_track] unsupported file type: {}", ext);
-        return Err(StatusCode::BAD_REQUEST);
-    };
-    let id = Uuid::new_v4();
-    let name: String = name
-        .map(|n| sanitize_input(&n))
-        .or_else(|| Some(sanitize_input(&file_name)))
-        .unwrap_or("Unnamed track".to_string());
-
-    let description = description.map(|d| sanitize_input(&d));
-    let categories: Vec<String> = categories.into_iter().map(|c| sanitize_input(&c)).collect();
-    let cats: Vec<&str> = categories.iter().map(|s| s.as_str()).collect();
-    let elevation_profile_json = match parsed_data.elevation_profile {
-        Some(profile) => serde_json::to_value(profile).ok(),
-        None => None,
-    };
-    let hr_data_json = match parsed_data.hr_data {
-        Some(hr_data) => serde_json::to_value(hr_data).ok(),
-        None => None,
-    };
-    let time_data_json = match parsed_data.time_data {
-        Some(time_data) => serde_json::to_value(time_data).ok(),
-        None => None,
-    };
-    let temp_data_json = match parsed_data.temp_data {
-        Some(temp_data) => serde_json::to_value(temp_data).ok(),
-        None => None,
-    };
-    let speed_data_json = match parsed_data.speed_data {
-        Some(speed_data) => serde_json::to_value(speed_data).ok(),
-        None => None,
-    };
-    let pace_data_json = match parsed_data.pace_data {
-        Some(pace_data) => serde_json::to_value(pace_data).ok(),
-        None => None,
-    };
-    db::insert_track(db::InsertTrackParams {
-        pool: &pool,
-        id,
-        name: &name,
+    let service = TrackUploadService::new(Arc::clone(&pool));
+    let request = TrackUploadRequest {
+        name,
         description,
-        categories: &cats,
-        auto_classifications: &parsed_data.auto_classifications,
-        geom_geojson: &parsed_data.geom_geojson,
-        length_km: parsed_data.length_km,
-        elevation_profile_json,
-        hr_data_json,
-        temp_data_json,
-        time_data_json,
-        elevation_gain: parsed_data.elevation_gain,
-        elevation_loss: parsed_data.elevation_loss,
-        elevation_min: parsed_data.elevation_min,
-        elevation_max: parsed_data.elevation_max,
-        elevation_enriched: Some(false), // Initially not enriched
-        elevation_enriched_at: None,
-        elevation_dataset: Some("original_gpx".to_string()), // Mark as original data from GPX/KML
-        elevation_api_calls: Some(0),                        // No API calls used initially
-        slope_min: parsed_data.slope_min,
-        slope_max: parsed_data.slope_max,
-        slope_avg: parsed_data.slope_avg,
-        slope_histogram: parsed_data.slope_histogram,
-        slope_segments: parsed_data.slope_segments,
-        avg_speed: parsed_data.avg_speed,
-        avg_hr: parsed_data.avg_hr,
-        hr_min: parsed_data.hr_min,
-        hr_max: parsed_data.hr_max,
-        moving_time: parsed_data.moving_time,
-        pause_time: parsed_data.pause_time,
-        moving_avg_speed: parsed_data.moving_avg_speed,
-        moving_avg_pace: parsed_data.moving_avg_pace,
-        duration_seconds: parsed_data.duration_seconds,
-        hash: &parsed_data.hash,
-        recorded_at: parsed_data.recorded_at,
+        categories,
         session_id,
-        speed_data_json,
-        pace_data_json,
-    })
-    .await
-    .map_err(|e| {
-        error!(?e, "[upload_track] db error on insert");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    info!(?id, "[upload_track] track uploaded successfully");
+        file_name,
+        file_bytes,
+    };
 
-    // Check if track needs automatic elevation enrichment
-    let needs_enrichment = parsed_data.elevation_gain.is_none()
-        || parsed_data.elevation_gain == Some(0.0)
-        || parsed_data.elevation_loss.is_none()
-        || parsed_data.elevation_loss == Some(0.0);
-
-    if needs_enrichment {
-        info!(
-            ?id,
-            "[upload_track] track has no elevation data, starting automatic enrichment"
-        );
-
-        // Extract coordinates for enrichment
-        let coordinates = match extract_coordinates_from_geojson(&parsed_data.geom_geojson) {
-            Ok(coords) if !coords.is_empty() => coords,
-            Ok(_) => {
-                info!(
-                    ?id,
-                    "[upload_track] track has no coordinates for enrichment, skipping"
-                );
-                return Ok(Json(TrackUploadResponse {
-                    id,
-                    url: format!("/tracks/{id}"),
-                }));
-            }
-            Err(e) => {
-                error!(
-                    ?id,
-                    "[upload_track] failed to extract coordinates for enrichment: {}", e
-                );
-                return Ok(Json(TrackUploadResponse {
-                    id,
-                    url: format!("/tracks/{id}"),
-                }));
-            }
-        };
-
-        // Start asynchronous elevation enrichment
-        let pool_clone = Arc::clone(&pool);
-        let track_id = id;
-        tokio::spawn(async move {
-            let enrichment_service = ElevationEnrichmentService::new();
-
-            match enrichment_service
-                .enrich_track_elevation(coordinates.clone())
-                .await
-            {
-                Ok(result) => {
-                    // Update track with enriched elevation data
-                    if let Err(e) = db::update_track_elevation(
-                        &pool_clone,
-                        track_id,
-                        db::UpdateElevationParams {
-                            elevation_gain: result.metrics.elevation_gain,
-                            elevation_loss: result.metrics.elevation_loss,
-                            elevation_min: result.metrics.elevation_min,
-                            elevation_max: result.metrics.elevation_max,
-                            elevation_enriched: true,
-                            elevation_enriched_at: Some(result.enriched_at.naive_utc()),
-                            elevation_dataset: Some(result.dataset.clone()),
-                            elevation_profile: result.elevation_profile.clone(),
-                            elevation_api_calls: result.api_calls_used,
-                        },
-                    )
-                    .await
-                    {
-                        error!(?track_id, "Failed to update enriched elevation data: {}", e);
-                    } else {
-                        info!(
-                            ?track_id,
-                            "Successfully auto-enriched track with elevation data: gain={:.1}m, loss={:.1}m",
-                            result.metrics.elevation_gain.unwrap_or(0.0),
-                            result.metrics.elevation_loss.unwrap_or(0.0)
-                        );
-
-                        // Calculate and update slope data if elevation enrichment was successful
-                        if let Some(elevation_profile) = result.elevation_profile {
-                            use crate::track_utils::slope::recalculate_slope_metrics;
-
-                            // Use universal slope calculation function
-                            let slope_result = recalculate_slope_metrics(
-                                &coordinates,
-                                &elevation_profile,
-                                &format!("Track {}", track_id),
-                            );
-
-                            // Update track with slope data
-                            if let Err(e) = db::update_track_slope(
-                                &pool_clone,
-                                track_id,
-                                db::UpdateSlopeParams {
-                                    slope_min: slope_result.slope_min,
-                                    slope_max: slope_result.slope_max,
-                                    slope_avg: slope_result.slope_avg,
-                                    slope_histogram: slope_result.slope_histogram,
-                                    slope_segments: slope_result.slope_segments,
-                                },
-                            )
-                            .await
-                            {
-                                error!(?track_id, "Failed to update slope data: {}", e);
-                            } else {
-                                info!(
-                                    ?track_id,
-                                    "Successfully calculated slope data: min={:.1}%, max={:.1}%, avg={:.1}%",
-                                    slope_result.slope_min.unwrap_or(0.0),
-                                    slope_result.slope_max.unwrap_or(0.0),
-                                    slope_result.slope_avg.unwrap_or(0.0)
-                                );
-                            }
-                        } else {
-                            error!(
-                                ?track_id,
-                                "No elevation profile available for slope calculation"
-                            );
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!(?track_id, "Failed to auto-enrich track elevation: {}", e);
-                }
-            }
-        });
-    }
-
-    // Process waypoints from GPX file
-    if !parsed_data.waypoints.is_empty() {
-        info!(
-            ?id,
-            "[upload_track] Processing {} waypoints from GPX",
-            parsed_data.waypoints.len()
-        );
-        
-        use crate::poi_deduplication::PoiDeduplicationService;
-        
-        match PoiDeduplicationService::link_pois_to_track(&pool, id, parsed_data.waypoints).await {
-            Ok(linked_count) => {
-                info!(?id, "[upload_track] Linked {} POIs to track", linked_count);
-            }
-            Err(e) => {
-                // Log error but don't fail the upload if POI linking fails
-                error!(?id, ?e, "[upload_track] Failed to link POIs, continuing anyway");
-            }
-        }
-    }
-
-    Ok(Json(TrackUploadResponse {
-        id,
-        url: format!("/tracks/{id}"),
-    }))
+    let response = service.upload_track(request).await?;
+    Ok(Json(response))
 }
 
 pub async fn list_tracks_geojson(
@@ -985,32 +656,6 @@ pub async fn enrich_elevation(
     }))
 }
 
-/// Extract coordinates from GeoJSON LineString
-fn extract_coordinates_from_geojson(
-    geom_geojson: &serde_json::Value,
-) -> Result<Vec<(f64, f64)>, String> {
-    let coordinates = geom_geojson
-        .get("coordinates")
-        .ok_or("Missing coordinates in geometry")?
-        .as_array()
-        .ok_or("Coordinates is not an array")?;
-
-    let mut result = Vec::new();
-    for coord in coordinates {
-        let coord_array = coord.as_array().ok_or("Coordinate is not an array")?;
-        if coord_array.len() < 2 {
-            return Err("Coordinate must have at least 2 elements".to_string());
-        }
-
-        let lon = coord_array[0].as_f64().ok_or("Longitude is not a number")?;
-        let lat = coord_array[1].as_f64().ok_or("Latitude is not a number")?;
-
-        result.push((lat, lon));
-    }
-
-    Ok(result)
-}
-
 fn sanitize_filename(name: &str) -> String {
     name.chars()
         .map(|c| {
@@ -1299,110 +944,6 @@ mod tests {
         assert!(gpx.contains("<gpxtpx:hr>120</gpxtpx:hr>"));
         assert!(gpx.contains("<time>2024-01-01T10:00:00Z</time>"));
         assert!(gpx.contains("<time>2024-01-01T10:01:00Z</time>"));
-    }
-
-    // Tests for elevation-related functionality
-    #[test]
-    fn test_extract_coordinates_from_geojson_valid() {
-        let geojson = json!({
-            "type": "LineString",
-            "coordinates": [[37.6176, 55.7558], [37.6177, 55.7559], [37.6178, 55.7560]]
-        });
-
-        let result = extract_coordinates_from_geojson(&geojson);
-        assert!(result.is_ok());
-
-        let coordinates = result.unwrap();
-        assert_eq!(coordinates.len(), 3);
-        assert_eq!(coordinates[0], (55.7558, 37.6176));
-        assert_eq!(coordinates[1], (55.7559, 37.6177));
-        assert_eq!(coordinates[2], (55.7560, 37.6178));
-    }
-
-    #[test]
-    fn test_extract_coordinates_from_geojson_invalid() {
-        // Test missing coordinates
-        let invalid_geojson1 = json!({
-            "type": "LineString"
-        });
-        assert!(extract_coordinates_from_geojson(&invalid_geojson1).is_err());
-
-        // Test coordinates not an array
-        let invalid_geojson2 = json!({
-            "type": "LineString",
-            "coordinates": "not_an_array"
-        });
-        assert!(extract_coordinates_from_geojson(&invalid_geojson2).is_err());
-
-        // Test coordinate with insufficient elements
-        let invalid_geojson3 = json!({
-            "type": "LineString",
-            "coordinates": [[37.6176]]
-        });
-        assert!(extract_coordinates_from_geojson(&invalid_geojson3).is_err());
-
-        // Test non-numeric coordinates
-        let invalid_geojson4 = json!({
-            "type": "LineString",
-            "coordinates": [["not_a_number", 55.7558]]
-        });
-        assert!(extract_coordinates_from_geojson(&invalid_geojson4).is_err());
-    }
-
-    #[test]
-    fn test_extract_coordinates_empty() {
-        let empty_geojson = json!({
-            "type": "LineString",
-            "coordinates": []
-        });
-
-        let result = extract_coordinates_from_geojson(&empty_geojson);
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_extract_coordinates_with_elevation() {
-        let geojson_with_elevation = json!({
-            "type": "LineString",
-            "coordinates": [
-                [37.6176, 55.7558, 100.0],
-                [37.6177, 55.7559, 110.0],
-                [37.6178, 55.7560, 90.0]
-            ]
-        });
-
-        let result = extract_coordinates_from_geojson(&geojson_with_elevation);
-        assert!(result.is_ok());
-
-        let coordinates = result.unwrap();
-        assert_eq!(coordinates.len(), 3);
-        // Should only extract lat/lon, ignoring elevation
-        assert_eq!(coordinates[0], (55.7558, 37.6176));
-        assert_eq!(coordinates[1], (55.7559, 37.6177));
-        assert_eq!(coordinates[2], (55.7560, 37.6178));
-    }
-
-    #[test]
-    fn test_extract_coordinates_edge_cases() {
-        // Test with extreme coordinate values
-        let extreme_geojson = json!({
-            "type": "LineString",
-            "coordinates": [
-                [-180.0, -90.0],
-                [180.0, 90.0],
-                [0.0, 0.0]
-            ]
-        });
-
-        let result = extract_coordinates_from_geojson(&extreme_geojson);
-        assert!(result.is_ok());
-
-        let coordinates = result.unwrap();
-        assert_eq!(coordinates.len(), 3);
-        assert_eq!(coordinates[0], (-90.0, -180.0));
-        assert_eq!(coordinates[1], (90.0, 180.0));
-        assert_eq!(coordinates[2], (0.0, 0.0));
     }
 
     // Additional integration tests from tests/handlers.rs
@@ -1908,10 +1449,7 @@ pub async fn get_pois(
     // Build query based on filters
     let pois = if let Some(bbox_str) = &params.bbox {
         // Parse bbox: "minLon,minLat,maxLon,maxLat"
-        let bbox_parts: Vec<f64> = bbox_str
-            .split(',')
-            .filter_map(|s| s.parse().ok())
-            .collect();
+        let bbox_parts: Vec<f64> = bbox_str.split(',').filter_map(|s| s.parse().ok()).collect();
 
         if bbox_parts.len() != 4 {
             error!("Invalid bbox format: {}", bbox_str);

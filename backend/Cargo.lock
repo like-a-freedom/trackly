@@ -177,6 +177,7 @@ dependencies = [
  "assert_approx_eq",
  "axum",
  "axum-extra",
+ "bytes",
  "chrono",
  "geo",
  "geo-types",
