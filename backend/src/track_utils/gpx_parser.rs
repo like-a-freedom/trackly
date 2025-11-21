@@ -348,7 +348,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         // Store waypoint if we have required data
                         if let (Some(lat), Some(lon), Some(name)) = (lat, lon, wpt_name.clone()) {
                             use crate::models::ParsedWaypoint;
-                            
+
                             waypoints.push(ParsedWaypoint {
                                 name: name.trim().to_string(),
                                 description: wpt_desc.clone(),
@@ -502,12 +502,12 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         speed_data_points.push(None);
         pace_data_points.push(None);
         time_diff_data.push(None);
-        
+
         for i in 1..points.len() {
             if let (Some(time1), Some(time2)) = (&time_points[i - 1], &time_points[i]) {
                 let time_diff_secs = (time2.timestamp() - time1.timestamp()) as f64;
                 time_diff_data.push(Some(time_diff_secs));
-                
+
                 if time_diff_secs > 0.0 && time_diff_secs < 3600.0 {
                     // Sanity check: < 1 hour between points
                     let dist_m = haversine_distance(
@@ -636,26 +636,37 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     };
 
     // Apply adaptive pace filtering based on track classification
-    let filtered_pace_data = if !pace_data_points.is_empty() && pace_data_points.iter().any(|p| p.is_some()) {
-        use crate::track_utils::pace_filter::filter_pace_data;
-        debug!("Applying adaptive pace filtering with {} classifications", classifications.len());
-        filter_pace_data(&pace_data_points, &speed_data_points, &time_diff_data, &classifications)
-    } else {
-        pace_data_points
-    };
+    let filtered_pace_data =
+        if !pace_data_points.is_empty() && pace_data_points.iter().any(|p| p.is_some()) {
+            use crate::track_utils::pace_filter::filter_pace_data;
+            debug!(
+                "Applying adaptive pace filtering with {} classifications",
+                classifications.len()
+            );
+            filter_pace_data(
+                &pace_data_points,
+                &speed_data_points,
+                &time_diff_data,
+                &classifications,
+            )
+        } else {
+            pace_data_points
+        };
 
     // Create final speed and pace data arrays if we have time data
-    let final_speed_data = if !speed_data_points.is_empty() && speed_data_points.iter().any(|s| s.is_some()) {
-        Some(speed_data_points)
-    } else {
-        None
-    };
-    
-    let final_pace_data = if !filtered_pace_data.is_empty() && filtered_pace_data.iter().any(|p| p.is_some()) {
-        Some(filtered_pace_data)
-    } else {
-        None
-    };
+    let final_speed_data =
+        if !speed_data_points.is_empty() && speed_data_points.iter().any(|s| s.is_some()) {
+            Some(speed_data_points)
+        } else {
+            None
+        };
+
+    let final_pace_data =
+        if !filtered_pace_data.is_empty() && filtered_pace_data.iter().any(|p| p.is_some()) {
+            Some(filtered_pace_data)
+        } else {
+            None
+        };
 
     Ok(ParsedTrackData {
         geom_geojson,
@@ -690,9 +701,9 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         duration_seconds, // Calculated duration
         hash,
         recorded_at,
-        auto_classifications, // Add automatic classifications
+        auto_classifications,         // Add automatic classifications
         speed_data: final_speed_data, // Add calculated speed data
-        pace_data: final_pace_data, // Add calculated pace data
-        waypoints, // Add parsed waypoints
+        pace_data: final_pace_data,   // Add calculated pace data
+        waypoints,                    // Add parsed waypoints
     })
 }

@@ -123,11 +123,10 @@ impl PoiDeduplicationService {
         for (idx, waypoint) in waypoints.into_iter().enumerate() {
             match Self::find_or_create_poi(pool, &waypoint).await {
                 Ok(poi_id) => {
-                    if let Err(e) = Self::link_poi_to_track(pool, track_id, poi_id, idx as i32).await {
-                        warn!(
-                            "Failed to link POI {} to track {}: {}",
-                            poi_id, track_id, e
-                        );
+                    if let Err(e) =
+                        Self::link_poi_to_track(pool, track_id, poi_id, idx as i32).await
+                    {
+                        warn!("Failed to link POI {} to track {}: {}", poi_id, track_id, e);
                         // Continue with other POIs even if one fails
                         continue;
                     }
@@ -143,9 +142,7 @@ impl PoiDeduplicationService {
 
         info!(
             "Successfully linked {} out of {} POIs to track {}",
-            count,
-            count,
-            track_id
+            count, count, track_id
         );
 
         Ok(count)

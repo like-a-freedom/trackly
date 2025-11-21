@@ -124,8 +124,8 @@ pub struct TrackSimplified {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     pub session_id: Option<Uuid>,
     pub auto_classifications: Vec<String>,
-    pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb  
-    pub pace_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
+    pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
+    pub pace_data: Option<serde_json::Value>,  // Store as JSON for compatibility with DB jsonb
 }
 
 #[derive(Serialize)]
@@ -241,7 +241,7 @@ pub struct ParsedTrackData {
     pub auto_classifications: Vec<String>, // Result of automatic track classification
     pub speed_data: Option<Vec<Option<f64>>>, // Point-by-point speed data (km/h)
     pub pace_data: Option<Vec<Option<f64>>>, // Point-by-point pace data (min/km)
-    pub waypoints: Vec<ParsedWaypoint>, // Waypoints/POIs from GPX file
+    pub waypoints: Vec<ParsedWaypoint>,    // Waypoints/POIs from GPX file
 }
 
 #[derive(Debug, Deserialize)]
@@ -502,7 +502,7 @@ pub struct CreatePoiRequest {
 /// Query parameters for listing POIs
 #[derive(Debug, Deserialize)]
 pub struct PoiQuery {
-    pub bbox: Option<String>,        // "minLon,minLat,maxLon,maxLat"
+    pub bbox: Option<String>, // "minLon,minLat,maxLon,maxLat"
     pub categories: Option<Vec<String>>,
     pub track_id: Option<Uuid>,
     pub search: Option<String>,
