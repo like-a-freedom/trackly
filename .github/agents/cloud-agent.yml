@@ -1,0 +1,117 @@
+name: cloud-agent
+description: Cloud-based agent for CI/CD and development tasks
+version: 1.0.0
+
+# Agent capabilities
+capabilities:
+  - build
+  - test
+  - deploy
+  - code-review
+  - security-scan
+
+# Execution environment
+environment:
+  type: cloud
+  runtime: containerized
+  platform: github-actions
+
+# Agent configuration
+config:
+  # Maximum execution time in minutes
+  timeout: 60
+  
+  # Resource limits
+  resources:
+    cpu: 2
+    memory: 4096
+    disk: 20480
+  
+  # Concurrent job limit
+  concurrency: 5
+
+# Trigger conditions
+triggers:
+  - event: push
+    branches:
+      - main
+      - master
+      - develop
+  - event: pull_request
+    branches:
+      - main
+      - master
+  - event: workflow_dispatch
+
+# Tasks delegation
+tasks:
+  build:
+    description: Build backend and frontend Docker images
+    steps:
+      - name: Checkout code
+        action: checkout
+      - name: Build backend
+        action: docker-build
+        context: ./backend
+        dockerfile: ./backend/Dockerfile
+      - name: Build frontend
+        action: docker-build
+        context: ./frontend
+        dockerfile: ./frontend/Dockerfile
+  
+  test:
+    description: Run automated tests
+    steps:
+      - name: Backend tests
+        action: run
+        command: cargo test
+        working_directory: ./backend
+      - name: Frontend tests
+        action: run
+        command: npm test
+        working_directory: ./frontend
+  
+  deploy:
+    description: Deploy application to cloud infrastructure
+    steps:
+      - name: Deploy to production
+        action: deploy
+        target: production
+        requires:
+          - build
+          - test
+
+# Security settings
+security:
+  scan_dependencies: true
+  scan_code: true
+  require_approval: true
+  allowed_actions:
+    - read
+    - write
+    - deploy
+
+# Notifications
+notifications:
+  on_success:
+    - type: github-status
+    - type: comment
+  on_failure:
+    - type: github-status
+    - type: comment
+    - type: issue
+
+# Integration with existing workflows
+integrations:
+  github_actions:
+    enabled: true
+    workflow_files:
+      - .github/workflows/build.yaml
+  
+  docker:
+    enabled: true
+    registry: ghcr.io
+  
+  postgresql:
+    enabled: true
+    version: "17"
