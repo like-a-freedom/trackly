@@ -31,6 +31,9 @@ vi.mock('../../composables/useMemoization', () => ({
     clearCacheByPattern: vi.fn()
 }));
 
+// Constant for panel close animation timeout
+const PANEL_CLOSE_TIMEOUT = 350; // Slightly more than the 300ms CSS transition
+
 // Helper to build a minimal track object
 function makeTrack(overrides = {}) {
     return Object.assign({
@@ -234,7 +237,7 @@ describe('TrackDetailPanel uncommitted changes warning', () => {
         });
 
         // Wait for the closing animation timeout
-        await new Promise(resolve => setTimeout(resolve, 350));
+        await new Promise(resolve => setTimeout(resolve, PANEL_CLOSE_TIMEOUT));
 
         // Verify panel was closed (user confirmed)
         expect(wrapper.emitted('close')).toBeTruthy();
@@ -255,7 +258,7 @@ describe('TrackDetailPanel uncommitted changes warning', () => {
         expect(mockShowConfirm).not.toHaveBeenCalled();
 
         // Wait for the closing animation timeout
-        await new Promise(resolve => setTimeout(resolve, 350));
+        await new Promise(resolve => setTimeout(resolve, PANEL_CLOSE_TIMEOUT));
 
         // Verify panel was closed
         expect(wrapper.emitted('close')).toBeTruthy();
@@ -282,7 +285,7 @@ describe('TrackDetailPanel uncommitted changes warning', () => {
         expect(mockShowConfirm).not.toHaveBeenCalled();
 
         // Wait for the closing animation timeout
-        await new Promise(resolve => setTimeout(resolve, 350));
+        await new Promise(resolve => setTimeout(resolve, PANEL_CLOSE_TIMEOUT));
 
         // Verify panel was closed
         expect(wrapper.emitted('close')).toBeTruthy();

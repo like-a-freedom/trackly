@@ -1569,7 +1569,7 @@ async function forceEnrichElevation() {
 async function handleClose() {
   // Check for uncommitted changes
   const hasUncommittedNameChange = isEditingName.value && 
-    editedName.value.trim() !== (track.value?.name || '');
+    editedName.value.trim() !== (track.value?.name?.trim() || '');
   const hasUncommittedDescriptionChange = isEditingDescription.value && 
     editedDescription.value !== (track.value?.description || '');
   
