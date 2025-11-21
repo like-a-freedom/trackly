@@ -141,3 +141,150 @@ describe('TrackDetailPanel delete behaviour', () => {
         expect(wrapper.emitted('deleted')).toBeFalsy();
     });
 });
+
+describe('TrackDetailPanel uncommitted changes warning', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        global.fetch = vi.fn();
+        mockShowConfirm.mockClear();
+        mockShowToast.mockClear();
+    });
+
+    it('should show warning when closing with uncommitted name changes', async () => {
+        const track = makeTrack({ name: 'Original Name' });
+        mockShowConfirm.mockResolvedValue(false); // user cancels
+
+        const wrapper = mount(TrackDetailPanel, {
+            props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
+        });
+
+        // Start editing name
+        wrapper.vm.isEditingName = true;
+        wrapper.vm.editedName = 'Modified Name';
+        await wrapper.vm.$nextTick();
+
+        // Try to close the panel
+        await wrapper.vm.handleClose();
+        await wrapper.vm.$nextTick();
+
+        // Verify confirmation dialog was shown
+        expect(mockShowConfirm).toHaveBeenCalledWith({
+            title: 'Uncommitted changes detected',
+            message: 'You have unsaved changes. Closing the panel will discard these changes. Do you want to proceed?',
+            confirmText: 'Proceed',
+            cancelText: 'Cancel'
+        });
+
+        // Verify panel was NOT closed (user cancelled)
+        expect(wrapper.emitted('close')).toBeFalsy();
+    });
+
+    it('should show warning when closing with uncommitted description changes', async () => {
+        const track = makeTrack({ description: 'Original Description' });
+        mockShowConfirm.mockResolvedValue(false); // user cancels
+
+        const wrapper = mount(TrackDetailPanel, {
+            props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
+        });
+
+        // Start editing description
+        wrapper.vm.isEditingDescription = true;
+        wrapper.vm.editedDescription = 'Modified Description';
+        await wrapper.vm.$nextTick();
+
+        // Try to close the panel
+        await wrapper.vm.handleClose();
+        await wrapper.vm.$nextTick();
+
+        // Verify confirmation dialog was shown
+        expect(mockShowConfirm).toHaveBeenCalledWith({
+            title: 'Uncommitted changes detected',
+            message: 'You have unsaved changes. Closing the panel will discard these changes. Do you want to proceed?',
+            confirmText: 'Proceed',
+            cancelText: 'Cancel'
+        });
+
+        // Verify panel was NOT closed (user cancelled)
+        expect(wrapper.emitted('close')).toBeFalsy();
+    });
+
+    it('should close panel when user confirms discarding uncommitted changes', async () => {
+        const track = makeTrack({ name: 'Original Name' });
+        mockShowConfirm.mockResolvedValue(true); // user confirms
+
+        const wrapper = mount(TrackDetailPanel, {
+            props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
+        });
+
+        // Start editing name
+        wrapper.vm.isEditingName = true;
+        wrapper.vm.editedName = 'Modified Name';
+        await wrapper.vm.$nextTick();
+
+        // Try to close the panel
+        await wrapper.vm.handleClose();
+        await wrapper.vm.$nextTick();
+
+        // Verify confirmation dialog was shown
+        expect(mockShowConfirm).toHaveBeenCalledWith({
+            title: 'Uncommitted changes detected',
+            message: 'You have unsaved changes. Closing the panel will discard these changes. Do you want to proceed?',
+            confirmText: 'Proceed',
+            cancelText: 'Cancel'
+        });
+
+        // Wait for the closing animation timeout
+        await new Promise(resolve => setTimeout(resolve, 350));
+
+        // Verify panel was closed (user confirmed)
+        expect(wrapper.emitted('close')).toBeTruthy();
+    });
+
+    it('should not show warning when closing without any edits', async () => {
+        const track = makeTrack();
+        
+        const wrapper = mount(TrackDetailPanel, {
+            props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
+        });
+
+        // Close the panel without editing anything
+        await wrapper.vm.handleClose();
+        await wrapper.vm.$nextTick();
+
+        // Verify confirmation dialog was NOT shown
+        expect(mockShowConfirm).not.toHaveBeenCalled();
+
+        // Wait for the closing animation timeout
+        await new Promise(resolve => setTimeout(resolve, 350));
+
+        // Verify panel was closed
+        expect(wrapper.emitted('close')).toBeTruthy();
+    });
+
+    it('should not show warning when name is edited but unchanged', async () => {
+        const track = makeTrack({ name: 'Original Name' });
+        
+        const wrapper = mount(TrackDetailPanel, {
+            props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
+        });
+
+        // Start editing name
+        wrapper.vm.isEditingName = true;
+        // Set the same name (no actual change)
+        wrapper.vm.editedName = 'Original Name';
+        await wrapper.vm.$nextTick();
+
+        // Try to close the panel
+        await wrapper.vm.handleClose();
+        await wrapper.vm.$nextTick();
+
+        // Verify confirmation dialog was NOT shown (no real changes)
+        expect(mockShowConfirm).not.toHaveBeenCalled();
+
+        // Wait for the closing animation timeout
+        await new Promise(resolve => setTimeout(resolve, 350));
+
+        // Verify panel was closed
+        expect(wrapper.emitted('close')).toBeTruthy();
+    });
+});

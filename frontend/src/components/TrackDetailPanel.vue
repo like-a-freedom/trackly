@@ -1566,7 +1566,26 @@ async function forceEnrichElevation() {
   }
 }
 
-function handleClose() {
+async function handleClose() {
+  // Check for uncommitted changes
+  const hasUncommittedNameChange = isEditingName.value && 
+    editedName.value.trim() !== (track.value?.name || '');
+  const hasUncommittedDescriptionChange = isEditingDescription.value && 
+    editedDescription.value !== (track.value?.description || '');
+  
+  if (hasUncommittedNameChange || hasUncommittedDescriptionChange) {
+    const proceed = await showConfirm({
+      title: 'Uncommitted changes detected',
+      message: 'You have unsaved changes. Closing the panel will discard these changes. Do you want to proceed?',
+      confirmText: 'Proceed',
+      cancelText: 'Cancel'
+    });
+    
+    if (!proceed) {
+      return;
+    }
+  }
+  
   isClosing.value = true;
   // Stop any ongoing polling
   stopElevationPolling();
