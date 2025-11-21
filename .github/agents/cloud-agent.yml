@@ -23,9 +23,9 @@ config:
   
   # Resource limits
   resources:
-    cpu: 2
-    memory: 4096
-    disk: 20480
+    cpu: 2           # CPU cores
+    memory: 4096     # Memory in MB
+    disk: 20480      # Disk space in MB
   
   # Concurrent job limit
   concurrency: 5
@@ -111,7 +111,3 @@ integrations:
   docker:
     enabled: true
     registry: ghcr.io
-  
-  postgresql:
-    enabled: true
-    version: "17"
