@@ -2,11 +2,12 @@ use crate::models::TrackDetail;
 use chrono::Utc;
 
 /// Service for exporting tracks to GPX format
+#[derive(Default)]
 pub struct GpxExportService;
 
 impl GpxExportService {
     pub fn new() -> Self {
-        Self
+        Self::default()
     }
 
     /// Generate GPX XML from track data
