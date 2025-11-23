@@ -7,7 +7,7 @@ pub struct GpxExportService;
 
 impl GpxExportService {
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     /// Generate GPX XML from track data
