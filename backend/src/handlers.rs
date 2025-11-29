@@ -167,10 +167,15 @@ pub async fn upload_track(
                     }
                 }
                 "session_id" => {
-                    let sid_str = field.text().await.map_err(|e| {
+                    let sid_raw = field.text().await.map_err(|e| {
                         error!("Failed to get text from field 'session_id': {}", e);
                         StatusCode::BAD_REQUEST
                     })?;
+                    let sid_str = sid_raw.trim().to_string();
+                    if sid_str.is_empty() {
+                        error!("session_id field is empty after trimming");
+                        return Err(StatusCode::BAD_REQUEST);
+                    }
                     session_id = match Uuid::parse_str(&sid_str) {
                         Ok(uuid) => Some(uuid),
                         Err(e) => {
@@ -657,7 +662,6 @@ pub async fn enrich_elevation(
         enriched_at: Some(enrichment_result.enriched_at.naive_utc()),
     }))
 }
-
 
 #[cfg(test)]
 mod tests {

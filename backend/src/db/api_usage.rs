@@ -78,8 +78,6 @@ pub async fn get_api_usage_stats(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[tokio::test]
     #[ignore] // Requires database setup
     async fn test_track_api_usage_tracking() {
