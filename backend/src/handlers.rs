@@ -116,6 +116,42 @@ static UPLOAD_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
         .unwrap_or(10) // Default 10 seconds
 });
 
+fn normalize_session_id(raw: &str) -> Result<(Uuid, String), StatusCode> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        error!("session_id field is empty after trimming");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    match Uuid::parse_str(trimmed) {
+        Ok(uuid) => Ok((uuid, trimmed.to_string())),
+        Err(e) => {
+            error!("Failed to parse session_id '{}': {}", trimmed, e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
+}
+
+fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
+    let mut map = LAST_UPLOAD.lock().unwrap();
+    if let Some(&last) = map.get(session_key) {
+        if now < last + *UPLOAD_RATE_LIMIT_SECONDS {
+            error!(
+                "[upload_track] rate limit hit for session_id: {}",
+                session_key
+            );
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+    }
+    map.insert(session_key.to_string(), now);
+    Ok(())
+}
+
+#[cfg(test)]
+fn reset_rate_limit_state() {
+    LAST_UPLOAD.lock().unwrap().clear();
+}
+
 pub async fn upload_track(
     State(pool): State<Arc<PgPool>>,
     mut multipart: AxumMultipart,
@@ -171,32 +207,14 @@ pub async fn upload_track(
                         error!("Failed to get text from field 'session_id': {}", e);
                         StatusCode::BAD_REQUEST
                     })?;
-                    let sid_str = sid_raw.trim().to_string();
-                    if sid_str.is_empty() {
-                        error!("session_id field is empty after trimming");
-                        return Err(StatusCode::BAD_REQUEST);
-                    }
-                    session_id = match Uuid::parse_str(&sid_str) {
-                        Ok(uuid) => Some(uuid),
-                        Err(e) => {
-                            error!("Failed to parse session_id '{}': {}", sid_str, e);
-                            return Err(StatusCode::BAD_REQUEST);
-                        }
-                    };
+                    let (parsed_session_id, normalized_session) = normalize_session_id(&sid_raw)?;
+                    session_id = Some(parsed_session_id);
                     // --- Rate limiting check ---
                     let now = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_secs();
-                    let mut map = LAST_UPLOAD.lock().unwrap();
-                    let key = sid_str.clone();
-                    if let Some(&last) = map.get(&key) {
-                        if now < last + *UPLOAD_RATE_LIMIT_SECONDS {
-                            error!("[upload_track] rate limit hit for session_id: {}", key);
-                            return Err(StatusCode::TOO_MANY_REQUESTS);
-                        }
-                    }
-                    map.insert(key, now);
+                    record_session_upload_attempt(&normalized_session, now)?;
                     // --- End rate limiting ---
                 }
                 "file" => {
@@ -668,6 +686,48 @@ mod tests {
     use super::*;
     use serde_json::json;
     use uuid::Uuid;
+
+    #[test]
+    fn normalize_session_id_accepts_trimmed_uuid() {
+        let raw = " 11111111-1111-4111-8111-111111111111 \n";
+        let (uuid, normalized) = normalize_session_id(raw).expect("should parse");
+
+        assert_eq!(
+            uuid,
+            Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap()
+        );
+        assert_eq!(normalized, "11111111-1111-4111-8111-111111111111");
+    }
+
+    #[test]
+    fn normalize_session_id_rejects_empty_field() {
+        let err = normalize_session_id("   ").unwrap_err();
+        assert_eq!(err, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn normalize_session_id_rejects_invalid_uuid() {
+        let err = normalize_session_id("not-a-uuid").unwrap_err();
+        assert_eq!(err, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn record_session_upload_allows_first_attempt() {
+        reset_rate_limit_state();
+        record_session_upload_attempt("session", 100).expect("first upload should pass");
+    }
+
+    #[test]
+    fn record_session_upload_blocks_fast_retries() {
+        reset_rate_limit_state();
+        record_session_upload_attempt("session", 200).expect("initial upload ok");
+
+        let err = record_session_upload_attempt("session", 205).expect_err("should rate limit");
+        assert_eq!(err, StatusCode::TOO_MANY_REQUESTS);
+
+        // After enough time passes, uploads are allowed again
+        record_session_upload_attempt("session", 212).expect("rate limit window expired");
+    }
 
     // Additional integration tests from tests/handlers.rs
 
