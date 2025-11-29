@@ -4,6 +4,7 @@ use crate::input_validation::{
     MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE, MAX_NAME_LENGTH,
 };
 use crate::models::*;
+use crate::services::gpx_export::GpxExportService;
 use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
 use crate::track_utils::{
     calculate_file_hash, extract_coordinates_from_geojson, ElevationEnrichmentService,
@@ -449,7 +450,8 @@ pub async fn export_track_gpx(
 
     match db::get_track_detail(&pool, id).await {
         Ok(Some(track)) => {
-            let gpx_content = generate_gpx_from_track(&track);
+            let gpx_service = GpxExportService::new();
+            let gpx_content = gpx_service.generate_gpx(&track);
 
             let response = axum::response::Response::builder()
                 .header("Content-Type", "application/gpx+xml")
@@ -457,7 +459,7 @@ pub async fn export_track_gpx(
                     "Content-Disposition",
                     format!(
                         "attachment; filename=\"{name}.gpx\"",
-                        name = sanitize_filename(&track.name)
+                        name = gpx_service.sanitize_filename(&track.name)
                     ),
                 )
                 .body(axum::body::Body::from(gpx_content))
@@ -656,295 +658,12 @@ pub async fn enrich_elevation(
     }))
 }
 
-fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        .trim()
-        .to_string()
-        .replace(' ', "_")
-}
-
-fn generate_gpx_from_track(track: &crate::models::TrackDetail) -> String {
-    use chrono::Utc;
-
-    let created_at = track
-        .created_at
-        .unwrap_or(Utc::now())
-        .format("%Y-%m-%dT%H:%M:%SZ");
-
-    // Extract coordinates from GeoJSON
-    let coordinates = if let Some(coords) = track.geom_geojson.get("coordinates") {
-        if let Some(coord_array) = coords.as_array() {
-            coord_array
-                .iter()
-                .filter_map(|coord| {
-                    if let Some(pair) = coord.as_array() {
-                        if pair.len() >= 2 {
-                            let lon = pair[0].as_f64()?;
-                            let lat = pair[1].as_f64()?;
-                            Some((lat, lon))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
-
-    // Generate track points with elevation data if available
-    let mut track_points = String::new();
-    for (i, (lat, lon)) in coordinates.iter().enumerate() {
-        let elevation = if let Some(elevation_profile) = &track.elevation_profile {
-            if let Some(elevation_array) = elevation_profile.as_array() {
-                if i < elevation_array.len() {
-                    if let Some(ele_val) = elevation_array[i].as_f64() {
-                        format!("<ele>{ele_val:.1}</ele>")
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-
-        let hr_data = if let Some(hr_data) = &track.hr_data {
-            if let Some(hr_array) = hr_data.as_array() {
-                if i < hr_array.len() {
-                    if let Some(hr_val) = hr_array[i].as_i64() {
-                        format!(
-                            "<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>{hr_val}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>"
-                        )
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-
-        let time_data = if let Some(time_data) = &track.time_data {
-            if let Some(time_array) = time_data.as_array() {
-                if i < time_array.len() {
-                    if let Some(time_str) = time_array[i].as_str() {
-                        format!("<time>{}</time>", xml_escape(time_str))
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-
-        track_points.push_str(&format!(
-            "      <trkpt lat=\"{lat:.7}\" lon=\"{lon:.7}\">{elevation}{time_data}{hr_data}</trkpt>\n"
-        ));
-    }
-
-    let track_name = xml_escape(&track.name);
-    let track_description = track
-        .description
-        .as_ref()
-        .map(|d| xml_escape(d))
-        .unwrap_or_default();
-
-    format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Trackly" 
-     xmlns="http://www.topografix.com/GPX/1/1"
-     xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
-     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
-  <metadata>
-    <name>{track_name}</name>
-    <desc>{track_description}</desc>
-    <time>{created_at}</time>
-  </metadata>
-  <trk>
-    <name>{track_name}</name>
-    <desc>{track_description}</desc>
-    <trkseg>
-{track_points}    </trkseg>
-  </trk>
-</gpx>"#
-    )
-}
-
-fn xml_escape(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
     use serde_json::json;
     use uuid::Uuid;
-
-    #[test]
-    fn test_sanitize_filename() {
-        assert_eq!(sanitize_filename("My Track"), "My_Track");
-        assert_eq!(sanitize_filename("Track/Name"), "Track_Name");
-        assert_eq!(sanitize_filename("Track<>Name"), "Track__Name");
-        assert_eq!(sanitize_filename("  Track  "), "Track");
-    }
-
-    #[test]
-    fn test_xml_escape() {
-        assert_eq!(xml_escape("Test & Track"), "Test &amp; Track");
-        assert_eq!(xml_escape("Track <name>"), "Track &lt;name&gt;");
-        assert_eq!(xml_escape("Track \"quoted\""), "Track &quot;quoted&quot;");
-    }
-
-    #[test]
-    fn test_generate_gpx_from_track() {
-        let track = crate::models::TrackDetail {
-            id: Uuid::new_v4(),
-            name: "Test Track".to_string(),
-            description: Some("Test Description".to_string()),
-            categories: vec!["running".to_string()],
-            auto_classifications: vec![],
-            geom_geojson: json!({
-                "type": "LineString",
-                "coordinates": [[37.6176, 55.7558], [37.6177, 55.7559]]
-            }),
-            length_km: 0.1,
-            elevation_profile: Some(json!([200.0, 210.0])),
-            hr_data: Some(json!([120, 125])),
-            temp_data: None,
-            time_data: None,
-            elevation_gain: Some(10.0),
-            elevation_loss: Some(0.0),
-            elevation_min: Some(200.0),
-            elevation_max: Some(210.0),
-            elevation_enriched: Some(false),
-            elevation_enriched_at: None,
-            elevation_dataset: None,
-            // Slope fields
-            slope_min: None,
-            slope_max: None,
-            slope_avg: None,
-            slope_histogram: None,
-            slope_segments: None,
-            avg_speed: Some(10.0),
-            avg_hr: Some(122),
-            hr_min: Some(120),
-            hr_max: Some(125),
-            moving_time: Some(60),
-            pause_time: Some(0),
-            moving_avg_speed: Some(10.0),
-            moving_avg_pace: Some(6.0),
-            duration_seconds: Some(60),
-            recorded_at: Some(Utc::now()),
-            created_at: Some(Utc::now()),
-            updated_at: Some(Utc::now()),
-            session_id: Some(Uuid::new_v4()),
-            speed_data: Some(json!([10.0, 10.5])),
-            pace_data: Some(json!([6.0, 5.7])),
-        };
-
-        let gpx = generate_gpx_from_track(&track);
-
-        assert!(gpx.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
-        assert!(gpx.contains("<gpx version=\"1.1\" creator=\"Trackly\""));
-        assert!(gpx.contains("<name>Test Track</name>"));
-        assert!(gpx.contains("<desc>Test Description</desc>"));
-        assert!(gpx.contains("lat=\"55.7558000\" lon=\"37.6176000\""));
-        assert!(gpx.contains("<ele>200.0</ele>"));
-        assert!(gpx.contains("<gpxtpx:hr>120</gpxtpx:hr>"));
-    }
-
-    #[test]
-    fn test_generate_gpx_from_track_with_time_data() {
-        let track = crate::models::TrackDetail {
-            id: Uuid::new_v4(),
-            name: "Track with Time".to_string(),
-            description: Some("Track with timestamps".to_string()),
-            categories: vec!["running".to_string()],
-            auto_classifications: vec![],
-            geom_geojson: json!({
-                "type": "LineString",
-                "coordinates": [[37.6176, 55.7558], [37.6177, 55.7559]]
-            }),
-            length_km: 0.1,
-            elevation_profile: Some(json!([200.0, 210.0])),
-            hr_data: Some(json!([120, 125])),
-            temp_data: None,
-            time_data: Some(json!(["2024-01-01T10:00:00Z", "2024-01-01T10:01:00Z"])),
-            elevation_gain: Some(10.0),
-            elevation_loss: Some(0.0),
-            elevation_min: Some(200.0),
-            elevation_max: Some(210.0),
-            elevation_enriched: Some(false),
-            elevation_enriched_at: None,
-            elevation_dataset: None,
-            // Slope fields
-            slope_min: None,
-            slope_max: None,
-            slope_avg: None,
-            slope_histogram: None,
-            slope_segments: None,
-            avg_speed: Some(10.0),
-            avg_hr: Some(122),
-            hr_min: Some(120),
-            hr_max: Some(125),
-            moving_time: Some(60),
-            pause_time: Some(0),
-            moving_avg_speed: Some(10.0),
-            moving_avg_pace: Some(6.0),
-            duration_seconds: Some(60),
-            recorded_at: Some(Utc::now()),
-            created_at: Some(Utc::now()),
-            updated_at: Some(Utc::now()),
-            session_id: Some(Uuid::new_v4()),
-            speed_data: Some(json!([10.0, 10.5])),
-            pace_data: Some(json!([6.0, 5.7])),
-        };
-
-        let gpx = generate_gpx_from_track(&track);
-
-        assert!(gpx.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
-        assert!(gpx.contains("<gpx version=\"1.1\" creator=\"Trackly\""));
-        assert!(gpx.contains("<name>Track with Time</name>"));
-        assert!(gpx.contains("lat=\"55.7558000\" lon=\"37.6176000\""));
-        assert!(gpx.contains("<ele>200.0</ele>"));
-        assert!(gpx.contains("<gpxtpx:hr>120</gpxtpx:hr>"));
-        assert!(gpx.contains("<time>2024-01-01T10:00:00Z</time>"));
-        assert!(gpx.contains("<time>2024-01-01T10:01:00Z</time>"));
-    }
 
     // Additional integration tests from tests/handlers.rs
 

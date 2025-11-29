@@ -312,7 +312,7 @@ fn apply_smoothing(pace_data: &[Option<f64>], config: &PaceFilterConfig) -> Vec<
 
             if !window_values.is_empty() {
                 window_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                let median = if window_values.len() % 2 == 0 {
+                let median = if window_values.len().is_multiple_of(2) {
                     (window_values[window_values.len() / 2 - 1]
                         + window_values[window_values.len() / 2])
                         / 2.0
