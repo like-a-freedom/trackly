@@ -197,21 +197,36 @@ function createArrowSymbol(L) {
   };
 }
 
-// Remove decorator from map
+// Remove decorator from map safely
 function removeDecorator() {
   if (decorator.value) {
     try {
-      decorator.value.remove();
+      // Check if decorator has a valid remove method and map reference
+      if (typeof decorator.value.remove === 'function') {
+        // For layerGroup, use removeFrom if available
+        if (typeof decorator.value.removeFrom === 'function') {
+          const map = leafletMap?.value?.leafletObject || leafletMap?.value?.mapObject;
+          if (map) {
+            decorator.value.removeFrom(map);
+          }
+        } else {
+          decorator.value.remove();
+        }
+      }
     } catch (e) {
-      // Ignore errors during cleanup
+      // Silently ignore cleanup errors - expected when navigating away
+      console.debug('[TrackDirectionLayer] Cleanup decorator:', e.message);
     }
     decorator.value = null;
   }
   if (polyline.value) {
     try {
-      polyline.value.remove();
+      if (typeof polyline.value.remove === 'function') {
+        polyline.value.remove();
+      }
     } catch (e) {
-      // Ignore errors during cleanup
+      // Silently ignore cleanup errors
+      console.debug('[TrackDirectionLayer] Cleanup polyline:', e.message);
     }
     polyline.value = null;
   }

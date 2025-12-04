@@ -138,6 +138,7 @@ const lastUserCenter = ref(null);
 const pendingZoomRestore = ref(null);
 const markerLatLng = ref(center.value);
 const bounds = ref(null);
+const mapInstance = ref(null); // Store map instance for invalidateSize on activation
 const dragActive = ref(false);
 const uploadFormExpanded = ref(false); // По умолчанию свернута
 const { polylines, fetchTracksInBounds, uploadTrack, error, updateTrackInPolylines } = useTracks();
@@ -246,6 +247,13 @@ onActivated(() => {
   // Clear any lingering tooltip state
   hideTooltip();
   
+  // Invalidate map size to fix rendering issues after navigation
+  if (mapInstance.value) {
+    nextTick(() => {
+      mapInstance.value.invalidateSize({ animate: false });
+    });
+  }
+  
   // Check if we need to restore search state (returning from track details)
   if (hasSearchState()) {
     openSearch();
@@ -294,6 +302,7 @@ watch(() => router.currentRoute.value.query, (newQuery, oldQuery) => {
 
 function onMapReady(e) {
   const map = e.target || e;
+  mapInstance.value = map; // Save map instance for later use
   bounds.value = map.getBounds();
   const options = { 
     zoom: zoom.value, 
