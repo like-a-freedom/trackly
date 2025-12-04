@@ -73,7 +73,7 @@
 
 <script setup>
 import { LMap, LTileLayer, LPolyline, LGeoJson } from "@vue-leaflet/vue-leaflet";
-import { ref, onMounted, onUnmounted, computed, watch, nextTick, getCurrentInstance } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, nextTick, getCurrentInstance, provide } from 'vue';
 import { latLngBounds } from 'leaflet';
 import {
   FLYOUT_PADDING,
@@ -116,6 +116,10 @@ const emit = defineEmits([
 
 // State management for map and animations
 const leafletMap = ref(null);
+
+// Provide leaflet map instance to child components in slot
+provide('leafletMap', leafletMap);
+
 const bounds = ref(null);
 const mapKey = ref(0);
 const layerKey = ref(0); // For forcing GeoJSON layer re-renders when filter changes

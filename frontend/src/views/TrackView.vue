@@ -24,6 +24,30 @@
         @click="handlePoiClick"
       />
       
+      <!-- Track Direction & Distance Visualization -->
+      <TrackDirectionLayer
+        v-if="track?.latlngs && track.latlngs.length >= 2"
+        :latlngs="track.latlngs"
+        :color="getColorForId(track.id)"
+        :zoom="zoom"
+      />
+      <TrackDistanceMarkers
+        v-if="track?.latlngs && track.latlngs.length >= 2"
+        :latlngs="track.latlngs"
+        :trackId="track.id"
+        :zoom="zoom"
+        :trackLengthKm="track.length_km || 0"
+        @marker-click="handleDistanceMarkerClick"
+      />
+      <TrackEndpoints
+        v-if="track?.latlngs && track.latlngs.length >= 2"
+        :startPosition="track.latlngs[0]"
+        :endPosition="track.latlngs[track.latlngs.length - 1]"
+        :isLoop="isTrackLoop"
+        :startTime="track.recorded_at"
+        @marker-click="handleEndpointClick"
+      />
+      
       <Toast
         :message="(toast.value && toast.value.message) || ''"
         :type="(toast.value && toast.value.type) || 'info'"
@@ -61,12 +85,17 @@ import TrackMap from '../components/TrackMap.vue';
 import Toast from '../components/Toast.vue';
 import TrackDetailPanel from '../components/TrackDetailPanel.vue';
 import PoiMarker from '../components/PoiMarker.vue';
+import TrackEndpoints from '../components/TrackEndpoints.vue';
+import TrackDistanceMarkers from '../components/TrackDistanceMarkers.vue';
+import TrackDirectionLayer from '../components/TrackDirectionLayer.vue';
 import { useToast } from '../composables/useToast';
 import { useTracks } from '../composables/useTracks';
 import { usePois } from '../composables/usePois';
 import { useSearchState } from '../composables/useSearchState';
 import { getSessionId } from '../utils/session';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
+import { isLoopTrack } from '../utils/trackGeometry.js';
+import '../styles/track-overlays.css';
 
 // Define component name for keep-alive
 defineOptions({
@@ -246,6 +275,13 @@ const polylines = computed(() => {
 const isOwner = computed(() => {
   if (!track.value) return false;
   return sessionId === track.value.session_id;
+});
+
+// Check if track is a loop (start and finish within 15m)
+const isTrackLoop = computed(() => {
+  const latlngs = track.value?.latlngs;
+  if (!latlngs || latlngs.length < 2) return false;
+  return isLoopTrack(latlngs);
 });
 
 // Map settings
@@ -529,6 +565,29 @@ function handlePoiClick(poi) {
   if (description) message += `: ${description}`;
   
   showToast(message, 'info', 5000);
+}
+
+function handleDistanceMarkerClick(data) {
+  console.log('[TrackView] Distance marker clicked:', data);
+  const distanceKm = data.distanceKm;
+  if (distanceKm < 1) {
+    showToast(`${Math.round(distanceKm * 1000)} m from start`, 'info', 3000);
+  } else {
+    showToast(`${distanceKm} km from start`, 'info', 3000);
+  }
+}
+
+function handleEndpointClick(data) {
+  console.log('[TrackView] Endpoint clicked:', data);
+  const { type, position } = data;
+  
+  if (type === 'loop') {
+    showToast('Start / Finish (loop track)', 'info', 3000);
+  } else if (type === 'start') {
+    showToast('Start point', 'info', 3000);
+  } else if (type === 'finish') {
+    showToast('Finish point', 'info', 3000);
+  }
 }
 
 // Initialize

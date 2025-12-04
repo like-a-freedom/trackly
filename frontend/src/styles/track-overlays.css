@@ -1,0 +1,118 @@
+/* Track Direction & Distance Visualization Styles */
+
+/* Kilometer markers - under POI (600) */
+.km-marker {
+  z-index: 550 !important;
+}
+
+.km-marker__badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(16, 24, 40, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.km-marker__badge:hover {
+  transform: scale(1.1);
+}
+
+.km-marker__badge:active {
+  transform: scale(0.95);
+}
+
+/* Start/Finish markers - under POI (600), but above km */
+.endpoint-marker {
+  z-index: 590 !important;
+}
+
+.endpoint-marker--start,
+.endpoint-marker--finish,
+.endpoint-marker--loop {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.endpoint-marker--start:hover,
+.endpoint-marker--finish:hover,
+.endpoint-marker--loop:hover {
+  transform: scale(1.1);
+}
+
+.endpoint-marker__icon {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+/* Direction arrows - handled by leaflet-polylinedecorator */
+.leaflet-marker-pane .arrow-decorator {
+  z-index: 450 !important;
+}
+
+/* Tooltip styles for markers */
+.track-marker-tooltip {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.track-marker-tooltip__title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.track-marker-tooltip__subtitle {
+  font-size: 11px;
+  color: #666;
+}
+
+/* Mobile adjustments (project standard breakpoint) */
+@media (max-width: 640px) {
+  .km-marker__badge {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+  
+  .endpoint-marker__icon {
+    width: 28px !important;
+    height: 28px !important;
+    /* Disable backdrop-filter for performance (project pattern) */
+    backdrop-filter: none;
+  }
+  
+  /* Increase touch target on mobile */
+  .km-marker__badge::before {
+    content: '';
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  
+  .endpoint-marker--start::before,
+  .endpoint-marker--finish::before,
+  .endpoint-marker--loop::before {
+    content: '';
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+}
