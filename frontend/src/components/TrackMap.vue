@@ -135,7 +135,7 @@ const clusteringConfig = computed(() => ({
   // Show individual tracks when zoomed in beyond this level
   disableClusteringAtZoom: 14,
   // Maximum cluster radius in pixels
-  maxClusterRadius: 50,
+  maxClusterRadius: 36,
   // Show coverage area when hovering over cluster
   showCoverageOnHover: true,
   // Zoom to show all items in cluster when clicking

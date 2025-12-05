@@ -24,7 +24,7 @@ const props = defineProps({
   // Max radius of clusters in pixels
   maxClusterRadius: {
     type: Number,
-    default: 40,
+    default: 30,
   },
 });
 
@@ -60,13 +60,13 @@ function createClusterIcon(cluster) {
   // Size and color based on count
   let size, className;
   if (count < 10) {
-    size = 36;
+    size = 28;
     className = 'poi-cluster-small';
   } else if (count < 50) {
-    size = 44;
+    size = 36;
     className = 'poi-cluster-medium';
   } else {
-    size = 52;
+    size = 44;
     className = 'poi-cluster-large';
   }
 
@@ -263,17 +263,17 @@ onUnmounted(() => {
 
 .poi-cluster-small {
   background-color: rgba(255, 107, 107, 0.9);
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .poi-cluster-medium {
   background-color: rgba(255, 80, 80, 0.9);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .poi-cluster-large {
   background-color: rgba(220, 53, 53, 0.9);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .poi-tooltip {

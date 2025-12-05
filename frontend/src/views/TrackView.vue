@@ -21,7 +21,7 @@
         v-if="pois.length > 0 && mapIsReady"
         :pois="pois"
         :disableClusteringAtZoom="15"
-        :maxClusterRadius="40"
+        :maxClusterRadius="32"
         @poi-click="handlePoiClick"
       />
       
