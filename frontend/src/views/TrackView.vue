@@ -139,8 +139,6 @@ const props = defineProps({
 const loading = ref(true);
 const track = shallowRef(null); // Use shallowRef for better performance
 const sessionId = getSessionId();
-const windowWidth = ref(window.innerWidth);
-const windowHeight = ref(window.innerHeight);
 const lastFetchZoom = ref(null); // Track last zoom used for fetching to avoid duplicates
 const isInitialLoad = ref(true); // Track if this is the first load to prevent redundant fetches
 const currentTrackId = ref(null); // Track current processing track ID to prevent race conditions
@@ -196,28 +194,9 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
         track.value.latlngs = track.value.path;
       }
       
-      // Set initial center and zoom based on track bounds (only on first load)
-      if (track.value.latlngs && track.value.latlngs.length > 0 && (!center.value || center.value[0] === 59.9311)) {
-        const bounds = calculateBounds(track.value.latlngs);
-        if (bounds) {
-          // Set center to track center, shifted up to account for detail panel
-          const trackCenterLat = (bounds.north + bounds.south) / 2;
-          const trackCenterLng = (bounds.east + bounds.west) / 2;
-          const latRange = bounds.north - bounds.south;
-          
-          // Shift center up by 25% of lat range to account for bottom panel
-          const shiftedLat = trackCenterLat + (latRange * 0.25);
-          
-          center.value = [shiftedLat, trackCenterLng];
-          // Set a reasonable zoom level based on track size
-          const lngRange = bounds.east - bounds.west;
-          const maxRange = Math.max(latRange, lngRange);
-          if (maxRange > 0.1) zoom.value = 10;
-          else if (maxRange > 0.05) zoom.value = 12;
-          else if (maxRange > 0.01) zoom.value = 14;
-          else zoom.value = 16;
-        }
-      }
+      // Track positioning is handled entirely by TrackMap's fitBounds with trackBounds
+      // and getDetailPanelFitBoundsOptions(). We don't set center/zoom here to avoid
+      // conflicting with fitBounds which properly accounts for the detail panel.
       
       // Fetch POIs for this track (only once per track)
       if (track.value && track.value.id && lastPoiFetchedTrackId.value !== track.value.id) {
@@ -292,7 +271,7 @@ const markerLatLng = ref(null);
 const url = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
-// Computed bounds for track with detail panel compensation
+// Computed bounds for track - padding is handled by TrackMap with getDetailPanelPadding()
 const trackBounds = computed(() => {
   // Only depend on track geometry data, not name/description to avoid unnecessary map repositioning
   const latlngs = track.value?.latlngs;
@@ -303,31 +282,10 @@ const trackBounds = computed(() => {
   const bounds = calculateBounds(latlngs);
   if (!bounds) return null;
   
-  // Calculate padding based on viewport and detail panel
-  const viewportWidth = windowWidth.value;
-  const viewportHeight = windowHeight.value;
-  
-  // Detail panel is a bottom flyout that takes ~50-80% of screen height
-  const detailPanelHeight = Math.min(viewportHeight * 0.8, 600); // Max 80vh or 600px
-  const effectiveMapHeight = viewportHeight - detailPanelHeight;
-  
-  // Calculate padding as percentage of track bounds
-  const latRange = bounds.north - bounds.south;
-  const lngRange = bounds.east - bounds.west;
-  
-  // Base padding: 10% of the track bounds
-  const basePadding = 0.1;
-  
-  // Additional padding to compensate for detail panel (push track up)
-  const latPaddingRatio = detailPanelHeight / effectiveMapHeight;
-  const additionalLatPadding = latRange * latPaddingRatio * 0.3; // 30% of the panel height ratio
-  
-  const latPadding = latRange * basePadding;
-  const lngPadding = lngRange * basePadding;
-  
+  // Return raw bounds - TrackMap will add padding for the detail panel
   return [
-    [bounds.south - latPadding - additionalLatPadding, bounds.west - lngPadding],
-    [bounds.north + latPadding, bounds.east + lngPadding]
+    [bounds.south, bounds.west],
+    [bounds.north, bounds.east]
   ];
 });
 
@@ -498,11 +456,7 @@ function handleKeyDown(event) {
   }
 }
 
-// Handle window resize to update bounds calculation
-function handleResize() {
-  windowWidth.value = window.innerWidth;
-  windowHeight.value = window.innerHeight;
-}
+
 
 // Handle track elevation updates from TrackDetailPanel
 function handleTrackElevationUpdated(event) {
@@ -603,8 +557,6 @@ onMounted(async () => {
   
   // Add ESC key listener
   document.addEventListener('keydown', handleKeyDown);
-  // Add window resize listener
-  window.addEventListener('resize', handleResize);
   // Add track elevation update listener
   window.addEventListener('track-elevation-updated', handleTrackElevationUpdated);
 });
@@ -613,8 +565,6 @@ onMounted(async () => {
 onUnmounted(() => {
   // Remove ESC key listener
   document.removeEventListener('keydown', handleKeyDown);
-  // Remove window resize listener
-  window.removeEventListener('resize', handleResize);
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
   
@@ -629,8 +579,6 @@ onUnmounted(() => {
 onActivated(() => {
   // Add ESC key listener when component is activated from keep-alive
   document.addEventListener('keydown', handleKeyDown);
-  // Add window resize listener
-  window.addEventListener('resize', handleResize);
   // Add track elevation update listener
   window.addEventListener('track-elevation-updated', handleTrackElevationUpdated);
 });
@@ -639,8 +587,6 @@ onActivated(() => {
 onDeactivated(() => {
   // Remove ESC key listener when component is deactivated to keep-alive
   document.removeEventListener('keydown', handleKeyDown);
-  // Remove window resize listener
-  window.removeEventListener('resize', handleResize);
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
   
