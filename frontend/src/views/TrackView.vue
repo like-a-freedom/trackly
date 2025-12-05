@@ -16,12 +16,13 @@
       @update:center="handleCenterUpdate"
       @update:zoom="handleZoomUpdate"
     >
-      <!-- POI Markers -->
-      <PoiMarker
-        v-for="poi in pois"
-        :key="poi.poi?.id || poi.id"
-        :poi="poi"
-        @click="handlePoiClick"
+      <!-- POI Markers with Clustering -->
+      <PoiClusterGroup
+        v-if="pois.length > 0 && mapIsReady"
+        :pois="pois"
+        :disableClusteringAtZoom="15"
+        :maxClusterRadius="40"
+        @poi-click="handlePoiClick"
       />
       
       <!-- Track Direction & Distance Visualization -->
@@ -84,7 +85,7 @@ import { useRouter, useRoute } from 'vue-router';
 import TrackMap from '../components/TrackMap.vue';
 import Toast from '../components/Toast.vue';
 import TrackDetailPanel from '../components/TrackDetailPanel.vue';
-import PoiMarker from '../components/PoiMarker.vue';
+import PoiClusterGroup from '../components/PoiClusterGroup.vue';
 import TrackEndpoints from '../components/TrackEndpoints.vue';
 import TrackDistanceMarkers from '../components/TrackDistanceMarkers.vue';
 import TrackDirectionLayer from '../components/TrackDirectionLayer.vue';
@@ -145,6 +146,7 @@ const currentTrackId = ref(null); // Track current processing track ID to preven
 const mapStabilizationTimer = ref(null); // Timer to wait for map stabilization
 const STABILIZATION_DELAY = 3000; // 3 seconds to wait for map auto-zoom to stabilize
 const lastPoiFetchedTrackId = ref(null); // Track which track ID has had POIs fetched to prevent duplicates
+const mapIsReady = ref(false); // Track if map is ready for POI clustering
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -378,6 +380,7 @@ function calculateBounds(latlngs) {
 
 function onMapReady() {
   console.log('Map is ready');
+  mapIsReady.value = true;
 }
 
 function handleCenterUpdate(newCenter) {
@@ -623,6 +626,7 @@ watch(() => route.params.id, async (newId, oldId) => {
     isInitialLoad.value = true;
     currentTrackId.value = newId; // Set this immediately to prevent race with onMounted
     lastPoiFetchedTrackId.value = null; // Reset POI fetch tracking for new track
+    mapIsReady.value = false; // Reset map ready state for new track
     // Center is computed from track data, no need to reset
     loading.value = true; // Set loading state
     

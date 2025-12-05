@@ -1,3 +1,13 @@
+Frontend UX: Cluster visuals & interactions
+Implementation status (as of 2025-12-05):
+- Client-side clustering: implemented using `leaflet.markercluster` and `PoiClusterGroup.vue`.
+- Clusters should display a bubble with a numeric count and an optional category icon when all POIs in the cluster share the same category.
+- Color code clusters by density thresholds (e.g., 2–9, 10–49, 50+), with larger clusters shown with more prominent colors.
+- On cluster click:
+    - If the cluster contains fewer POIs than `SPIDERFY_THRESHOLD` (e.g. 12), expand with a spiderfy animation to reveal points.
+    - Otherwise, zoom the map to the cluster bounding box.
+- On cluster hover, show a quick popup summarizing: count, sample POI names, top categories.
+ - Clustering is client-only and is not toggleable in settings (no server-side mode available).
 # POI/Marker Loading and Display Functionality - Technical Specification
 
 ## 1. Overview
@@ -14,6 +24,7 @@ This specification defines the functionality for loading Points of Interest (POI
 4. **Display POIs on the map** with appropriate clustering
 5. **Manage POI lifecycle** including creation, deletion, and updates
 6. **Search and filter POIs** by various criteria
+7. **Cluster POIs dynamically** by zoom level and bounding box for dense areas, with both server-side and client-side clustering strategies to ensure good UX and minimal traffic/CPU use.
 
 ### 2.2 Non-Functional Requirements
 
@@ -21,6 +32,7 @@ This specification defines the functionality for loading Points of Interest (POI
 2. **Data Integrity**: Prevent orphaned POIs and maintain referential integrity
 3. **Scalability**: Support growth to 100,000+ POIs
 4. **Security**: Proper ownership validation and access control
+5. **Responsiveness**: Map interactions (panning/zooming) must remain responsive with POIs and clusters loaded within 200ms for common viewport sizes.
 
 ## 3. Database Schema
 
@@ -395,6 +407,28 @@ impl PoiDeduplicationService {
         Ok(results)
     }
 }
+
+    ### 4.6 POI Clustering
+
+    Current Implementation — Client-side clustering (implemented)
+    - Clustering is implemented on the frontend using `leaflet.markercluster` in `frontend/src/components/PoiClusterGroup.vue` (client-side).
+    - The frontend uses the `usePois` composable (`frontend/src/composables/usePois.js`) to fetch POIs and optionally request clusters. In practice today, the app fetches raw POIs and performs client-side clustering for responsive UX.
+    - Clustering behavior implemented on the frontend:
+      - Bubble markers with counts, size + color scaled by density
+      - Spiderfy for small clusters (configurable via `PoiClusterGroup` props)
+      - Click behavior: spiderfy for small clusters or fit bounds/zoom for larger clusters
+      - Toggle to show/hide POIs and clustering controls available in `TrackMap` and `TrackView` integrations
+
+    Strategy & UX
+    - CLIENT_CLUSTER_THRESHOLD: the frontend prefers client-side clustering for small-to-moderate numbers of POIs (default threshold ~3000). This keeps in-browser interactions snappy and avoids unnecessary server CPU/bandwidth when not required.
+
+    Backend clustering
+    - The current Trackly implementation uses client-side clustering exclusively (Leaflet + PoiClusterGroup.vue). Server-side clustering is not supported.
+
+    Testing & Verification
+    - Frontend: unit and integration tests should cover `PoiClusterGroup` rendering, `usePois` composable fetching/estimation behavior, and TrackMap interactions (cluster click, spiderfy, marker popups).
+    - Backend: No server-side clustering tests are required for client-side-only clustering.
+
 ```
 
 ### 4.3 GPX Parser Modifications
@@ -646,6 +680,8 @@ pub async fn get_poi(
     Ok(Json(poi))
 }
 
+// Server-side clustering endpoints are not implemented; client-side clustering is used.
+
 /// GET /tracks/:track_id/pois - Get POIs for a track
 pub async fn get_track_pois(
     State(pool): State<Arc<PgPool>>,
@@ -815,6 +851,7 @@ let app = Router::new()
     .route("/pois/:id", get(handlers::get_poi).delete(handlers::delete_poi))
     .route("/tracks/:track_id/pois", get(handlers::get_track_pois))
     .route("/tracks/:track_id/pois/:poi_id", delete(handlers::unlink_track_poi))
+    // NOTE: The server routes for basic POI CRUD operations used by the frontend.
     .with_state(Arc::new(pool));
 ```
 
@@ -829,9 +866,9 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 
 export const usePoiStore = defineStore('poi', () => {
-  const pois = ref([]);
-  const loading = ref(false);
-  const error = ref(null);
+    const pois = ref([]);
+    const loading = ref(false);
+    const error = ref(null);
   
   async function fetchPois(bbox = null, trackId = null) {
     loading.value = true;
@@ -846,7 +883,7 @@ export const usePoiStore = defineStore('poi', () => {
       if (!response.ok) throw new Error('Failed to fetch POIs');
       
       const data = await response.json();
-      pois.value = data.pois;
+    pois.value = data.pois;
     } catch (e) {
       error.value = e.message;
       console.error('Error fetching POIs:', e);
@@ -873,14 +910,19 @@ export const usePoiStore = defineStore('poi', () => {
       loading.value = false;
     }
   }
+
+    // Server-side clustering is not used in the current implementation.
+    // The frontend relies on client-side clustering via PoiClusterGroup.vue.
   
-  return {
-    pois,
-    loading,
-    error,
-    fetchPois,
-    fetchTrackPois
-  };
+    return {
+        pois,
+        
+        loading,
+        error,
+        fetchPois,
+        fetchTrackPois,
+        
+    };
 });
 ```
 
@@ -957,6 +999,56 @@ function handleClick() {
   color: #666;
 }
 </style>
+
+### 5.2.1 POI Cluster Marker Component
+
+Create `frontend/src/components/PoiClusterMarker.vue`:
+
+```vue
+<template>
+    <l-marker :lat-lng="[cluster.geometry.coordinates[1], cluster.geometry.coordinates[0]]" @click="onClick">
+        <div class="poi-cluster-marker" :style="markerStyle">
+            <span class="count">{{ cluster.properties.point_count }}</span>
+        </div>
+    </l-marker>
+</template>
+
+<script setup>
+import { computed } from 'vue';
+import { LMarker } from '@vue-leaflet/vue-leaflet';
+
+const props = defineProps({
+    cluster: { type: Object, required: true }
+});
+const emit = defineEmits(['click']);
+
+const markerStyle = computed(() => {
+    const count = props.cluster.properties.point_count || 0;
+    const size = Math.min(48, 24 + Math.ceil(Math.log2(Math.max(1, count))) * 8);
+    return {
+        width: size + 'px',
+        height: size + 'px',
+        borderRadius: '50%',
+        background: '#2b86f3',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '12px',
+        border: '3px solid rgba(255,255,255,0.9)'
+    };
+});
+
+function onClick() {
+    emit('click', props.cluster);
+}
+</script>
+
+<style scoped>
+.poi-cluster-marker { cursor: pointer; }
+.poi-cluster-marker .count { font-weight: 700; }
+</style>
+```
 ```
 
 ### 5.3 TrackMap Integration
@@ -973,19 +1065,26 @@ const poiStore = usePoiStore();
 const map = ref(null);
 const showPois = ref(true);
 
-// Watch map bounds and fetch POIs
+// Watch map bounds and fetch POIs for client-side clustering
+// Strategy: Always fetch raw POIs for the bounding box and render them client-side
 watch(() => map.value?.getBounds(), (bounds) => {
-  if (!bounds || !showPois.value) return;
-  
-  const bbox = [
-    bounds.getWest(),
-    bounds.getSouth(),
-    bounds.getEast(),
-    bounds.getNorth()
-  ].join(',');
-  
-  // Debounce POI fetching
-  debounce(() => poiStore.fetchPois(bbox), 500);
+    if (!bounds || !showPois.value) return;
+
+    const bbox = [
+        bounds.getWest(),
+        bounds.getSouth(),
+        bounds.getEast(),
+        bounds.getNorth()
+    ].join(',');
+
+    // Debounce requests and fetch POIs for client-side clustering
+    debounce(async () => {
+        try {
+            await poiStore.fetchPois(bbox);
+        } catch (e) {
+            console.error('[TrackMap] Error fetching POIs:', e);
+        }
+    }, 300);
 }, { deep: true });
 
 // Debounce helper
@@ -1005,15 +1104,46 @@ function debounce(fn, delay) {
       
       <!-- Existing track layers -->
       
-      <!-- POI Markers -->
-      <template v-if="showPois">
-        <poi-marker
-          v-for="poi in poiStore.pois"
-          :key="poi.id"
-          :poi="poi"
-          @click="handlePoiClick"
-        />
-      </template>
+            <!-- POI Markers / Clusters -->
+            <template v-if="showPois">
+                <!-- Clusters returned by server: feature collection in poiStore.clusters -->
+                <template v-if="poiStore.clusters && poiStore.clusters.length > 0">
+                    <component
+                        v-for="feature in poiStore.clusters"
+                        :key="feature.properties.cluster ? `cluster-${feature.properties.cluster_id}` : `poi-${feature.properties.id}`"
+                        :is="feature.properties.cluster ? 'PoiClusterMarker' : 'PoiMarker'"
+                        :cluster="feature.properties.cluster ? feature : null"
+                        :poi="!feature.properties.cluster ? feature.properties : null"
+                        @click="(f) => {
+                            // Cluster click behavior
+                            // If cluster -> fitBounds & optionally request child POIs for the cluster
+                            if (f.properties.cluster) {
+                                // Fit to cluster bounds (server can include cluster_bbox)
+                                if (f.properties.cluster_bbox) {
+                                    const bbox = f.properties.cluster_bbox; // [west, south, east, north]
+                                    const boundsObj = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
+                                    map.value.fitBounds(boundsObj, { animate: true });
+                                } else {
+                                    // fallback: zoom a couple of levels
+                                    const nextZoom = Math.min(map.value.getMaxZoom(), map.value.getZoom() + 2);
+                                    map.value.setZoom(nextZoom);
+                                }
+                            } else {
+                                handlePoiClick(f.properties);
+                            }
+                        }"
+                    />
+                </template>
+                <!-- Or raw POIs when using client-side clustering / small counts -->
+                <template v-else>
+                    <poi-marker
+                        v-for="poi in poiStore.pois"
+                        :key="poi.id"
+                        :poi="poi"
+                        @click="handlePoiClick"
+                    />
+                </template>
+            </template>
     </l-map>
     
     <div class="map-controls">
@@ -1057,6 +1187,7 @@ $$ LANGUAGE plpgsql;
 - Enable `pg_stat_statements` for monitoring
 - Create appropriate indexes (already defined in schema)
 - Use `EXPLAIN ANALYZE` for slow queries
+- Clustering caching: Use Redis or Postgres materialized views to store and serve cluster tiles by zoom/tile coordinates. Key format: `poi:clusters:z:{zoom}:x:{tileX}:y:{tileY}` with TTL 30–60s for active tiles. If using a materialized view in Postgres, refresh concurrently in the background or rebuild on index change.
 
 ### 6.3 Connection Pooling
 
@@ -1068,6 +1199,10 @@ let pool = PgPoolOptions::new()
     .acquire_timeout(Duration::from_secs(5))
     .connect(&database_url)
     .await?;
+
+-- Client-side clustering advice for performance
+- When implementing client-side clustering, prefer `supercluster` for performance and predictability.
+- The frontend should cap raw POI arrays to the CLIENT_CLUSTER_THRESHOLD (e.g., 3000) to avoid high memory usage in browsers. For larger results, use bounding, limiting, or pagination strategies to reduce the data sent to clients and keep clustering local.
 ```
 
 ## 7. Testing Strategy
@@ -1108,6 +1243,15 @@ async fn test_upload_track_with_waypoints() {
 #[tokio::test]
 async fn test_poi_api_endpoints() {
     // Test all CRUD operations
+}
+
+#[tokio::test]
+async fn test_poi_client_side_clustering_rendering() {
+    // Client-side tests: ensure the frontend clusters POIs correctly using PoiClusterGroup
+    // - Create synthetic POIs inside a bbox with known distribution
+    // - Render the TrackMap/ POI components in test environment
+    // - Verify number of rendered cluster markers and unclustered markers match expectations
+    // - Verify spiderfy/zoom-to-bounds behavior on cluster interactions
 }
 ```
 
