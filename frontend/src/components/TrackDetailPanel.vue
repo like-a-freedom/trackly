@@ -1826,27 +1826,39 @@ defineExpose({
 }
 
 .panel-controls-tab:hover {
-  background: rgba(255, 255, 255, 1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  /* Keep subtle transform but avoid highlighting the whole tab area
+     — highlight will be applied to the inner button for consistency */
   transform: translateY(-1px);
 }
 
 .collapse-toggle-btn {
-  width: 100%;
-  height: 100%;
-  background: transparent;
+  /* Match sizing, padding and hover area to other icon buttons like .close-button */
+  background: none;
   border: none;
-  border-radius: 8px;
   cursor: pointer;
   color: #666;
+  padding: 6px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
+  box-sizing: border-box;
+  min-width: 28px;
+  height: 28px;
+}
+
+/* When the collapse button is inside the floating tab, keep it small and centered */
+.panel-controls-tab .collapse-toggle-btn {
+  width: auto;
+  height: auto;
+  padding: 6px;
 }
 
 .collapse-toggle-btn:hover {
+  /* Use a subtle neutral hover similar to other icon buttons */
+  background: rgba(0, 0, 0, 0.06);
   color: #333;
 }
 
@@ -1877,8 +1889,9 @@ defineExpose({
 }
 
 .collapse-toggle-btn:hover {
-  background: rgba(33, 150, 243, 0.1);
-  color: #1976d2;
+  /* Neutral, subtle highlight to match other icon buttons */
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
   transform: scale(1.05);
 }
 
