@@ -3,7 +3,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use backend::handlers;
+use backend::{handlers, metrics};
 use mimalloc::MiMalloc;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -34,6 +34,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .event_format(tracing_subscriber::fmt::format().json())
         .init();
 
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -43,13 +44,20 @@ async fn main() {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(50 * 1024 * 1024); // Default 50MB
 
+    let max_connections = std::env::var("DATABASE_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(5);
+
     let pool = Arc::new(
         PgPoolOptions::new()
-            .max_connections(5)
+            .max_connections(max_connections)
             .connect(&db_url)
             .await
             .expect("DB connect"),
     );
+
+    metrics::set_db_pool(Arc::clone(&pool), max_connections as i64);
 
     // Run migrations automatically on startup
     info!("Running database migrations...");
@@ -61,6 +69,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(handlers::health))
+        .route("/metrics", get(metrics::serve_metrics))
         .route("/tracks/upload", post(handlers::upload_track))
         .route("/tracks", get(handlers::list_tracks_geojson))
         .route("/tracks", post(handlers::upload_track))
@@ -108,6 +117,7 @@ async fn main() {
             axum::routing::delete(handlers::unlink_track_poi),
         )
         .layer(DefaultBodyLimit::max(max_body_size))
+        .layer(metrics::HttpMetricsLayer::new())
         .with_state(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     info!("listening on {}", addr);

@@ -1,0 +1,95 @@
+groups:
+  - name: backend-http
+    rules:
+      - alert: BackendHighLatencyP95
+        expr: histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket[5m]))) > 1.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "p95 latency >1.5s"}
+      - alert: BackendHighLatencyP99
+        expr: histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket[5m]))) > 3
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "p99 latency >3s"}
+      - alert: BackendErrorRateHigh
+        expr: sum(rate(http_requests_errors_total[5m])) / sum(rate(http_requests_total[5m])) > 0.02
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Error rate >2%"}
+      - alert: BackendErrorRateSpike
+        expr: sum(rate(http_requests_errors_total[1m])) / sum(rate(http_requests_total[1m])) > 0.05
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Error rate >5%"}
+      - alert: BackendInFlightHigh
+        expr: http_requests_in_flight > 100
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "High in-flight requests"}
+
+  - name: upload-pipeline
+    rules:
+      - alert: UploadFailuresSpike
+        expr: increase(track_upload_failures_total[10m]) > 10
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Upload failures spiking"}
+      - alert: PipelineLatencyHigh
+        expr: histogram_quantile(0.95, sum by(le) (rate(track_pipeline_latency_seconds_bucket[10m]))) > 30
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Upload pipeline p95 >30s"}
+
+  - name: database
+    rules:
+      - alert: DbConnectionsHigh
+        expr: sum(db_pool_connections{state="in_use"}) / sum(db_pool_connections{state="max"}) > 0.8
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "DB pool >80% used"}
+      - alert: PostgresCacheHitLow
+        expr: (sum(rate(pg_stat_database_blks_hit[15m])) / (sum(rate(pg_stat_database_blks_hit[15m])) + sum(rate(pg_stat_database_blks_read[15m])))) < 0.9
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "Postgres cache hit <90%"}
+      - alert: PostgresDeadlocks
+        expr: sum(rate(pg_stat_database_deadlocks[5m])) > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "Postgres deadlocks detected"}
+
+  - name: caddy
+    rules:
+      - alert: CaddyErrorRateHigh
+        expr: sum(rate(caddy_http_requests_total{status=~"5.."}[5m])) / sum(rate(caddy_http_requests_total[5m])) > 0.02
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Caddy error rate >2%"}
+      - alert: CaddyTlsExpiry
+        expr: min(caddy_tls_cert_expiration_timestamp) - time() < 172800
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "TLS cert expires in <2 days"}
+
+  - name: platform
+    rules:
+      - alert: NodeCpuHigh
+        expr: 100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Host CPU >85%"}
+      - alert: NodeMemoryHigh
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Host memory >90%"}
+      - alert: NodeDiskLow
+        expr: min(node_filesystem_free_bytes{fstype!~"tmpfs|aufs"} / node_filesystem_size_bytes{fstype!~"tmpfs|aufs"}) < 0.15
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Disk free <15%"}
+      - alert: ContainerMemoryHigh
+        expr: sum by(container_label_com_docker_swarm_service_name) (container_memory_working_set_bytes) > 0.9 * sum by(container_label_com_docker_swarm_service_name) (container_spec_memory_limit_bytes)
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Container memory >90%"}

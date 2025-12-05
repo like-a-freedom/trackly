@@ -7,3 +7,9 @@ scrape_configs:
       - targets: ['frontend:2019']
     metrics_path: /metrics
     scheme: http
+  - job_name: 'backend'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['backend:8080']
+    metrics_path: /metrics
+    scheme: http

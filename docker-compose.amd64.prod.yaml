@@ -31,6 +31,8 @@ services:
       MAX_HTTP_BODY_SIZE: ${MAX_HTTP_BODY_SIZE:-52428800}
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-50331648}
       UPLOAD_RATE_LIMIT_SECONDS: ${UPLOAD_RATE_LIMIT_SECONDS:-10}
+      SERVICE_NAME: trackly_backend
+      APP_ENV: prod
     depends_on:
       db:
         condition: service_healthy

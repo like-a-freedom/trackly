@@ -13,7 +13,7 @@ services:
     volumes:
       - ./db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER}" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -22,7 +22,7 @@ services:
   backend:
     container_name: trackly_backend
     restart: unless-stopped
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     environment:
@@ -31,13 +31,15 @@ services:
       MAX_HTTP_BODY_SIZE: ${MAX_HTTP_BODY_SIZE:-52428800}
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-50331648}
       UPLOAD_RATE_LIMIT_SECONDS: ${UPLOAD_RATE_LIMIT_SECONDS:-10}
+      SERVICE_NAME: trackly_backend
+      APP_ENV: prod
     depends_on:
       db:
         condition: service_healthy
     networks:
       - trackly-internal
     healthcheck:
-      test: ["CMD", "/app/backend", "--health-check"]
+      test: [ "CMD", "/app/backend", "--health-check" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -51,7 +53,7 @@ services:
   frontend:
     container_name: trackly_frontend
     restart: unless-stopped
-    build: 
+    build:
       context: ./frontend
       dockerfile: Dockerfile
     volumes:

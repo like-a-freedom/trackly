@@ -9,12 +9,13 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-trackly}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:  # only for development, debugging, and testing, do not expose in production
+    ports:
+      # only for development, debugging, and testing, do not expose in production
       - 5432:5432
     volumes:
       - ./db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,12 +30,14 @@ services:
       MAX_HTTP_BODY_SIZE: ${MAX_HTTP_BODY_SIZE:-52428800}
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-50331648}
       UPLOAD_RATE_LIMIT_SECONDS: ${UPLOAD_RATE_LIMIT_SECONDS:-10}
+      SERVICE_NAME: trackly_backend
+      APP_ENV: dev
     depends_on:
       - db
     ports:
       - 8080:8080
     healthcheck:
-      test: ["CMD", "/app/backend", "--health-check"]
+      test: [ "CMD", "/app/backend", "--health-check" ]
       interval: 10s
       timeout: 5s
       retries: 5
