@@ -3,6 +3,7 @@ use crate::input_validation::{
     validate_file_size, validate_text_field, MAX_CATEGORIES, MAX_CATEGORY_LENGTH,
     MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE, MAX_NAME_LENGTH,
 };
+use crate::metrics;
 use crate::models::*;
 use crate::services::gpx_export::GpxExportService;
 use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
@@ -22,6 +23,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -214,13 +216,20 @@ pub async fn upload_track(
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_secs();
-                    record_session_upload_attempt(&normalized_session, now)?;
+                    record_session_upload_attempt(&normalized_session, now).inspect_err(
+                        |&status| {
+                            if status == StatusCode::TOO_MANY_REQUESTS {
+                                metrics::record_track_upload_failure("rate_limit");
+                            }
+                        },
+                    )?;
                     // --- End rate limiting ---
                 }
                 "file" => {
                     file_name = field.file_name().map(|s| s.to_string());
                     let bytes = field.bytes().await.map_err(|e| {
                         error!("Failed to get bytes from field 'file': {}", e);
+                        metrics::record_track_upload_failure("read_error");
                         StatusCode::PAYLOAD_TOO_LARGE
                     })?;
 
@@ -236,6 +245,7 @@ pub async fn upload_track(
         Some(b) => b,
         None => {
             error!("[upload_track] no file provided");
+            metrics::record_track_upload_failure("validation");
             return Err(StatusCode::BAD_REQUEST);
         }
     };
@@ -243,6 +253,7 @@ pub async fn upload_track(
         Some(f) => f,
         None => {
             error!("[upload_track] no file name provided");
+            metrics::record_track_upload_failure("validation");
             return Err(StatusCode::BAD_REQUEST);
         }
     };
@@ -276,6 +287,7 @@ pub async fn upload_track(
     };
 
     let response = service.upload_track(request).await?;
+    metrics::record_track_uploaded("anonymous");
     Ok(Json(response))
 }
 
@@ -470,6 +482,7 @@ pub async fn export_track_gpx(
     Path(id): Path<Uuid>,
 ) -> Result<axum::response::Response<axum::body::Body>, StatusCode> {
     info!(?id, "[export_track_gpx] called");
+    let start = Instant::now();
 
     match db::get_track_detail(&pool, id).await {
         Ok(Some(track)) => {
@@ -487,6 +500,8 @@ pub async fn export_track_gpx(
                 )
                 .body(axum::body::Body::from(gpx_content))
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            metrics::observe_track_export_duration("gpx", start.elapsed().as_secs_f64());
 
             Ok(response)
         }
@@ -524,6 +539,7 @@ pub async fn delete_track(
     if affected == 0 {
         return Err(StatusCode::NOT_FOUND);
     }
+    metrics::record_track_deleted("success");
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -633,8 +649,10 @@ pub async fn enrich_elevation(
         use crate::track_utils::slope::recalculate_slope_metrics;
 
         // Use universal slope calculation function
+        let slope_start = Instant::now();
         let slope_result =
             recalculate_slope_metrics(&coordinates, elevation_profile, &format!("Track {}", id));
+        let slope_duration = slope_start.elapsed().as_secs_f64();
 
         // Update track with slope data
         if let Err(e) = db::update_track_slope(
@@ -651,7 +669,9 @@ pub async fn enrich_elevation(
         .await
         {
             error!("Failed to update slope data for track {}: {}", id, e);
+            metrics::observe_slope_recalc("db_error", slope_duration);
         } else {
+            metrics::observe_slope_recalc("success", slope_duration);
             info!(
                 "Successfully calculated slope data for track {}: min={:.1}%, max={:.1}%, avg={:.1}%",
                 id,
@@ -1173,7 +1193,9 @@ pub async fn recalculate_track_slopes(
     }
 
     // Recalculate slopes with improved algorithm
+    let slope_start = Instant::now();
     let slope_metrics = recalculate_slope_metrics(&coordinates, &elevation_profile, &track.name);
+    let slope_duration = slope_start.elapsed().as_secs_f64();
 
     // Update track in database
     let update_result = sqlx::query(
@@ -1200,6 +1222,7 @@ pub async fn recalculate_track_slopes(
 
     match update_result {
         Ok(_) => {
+            metrics::observe_slope_recalc("success", slope_duration);
             tracing::info!("Successfully recalculated slopes for track {}", id);
             Ok(Json(json!({
                 "id": id,
@@ -1212,6 +1235,7 @@ pub async fn recalculate_track_slopes(
         }
         Err(e) => {
             tracing::error!("Failed to update track slopes: {}", e);
+            metrics::observe_slope_recalc("db_error", slope_duration);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -1447,6 +1471,7 @@ pub async fn create_poi(
     })?;
 
     info!("Created POI {} (id: {})", poi.name, poi.id);
+    metrics::record_poi_created("manual");
     Ok(Json(poi))
 }
 
@@ -1470,6 +1495,7 @@ pub async fn unlink_track_poi(
     }
 
     info!("Unlinked POI {} from track {}", poi_id, track_id);
+    metrics::record_poi_deleted("unlink_track");
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1527,5 +1553,6 @@ pub async fn delete_poi(
         })?;
 
     info!("Deleted POI {}", id);
+    metrics::record_poi_deleted("delete_poi");
     Ok(StatusCode::NO_CONTENT)
 }

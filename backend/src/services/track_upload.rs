@@ -5,6 +5,7 @@ use crate::{
         MAX_CATEGORIES, MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE,
         MAX_NAME_LENGTH,
     },
+    metrics,
     models::{ParsedTrackData, ParsedWaypoint, TrackUploadResponse},
     poi_deduplication::PoiDeduplicationService,
     track_utils::{
@@ -16,6 +17,7 @@ use axum::http::StatusCode;
 use bytes::Bytes;
 use sqlx::PgPool;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::task;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -42,6 +44,7 @@ impl TrackUploadService {
         &self,
         request: TrackUploadRequest,
     ) -> Result<TrackUploadResponse, StatusCode> {
+        let pipeline_start = Instant::now();
         self.validate_request(&request)?;
         validate_file_size(request.file_bytes.len())?;
         let extension = validate_file_extension(&request.file_name)?;
@@ -137,9 +140,16 @@ impl TrackUploadService {
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+        metrics::observe_track_length_km("anonymous", parsed_data.length_km);
+        for category in &sanitized_categories {
+            metrics::record_track_category(category);
+        }
+
         self.maybe_start_elevation_enrichment(track_id, &parsed_data);
         self.process_waypoints(track_id, parsed_data.waypoints.clone())
             .await;
+
+        metrics::observe_track_pipeline_latency("success", pipeline_start.elapsed().as_secs_f64());
 
         Ok(TrackUploadResponse {
             id: track_id,
@@ -177,6 +187,7 @@ impl TrackUploadService {
         file_bytes: &Bytes,
         extension: &str,
     ) -> Result<ParsedTrackData, StatusCode> {
+        let parse_start = Instant::now();
         match extension {
             "gpx" => {
                 let minimal = parse_gpx_minimal(file_bytes.as_ref()).map_err(|e| {
@@ -192,6 +203,7 @@ impl TrackUploadService {
                     })?
                     .is_some()
                 {
+                    metrics::record_track_deduplicated("gpx_hash_match");
                     return Err(StatusCode::CONFLICT);
                 }
 
@@ -214,6 +226,7 @@ impl TrackUploadService {
                     })?
                     .is_some()
                 {
+                    metrics::record_track_deduplicated("kml_hash_match");
                     return Err(StatusCode::CONFLICT);
                 }
 
@@ -227,10 +240,14 @@ impl TrackUploadService {
                 Err(StatusCode::BAD_REQUEST)
             }
         }
+        .inspect(|_parsed| {
+            metrics::observe_track_parse_duration(extension, parse_start.elapsed().as_secs_f64());
+        })
     }
 
     fn maybe_start_elevation_enrichment(&self, track_id: Uuid, parsed_data: &ParsedTrackData) {
         if !self.track_needs_enrichment(parsed_data) {
+            metrics::record_track_enrich_status("skipped_not_needed");
             return;
         }
 
@@ -238,6 +255,7 @@ impl TrackUploadService {
             Ok(coords) if !coords.is_empty() => coords,
             Ok(_) => {
                 info!(%track_id, "[upload_track_service] no coordinates for enrichment");
+                metrics::record_track_enrich_status("skipped_no_coords");
                 return;
             }
             Err(e) => {
@@ -245,12 +263,15 @@ impl TrackUploadService {
                     "[upload_track_service] failed to extract coordinates for enrichment: {}",
                     e
                 );
+                metrics::record_track_enrich_status("failed_extract_coords");
                 return;
             }
         };
 
         let pool = Arc::clone(&self.pool);
         task::spawn(async move {
+            let _task_guard = metrics::BackgroundTaskGuard::new();
+            let enrich_start = Instant::now();
             let enrichment_service = ElevationEnrichmentService::new();
             match enrichment_service
                 .enrich_track_elevation(coordinates.clone())
@@ -275,17 +296,24 @@ impl TrackUploadService {
                     .await
                     {
                         error!(?track_id, "Failed to update enriched elevation data: {}", e);
+                        metrics::record_track_enrich_status("failed_update_db");
+                        metrics::observe_track_enrich_duration(
+                            "failed_update_db",
+                            enrich_start.elapsed().as_secs_f64(),
+                        );
                         return;
                     }
 
                     if let Some(profile) = result.elevation_profile {
                         use crate::track_utils::slope::recalculate_slope_metrics;
 
+                        let slope_start = Instant::now();
                         let slope_result = recalculate_slope_metrics(
                             &coordinates,
                             &profile,
                             &format!("Track {}", track_id),
                         );
+                        let slope_duration = slope_start.elapsed().as_secs_f64();
 
                         if let Err(e) = db::update_track_slope(
                             &pool,
@@ -301,11 +329,30 @@ impl TrackUploadService {
                         .await
                         {
                             error!(?track_id, "Failed to update slope data: {}", e);
+                            metrics::record_track_enrich_status("failed_update_slope");
+                            metrics::observe_track_enrich_duration(
+                                "failed_update_slope",
+                                enrich_start.elapsed().as_secs_f64(),
+                            );
+                            metrics::observe_slope_recalc("db_error", slope_duration);
+                        } else {
+                            metrics::observe_slope_recalc("success", slope_duration);
                         }
                     }
+
+                    metrics::record_track_enrich_status("success");
+                    metrics::observe_track_enrich_duration(
+                        "success",
+                        enrich_start.elapsed().as_secs_f64(),
+                    );
                 }
                 Err(e) => {
                     error!(?track_id, "Failed to auto-enrich track elevation: {}", e);
+                    metrics::record_track_enrich_status("failed_remote");
+                    metrics::observe_track_enrich_duration(
+                        "failed_remote",
+                        enrich_start.elapsed().as_secs_f64(),
+                    );
                 }
             }
         });

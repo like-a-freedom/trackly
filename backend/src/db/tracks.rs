@@ -1,7 +1,9 @@
 use crate::models::*;
+use crate::metrics;
 use crate::track_utils::{get_simplification_params, simplify_track_for_zoom};
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
+use std::time::Instant;
 use uuid::Uuid;
 
 pub async fn track_exists(pool: &Arc<PgPool>, hash: &str) -> Result<Option<Uuid>, sqlx::Error> {
@@ -60,6 +62,7 @@ pub struct InsertTrackParams<'a> {
 }
 
 pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Error> {
+    let start = Instant::now();
     let InsertTrackParams {
         pool,
         id,
@@ -156,6 +159,7 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     .bind(pace_data_json)
     .execute(&**pool)
     .await?;
+    metrics::observe_db_query("insert_track", start.elapsed().as_secs_f64());
     Ok(())
 }
 
@@ -312,6 +316,7 @@ pub async fn get_track_detail_adaptive(
     zoom: Option<f64>,
     mode: Option<&str>,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
+    let start = Instant::now();
     let track_mode = TrackMode::from_string(mode.unwrap_or("detail"));
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
@@ -353,7 +358,12 @@ pub async fn get_track_detail_adaptive(
                         .collect();
 
                     if !points.is_empty() {
+                        let simplify_start = Instant::now();
                         let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
+                        metrics::observe_track_simplify(
+                            if track_mode.is_detail() { "detail" } else { "overview" },
+                            simplify_start.elapsed().as_secs_f64(),
+                        );
                         if simplified_geom.len() < points.len() {
                             let simplified_coords: Vec<serde_json::Value> = simplified_geom
                                 .iter()
@@ -383,7 +393,7 @@ pub async fn get_track_detail_adaptive(
 
         let time_data = simplify_chart_data(row.try_get("time_data").ok(), track_mode, zoom_level);
 
-        Ok(Some(TrackDetail {
+        let result = Ok(Some(TrackDetail {
             id: row
                 .try_get::<Uuid, _>("id")
                 .expect("Failed to get id: id column missing or wrong type"),
@@ -450,8 +460,11 @@ pub async fn get_track_detail_adaptive(
             session_id: row.try_get("session_id").ok(),
             speed_data: row.try_get("speed_data").ok(),
             pace_data: row.try_get("pace_data").ok(),
-        }))
+        }));
+        metrics::observe_db_query("get_track_detail_adaptive", start.elapsed().as_secs_f64());
+        result
     } else {
+        metrics::observe_db_query("get_track_detail_adaptive", start.elapsed().as_secs_f64());
         Ok(None)
     }
 }
@@ -499,6 +512,7 @@ pub async fn list_tracks_geojson(
     mode: Option<&str>,
     filter_params: &crate::models::TrackGeoJsonQuery,
 ) -> Result<TrackGeoJsonCollection, sqlx::Error> {
+    let start = Instant::now();
     let track_mode = TrackMode::from_string(mode.unwrap_or("overview"));
     let zoom_level = zoom.unwrap_or(12.0);
 
@@ -676,7 +690,12 @@ pub async fn list_tracks_geojson(
                                 points.len(),
                             );
                             if params.should_simplify(points.len()) {
+                                let simplify_start = Instant::now();
                                 let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
+                                metrics::observe_track_simplify(
+                                    if track_mode.is_detail() { "detail" } else { "overview" },
+                                    simplify_start.elapsed().as_secs_f64(),
+                                );
                                 if simplified_geom.len() < points.len() {
                                     // Convert back to GeoJSON format
                                     let simplified_coords: Vec<serde_json::Value> = simplified_geom
@@ -745,6 +764,8 @@ pub async fn list_tracks_geojson(
         );
     }
 
+    let elapsed = start.elapsed().as_secs_f64();
+    metrics::observe_db_query("list_tracks_geojson", elapsed);
     Ok(TrackGeoJsonCollection {
         type_field: "FeatureCollection".to_string(),
         features,
@@ -756,6 +777,7 @@ pub async fn update_track_description(
     track_id: Uuid,
     new_description: &str,
 ) -> Result<(), sqlx::Error> {
+    let start = Instant::now();
     sqlx::query(
         r#"
         UPDATE tracks
@@ -768,6 +790,7 @@ pub async fn update_track_description(
     .bind(track_id)
     .execute(&**pool)
     .await?;
+    metrics::observe_db_query("update_track_description", start.elapsed().as_secs_f64());
     Ok(())
 }
 
@@ -776,6 +799,7 @@ pub async fn update_track_name(
     track_id: Uuid,
     new_name: &str,
 ) -> Result<(), sqlx::Error> {
+    let start = Instant::now();
     sqlx::query(
         r#"
         UPDATE tracks
@@ -788,10 +812,12 @@ pub async fn update_track_name(
     .bind(track_id)
     .execute(&**pool)
     .await?;
+    metrics::observe_db_query("update_track_name", start.elapsed().as_secs_f64());
     Ok(())
 }
 
 pub async fn delete_track(pool: &Arc<PgPool>, track_id: Uuid) -> Result<u64, sqlx::Error> {
+    let start = Instant::now();
     let result = sqlx::query(
         r#"
         DELETE FROM tracks WHERE id = $1
@@ -800,6 +826,7 @@ pub async fn delete_track(pool: &Arc<PgPool>, track_id: Uuid) -> Result<u64, sql
     .bind(track_id)
     .execute(&**pool)
     .await?;
+    metrics::observe_db_query("delete_track", start.elapsed().as_secs_f64());
     Ok(result.rows_affected())
 }
 
@@ -807,6 +834,7 @@ pub async fn search_tracks(
     pool: &Arc<PgPool>,
     query: &str,
 ) -> Result<Vec<TrackSearchResult>, sqlx::Error> {
+    let start = Instant::now();
     let search_query = format!("%{}%", query.to_lowercase());
 
     let rows = sqlx::query(
@@ -840,6 +868,7 @@ pub async fn search_tracks(
     .bind(&search_query)
     .fetch_all(&**pool)
     .await?;
+    metrics::observe_db_query("search_tracks", start.elapsed().as_secs_f64());
 
     let mut tracks = Vec::new();
     for row in rows {
@@ -865,6 +894,7 @@ pub async fn get_track_by_id(
     pool: &PgPool,
     track_id: Uuid,
 ) -> Result<Option<TrackForElevationEnrichment>, sqlx::Error> {
+    let start = Instant::now();
     let row = sqlx::query(
         r#"
         SELECT id, session_id, elevation_enriched, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched_at, elevation_dataset, ST_AsGeoJSON(geom)::jsonb as geom_geojson
@@ -875,6 +905,8 @@ pub async fn get_track_by_id(
     .bind(track_id)
     .fetch_optional(pool)
     .await?;
+
+    metrics::observe_db_query("get_track_by_id", start.elapsed().as_secs_f64());
 
     if let Some(row) = row {
         Ok(Some(TrackForElevationEnrichment {
@@ -912,6 +944,7 @@ pub async fn update_track_elevation(
     track_id: Uuid,
     params: UpdateElevationParams,
 ) -> Result<(), sqlx::Error> {
+    let start = Instant::now();
     // Convert elevation profile to JSON
     let elevation_profile_json = params
         .elevation_profile
@@ -946,6 +979,8 @@ pub async fn update_track_elevation(
     .execute(pool)
     .await?;
 
+    metrics::observe_db_query("update_track_elevation", start.elapsed().as_secs_f64());
+
     Ok(())
 }
 
@@ -964,6 +999,7 @@ pub async fn update_track_slope(
     track_id: Uuid,
     params: UpdateSlopeParams,
 ) -> Result<(), sqlx::Error> {
+    let start = Instant::now();
     sqlx::query(
         r#"
         UPDATE tracks 
@@ -984,6 +1020,8 @@ pub async fn update_track_slope(
     .bind(params.slope_segments)
     .execute(pool)
     .await?;
+
+    metrics::observe_db_query("update_track_slope", start.elapsed().as_secs_f64());
 
     Ok(())
 }

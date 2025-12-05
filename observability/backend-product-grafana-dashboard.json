@@ -1,0 +1,116 @@
+{
+    "id": null,
+    "uid": "backend-product",
+    "title": "Backend Product Metrics",
+    "schemaVersion": 39,
+    "version": 1,
+    "tags": [
+        "backend",
+        "product"
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "env",
+                "type": "query",
+                "query": "label_values(env)",
+                "current": {
+                    "text": "prod",
+                    "value": "prod"
+                }
+            },
+            {
+                "name": "service",
+                "type": "query",
+                "query": "label_values(service)",
+                "current": {
+                    "text": "backend",
+                    "value": "backend"
+                }
+            }
+        ]
+    },
+    "panels": [
+        {
+            "type": "graph",
+            "title": "Tracks Uploaded",
+            "targets": [
+                {
+                    "expr": "sum(rate(tracks_uploaded_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                }
+            ]
+        },
+        {
+            "type": "graph",
+            "title": "Dedup Hits",
+            "targets": [
+                {
+                    "expr": "sum(rate(tracks_deduplicated_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                }
+            ]
+        },
+        {
+            "type": "graph",
+            "title": "Track Categories",
+            "targets": [
+                {
+                    "expr": "sum by(category) (rate(track_categories_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                }
+            ]
+        },
+        {
+            "type": "graph",
+            "title": "Track Length Distribution (km)",
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.5, sum by(le) (rate(track_length_km_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                },
+                {
+                    "expr": "histogram_quantile(0.9, sum by(le) (rate(track_length_km_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                }
+            ]
+        },
+        {
+            "type": "graph",
+            "title": "Elevation Enrich Requests",
+            "targets": [
+                {
+                    "expr": "sum by(status) (rate(track_elevation_enrich_requests_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                }
+            ]
+        },
+        {
+            "type": "graph",
+            "title": "Elevation/Slope Duration (p95)",
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(track_elevation_enrich_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                },
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(track_slope_recalc_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                }
+            ]
+        },
+        {
+            "type": "graph",
+            "title": "GPX Export Duration (p95)",
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(track_export_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                }
+            ]
+        },
+        {
+            "type": "graph",
+            "title": "POIs Created/Deleted",
+            "targets": [
+                {
+                    "expr": "sum by(source) (rate(pois_created_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                },
+                {
+                    "expr": "sum by(source) (rate(pois_deleted_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                }
+            ]
+        }
+    ]
+}
