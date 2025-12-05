@@ -82,11 +82,23 @@ export function usePois() {
     }
   }
 
+  // Client-only approach: POIs are fetched and clustering is performed on the frontend (PoiClusterGroup.vue)
+
+  /**
+   * Clear all POI and cluster data
+   */
+  function clearPois() {
+    pois.value = [];
+    // Server clusters not used; client-side clustering used in PoiClusterGroup
+    error.value = null;
+  }
+
   return {
     pois,
     loading,
     error,
     fetchTrackPois,
     fetchPoisInBbox,
+    clearPois,
   };
 }

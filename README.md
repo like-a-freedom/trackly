@@ -177,6 +177,11 @@ docker-compose -f docker-compose.dev.yaml up --build
 - 🔧 Backend API: http://localhost:8080
 - 🗄️ PostgreSQL: localhost:5432
 
+### Environment variables
+
+The frontend uses Vite environment variables for configuration. If you want to customize environment variables, create a `.env` file in the `frontend` folder (copy `.env.example`).
+
+
 ### Production
 
 Choose the appropriate compose file for your architecture:
