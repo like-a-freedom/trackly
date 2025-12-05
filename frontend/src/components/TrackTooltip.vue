@@ -30,24 +30,7 @@ const props = defineProps({
 });
 const { visible, x, y, data } = toRefs(props);
 
-// Format date and time in 24-hour format
-function formatDateTime(dateString) {
-  if (!dateString) return 'N/A';
-  try {
-    const options = { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false // Force 24-hour format
-    };
-    return new Date(dateString).toLocaleString(undefined, options);
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return 'Invalid Date';
-  }
-}
+import { formatDateTime } from '../utils/format';
 
 // Format dataset name for display
 function formatDataset(dataset) {

@@ -189,11 +189,11 @@
       <div class="stats-section" v-if="track.categories && track.categories.length > 0">
         <div class="section-header-with-tooltip">
           <h3>Categories</h3>
-          <span class="info-icon" title="Categories that were added by the user during track upload">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span class="info-icon" tabindex="0" data-tooltip="Categories that were added by the user during track upload" aria-label="Categories that were added by the user during track upload">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
           </span>
         </div>
@@ -208,11 +208,11 @@
       <div class="stats-section" v-if="track.auto_classifications && track.auto_classifications.length > 0">
         <div class="section-header-with-tooltip">
           <h3>Auto classifications</h3>
-          <span class="info-icon" title="Track types automatically classified by the system based on track characteristics">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span class="info-icon" tabindex="0" data-tooltip="Track types automatically classified by the system based on track characteristics" aria-label="Track types automatically classified by the system based on track characteristics">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
           </span>
         </div>
@@ -466,15 +466,15 @@
         <div class="metadata-grid">
           <div class="metadata-item" v-if="track.recorded_at">
             <span class="metadata-label">Recorded</span>
-            <span class="metadata-value">{{ formatDate(track.recorded_at) }}</span>
+            <span class="metadata-value">{{ formatDateTime(track.recorded_at) }}</span>
           </div>
           <div class="metadata-item" v-if="track.created_at">
             <span class="metadata-label">Added</span>
-            <span class="metadata-value">{{ formatDate(track.created_at) }}</span>
+            <span class="metadata-value">{{ formatDateTime(track.created_at) }}</span>
           </div>
           <div class="metadata-item" v-if="track.updated_at">
             <span class="metadata-label">Modified</span>
-            <span class="metadata-value">{{ formatDate(track.updated_at) }}</span>
+            <span class="metadata-value">{{ formatDateTime(track.updated_at) }}</span>
           </div>
         </div>
       </div>
@@ -491,7 +491,8 @@ import ElevationChart from './ElevationChart.vue';
 import { 
   formatDuration as utilFormatDuration,
   formatDistance,
-  convertUrlsToLinks
+  convertUrlsToLinks,
+  formatDateTime
 } from '../utils/format';
 import { validateSpeedData, formatSpeed, formatPace, calculatePaceFromSpeed } from '../composables/useTracks';
 import { useUnits } from '../composables/useUnits';
@@ -1305,34 +1306,7 @@ async function saveDescription() {
 // Utility functions - memoized for performance
 // Date formatting function
 
-function formatDate(dateString) {
-  if (!dateString) return 'N/A';
-  
-  try {
-    // Create Date object and check if it's valid
-    const date = new Date(dateString);
-    
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      console.error('Invalid date string:', dateString);
-      return 'Invalid Date';
-    }
-    
-    const options = { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false
-    };
-    
-    return date.toLocaleString(undefined, options);
-  } catch (error) {
-    console.error('Error formatting date:', dateString, error);
-    return 'Invalid Date';
-  }
-}
+
 
 function formatCategory(category) {
   // Format category with proper capitalization
@@ -2358,7 +2332,7 @@ defineExpose({
 .section-header-with-tooltip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 12px;
 }
 
@@ -2373,31 +2347,94 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #555;
+  color: #888;
   cursor: help;
-  opacity: 0.8;
+  opacity: 0.7;
   transition: all 0.2s ease;
   border-radius: 50%;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   position: relative;
-  margin-left: 8px;
 }
 
 .info-icon:hover {
   opacity: 1;
   color: #2196f3;
   background-color: rgba(33, 150, 243, 0.1);
-  transform: scale(1.1);
 }
 
-/* Ensure tooltips work correctly */
-.info-icon[title] {
+/* Ensure tooltips work correctly for custom tooltip attr */
+.info-icon[data-tooltip] {
   position: relative;
+}
+
+/* Custom CSS tooltip */
+.info-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: rgba(33, 33, 33, 0.95);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: normal;
+  min-width: 180px;
+  max-width: min(520px, 85vw);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  text-align: left;
+  box-sizing: border-box;
+  z-index: 10000;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.info-icon:hover::after,
+.info-icon:focus::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Tooltip arrow */
+.info-icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(33, 33, 33, 0.95);
+  z-index: 10000;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.info-icon:hover::before,
+.info-icon:focus::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.info-icon:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.12);
+  color: #2196f3;
+  background-color: rgba(33, 150, 243, 0.08);
 }
 
 .info-icon svg {
   pointer-events: none;
+  width: 14px;
+  height: 14px;
 }
 
 .section-header {

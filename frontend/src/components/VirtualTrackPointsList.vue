@@ -27,6 +27,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { formatDateTime } from '../utils/format';
 import { useVirtualizedList } from '../composables/useVirtualizedList';
 
 const props = defineProps({
@@ -60,11 +61,8 @@ function handleScroll(event) {
 
 function formatTime(timeString) {
   if (!timeString) return '';
-  try {
-    return new Date(timeString).toLocaleTimeString();
-  } catch (e) {
-    return '';
-  }
+  // Use shared formatDateTime util to keep consistent format
+  return formatDateTime(timeString);
 }
 </script>
 
