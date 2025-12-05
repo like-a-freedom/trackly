@@ -556,11 +556,15 @@ onMounted(() => {
       startElevationPolling(props.track.id);
     }
   }
+  // Setup tooltip handlers within this panel
+  attachIconTooltipHandlers(flyoutContent.value);
 });
 
 // Cleanup on unmount
 onUnmounted(() => {
   stopElevationPolling();
+  // Detach tooltip handlers
+  detachIconTooltipHandlers(flyoutContent.value);
 });
 
 // Reset panel state when track changes
@@ -607,6 +611,96 @@ function startElevationPolling(trackId) {
   enrichmentPollingInterval.value = setInterval(async () => {
     await pollForElevationData(trackId);
   }, 3000); // Poll every 3 seconds
+}
+
+// Tooltip placement helpers
+function _createMeasureNode(text) {
+  const measure = document.createElement('div');
+  measure.className = 'info-icon__measure';
+  measure.textContent = text || '';
+  return measure;
+}
+
+function updateTooltipPlacementForIcon(el) {
+  if (!el || !flyoutContent.value) return;
+  const tooltipText = el.getAttribute('data-tooltip');
+  if (!tooltipText) return;
+
+  // create measurement element inside panel so scoped styles apply
+  const measure = _createMeasureNode(tooltipText);
+  flyoutContent.value.appendChild(measure);
+
+  const panelRect = flyoutContent.value.getBoundingClientRect();
+  const iconRect = el.getBoundingClientRect();
+  const measureRect = measure.getBoundingClientRect();
+
+  // Compute available spaces
+  const aboveSpace = iconRect.top - panelRect.top;
+  const belowSpace = panelRect.bottom - iconRect.bottom;
+
+  // default: place above
+  el.classList.remove('tooltip-bottom');
+
+  // Vertical placement: prefer above; if not enough, place below
+  if (measureRect.height + 16 > aboveSpace && belowSpace > aboveSpace) {
+    el.classList.add('tooltip-bottom');
+  }
+
+  // Cleanup measure node
+  if (measure && measure.parentNode) measure.parentNode.removeChild(measure);
+}
+
+let _tooltipResizeHandler = null;
+let _tooltipScrollHandler = null;
+function attachIconTooltipHandlers(container) {
+  if (!container) return;
+  const icons = container.querySelectorAll('.info-icon[data-tooltip]');
+  icons.forEach(icon => {
+    // mouse and keyboard interactions
+    const showHandler = () => {
+      icon.classList.add('tooltip-active');
+      updateTooltipPlacementForIcon(icon);
+    };
+    const hideHandler = () => {
+      icon.classList.remove('tooltip-active');
+      icon.classList.remove('tooltip-bottom');
+    };
+    icon._tooltipHandlers = { showHandler, hideHandler };
+    icon.addEventListener('mouseenter', showHandler);
+    icon.addEventListener('focus', showHandler);
+    icon.addEventListener('touchstart', showHandler, { passive: true });
+    icon.addEventListener('mouseleave', hideHandler);
+    icon.addEventListener('blur', hideHandler);
+  });
+  // Recompute on resize / scroll
+  _tooltipResizeHandler = () => icons.forEach(i => { if (i.classList.contains('tooltip-active')) updateTooltipPlacementForIcon(i); });
+  _tooltipScrollHandler = () => icons.forEach(i => { if (i.classList.contains('tooltip-active')) updateTooltipPlacementForIcon(i); });
+  window.addEventListener('resize', _tooltipResizeHandler);
+  container.addEventListener('scroll', _tooltipScrollHandler);
+}
+
+function detachIconTooltipHandlers(container) {
+  if (!container) return;
+  const icons = container.querySelectorAll('.info-icon[data-tooltip]');
+  icons.forEach(icon => {
+    const handlers = icon._tooltipHandlers;
+    if (handlers) {
+      icon.removeEventListener('mouseenter', handlers.showHandler);
+      icon.removeEventListener('focus', handlers.showHandler);
+      icon.removeEventListener('touchstart', handlers.showHandler);
+      icon.removeEventListener('mouseleave', handlers.hideHandler);
+      icon.removeEventListener('blur', handlers.hideHandler);
+      delete icon._tooltipHandlers;
+    }
+  });
+  if (_tooltipResizeHandler) {
+    window.removeEventListener('resize', _tooltipResizeHandler);
+    _tooltipResizeHandler = null;
+  }
+  if (_tooltipScrollHandler) {
+    container.removeEventListener('scroll', _tooltipScrollHandler);
+    _tooltipScrollHandler = null;
+  }
 }
 
 // Separate polling function for easier testing
@@ -2375,15 +2469,15 @@ defineExpose({
   left: 50%;
   bottom: calc(100% + 8px);
   transform: translateX(-50%);
-  background: rgba(33, 33, 33, 0.95);
-  color: #fff;
-  padding: 10px 16px;
+  background: #fff;
+  color: #333;
+  padding: 8px 12px;
   border-radius: 6px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.4;
   white-space: normal;
-  min-width: 180px;
-  max-width: min(520px, 85vw);
+  width: max-content;
+  max-width: 220px;
   overflow-wrap: break-word;
   word-break: break-word;
   text-align: left;
@@ -2393,13 +2487,26 @@ defineExpose({
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.2s ease, visibility 0.2s ease;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e0e0e0;
 }
 
 .info-icon:hover::after,
 .info-icon:focus::after {
   opacity: 1;
   visibility: visible;
+}
+
+/* When tooltip doesn't fit above, show under the element */
+.info-icon.tooltip-bottom::after {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+.info-icon.tooltip-bottom::before {
+  top: calc(100% + 2px);
+  bottom: auto;
+  border-top-color: transparent;
+  border-bottom-color: #fff;
 }
 
 /* Tooltip arrow */
@@ -2410,12 +2517,13 @@ defineExpose({
   bottom: calc(100% + 2px);
   transform: translateX(-50%);
   border: 6px solid transparent;
-  border-top-color: rgba(33, 33, 33, 0.95);
-  z-index: 10000;
+  border-top-color: #fff;
+  z-index: 10001;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.2s ease, visibility 0.2s ease;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
 }
 
 .info-icon:hover::before,
@@ -2435,6 +2543,28 @@ defineExpose({
   pointer-events: none;
   width: 14px;
   height: 14px;
+}
+
+/* off-DOM measurement element for tooltip sizing (visually hidden) */
+.info-icon__measure {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  visibility: hidden;
+  pointer-events: none;
+  background: #fff;
+  color: #333;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+  width: max-content;
+  max-width: 220px;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  text-align: left;
+  box-sizing: border-box;
 }
 
 .section-header {

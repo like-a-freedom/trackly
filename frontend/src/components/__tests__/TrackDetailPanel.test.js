@@ -1320,13 +1320,13 @@ describe('TrackDetailPanel', () => {
     it('should disable button during enrichment process', async () => {
       // Mock showConfirm to return true (user confirms)
       mockShowConfirm.mockResolvedValueOnce(true);
-      
+
       // Mock slow fetch response - use mockResolvedValueOnce to avoid polluting other tests
       let resolveEnrichment;
       const enrichmentPromise = new Promise(resolve => {
         resolveEnrichment = resolve;
       });
-      
+
       global.fetch.mockReturnValueOnce(
         enrichmentPromise.then(() => ({
           ok: true,
@@ -1345,7 +1345,7 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       expect(forceUpdateBtn.attributes('disabled')).toBe('');
-      
+
       // Clean up - resolve the promise so it doesn't leak
       resolveEnrichment();
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -1354,7 +1354,7 @@ describe('TrackDetailPanel', () => {
     it('should handle 403 permission error', async () => {
       // Mock showConfirm to return true (user confirms)
       mockShowConfirm.mockResolvedValueOnce(true);
-      
+
       global.fetch.mockResolvedValueOnce({ ok: false, status: 403 });
 
       wrapper = mount(TrackDetailPanel, {
@@ -1372,7 +1372,7 @@ describe('TrackDetailPanel', () => {
     it('should handle 429 rate limit error', async () => {
       // Mock showConfirm to return true (user confirms)
       mockShowConfirm.mockResolvedValueOnce(true);
-      
+
       global.fetch.mockResolvedValueOnce({ ok: false, status: 429 });
 
       wrapper = mount(TrackDetailPanel, {
@@ -1390,7 +1390,7 @@ describe('TrackDetailPanel', () => {
     it('should handle network errors gracefully', async () => {
       // Mock showConfirm to return true (user confirms)
       mockShowConfirm.mockResolvedValueOnce(true);
-      
+
       global.fetch.mockRejectedValueOnce(new Error('Network error'));
 
       wrapper = mount(TrackDetailPanel, {
@@ -1451,7 +1451,7 @@ describe('TrackDetailPanel', () => {
     it('should dispatch global event after successful enrichment', async () => {
       // Mock showConfirm to return true (user confirms)
       mockShowConfirm.mockResolvedValueOnce(true);
-      
+
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
@@ -1486,7 +1486,7 @@ describe('TrackDetailPanel', () => {
     it('should handle failed track data fetch after enrichment', async () => {
       // Mock showConfirm to return true (user confirms)
       mockShowConfirm.mockResolvedValueOnce(true);
-      
+
       global.fetch
         .mockResolvedValueOnce({ // Enrichment succeeds
           ok: true,
@@ -1884,7 +1884,7 @@ describe('TrackDetailPanel', () => {
 
     it('handles touchmove on content to prevent map interaction', async () => {
       const flyoutContent = wrapper.find('.flyout-content');
-      
+
       // Set up scrollable content
       const mockElement = {
         scrollTop: 50,
@@ -1901,14 +1901,14 @@ describe('TrackDetailPanel', () => {
 
       // Call the handler directly
       wrapper.vm.handleContentTouchMove(touchMoveEvent);
-      
+
       // Should stop propagation when content can scroll
       expect(touchMoveEvent.stopPropagation).toHaveBeenCalled();
     });
 
     it('prevents both propagation and default when content cannot scroll', async () => {
       const flyoutContent = wrapper.find('.flyout-content');
-      
+
       // Set up non-scrollable content
       const mockElement = {
         scrollTop: 0,
@@ -1925,7 +1925,7 @@ describe('TrackDetailPanel', () => {
 
       // Call the handler directly
       wrapper.vm.handleContentTouchMove(touchMoveEvent);
-      
+
       // Should prevent both when content can't scroll
       expect(touchMoveEvent.stopPropagation).toHaveBeenCalled();
       expect(touchMoveEvent.preventDefault).toHaveBeenCalled();
@@ -1933,7 +1933,7 @@ describe('TrackDetailPanel', () => {
 
     it('handles touchend to reset touch tracking', async () => {
       const flyoutContent = wrapper.find('.flyout-content');
-      
+
       // Trigger touchstart first
       const touchStartEvent = {
         touches: [{ clientY: 100 }],
@@ -1945,10 +1945,10 @@ describe('TrackDetailPanel', () => {
       const touchEndEvent = {
         stopPropagation: vi.fn()
       };
-      
+
       // Call the handler directly
       wrapper.vm.handleTouchEnd(touchEndEvent);
-      
+
       // Check that tracking values are reset
       expect(wrapper.vm.touchStartY).toBe(0);
       expect(wrapper.vm.touchStartScrollTop).toBe(0);
@@ -1957,10 +1957,10 @@ describe('TrackDetailPanel', () => {
     it('has proper CSS touch-action properties', () => {
       const flyout = wrapper.find('.track-detail-flyout');
       const flyoutContent = wrapper.find('.flyout-content');
-      
+
       expect(flyout.exists()).toBe(true);
       expect(flyoutContent.exists()).toBe(true);
-      
+
       // Note: We can't directly test CSS properties in this test environment,
       // but we can verify that the elements exist and the template is correct
     });

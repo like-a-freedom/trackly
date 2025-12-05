@@ -1,4 +1,5 @@
 <template>
+  <div style="display: contents;">
   <!-- Combined Start/Finish marker for loop tracks -->
   <LMarker
     v-if="isLoop"
@@ -70,6 +71,7 @@
       </div>
     </LTooltip>
   </LMarker>
+  </div>
 </template>
 
 <script setup>
