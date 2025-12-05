@@ -15,7 +15,7 @@
     />
     <LTooltip>
       <div class="track-marker-tooltip">
-        <div class="track-marker-tooltip__title">Старт/Финиш</div>
+        <div class="track-marker-tooltip__title">Start / Finish</div>
         <div v-if="startTime" class="track-marker-tooltip__subtitle">
           {{ formatTime(startTime) }}
         </div>
@@ -39,7 +39,7 @@
     />
     <LTooltip>
       <div class="track-marker-tooltip">
-        <div class="track-marker-tooltip__title">Старт</div>
+        <div class="track-marker-tooltip__title">Start</div>
         <div v-if="startTime" class="track-marker-tooltip__subtitle">
           {{ formatTime(startTime) }}
         </div>
@@ -63,7 +63,7 @@
     />
     <LTooltip>
       <div class="track-marker-tooltip">
-        <div class="track-marker-tooltip__title">Финиш</div>
+        <div class="track-marker-tooltip__title">Finish</div>
         <div v-if="endTime" class="track-marker-tooltip__subtitle">
           {{ formatTime(endTime) }}
         </div>
@@ -74,6 +74,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { formatDateTime } from '../utils/format';
 import { LMarker, LIcon, LTooltip } from '@vue-leaflet/vue-leaflet';
 
 const props = defineProps({
@@ -141,20 +142,10 @@ const loopIconUrl = computed(() => {
 });
 
 // Format time for tooltip
+// uses shared format function - the prop already shows ISO strings or Date objects
 function formatTime(isoString) {
   if (!isoString) return '';
-  try {
-    const date = new Date(isoString);
-    return date.toLocaleString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch {
-    return '';
-  }
+  return formatDateTime(isoString);
 }
 
 // Event handlers

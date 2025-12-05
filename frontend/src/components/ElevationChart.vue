@@ -934,19 +934,20 @@ function formatDataset(dataset) {
   return datasetNames[dataset] || dataset.charAt(0).toUpperCase() + dataset.slice(1);
 }
 
+import { formatDateTime } from '../utils/format';
+
 function formatTime(timeValue) {
-  if (!timeValue) return 'Unknown';
+  if (!timeValue && timeValue !== 0) return 'Unknown';
   
   // Handle different time formats
   if (typeof timeValue === 'string') {
     // ISO string or similar
-    const date = new Date(timeValue);
-    return date.toLocaleTimeString();
+    return formatDateTime(timeValue);
   } else if (typeof timeValue === 'number') {
     // Unix timestamp or elapsed seconds
     if (timeValue > 1000000000) {
       // Looks like Unix timestamp
-      return new Date(timeValue * 1000).toLocaleTimeString();
+      return formatDateTime(timeValue);
     } else {
       // Elapsed seconds from start
       const hours = Math.floor(timeValue / 3600);
@@ -960,7 +961,7 @@ function formatTime(timeValue) {
       }
     }
   } else if (timeValue instanceof Date) {
-    return timeValue.toLocaleTimeString();
+    return formatDateTime(timeValue);
   }
   
   return 'Unknown';

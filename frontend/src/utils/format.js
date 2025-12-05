@@ -80,3 +80,38 @@ export function convertUrlsToLinks(text) {
     return `<a href="${encodedUrl}" target="_blank" rel="noopener noreferrer">${escapedVisibleText}</a>`;
   });
 }
+
+/**
+ * Format date and time string into human readable localized datetime
+ * Uses the same options as the UI reference in TrackDetailPanel.vue
+ * @param {string|Date|number} dateString - value to parse into Date (ISO string or Date object or unix timestamp seconds)
+ * @returns {string} formatted date/time or 'N/A'/'Invalid Date' for errors
+ */
+export function formatDateTime(dateString) {
+  if (!dateString && dateString !== 0) return 'N/A';
+  try {
+    let dateObj;
+    if (typeof dateString === 'number') {
+      // If millis or seconds? If it's > 1e11 (ms since epoch) it's probably millis, else seconds
+      // We interpret > 1e11 as ms and <= 1e11 as seconds
+      dateObj = dateString > 1e11 ? new Date(dateString) : new Date(dateString * 1000);
+    } else {
+      dateObj = new Date(dateString);
+    }
+    if (isNaN(dateObj.getTime())) return 'Invalid Date';
+
+    const options = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    };
+
+    return dateObj.toLocaleString(undefined, options);
+  } catch (e) {
+    console.error('Error formatting date:', dateString, e);
+    return 'Invalid Date';
+  }
+}
