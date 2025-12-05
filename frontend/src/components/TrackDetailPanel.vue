@@ -1734,8 +1734,8 @@ defineExpose({
   min-width: 100vw;
   max-width: 100vw;
   margin: 0;
-  min-height: 220px;
-  max-height: 80vh;
+  min-height: 200px;
+  max-height: 50vh;
   display: flex;
   flex-direction: column;
   color: #333;

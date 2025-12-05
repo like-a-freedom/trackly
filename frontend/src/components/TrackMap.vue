@@ -3,8 +3,8 @@
     :key="mapKey"
     ref="leafletMap"
     class="fullscreen-map"
-    :zoom="zoom"
-    :center="center"
+    :zoom="effectiveZoom"
+    :center="effectiveCenter"
     :options="{ zoomControl: false, preferCanvas: true }"
     @ready="onMapReady"
     @movestart="onMoveStart"
@@ -76,7 +76,7 @@ import { LMap, LTileLayer, LPolyline, LGeoJson } from "@vue-leaflet/vue-leaflet"
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, getCurrentInstance, provide } from 'vue';
 import { latLngBounds } from 'leaflet';
 import {
-  FLYOUT_PADDING,
+  getDetailPanelFitBoundsOptions,
   POLYLINE_WEIGHT_ACTIVE,
   POLYLINE_WEIGHT_SELECTED_DETAIL,
   POLYLINE_WEIGHT_DEFAULT,
@@ -158,6 +158,27 @@ const mapState = ref({
   },
   userChangedZoomOrCenter: false,
   pendingRestoreCenterZoom: false
+});
+
+// Computed values for zoom/center that avoid conflicting with fitBounds
+// When bounds is provided with selectedTrackDetail, we let fitBounds control the view
+// and don't pass zoom/center to l-map to prevent vue-leaflet from overriding fitBounds
+const effectiveZoom = computed(() => {
+  // When we have bounds for a track detail view, don't apply zoom prop
+  // to avoid conflicting with fitBounds
+  if (props.bounds && props.selectedTrackDetail) {
+    return mapState.value.lastKnownGood.zoom || props.zoom;
+  }
+  return props.zoom;
+});
+
+const effectiveCenter = computed(() => {
+  // When we have bounds for a track detail view, don't apply center prop
+  // to avoid conflicting with fitBounds
+  if (props.bounds && props.selectedTrackDetail) {
+    return mapState.value.lastKnownGood.center || props.center;
+  }
+  return props.center;
 });
 
 // Animation management with proper cleanup and debouncing
@@ -990,19 +1011,22 @@ async function onMapReady(e) {
     if (props.bounds && Array.isArray(props.bounds) && props.bounds.length === 2) {
       try {
         const options = props.selectedTrackDetail ? 
-          { paddingBottomRight: FLYOUT_PADDING } : 
+          getDetailPanelFitBoundsOptions() : 
           { padding: [20, 20] };
+        console.log('[TrackMap] onMapReady - fitting bounds with options:', options, 'bounds:', props.bounds);
         map.fitBounds(props.bounds, options);
       } catch (error) {
         console.error('[TrackMap] Error applying initial bounds:', error);
       }
+    } else {
+      console.log('[TrackMap] onMapReady - no bounds to fit', { bounds: props.bounds, selectedTrackDetail: !!props.selectedTrackDetail });
     }
     
     // Enhance fitBounds for selected track detail
     const origFitBounds = map.fitBounds.bind(map);
     map.fitBounds = function(boundsArg, options = {}) {
-      if (props.selectedTrackDetail && !options.paddingBottomRight) {
-        options = { ...options, paddingBottomRight: FLYOUT_PADDING };
+      if (props.selectedTrackDetail && !options.paddingBottomRight && !options.paddingTopLeft) {
+        options = { ...options, ...getDetailPanelFitBoundsOptions() };
       }
       return origFitBounds(boundsArg, options);
     };
@@ -1315,6 +1339,20 @@ function onLocationFound(location) {
  */
 async function handleTrackSelected(newDetail) {
   try {
+    // If bounds prop is provided, let the bounds watch handle positioning
+    // This prevents double-positioning and conflicts
+    if (props.bounds && Array.isArray(props.bounds) && props.bounds.length === 2) {
+      console.log('[TrackMap] Bounds provided, skipping handleTrackSelected flyToBounds');
+      // Just save pre-selection state for returning later
+      const map = getMapObject('handleTrackSelected-saveState');
+      if (map) {
+        mapState.value.preSelection.zoom = map.getZoom();
+        mapState.value.preSelection.center = [map.getCenter().lat, map.getCenter().lng];
+        saveMapStateToStorage(mapState.value.preSelection.zoom, mapState.value.preSelection.center);
+      }
+      return;
+    }
+
     const selectedPolyline = props.polylines.find(
       poly => poly.properties && poly.properties.id === newDetail.id
     );
@@ -1331,7 +1369,7 @@ async function handleTrackSelected(newDetail) {
       saveMapStateToStorage(mapState.value.preSelection.zoom, mapState.value.preSelection.center);
       
       map.flyToBounds(selectedPolyline.latlngs, {
-        paddingBottomRight: FLYOUT_PADDING,
+        ...getDetailPanelFitBoundsOptions(),
         duration: 1.5,
         easeLinearity: 0.25
       });
@@ -1531,15 +1569,16 @@ watch(() => props.bounds, (newBounds) => {
       try {
         // Use fitBounds with proper options for track detail view
         const options = props.selectedTrackDetail ? 
-          { paddingBottomRight: FLYOUT_PADDING } : 
+          getDetailPanelFitBoundsOptions() : 
           { padding: [20, 20] };
+        console.log('[TrackMap] Fitting bounds with options:', options);
         map.fitBounds(newBounds, options);
       } catch (error) {
         console.error('[TrackMap] Error fitting bounds:', error);
       }
     }
   }
-});
+}, { immediate: true });
 
 // Cleanup function for component unmounting
 function cleanup() {
