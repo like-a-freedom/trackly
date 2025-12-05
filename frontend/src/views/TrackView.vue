@@ -1,12 +1,12 @@
 <template>
   <div class="app-container" v-if="!loading">
     <TrackMap
-      v-if="track && polylines.length > 0"
+      v-if="track && polylines.length > 0 && trackBounds"
       key="track-detail-map"
       :polylines="polylines"
       :zoom="zoom"
       :center="center"
-  :bounds="trackBounds"
+      :bounds="trackBounds"
       :markerLatLng="markerLatLng"
       :url="url"
       :attribution="attribution"
@@ -265,11 +265,27 @@ const isTrackLoop = computed(() => {
 
 // Map settings
 const zoom = ref(14);
-const center = ref([59.9311, 30.3609]);
 const bounds = ref(null);
 const markerLatLng = ref(null);
 const url = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+// Computed center based on track - avoids showing default St. Petersburg coordinates
+const center = computed(() => {
+  const latlngs = track.value?.latlngs;
+  if (!latlngs || latlngs.length === 0) {
+    return [0, 0]; // Will be overridden by fitBounds anyway
+  }
+  
+  const trackBoundsData = calculateBounds(latlngs);
+  if (!trackBoundsData) return [0, 0];
+  
+  // Return center of track bounds
+  return [
+    (trackBoundsData.north + trackBoundsData.south) / 2,
+    (trackBoundsData.east + trackBoundsData.west) / 2
+  ];
+});
 
 // Computed bounds for track - padding is handled by TrackMap with getDetailPanelPadding()
 const trackBounds = computed(() => {
@@ -365,12 +381,8 @@ function onMapReady() {
 }
 
 function handleCenterUpdate(newCenter) {
-  // Only update if valid
-  if (Array.isArray(newCenter) && newCenter.length === 2 &&
-      typeof newCenter[0] === 'number' && typeof newCenter[1] === 'number' &&
-      !isNaN(newCenter[0]) && !isNaN(newCenter[1])) {
-    center.value = newCenter;
-  }
+  // Center is now computed from track data, no need to update manually
+  // The map's center is controlled by fitBounds with trackBounds
 }
 
 // Handle zoom updates for adaptive loading
@@ -611,7 +623,7 @@ watch(() => route.params.id, async (newId, oldId) => {
     isInitialLoad.value = true;
     currentTrackId.value = newId; // Set this immediately to prevent race with onMounted
     lastPoiFetchedTrackId.value = null; // Reset POI fetch tracking for new track
-    center.value = [59.9311, 30.3609]; // Reset to default, will be updated by track data
+    // Center is computed from track data, no need to reset
     loading.value = true; // Set loading state
     
     // Clear stabilization timer for old track
