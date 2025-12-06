@@ -368,6 +368,16 @@ pub fn initialize_metrics_baseline() {
     // Ensure collectors are registered
     let _ = HttpMetricsLayer::new();
 
+    // Log the current registry families for debugging on startup
+    {
+        let families = REGISTRY.gather();
+        let names: Vec<String> = families
+            .iter()
+            .map(|f| f.name().to_string())
+            .collect();
+        info!(count = families.len(), names = ?names, "metrics baseline registered");
+    }
+
     // HTTP core metrics
     let _ = HTTP_REQUESTS_TOTAL.with_label_values(&["INIT", "/init", "0xx"]);
     let _ = HTTP_REQUEST_DURATION_SECONDS.with_label_values(&["INIT", "/init", "0xx"]);
@@ -605,7 +615,16 @@ pub async fn serve_metrics() -> impl IntoResponse {
             .set(DB_POOL_MAX.get().copied().unwrap_or(size));
     }
 
+    // Emit a short debug log so we can see which metrics are served at runtime
     let encoder = TextEncoder::new();
+    {
+        let families = REGISTRY.gather();
+        let names: Vec<String> = families
+            .iter()
+            .map(|f| f.name().to_string())
+            .collect();
+        info!(count = families.len(), names = ?names, "serving metrics request");
+    }
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
     if let Err(_e) = encoder.encode(&metric_families, &mut buffer) {

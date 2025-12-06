@@ -1,87 +1,96 @@
 # Trackly Observability Configuration
 
-Конфигурация для мониторинга приложения Trackly с использованием VictoriaMetrics, vmagent и Grafana.
+Configuration for monitoring the Trackly application using VictoriaMetrics, vmagent, and Grafana.
 
-## Структура
+## Structure
 
 ```
 observability/
-├── vmagent.yml              # Конфигурация vmagent для сбора метрик
-├── alerts.yml               # Правила алертинга
+├── vmagent.yml              # vmagent configuration for scraping metrics
+├── alerts.yml               # Alerting rules
 ├── dashboards/
-│   ├── technical-metrics.json   # Технические метрики (HTTP, DB, ресурсы)
-│   └── product-metrics.json     # Продуктовые метрики (треки, POI, активность)
-└── README.md                # Эта документация
+│   ├── technical-metrics.json   # Technical metrics (HTTP, DB, resources)
+│   ├── product-metrics.json     # Product metrics (tracks, POIs, activity)
+│   └── caddy-frontend.json      # Caddy reverse proxy metrics
+└── README.md                # This documentation
 ```
 
-## Компоненты
+## Components
 
 ### 1. VictoriaMetrics (victoriametrics:8428)
-База данных временных рядов для хранения метрик. В production используется внешний экземпляр.
+Time-series database used to store metrics. In production, an external instance is recommended.
 
 ### 2. vmagent
-Агент для сбора метрик с различных источников и отправки в VictoriaMetrics.
+Scraper agent that gathers metrics from various sources and sends them to VictoriaMetrics.
 
-**Конфигурация**: `vmagent.yml`
+**Configuration**: `vmagent.yml`
 
-**Источники метрик**:
-- `trackly_backend:8080/metrics` - метрики backend приложения (Prometheus формат)
-- `frontend:2019/metrics` - метрики Caddy (если включены)
-- `postgres_exporter:9187/metrics` - метрики PostgreSQL (опционально)
+**Metric sources**:
+- `trackly_backend:8080/metrics` - backend application metrics (Prometheus format)
+- `frontend:2019/metrics` - Caddy metrics (if enabled)
+- `postgres_exporter:9187/metrics` - PostgreSQL metrics (optional)
 
-**Интервалы сбора**:
-- Backend: 15 секунд
-- Frontend/Caddy: 30 секунд
-- PostgreSQL: 30 секунд
+**Scrape intervals**:
+- Backend: 15 seconds
+- Frontend/Caddy: 30 seconds
+- PostgreSQL: 30 seconds
 
 ### 3. Alerting Rules
-**Файл**: `alerts.yml`
+**File**: `alerts.yml`
 
-**Группы алертов**:
+**Alert groups**:
 
 #### Backend Health
-- `BackendDown` - сервис недоступен (critical)
-- `HighErrorRate` - высокий уровень ошибок >5% (warning)
-- `HighLatency` - p95 latency >2s (warning)
-- `VeryHighLatency` - p95 latency >5s (critical)
+- `BackendDown` - backend is down (critical)
+- `HighErrorRate` - error rate > 5% (warning)
+- `HighLatency` - p95 latency > 2s (warning)
+- `VeryHighLatency` - p95 latency > 5s (critical)
 
 #### Database Health
-- `DatabaseConnectionPoolExhausted` - >90% соединений использовано (warning)
-- `SlowDatabaseQueries` - p95 query time >1s (warning)
+- `DatabaseConnectionPoolExhausted` - >90% of DB connections in use (warning)
+- `SlowDatabaseQueries` - p95 DB query time > 1s (warning)
 
 #### Track Processing
-- `HighTrackUploadFailureRate` - >10% загрузок неудачны (warning)
-- `SlowTrackParsing` - p95 parsing time >5s (warning)
-- `ElevationEnrichmentFailures` - >30% обогащений неудачны (warning)
-- `SlowElevationEnrichment` - p95 enrichment time >10s (warning)
+- `HighTrackUploadFailureRate` - >10% of uploads are failing (warning)
+- `SlowTrackParsing` - p95 parsing time > 5s (warning)
+- `ElevationEnrichmentFailures` - >30% enrichment failures (warning)
+- `SlowElevationEnrichment` - p95 enrichment time > 10s (warning)
 
 #### Resource Usage
-- `HighMemoryUsage` - использование памяти >1GB (warning)
-- `TooManyBackgroundTasks` - >50 фоновых задач (warning)
+- `HighMemoryUsage` - process memory usage > 1GB (warning)
+- `TooManyBackgroundTasks` - >50 background tasks (warning)
 
 #### Product Metrics
-- `NoTracksUploadedRecently` - нет загрузок 2 часа (info)
-- `HighTrackDeduplicationRate` - >50% дубликатов (info)
+- `NoTracksUploadedRecently` - no uploads in the last 2 hours (info)
+- `HighTrackDeduplicationRate` - >50% duplicates (info)
+
+#### Frontend Health (Caddy)
+- `FrontendDown` - Caddy is down (critical)
+- `FrontendHighErrorRate` - >5% 5xx error rate (warning)
+- `FrontendHighLatency` - p95 latency > 3s (warning)
+- `BackendUpstreamUnhealthy` - upstream backend is unhealthy (critical)
+- `FrontendHighMemoryUsage` - >512MB memory usage (warning)
+- `FrontendHighGoroutines` - >1000 goroutines (warning)
 
 ### 4. Grafana Dashboards
 
 #### Technical Metrics Dashboard
-**Файл**: `dashboards/technical-metrics.json`
+**File**: `dashboards/technical-metrics.json`
 
-**Секции**:
+**Sections**:
 1. **Service Health Overview**
-   - Статус backend
+   - Backend status
    - HTTP request rate
    - HTTP error rate
    - Requests in flight
 
 2. **HTTP Performance Metrics**
-   - Request latency (p50, p95, p99) по endpoints
-   - Request/Response size (p95)
+   - Request latency (p50, p95, p99) per endpoint
+   - Request/response size (p95)
 
 3. **Database Metrics**
    - Connection pool usage
-   - Query latency по операциям
+   - Query latency per operation
    - Query rate
 
 4. **Track Processing Performance**
@@ -93,9 +102,9 @@ observability/
    - Background tasks count
 
 #### Product Metrics Dashboard
-**Файл**: `dashboards/product-metrics.json`
+**File**: `dashboards/product-metrics.json`
 
-**Секции**:
+**Sections**:
 1. **Track Upload Activity**
    - Tracks uploaded (24h, 7d)
    - Deduplicated tracks
@@ -119,9 +128,44 @@ observability/
    - Top 10 endpoints by request rate
    - Endpoint usage summary table
 
-## Настройка
+5. **Track Export & Data Flow**
+   - Track exports by format (GPX, KML, etc.)
+   - Total exports (24h)
+   - Upload failures by reason (pie chart)
+   - Track lifecycle (uploaded, deduplicated, deleted)
+   - Enrichment success rate
+   - Deduplication rate
 
-### Запуск vmagent в production
+#### Caddy Frontend Dashboard
+**File**: `dashboards/caddy-frontend.json`
+
+**Sections**:
+1. **Service Health**
+   - Caddy status
+   - Uptime
+   - Memory usage
+   - Active goroutines
+   - Total HTTP requests (24h)
+
+2. **HTTP Traffic**
+   - Requests by handler
+   - Requests by status code
+   - Error rate
+   - Request latency (p50, p95, p99)
+
+3. **Reverse Proxy**
+   - Upstream health status
+   - Upstream request rate
+   - Upstream failures
+   - Response size distribution
+
+4. **Go Runtime**
+   - Memory usage (heap, stack, sys)
+   - GC pause duration
+
+## Setup
+
+### Running vmagent in production
 
 ```bash
 # Docker
@@ -134,29 +178,28 @@ docker run -d \
   -remoteWrite.url=http://victoriametrics:8428/api/v1/write
 ```
 
-### Импорт дашбордов в Grafana
+### Importing dashboards into Grafana
 
-1. Откройте Grafana UI
-2. Перейдите в Dashboards → Import
-3. Загрузите JSON файл из `observability/dashboards/`
-4. Выберите datasource: `victoriametrics` (Prometheus type)
-5. Нажмите Import
+1. Open Grafana UI
+2. Go to Dashboards → Import
+3. Upload the JSON file from `observability/dashboards/`
+4. Choose the datasource: `victoriametrics` (Prometheus type)
+5. Click Import
 
-### Настройка datasource в Grafana
+### Setting up the datasource in Grafana
 
 1. Configuration → Data sources → Add data source
-2. Выберите Prometheus
+2. Select Prometheus
 3. URL: `http://victoriametrics:8428`
 4. Name: `victoriametrics`
 5. Save & Test
 
-### Настройка алертинга
+### Alerting configuration
 
-Alerts можно настроить через:
+You can configure alerts using either:
 
-1. **Grafana Alerting** (рекомендуется):
-   - Загрузите `alerts.yml` как provisioning файл
-   - Или создайте alert rules вручную в UI
+1. **Grafana Alerting** (recommended):
+   - Import `alerts.yml` as a provisioning file or create rules manually via the UI
 
 2. **VictoriaMetrics vmalert**:
 ```bash
@@ -169,119 +212,121 @@ docker run -d \
   -notifier.url=http://alertmanager:9093
 ```
 
-## Доступные метрики
+## Available Metrics
 
-### HTTP метрики
-- `http_requests_total` - количество запросов
-- `http_request_duration_seconds` - latency запросов
-- `http_requests_in_flight` - активные запросы
-- `http_request_size_bytes` - размер запросов
-- `http_response_size_bytes` - размер ответов
-- `http_requests_errors_total` - ошибки
+### HTTP metrics
+- `http_requests_total` - number of requests
+- `http_request_duration_seconds` - request latency
+- `http_requests_in_flight` - current in-flight requests
+- `http_request_size_bytes` - request size
+- `http_response_size_bytes` - response size
+- `http_requests_errors_total` - error count
 
-### Database метрики
-- `db_pool_connections` - состояние connection pool
-- `db_query_duration_seconds` - latency запросов к БД
+### Database metrics
+- `db_pool_connections` - connection pool state
+- `db_query_duration_seconds` - DB query latency
 
-### Track processing метрики
-- `tracks_uploaded_total` - загруженные треки
-- `tracks_deduplicated_total` - дубликаты
-- `track_upload_failures_total` - неудачные загрузки
-- `tracks_deleted_total` - удалённые треки
-- `track_categories_total` - категории треков
-- `track_length_km_bucket` - распределение длины треков
-- `track_parse_duration_seconds` - время парсинга
-- `track_pipeline_latency_seconds` - end-to-end latency загрузки
-- `track_simplify_duration_seconds` - время упрощения
-- `track_slope_recalc_duration_seconds` - время пересчёта уклонов
+### Track processing metrics
+- `tracks_uploaded_total` - tracks uploaded
+- `tracks_deduplicated_total` - duplicated tracks
+- `track_upload_failures_total` - upload failures
+- `tracks_deleted_total` - deleted tracks
+- `track_categories_total` - track categories
+- `track_length_km_bucket` - distribution of track lengths
+- `track_parse_duration_seconds` - parsing time
+- `track_pipeline_latency_seconds` - end-to-end pipeline latency
+- `track_simplify_duration_seconds` - simplification time
+- `track_slope_recalc_duration_seconds` - slope recalculation time
 
-### Elevation enrichment метрики
-- `track_enrich_requests_total` - попытки обогащения
-- `track_enrich_duration_seconds` - время обогащения
+### Elevation enrichment metrics
+- `track_enrich_requests_total` - enrichment requests
+- `track_enrich_duration_seconds` - enrichment duration
 
-### POI метрики
-- `pois_created_total` - созданные POI
-- `pois_deleted_total` - удалённые/отвязанные POI
+### POI metrics
+- `pois_created_total` - POIs created
+- `pois_deleted_total` - POIs deleted/unlinked
 
-### Resource метрики
-- `background_tasks_in_flight` - фоновые задачи
+### Resource metrics
+- `background_tasks_in_flight` - background jobs in flight
 
 ## Labels
 
-Метрики содержат следующие labels:
-- `service` - название сервиса (backend, frontend)
-- `env` - окружение (dev, prod)
-- `instance` - ID инстанса
-- `version` - версия приложения
-- `method` - HTTP метод
+Metrics include the following labels:
+- `service` - service name (backend, frontend)
+- `env` - environment (dev, prod)
+- `instance` - instance ID
+- `version` - application version
+- `method` - HTTP method
 - `route` - endpoint
-- `status_class` - класс статуса (2xx, 4xx, 5xx)
-- `operation` - операция БД
-- `format` - формат трека (gpx, kml)
-- `source` - источник (anonymous)
-- `category` - категория трека
-- `reason` - причина ошибки
-- `result` - результат операции
-- `state` - состояние (idle, in_use)
-- `outcome` - результат (success, failed)
-- `mode` - режим (detail, overview)
+- `status_class` - status class (2xx, 4xx, 5xx)
+- `operation` - DB operation
+- `format` - track format (gpx, kml)
+- `source` - track source (anonymous)
+- `category` - track category
+- `reason` - failure reason
+- `result` - operation result
+- `state` - pool state (idle, in_use)
+- `outcome` - result (success, failed)
+- `mode` - mode (detail, overview)
 
-## Лучшие практики
+## Best practices
 
-1. **Регулярно проверяйте алерты** - настройте каналы уведомлений (Slack, email, PagerDuty)
+1. **Monitor alerts regularly** - configure notification channels (Slack, email, PagerDuty)
 
-2. **Мониторьте cardinality** - избегайте labels с высокой кардинальностью (user_id, track_id)
+2. **Watch cardinality** - avoid labels with very high cardinality (user_id, track_id)
 
-3. **Используйте recording rules** - для часто используемых запросов создайте pre-aggregated метрики
+3. **Use recording rules** - create pre-aggregated metrics for frequently used queries
 
-4. **Retention policy** - настройте политику хранения в VictoriaMetrics:
-   ```
-   -retentionPeriod=30d  # Хранить 30 дней
-   ```
+4. **Retention policy** - configure retention on VictoriaMetrics
+```
+-retentionPeriod=30d  # Keep data for 30 days
+```
 
-5. **Backup** - регулярно бэкапьте VictoriaMetrics данные
+5. **Backup** - make regular backups of critical metric data
 
-6. **Capacity planning** - мониторьте рост данных и планируйте масштабирование
+6. **Capacity planning** - monitor data growth and plan scaling ahead
 
 ## Troubleshooting
 
-### Метрики не собираются
+### Metrics not being scraped
 
-1. Проверьте доступность endpoint:
-   ```bash
-   curl http://backend:8080/metrics
-   ```
+1. Verify the endpoint is reachable:
+```bash
+curl http://backend:8080/metrics
+```
 
-2. Проверьте логи vmagent:
-   ```bash
-   docker logs vmagent
-   ```
+2. Check vmagent logs:
+```bash
+docker logs vmagent
+```
 
-3. Проверьте конфигурацию:
-   ```bash
-   # Validate YAML
-   yamllint vmagent.yml
-   ```
+3. Validate configuration:
+```bash
+# Validate YAML
+yamllint vmagent.yml
+```
 
-### Дашборды не показывают данные
+### Dashboards show no data
 
-1. Проверьте datasource в Grafana
-2. Проверьте наличие данных в VictoriaMetrics:
-   ```bash
-   curl 'http://victoriametrics:8428/api/v1/query?query=up'
-   ```
+1. Check the Grafana datasource
+2. Verify metrics in VictoriaMetrics:
+```bash
+curl 'http://victoriametrics:8428/api/v1/query?query=up'
+```
+3. Verify the datasource UID in the dashboard (should be `victoriametrics`)
 
-3. Проверьте UID datasource в дашборде (должен быть `victoriametrics`)
+### Alerts not firing
 
-### Алерты не срабатывают
+1. Check alert rules in vmalert/Grafana
+2. Verify notifier/contact points
+3. Check thresholds in `alerts.yml`
 
-1. Проверьте правила алертинга в vmalert/Grafana
-2. Проверьте notifier/contact points
-3. Проверьте пороги (thresholds) в alerts.yml
-
-## Полезные ссылки
+## Useful links
 
 - [VictoriaMetrics Documentation](https://docs.victoriametrics.com/)
 - [vmagent Documentation](https://docs.victoriametrics.com/vmagent.html)
 - [Grafana Dashboards](https://grafana.com/grafana/dashboards/)
 - [Prometheus Query Examples](https://prometheus.io/docs/prometheus/latest/querying/examples/)
+
+
+
