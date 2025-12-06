@@ -1,95 +1,190 @@
 groups:
-  - name: backend-http
+  - name: trackly_backend_health
+    interval: 30s
     rules:
-      - alert: BackendHighLatencyP95
-        expr: histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job="backend",route!="/metrics"}[5m]))) > 1.5
-        for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "p95 latency >1.5s"}
-      - alert: BackendHighLatencyP99
-        expr: histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket{job="backend",route!="/metrics"}[5m]))) > 3
-        for: 5m
-        labels: {severity: critical}
-        annotations: {summary: "p99 latency >3s"}
-      - alert: BackendErrorRateHigh
-        expr: sum(rate(http_requests_errors_total{job="backend",route!="/metrics"}[5m])) / clamp_min(sum(rate(http_requests_total{job="backend",route!="/metrics"}[5m])), 1) > 0.02
-        for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "Error rate >2%"}
-      - alert: BackendErrorRateSpike
-        expr: sum(rate(http_requests_errors_total{job="backend",route!="/metrics"}[1m])) / clamp_min(sum(rate(http_requests_total{job="backend",route!="/metrics"}[1m])), 1) > 0.05
+      - alert: BackendDown
+        expr: up{job="trackly_backend"} == 0
         for: 1m
-        labels: {severity: critical}
-        annotations: {summary: "Error rate >5%"}
-      - alert: BackendInFlightHigh
-        expr: http_requests_in_flight{job="backend"} > 100
-        for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "High in-flight requests"}
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "Trackly backend is down"
+          description: "Backend service has been down for more than 1 minute. Service: {{ $labels.instance }}"
 
-  - name: upload-pipeline
-    rules:
-      - alert: UploadFailuresSpike
-        expr: increase(track_upload_failures_total{job="backend"}[10m]) > 10
-        for: 10m
-        labels: {severity: warning}
-        annotations: {summary: "Upload failures spiking"}
-      - alert: PipelineLatencyHigh
-        expr: histogram_quantile(0.95, sum by(le) (rate(track_pipeline_latency_seconds_bucket{job="backend"}[10m]))) > 30
-        for: 10m
-        labels: {severity: warning}
-        annotations: {summary: "Upload pipeline p95 >30s"}
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_errors_total{job="trackly_backend"}[5m])) by (service, route) 
+          / 
+          sum(rate(http_requests_total{job="trackly_backend"}[5m])) by (service, route) 
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} on route {{ $labels.route }}"
 
-  - name: database
-    rules:
-      - alert: DbConnectionsHigh
-        expr: sum(db_pool_connections{job="backend",state="in_use"}) / sum(db_pool_connections{job="backend",state="max"}) > 0.8
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{job="trackly_backend"}[5m])) by (le, route)
+          ) > 2
         for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "DB pool >80% used"}
-      - alert: PostgresCacheHitLow
-        expr: (sum(rate(pg_stat_database_blks_hit[15m])) / (sum(rate(pg_stat_database_blks_hit[15m])) + sum(rate(pg_stat_database_blks_read[15m])))) < 0.9
-        for: 15m
-        labels: {severity: warning}
-        annotations: {summary: "Postgres cache hit <90%"}
-      - alert: PostgresDeadlocks
-        expr: sum(rate(pg_stat_database_deadlocks[5m])) > 0
-        for: 5m
-        labels: {severity: critical}
-        annotations: {summary: "Postgres deadlocks detected"}
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High latency on {{ $labels.route }}"
+          description: "95th percentile latency is {{ $value }}s on route {{ $labels.route }}"
 
-  - name: caddy
-    rules:
-      - alert: CaddyErrorRateHigh
-        expr: sum(rate(caddy_http_requests_total{status=~"5.."}[5m])) / sum(rate(caddy_http_requests_total[5m])) > 0.02
-        for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "Caddy error rate >2%"}
-      - alert: CaddyTlsExpiry
-        expr: min(caddy_tls_cert_expiration_timestamp) - time() < 172800
-        for: 5m
-        labels: {severity: critical}
-        annotations: {summary: "TLS cert expires in <2 days"}
+      - alert: VeryHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{job="trackly_backend"}[5m])) by (le, route)
+          ) > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "Very high latency on {{ $labels.route }}"
+          description: "95th percentile latency is {{ $value }}s on route {{ $labels.route }}"
 
-  - name: platform
+  - name: trackly_database_health
+    interval: 30s
     rules:
-      - alert: NodeCpuHigh
-        expr: 100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          db_pool_connections{state="in_use"} / db_pool_connections{state="max"} > 0.9
+        for: 2m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "{{ $value | humanizePercentage }} of database connections are in use"
+
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(db_query_duration_seconds_bucket[5m])) by (le, operation)
+          ) > 1
         for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "Host CPU >85%"}
-      - alert: NodeMemoryHigh
-        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time for {{ $labels.operation }} is {{ $value }}s"
+
+  - name: trackly_track_processing
+    interval: 30s
+    rules:
+      - alert: HighTrackUploadFailureRate
+        expr: |
+          sum(rate(track_upload_failures_total[5m])) by (reason) 
+          / 
+          (sum(rate(tracks_uploaded_total[5m])) + sum(rate(track_upload_failures_total[5m])))
+          > 0.1
         for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "Host memory >90%"}
-      - alert: NodeDiskLow
-        expr: min(node_filesystem_free_bytes{fstype!~"tmpfs|aufs"} / node_filesystem_size_bytes{fstype!~"tmpfs|aufs"}) < 0.15
+        labels:
+          severity: warning
+          component: track_processing
+        annotations:
+          summary: "High track upload failure rate"
+          description: "{{ $value | humanizePercentage }} of uploads failing due to {{ $labels.reason }}"
+
+      - alert: SlowTrackParsing
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(track_parse_duration_seconds_bucket[5m])) by (le, format)
+          ) > 5
         for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "Disk free <15%"}
-      - alert: ContainerMemoryHigh
-        expr: sum by(container_label_com_docker_swarm_service_name) (container_memory_working_set_bytes) > 0.9 * sum by(container_label_com_docker_swarm_service_name) (container_spec_memory_limit_bytes)
+        labels:
+          severity: warning
+          component: track_processing
+        annotations:
+          summary: "Slow track parsing for {{ $labels.format }}"
+          description: "95th percentile parsing time is {{ $value }}s"
+
+      - alert: ElevationEnrichmentFailures
+        expr: |
+          sum(rate(track_enrich_requests_total{status="failed_remote"}[10m]))
+          /
+          sum(rate(track_enrich_requests_total[10m]))
+          > 0.3
         for: 5m
-        labels: {severity: warning}
-        annotations: {summary: "Container memory >90%"}
+        labels:
+          severity: warning
+          component: elevation
+        annotations:
+          summary: "High elevation enrichment failure rate"
+          description: "{{ $value | humanizePercentage }} of enrichment requests are failing"
+
+      - alert: SlowElevationEnrichment
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(track_enrich_duration_seconds_bucket{status="success"}[5m])) by (le)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: elevation
+        annotations:
+          summary: "Slow elevation enrichment"
+          description: "95th percentile enrichment time is {{ $value }}s"
+
+  - name: trackly_resource_usage
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: |
+          process_resident_memory_bytes{job="trackly_backend"} > 1073741824
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High memory usage"
+          description: "Backend is using {{ $value | humanize }}B of memory"
+
+      - alert: TooManyBackgroundTasks
+        expr: |
+          background_tasks_in_flight > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "Too many background tasks running"
+          description: "{{ $value }} background tasks are currently running"
+
+  - name: trackly_product_metrics
+    interval: 1m
+    rules:
+      - alert: NoTracksUploadedRecently
+        expr: |
+          rate(tracks_uploaded_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: info
+          component: product
+        annotations:
+          summary: "No tracks uploaded in the last 2 hours"
+          description: "This might indicate a problem with the upload functionality or lack of user activity"
+
+      - alert: HighTrackDeduplicationRate
+        expr: |
+          sum(rate(tracks_deduplicated_total[30m]))
+          /
+          (sum(rate(tracks_uploaded_total[30m])) + sum(rate(tracks_deduplicated_total[30m])))
+          > 0.5
+        for: 30m
+        labels:
+          severity: info
+          component: product
+        annotations:
+          summary: "High track deduplication rate"
+          description: "{{ $value | humanizePercentage }} of track uploads are duplicates"
