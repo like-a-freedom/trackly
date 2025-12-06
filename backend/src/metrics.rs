@@ -371,10 +371,7 @@ pub fn initialize_metrics_baseline() {
     // Log the current registry families for debugging on startup
     {
         let families = REGISTRY.gather();
-        let names: Vec<String> = families
-            .iter()
-            .map(|f| f.name().to_string())
-            .collect();
+        let names: Vec<String> = families.iter().map(|f| f.name().to_string()).collect();
         info!(count = families.len(), names = ?names, "metrics baseline registered");
     }
 
@@ -619,10 +616,7 @@ pub async fn serve_metrics() -> impl IntoResponse {
     let encoder = TextEncoder::new();
     {
         let families = REGISTRY.gather();
-        let names: Vec<String> = families
-            .iter()
-            .map(|f| f.name().to_string())
-            .collect();
+        let names: Vec<String> = families.iter().map(|f| f.name().to_string()).collect();
         info!(count = families.len(), names = ?names, "serving metrics request");
     }
     let metric_families = REGISTRY.gather();
