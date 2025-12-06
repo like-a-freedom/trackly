@@ -363,6 +363,55 @@ impl HttpMetricsLayer {
     }
 }
 
+/// Pre-create label value combinations so metrics appear in scraping even before traffic.
+pub fn initialize_metrics_baseline() {
+    // Ensure collectors are registered
+    let _ = HttpMetricsLayer::new();
+
+    // HTTP core metrics
+    let _ = HTTP_REQUESTS_TOTAL.with_label_values(&["INIT", "/init", "0xx"]);
+    let _ = HTTP_REQUEST_DURATION_SECONDS.with_label_values(&["INIT", "/init", "0xx"]);
+    let _ = HTTP_REQUEST_SIZE_BYTES.with_label_values(&["INIT", "/init"]);
+    let _ = HTTP_RESPONSE_SIZE_BYTES.with_label_values(&["INIT", "/init", "0xx"]);
+    let _ = HTTP_REQUEST_ERRORS_TOTAL.with_label_values(&["/init", "5xx"]);
+    HTTP_REQUESTS_IN_FLIGHT.set(0);
+
+    // DB metrics
+    let _ = DB_QUERY_DURATION_SECONDS.with_label_values(&["unknown"]);
+    DB_POOL_CONNECTIONS.with_label_values(&["idle"]).set(0);
+    DB_POOL_CONNECTIONS.with_label_values(&["in_use"]).set(0);
+    DB_POOL_CONNECTIONS.with_label_values(&["max"]).set(0);
+
+    // Upload and parsing
+    let _ = TRACK_UPLOAD_FAILURES.with_label_values(&["validation"]);
+    let _ = TRACKS_UPLOADED_TOTAL.with_label_values(&["anonymous"]);
+    let _ = TRACKS_DEDUPLICATED_TOTAL.with_label_values(&["gpx_hash_match"]);
+    let _ = TRACKS_DELETED_TOTAL.with_label_values(&["success"]);
+    let _ = TRACK_PARSE_DURATION_SECONDS.with_label_values(&["gpx"]);
+    let _ = TRACK_PIPELINE_LATENCY_SECONDS.with_label_values(&["success"]);
+    let _ = TRACK_LENGTH_KM_BUCKET.with_label_values(&["anonymous"]);
+    let _ = TRACK_CATEGORIES_TOTAL.with_label_values(&["unknown"]);
+
+    // Enrichment
+    let _ = TRACK_ENRICH_REQUESTS_TOTAL.with_label_values(&["success"]);
+    let _ = TRACK_ENRICH_REQUESTS_TOTAL.with_label_values(&["failed_remote"]);
+    let _ = TRACK_ENRICH_DURATION_SECONDS.with_label_values(&["success"]);
+    let _ = TRACK_ENRICH_DURATION_SECONDS.with_label_values(&["failed_remote"]);
+    let _ = TRACK_SLOPE_RECALC_DURATION_SECONDS.with_label_values(&["success"]);
+    let _ = TRACK_SLOPE_RECALC_DURATION_SECONDS.with_label_values(&["db_error"]);
+
+    // Export/simplify/POI
+    let _ = TRACK_EXPORT_DURATION_SECONDS.with_label_values(&["gpx"]);
+    let _ = TRACK_SIMPLIFY_DURATION_SECONDS.with_label_values(&["detail"]);
+    let _ = TRACK_SIMPLIFY_DURATION_SECONDS.with_label_values(&["overview"]);
+    let _ = POIS_CREATED_TOTAL.with_label_values(&["manual"]);
+    let _ = POIS_DELETED_TOTAL.with_label_values(&["unlink_track"]);
+    let _ = POIS_DELETED_TOTAL.with_label_values(&["delete_poi"]);
+
+    // Background workers gauge
+    BACKGROUND_TASKS_IN_FLIGHT.set(0);
+}
+
 impl<S> Layer<S> for HttpMetricsLayer {
     type Service = HttpMetricsMiddleware<S>;
 
@@ -536,7 +585,7 @@ where
 }
 pub async fn serve_metrics() -> impl IntoResponse {
     // Ensure all metrics are registered even if no requests have hit the middleware yet
-    let _ = HttpMetricsLayer::new();
+    initialize_metrics_baseline();
     // Touch a baseline sample so the metric name appears even before traffic
     HTTP_REQUESTS_TOTAL
         .with_label_values(&["init", "/metrics", "0xx"])
@@ -698,5 +747,20 @@ mod tests {
             .expect("body to bytes");
         let body_str = String::from_utf8(body.to_vec()).expect("utf8 body");
         assert!(body_str.contains("http_requests_total"));
+    }
+
+    #[tokio::test]
+    async fn baseline_exposes_product_metrics() {
+        initialize_metrics_baseline();
+        let response = serve_metrics().await.into_response();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body to bytes");
+        let body_str = String::from_utf8(body.to_vec()).expect("utf8 body");
+        assert!(body_str.contains("tracks_uploaded_total"));
+        assert!(body_str.contains("track_enrich_requests_total"));
+        assert!(body_str.contains("track_upload_failures_total"));
     }
 }

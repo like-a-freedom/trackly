@@ -58,6 +58,7 @@ async fn main() {
     );
 
     metrics::set_db_pool(Arc::clone(&pool), max_connections as i64);
+    metrics::initialize_metrics_baseline();
 
     // Run migrations automatically on startup
     info!("Running database migrations...");

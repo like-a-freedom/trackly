@@ -2,27 +2,27 @@ groups:
   - name: backend-http
     rules:
       - alert: BackendHighLatencyP95
-        expr: histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket[5m]))) > 1.5
+        expr: histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{job="backend",route!="/metrics"}[5m]))) > 1.5
         for: 5m
         labels: {severity: warning}
         annotations: {summary: "p95 latency >1.5s"}
       - alert: BackendHighLatencyP99
-        expr: histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket[5m]))) > 3
+        expr: histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket{job="backend",route!="/metrics"}[5m]))) > 3
         for: 5m
         labels: {severity: critical}
         annotations: {summary: "p99 latency >3s"}
       - alert: BackendErrorRateHigh
-        expr: sum(rate(http_requests_errors_total[5m])) / sum(rate(http_requests_total[5m])) > 0.02
+        expr: sum(rate(http_requests_errors_total{job="backend",route!="/metrics"}[5m])) / clamp_min(sum(rate(http_requests_total{job="backend",route!="/metrics"}[5m])), 1) > 0.02
         for: 5m
         labels: {severity: warning}
         annotations: {summary: "Error rate >2%"}
       - alert: BackendErrorRateSpike
-        expr: sum(rate(http_requests_errors_total[1m])) / sum(rate(http_requests_total[1m])) > 0.05
+        expr: sum(rate(http_requests_errors_total{job="backend",route!="/metrics"}[1m])) / clamp_min(sum(rate(http_requests_total{job="backend",route!="/metrics"}[1m])), 1) > 0.05
         for: 1m
         labels: {severity: critical}
         annotations: {summary: "Error rate >5%"}
       - alert: BackendInFlightHigh
-        expr: http_requests_in_flight > 100
+        expr: http_requests_in_flight{job="backend"} > 100
         for: 5m
         labels: {severity: warning}
         annotations: {summary: "High in-flight requests"}
@@ -30,12 +30,12 @@ groups:
   - name: upload-pipeline
     rules:
       - alert: UploadFailuresSpike
-        expr: increase(track_upload_failures_total[10m]) > 10
+        expr: increase(track_upload_failures_total{job="backend"}[10m]) > 10
         for: 10m
         labels: {severity: warning}
         annotations: {summary: "Upload failures spiking"}
       - alert: PipelineLatencyHigh
-        expr: histogram_quantile(0.95, sum by(le) (rate(track_pipeline_latency_seconds_bucket[10m]))) > 30
+        expr: histogram_quantile(0.95, sum by(le) (rate(track_pipeline_latency_seconds_bucket{job="backend"}[10m]))) > 30
         for: 10m
         labels: {severity: warning}
         annotations: {summary: "Upload pipeline p95 >30s"}
@@ -43,7 +43,7 @@ groups:
   - name: database
     rules:
       - alert: DbConnectionsHigh
-        expr: sum(db_pool_connections{state="in_use"}) / sum(db_pool_connections{state="max"}) > 0.8
+        expr: sum(db_pool_connections{job="backend",state="in_use"}) / sum(db_pool_connections{job="backend",state="max"}) > 0.8
         for: 5m
         labels: {severity: warning}
         annotations: {summary: "DB pool >80% used"}

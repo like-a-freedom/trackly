@@ -3,114 +3,322 @@
     "uid": "backend-product",
     "title": "Backend Product Metrics",
     "schemaVersion": 39,
-    "version": 1,
+    "version": 2,
     "tags": [
         "backend",
         "product"
     ],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+        "from": "now-6h",
+        "to": "now"
+    },
     "templating": {
         "list": [
             {
                 "name": "env",
                 "type": "query",
-                "query": "label_values(env)",
-                "current": {
-                    "text": "prod",
-                    "value": "prod"
-                }
+                "datasource": "Prometheus",
+                "query": "label_values(tracks_uploaded_total, env)",
+                "includeAll": true,
+                "refresh": 2
             },
             {
                 "name": "service",
                 "type": "query",
-                "query": "label_values(service)",
-                "current": {
-                    "text": "backend",
-                    "value": "backend"
-                }
+                "datasource": "Prometheus",
+                "query": "label_values(tracks_uploaded_total{env=~\"$env\"}, service)",
+                "includeAll": true,
+                "refresh": 2
             }
         ]
     },
     "panels": [
         {
-            "type": "graph",
-            "title": "Tracks Uploaded",
+            "type": "timeseries",
+            "title": "Tracks Uploaded (rps)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
             "targets": [
                 {
-                    "expr": "sum(rate(tracks_uploaded_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                    "expr": "sum by(source) (rate(tracks_uploaded_total{env=~\"$env\",service=~\"$service\"}[5m]))"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "Dedup Hits",
+            "type": "timeseries",
+            "title": "Upload Failures (rps)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
             "targets": [
                 {
-                    "expr": "sum(rate(tracks_deduplicated_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                    "expr": "sum by(reason) (rate(track_upload_failures_total{env=~\"$env\",service=~\"$service\"}[5m]))"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "Track Categories",
+            "type": "timeseries",
+            "title": "Dedup Hits (rps)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum by(reason) (rate(tracks_deduplicated_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Track Categories (rps)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 8
+            },
             "targets": [
                 {
                     "expr": "sum by(category) (rate(track_categories_total{env=~\"$env\",service=~\"$service\"}[5m]))"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "Track Length Distribution (km)",
+            "type": "timeseries",
+            "title": "Track Length (km) p50/p90",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 16
+            },
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.5, sum by(le) (rate(track_length_km_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                    "expr": "histogram_quantile(0.5, sum by(le) (rate(track_length_km_bucket{env=~\"$env\",service=~\"$service\"}[5m])))",
+                    "legendFormat": "p50"
                 },
                 {
-                    "expr": "histogram_quantile(0.9, sum by(le) (rate(track_length_km_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                    "expr": "histogram_quantile(0.9, sum by(le) (rate(track_length_km_bucket{env=~\"$env\",service=~\"$service\"}[5m])))",
+                    "legendFormat": "p90"
                 }
-            ]
-        },
-        {
-            "type": "graph",
-            "title": "Elevation Enrich Requests",
-            "targets": [
-                {
-                    "expr": "sum by(status) (rate(track_elevation_enrich_requests_total{env=~\"$env\",service=~\"$service\"}[5m]))"
-                }
-            ]
-        },
-        {
-            "type": "graph",
-            "title": "Elevation/Slope Duration (p95)",
-            "targets": [
-                {
-                    "expr": "histogram_quantile(0.95, sum by(le) (rate(track_elevation_enrich_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
                 },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Pipeline Latency p95",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 16
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(track_pipeline_latency_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Elevation Enrich Requests (rps)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "sum by(status) (rate(track_enrich_requests_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Elevation Enrich Duration p95",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(track_enrich_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Slope Recalculation p95",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 32
+            },
+            "targets": [
                 {
                     "expr": "histogram_quantile(0.95, sum by(le) (rate(track_slope_recalc_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "GPX Export Duration (p95)",
+            "type": "timeseries",
+            "title": "GPX Export Duration p95",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 32
+            },
             "targets": [
                 {
                     "expr": "histogram_quantile(0.95, sum by(le) (rate(track_export_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "POIs Created/Deleted",
+            "type": "timeseries",
+            "title": "POIs Created/Deleted (rps)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 40
+            },
             "targets": [
                 {
-                    "expr": "sum by(source) (rate(pois_created_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                    "expr": "sum by(source) (rate(pois_created_total{env=~\"$env\",service=~\"$service\"}[5m]))",
+                    "legendFormat": "created {{source}}"
                 },
                 {
-                    "expr": "sum by(source) (rate(pois_deleted_total{env=~\"$env\",service=~\"$service\"}[5m]))"
+                    "expr": "sum by(source) (rate(pois_deleted_total{env=~\"$env\",service=~\"$service\"}[5m]))",
+                    "legendFormat": "deleted {{source}}"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         }
     ]
 }
