@@ -1,15 +1,58 @@
-# VictoriaMetrics Agent config for scraping Caddy metrics
-# https://docs.victoriametrics.com/vmagent/
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'trackly'
+    replica: '1'
+
 scrape_configs:
-  - job_name: 'caddy'
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['frontend:2019']
-    metrics_path: /metrics
-    scheme: http
-  - job_name: 'backend'
-    scrape_interval: 15s
+  # Backend metrics
+  - job_name: 'trackly_backend'
     static_configs:
       - targets: ['backend:8080']
-    metrics_path: /metrics
-    scheme: http
+        labels:
+          service: 'backend'
+          component: 'api'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Frontend Caddy metrics  
+  - job_name: 'trackly_frontend'
+    static_configs:
+      - targets: ['frontend:2019']
+        labels:
+          service: 'frontend'
+          component: 'proxy'
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL metrics (if using postgres_exporter)
+  - job_name: 'trackly_postgres'
+    static_configs:
+      - targets: ['postgres_exporter:9187']
+        labels:
+          service: 'postgres'
+          component: 'database'
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    # Optional: remove this section if not using postgres_exporter
+
+# Remote write configuration for VictoriaMetrics
+remote_write:
+  - url: http://victoriametrics:8428/api/v1/write
+    queue_config:
+      max_samples_per_send: 10000
+      max_shards: 30
+      capacity: 50000
+    write_relabel_configs:
+      # Drop metrics with empty values
+      - source_labels: [__name__]
+        regex: '.*_bucket|.*_sum|.*_count'
+        action: keep
+      # Keep only necessary labels to reduce cardinality
+      - action: labelkeep
+        regex: '__name__|job|instance|service|component|env|version|method|route|status_class|operation|format|source|category|reason|result|state|outcome|mode'
