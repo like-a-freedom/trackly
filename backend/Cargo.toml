@@ -34,8 +34,8 @@ reqwest = { version = "0.12.24", default-features = false, features = ["json", "
 # File parsing
 quick-xml = "0.38.4"
 kml = "0.12.0"
-geo = "0.31.0"
-geo-types = "0.7.17"
+geo = "0.32.0"
+geo-types = "0.7.18"
 
 # Multipart
 axum-extra = { version = "0.12.2", features = ["multipart", "typed-header"] }

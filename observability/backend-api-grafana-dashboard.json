@@ -3,88 +3,148 @@
     "uid": "backend-api",
     "title": "Backend API Golden Signals",
     "schemaVersion": 39,
-    "version": 1,
+    "version": 2,
     "tags": [
         "backend",
         "golden-signals"
     ],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+        "from": "now-6h",
+        "to": "now"
+    },
     "templating": {
         "list": [
             {
                 "name": "env",
                 "type": "query",
-                "query": "label_values(env)",
-                "current": {
-                    "text": "prod",
-                    "value": "prod"
-                }
+                "datasource": "Prometheus",
+                "query": "label_values(http_requests_total, env)",
+                "includeAll": true,
+                "refresh": 2
             },
             {
                 "name": "service",
                 "type": "query",
-                "query": "label_values(service)",
-                "current": {
-                    "text": "backend",
-                    "value": "backend"
-                }
+                "datasource": "Prometheus",
+                "query": "label_values(http_requests_total{env=~\"$env\"}, service)",
+                "includeAll": true,
+                "refresh": 2
             },
             {
                 "name": "instance",
                 "type": "query",
-                "query": "label_values(instance)",
-                "includeAll": true
+                "datasource": "Prometheus",
+                "query": "label_values(http_requests_total{env=~\"$env\",service=~\"$service\"}, instance)",
+                "includeAll": true,
+                "refresh": 2
             },
             {
                 "name": "route",
                 "type": "query",
-                "query": "label_values(http_requests_total, route)",
-                "includeAll": true
-            },
-            {
-                "name": "status_class",
-                "type": "query",
-                "query": "label_values(http_requests_total, status_class)",
-                "includeAll": true
+                "datasource": "Prometheus",
+                "query": "label_values(http_request_duration_seconds_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\"}, route)",
+                "includeAll": true,
+                "refresh": 2
             }
         ]
     },
     "panels": [
         {
-            "type": "graph",
-            "title": "Request Rate (rps)",
+            "type": "timeseries",
+            "title": "Requests per Second",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
             "targets": [
                 {
-                    "expr": "sum by(route,method) (rate(http_requests_total{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m]))"
+                    "expr": "sum by(status_class) (rate(http_requests_total{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[1m]))"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "Latency p50/p90/p99",
-            "targets": [
-                {
-                    "expr": "histogram_quantile(0.5, sum by(le) (rate(http_request_duration_seconds_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))"
-                },
-                {
-                    "expr": "histogram_quantile(0.9, sum by(le) (rate(http_request_duration_seconds_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))"
-                },
-                {
-                    "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))"
-                }
-            ]
-        },
-        {
-            "type": "graph",
+            "type": "timeseries",
             "title": "Error Rate",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
             "targets": [
                 {
-                    "expr": "sum(rate(http_requests_errors_total{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\",status_class=~\"$status_class\"}[5m])) / sum(rate(http_requests_total{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m]))"
+                    "expr": "sum(rate(http_requests_errors_total{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])) / clamp_min(sum(rate(http_requests_total{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])), 1)"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Latency p50/p95/p99",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.5, sum by(le) (rate(http_request_duration_seconds_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))",
+                    "legendFormat": "p50"
+                },
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))",
+                    "legendFormat": "p95"
+                },
+                {
+                    "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))",
+                    "legendFormat": "p99"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
             "type": "stat",
             "title": "In-flight Requests",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 12,
+                "y": 8
+            },
             "targets": [
                 {
                     "expr": "sum(http_requests_in_flight{env=~\"$env\",service=~\"$service\",instance=~\"$instance\"})"
@@ -92,49 +152,170 @@
             ]
         },
         {
-            "type": "graph",
-            "title": "Request Size (bytes)",
+            "type": "stat",
+            "title": "Background Tasks",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 18,
+                "y": 8
+            },
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_size_bytes_bucket{env=~\"$env\",service=~\"$service\",route=~\"$route\"}[5m])))"
+                    "expr": "sum(background_tasks_in_flight{env=~\"$env\",service=~\"$service\",instance=~\"$instance\"})"
                 }
             ]
         },
         {
-            "type": "graph",
-            "title": "Response Size (bytes)",
+            "type": "timeseries",
+            "title": "DB Pool Usage",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 16
+            },
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.95, sum by(le) (rate(http_response_size_bytes_bucket{env=~\"$env\",service=~\"$service\",route=~\"$route\",status_class=~\"$status_class\"}[5m])))"
+                    "expr": "sum by(state) (db_pool_connections{env=~\"$env\",service=~\"$service\",instance=~\"$instance\"})"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "Pipeline Latency",
+            "type": "timeseries",
+            "title": "Request Size p95 (bytes)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 16
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_size_bytes_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Response Size p95 (bytes)",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(http_response_size_bytes_bucket{env=~\"$env\",service=~\"$service\",instance=~\"$instance\",route=~\"$route\"}[5m])))"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "DB Query Duration p95",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum by(le) (rate(db_query_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Pipeline Latency p95",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 32
+            },
             "targets": [
                 {
                     "expr": "histogram_quantile(0.95, sum by(le) (rate(track_pipeline_latency_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
                 }
-            ]
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            }
         },
         {
-            "type": "graph",
-            "title": "DB Query Duration (p95)",
+            "type": "timeseries",
+            "title": "Top Routes by RPS",
+            "datasource": "Prometheus",
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 32
+            },
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.95, sum by(le,operation) (rate(db_query_duration_seconds_bucket{env=~\"$env\",service=~\"$service\"}[5m])))"
+                    "expr": "topk(5, sum by(route) (rate(http_requests_total{env=~\"$env\",service=~\"$service\",instance=~\"$instance\"}[5m])))"
                 }
-            ]
-        },
-        {
-            "type": "graph",
-            "title": "DB Pool Usage",
-            "targets": [
-                {
-                    "expr": "sum by(state) (db_pool_connections{env=~\"$env\",service=~\"$service\"})"
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
                 }
-            ]
+            }
         }
     ]
 }
