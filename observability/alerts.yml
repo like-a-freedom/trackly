@@ -188,3 +188,76 @@ groups:
         annotations:
           summary: "High track deduplication rate"
           description: "{{ $value | humanizePercentage }} of track uploads are duplicates"
+
+  - name: trackly_frontend_health
+    interval: 30s
+    rules:
+      - alert: FrontendDown
+        expr: up{job="trackly_frontend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: frontend
+        annotations:
+          summary: "Trackly frontend (Caddy) is down"
+          description: "Frontend reverse proxy has been down for more than 1 minute. Service: {{ $labels.instance }}"
+
+      - alert: FrontendHighErrorRate
+        expr: |
+          sum(rate(caddy_http_requests_total{job="trackly_frontend", code=~"5.."}[5m]))
+          /
+          sum(rate(caddy_http_requests_total{job="trackly_frontend"}[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+        annotations:
+          summary: "High error rate on frontend"
+          description: "Frontend error rate is {{ $value | humanizePercentage }}"
+
+      - alert: FrontendHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(caddy_http_request_duration_seconds_bucket{job="trackly_frontend"}[5m])) by (le)
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+        annotations:
+          summary: "High frontend latency"
+          description: "95th percentile frontend latency is {{ $value }}s"
+
+      - alert: BackendUpstreamUnhealthy
+        expr: |
+          caddy_reverse_proxy_upstreams_healthy{job="trackly_frontend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: frontend
+        annotations:
+          summary: "Backend upstream is unhealthy"
+          description: "Caddy reports backend upstream as unhealthy for {{ $labels.upstream }}"
+
+      - alert: FrontendHighMemoryUsage
+        expr: |
+          process_resident_memory_bytes{job="trackly_frontend"} > 536870912
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+        annotations:
+          summary: "High memory usage on frontend"
+          description: "Frontend (Caddy) is using {{ $value | humanize }}B of memory"
+
+      - alert: FrontendHighGoroutines
+        expr: |
+          go_goroutines{job="trackly_frontend"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: frontend
+        annotations:
+          summary: "High number of goroutines on frontend"
+          description: "Frontend has {{ $value }} goroutines running"
