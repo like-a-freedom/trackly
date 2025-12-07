@@ -33,10 +33,23 @@ export function generateSessionId() {
 }
 
 export function getSessionId() {
-    let sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId) {
-        sessionId = generateSessionId();
-        localStorage.setItem(SESSION_KEY, sessionId);
+    try {
+        if (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function') {
+            let sessionId = localStorage.getItem(SESSION_KEY);
+            if (!sessionId) {
+                sessionId = generateSessionId();
+                // Try-catch in case localStorage is unavailable/setItem is not a function
+                try {
+                    localStorage.setItem(SESSION_KEY, sessionId);
+                } catch (e) {
+                    // ignore
+                }
+            }
+            return sessionId;
+        }
+    } catch (e) {
+        // ignore and fallback
     }
-    return sessionId;
+    // Fallback: generate a session id without persisting
+    return generateSessionId();
 }

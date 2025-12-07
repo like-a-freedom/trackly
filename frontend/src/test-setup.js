@@ -241,8 +241,95 @@ if (!window.URL) {
 window.URL.createObjectURL = vi.fn(() => 'mock-url');
 window.URL.revokeObjectURL = vi.fn();
 
-// Mock fetch if not already mocked
-global.fetch = global.fetch || vi.fn();
+// Wrap URL constructor so that relative URLs are allowed in tests
+if (typeof global.URL === 'function') {
+    const NativeURL = global.URL;
+    function URLWrapper(url, base) {
+        // If only a relative path (no base), default to http://localhost
+        return new NativeURL(url, base || 'http://localhost');
+    }
+    URLWrapper.createObjectURL = NativeURL.createObjectURL;
+    URLWrapper.revokeObjectURL = NativeURL.revokeObjectURL;
+    URLWrapper.prototype = NativeURL.prototype;
+    global.URL = URLWrapper;
+    window.URL = URLWrapper;
+}
+
+// Mock fetch — always override Node/browser fetch with our test-friendly stub
+// Simple fetch mock that handles common API paths used in tests
+global.fetch = vi.fn(async (url, opts) => {
+    const path = typeof url === 'string' ? url : (url?.url || '');
+    // Trim out origin so both absolute and relative URLs match
+    const trimmed = (path || '').replace(/^https?:\/\/[^/]+/, '');
+    // POIs endpoint
+    if (trimmed.endsWith('/pois')) {
+        return {
+            ok: true,
+            json: async () => []
+        };
+    }
+    // Track details endpoint
+    if (trimmed.includes('/tracks/') && !trimmed.includes('/pois')) {
+        // Extract id and return simplified track object for tests
+        const idMatch = trimmed.match(/\/tracks\/(.*?)(\/|$|\?)/);
+        const id = idMatch ? idMatch[1] : 'test-track-id';
+        return {
+            ok: true,
+            json: async () => ({
+                id,
+                latlngs: [[55.7558, 37.6173], [55.7568, 37.6173]],
+                time_data: [null, '2024-01-01T10:00:00Z'],
+                duration_seconds: 3600,
+                recorded_at: '2024-01-01T09:00:00Z'
+            })
+        };
+    }
+
+    // Fallback
+    return {
+        ok: true,
+        json: async () => ({})
+    };
+});
+
+// Wrap the global Request constructor in tests so that relative URLs (e.g. '/tracks/1')
+// don't throw when Request tries to create a URL object in Node's undici implementation.
+// This mirrors browser behavior by using http://localhost as base for relative URLs.
+if (typeof global.Request !== 'undefined') {
+    const OriginalRequest = global.Request;
+    global.Request = function (input, init) {
+        try {
+            if (typeof input === 'string' && input.startsWith('/')) {
+                return new OriginalRequest(`http://localhost${input}`, init);
+            }
+            // If input is a Request-like object (undici passes Request), normalize its url
+            if (input && input.url && typeof input.url === 'string' && input.url.startsWith('/')) {
+                return new OriginalRequest(`http://localhost${input.url}`, init || input);
+            }
+        } catch (e) {
+            // Fall back to original behavior if anything goes wrong
+            // eslint-disable-next-line no-console
+            console.warn('[test-setup] Request wrapper fallback:', e.message);
+        }
+        return new OriginalRequest(input, init);
+    };
+    // Preserve prototype chain so instanceof checks still work
+    Object.setPrototypeOf(global.Request, OriginalRequest);
+}
+
+// Mock localStorage for tests
+const localStorageMock = (() => {
+    let store = {};
+    return {
+        getItem: (key) => (key in store ? store[key] : null),
+        setItem: (key, value) => { store[key] = String(value); },
+        removeItem: (key) => { delete store[key]; },
+        clear: () => { store = {}; },
+        // For tests that check the raw store
+        __getStore: () => store
+    };
+})();
+global.localStorage = global.localStorage || localStorageMock;
 
 // Suppress Vue warnings during tests
 config.global.config.warnHandler = () => { };
