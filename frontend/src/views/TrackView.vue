@@ -57,6 +57,7 @@
         :endPosition="track.latlngs[track.latlngs.length - 1]"
         :isLoop="isTrackLoop"
         :startTime="track.recorded_at"
+        :endTime="endTime"
         @marker-click="handleEndpointClick"
       />
       <LCircleMarker
@@ -319,6 +320,29 @@ const isTrackLoop = computed(() => {
   const latlngs = track.value?.latlngs;
   if (!latlngs || latlngs.length < 2) return false;
   return isLoopTrack(latlngs);
+});
+
+// Compute endTime: try time_data last non-null entry, fallback to recorded_at + duration_seconds
+const endTime = computed(() => {
+  if (!track.value) return null;
+  const tdata = track.value.time_data;
+  if (Array.isArray(tdata) && tdata.length > 0) {
+    for (let i = tdata.length - 1; i >= 0; i--) {
+      if (tdata[i]) return tdata[i];
+    }
+  }
+  if (track.value.recorded_at && track.value.duration_seconds) {
+    try {
+      const recorded = new Date(track.value.recorded_at);
+      if (!isNaN(recorded.getTime())) {
+        const end = new Date(recorded.getTime() + track.value.duration_seconds * 1000);
+        return end.toISOString();
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return null;
 });
 
 // Map settings

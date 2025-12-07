@@ -35,7 +35,7 @@ export function haversineMeters(lat1, lng1, lat2, lng2) {
  */
 export function computeCumulativeDistances(latlngs) {
     if (!latlngs || latlngs.length === 0) {
-        return [0];
+        return [];
     }
 
     const distances = [0];
@@ -211,7 +211,9 @@ export function getMarkerInterval(zoom, trackLengthKm) {
 
     // Base interval based on zoom
     let interval;
-    if (zoom >= 15) {
+    if (zoom >= 17) {
+        interval = 0.1; // 100m
+    } else if (zoom >= 15) {
         interval = 0.5; // 500m
     } else if (zoom >= 13) {
         interval = 1; // 1km
@@ -232,6 +234,11 @@ export function getMarkerInterval(zoom, trackLengthKm) {
         }
     }
 
+    // Hide markers for very short tracks at low/medium zoom levels
+    if (zoom <= 12 && trackLengthKm < 1) {
+        return 0;
+    }
+
     return interval;
 }
 
@@ -245,6 +252,8 @@ export function getArrowRepeatInterval(zoom) {
         return 0; // Hidden
     } else if (zoom <= 12) {
         return 150; // Sparse
+    } else if (zoom <= 15) {
+        return 100; // Medium density
     } else {
         return 70; // Dense
     }
@@ -257,7 +266,13 @@ export function getArrowRepeatInterval(zoom) {
  */
 export function formatDistanceMarker(distanceKm) {
     if (distanceKm < 1) {
-        return distanceKm.toString();
+        // Remove leading zero for values like 0.5 -> '.5'
+        return distanceKm.toString().replace(/^0(?=\.)/, '');
     }
-    return Math.round(distanceKm).toString();
+    // Keep one decimal place for non-integer kilometer values (e.g., 1.5)
+    const rounded = Math.round(distanceKm * 10) / 10;
+    if (Number.isInteger(rounded)) {
+        return rounded.toString();
+    }
+    return rounded.toString();
 }
