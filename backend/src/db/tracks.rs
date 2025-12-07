@@ -1,6 +1,10 @@
-use crate::models::*;
 use crate::metrics;
-use crate::track_utils::{get_simplification_params, simplify_track_for_zoom};
+use crate::models::*;
+use crate::track_utils::{
+    extract_segments_from_geojson, geojson_from_segments, get_simplification_params,
+    haversine_distance, length_km_for_segments, simplify_track_for_zoom, split_points_by_gap,
+};
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use std::time::Instant;
@@ -242,6 +246,14 @@ pub async fn get_track_detail(
         .fetch_optional(&**pool)
         .await?;
     if let Some(row) = row {
+        let geom_geojson: serde_json::Value = row
+            .try_get::<serde_json::Value, _>("geom_geojson")
+            .expect("Failed to get geom_geojson");
+        let time_data_raw: Option<serde_json::Value> = row.try_get("time_data").ok();
+        let segments_for_metadata = extract_segments_from_geojson(&geom_geojson).ok();
+        let (segment_gaps, pause_gaps) =
+            compute_gap_metadata(segments_for_metadata.as_deref(), time_data_raw.as_ref());
+
         Ok(Some(TrackDetail {
             id: row
                 .try_get::<Uuid, _>("id")
@@ -261,13 +273,15 @@ pub async fn get_track_detail(
             geom_geojson: row
                 .try_get::<serde_json::Value, _>("geom_geojson")
                 .expect("Failed to get geom_geojson"),
+            segment_gaps,
+            pause_gaps,
             length_km: row
                 .try_get("length_km")
                 .expect("Failed to get length_km: length_km column missing or wrong type"),
             elevation_profile: row.try_get("elevation_profile").ok(),
             hr_data: row.try_get("hr_data").ok(),
             temp_data: row.try_get("temp_data").ok(),
-            time_data: row.try_get("time_data").ok(),
+            time_data: time_data_raw,
             // Unified elevation fields
             elevation_gain: row.try_get("elevation_gain").ok(),
             elevation_loss: row.try_get("elevation_loss").ok(),
@@ -333,48 +347,63 @@ pub async fn get_track_detail_adaptive(
         let mut geom_geojson: serde_json::Value = row
             .try_get::<serde_json::Value, _>("geom_geojson")
             .expect("Failed to get geom_geojson");
+        let mut working_segments: Option<Vec<Vec<(f64, f64)>>> = None;
+        let time_data_raw: Option<serde_json::Value> = row.try_get("time_data").ok();
+        let mut normalized_length_km: Option<f64> = None;
+
+        // Normalize geometry by splitting teleport gaps for legacy records
+        if let Ok(raw_segments) = extract_segments_from_geojson(&geom_geojson) {
+            let max_gap_meters = std::env::var("TRACK_MAX_GAP_METERS")
+                .ok()
+                .and_then(|v| v.parse::<f64>().ok());
+            let mut normalized_segments: Vec<Vec<(f64, f64)>> = Vec::new();
+            let mut changed = false;
+            for segment in raw_segments {
+                let splits = split_points_by_gap(&segment, max_gap_meters);
+                if splits.len() > 1 {
+                    changed = true;
+                }
+                normalized_segments.extend(splits);
+            }
+
+            if changed {
+                geom_geojson = geojson_from_segments(&normalized_segments);
+            }
+
+            if !normalized_segments.is_empty() {
+                working_segments = Some(normalized_segments.clone());
+                normalized_length_km = Some(length_km_for_segments(&normalized_segments));
+            }
+        }
 
         // Apply simplification for huge tracks or overview mode
         let params =
             get_simplification_params(track_mode, Some(zoom_level), original_points as usize);
         if params.should_simplify(original_points as usize) {
-            if let Some(coordinates) = geom_geojson.get("coordinates").and_then(|c| c.as_array()) {
-                if !coordinates.is_empty() {
-                    let points: Vec<(f64, f64)> = coordinates
+            if let Ok(segments) = extract_segments_from_geojson(&geom_geojson) {
+                if !segments.is_empty() {
+                    let simplify_start = Instant::now();
+                    let simplified_segments: Vec<Vec<(f64, f64)>> = segments
                         .iter()
-                        .filter_map(|coord| {
-                            if let Some(coord_array) = coord.as_array() {
-                                if coord_array.len() >= 2 {
-                                    let lng = coord_array[0].as_f64()?;
-                                    let lat = coord_array[1].as_f64()?;
-                                    Some((lat, lng))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        })
+                        .map(|segment| simplify_track_for_zoom(segment, zoom_level))
                         .collect();
 
-                    if !points.is_empty() {
-                        let simplify_start = Instant::now();
-                        let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
-                        metrics::observe_track_simplify(
-                            if track_mode.is_detail() { "detail" } else { "overview" },
-                            simplify_start.elapsed().as_secs_f64(),
-                        );
-                        if simplified_geom.len() < points.len() {
-                            let simplified_coords: Vec<serde_json::Value> = simplified_geom
-                                .iter()
-                                .map(|(lat, lng)| serde_json::json!([lng, lat]))
-                                .collect();
+                    metrics::observe_track_simplify(
+                        if track_mode.is_detail() {
+                            "detail"
+                        } else {
+                            "overview"
+                        },
+                        simplify_start.elapsed().as_secs_f64(),
+                    );
 
-                            geom_geojson = serde_json::json!({
-                                "type": "LineString",
-                                "coordinates": simplified_coords
-                            });
-                        }
+                    let changed = simplified_segments
+                        .iter()
+                        .zip(segments.iter())
+                        .any(|(new_seg, old_seg)| new_seg.len() < old_seg.len());
+
+                    if changed {
+                        geom_geojson = geojson_from_segments(&simplified_segments);
                     }
                 }
             }
@@ -391,7 +420,13 @@ pub async fn get_track_detail_adaptive(
 
         let temp_data = simplify_chart_data(row.try_get("temp_data").ok(), track_mode, zoom_level);
 
-        let time_data = simplify_chart_data(row.try_get("time_data").ok(), track_mode, zoom_level);
+        let time_data = simplify_chart_data(time_data_raw.clone(), track_mode, zoom_level);
+
+        let segments_for_metadata = working_segments
+            .clone()
+            .or_else(|| extract_segments_from_geojson(&geom_geojson).ok());
+        let (segment_gaps, pause_gaps) =
+            compute_gap_metadata(segments_for_metadata.as_deref(), time_data_raw.as_ref());
 
         let result = Ok(Some(TrackDetail {
             id: row
@@ -410,9 +445,12 @@ pub async fn get_track_detail_adaptive(
                 .try_get("auto_classifications")
                 .unwrap_or_else(|_| Vec::new()),
             geom_geojson,
-            length_km: row
-                .try_get("length_km")
-                .expect("Failed to get length_km: length_km column missing or wrong type"),
+            segment_gaps,
+            pause_gaps,
+            length_km: normalized_length_km.unwrap_or_else(|| {
+                row.try_get("length_km")
+                    .expect("Failed to get length_km: length_km column missing or wrong type")
+            }),
             elevation_profile,
             hr_data,
             temp_data,
@@ -503,6 +541,118 @@ fn simplify_chart_data(
         }
         None => None,
     }
+}
+
+const PAUSE_GAP_THRESHOLD_SECS: i64 = 180; // 3 minutes without samples marks a pause gap
+
+fn parse_time_points(time_data: &serde_json::Value) -> Vec<Option<DateTime<Utc>>> {
+    let mut result = Vec::new();
+    let array = match time_data.as_array() {
+        Some(arr) => arr,
+        None => return result,
+    };
+
+    for value in array {
+        if value.is_null() {
+            result.push(None);
+            continue;
+        }
+
+        if let Some(s) = value.as_str() {
+            if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+                result.push(Some(dt.with_timezone(&Utc)));
+                continue;
+            }
+        }
+
+        result.push(None);
+    }
+
+    result
+}
+
+fn compute_gap_metadata(
+    segments_opt: Option<&[Vec<(f64, f64)>]>,
+    time_data_raw: Option<&serde_json::Value>,
+) -> (Option<Vec<GapInfo>>, Option<Vec<GapInfo>>) {
+    let mut segment_gaps: Vec<GapInfo> = Vec::new();
+    let mut pause_gaps: Vec<GapInfo> = Vec::new();
+
+    if let Some(segments) = segments_opt {
+        if segments.len() > 1 {
+            for (idx, window) in segments.windows(2).enumerate() {
+                let from = window[0].last().copied();
+                let to = window[1].first().copied();
+                if let (Some(from_pt), Some(to_pt)) = (from, to) {
+                    let distance_m = haversine_distance(from_pt, to_pt);
+                    segment_gaps.push(GapInfo {
+                        kind: "segment".to_string(),
+                        from: GapEndpoint {
+                            lat: from_pt.0,
+                            lon: from_pt.1,
+                            segment_index: idx,
+                            point_index: window[0].len().saturating_sub(1),
+                        },
+                        to: GapEndpoint {
+                            lat: to_pt.0,
+                            lon: to_pt.1,
+                            segment_index: idx + 1,
+                            point_index: 0,
+                        },
+                        distance_m,
+                        duration_seconds: None,
+                    });
+                }
+            }
+        }
+
+        if segments.len() == 1 {
+            if let Some(time_json) = time_data_raw {
+                let times = parse_time_points(time_json);
+                let coords = &segments[0];
+                if coords.len() == times.len() && coords.len() > 1 {
+                    for i in 1..coords.len() {
+                        if let (Some(t1), Some(t2)) = (times[i - 1], times[i]) {
+                            let delta = (t2 - t1).num_seconds();
+                            if delta >= PAUSE_GAP_THRESHOLD_SECS {
+                                let distance_m = haversine_distance(coords[i - 1], coords[i]);
+                                pause_gaps.push(GapInfo {
+                                    kind: "pause".to_string(),
+                                    from: GapEndpoint {
+                                        lat: coords[i - 1].0,
+                                        lon: coords[i - 1].1,
+                                        segment_index: 0,
+                                        point_index: i - 1,
+                                    },
+                                    to: GapEndpoint {
+                                        lat: coords[i].0,
+                                        lon: coords[i].1,
+                                        segment_index: 0,
+                                        point_index: i,
+                                    },
+                                    distance_m,
+                                    duration_seconds: Some(delta),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    (
+        if segment_gaps.is_empty() {
+            None
+        } else {
+            Some(segment_gaps)
+        },
+        if pause_gaps.is_empty() {
+            None
+        } else {
+            Some(pause_gaps)
+        },
+    )
 }
 
 pub async fn list_tracks_geojson(
@@ -693,7 +843,11 @@ pub async fn list_tracks_geojson(
                                 let simplify_start = Instant::now();
                                 let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
                                 metrics::observe_track_simplify(
-                                    if track_mode.is_detail() { "detail" } else { "overview" },
+                                    if track_mode.is_detail() {
+                                        "detail"
+                                    } else {
+                                        "overview"
+                                    },
                                     simplify_start.elapsed().as_secs_f64(),
                                 );
                                 if simplified_geom.len() < points.len() {
@@ -1026,11 +1180,59 @@ pub async fn update_track_slope(
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::TrackGeoJsonQuery;
+    use serde_json::json;
+
+    #[test]
+    fn compute_gap_metadata_detects_segment_boundaries() {
+        let segments = vec![
+            vec![(0.0, 0.0), (0.0, 0.001)],
+            vec![(0.0, 0.002), (0.0, 0.003)],
+        ];
+
+        let (segment_gaps, pause_gaps) = compute_gap_metadata(Some(&segments), None);
+
+        assert!(pause_gaps.is_none());
+        let gaps = segment_gaps.expect("Expected segment gaps");
+        assert_eq!(gaps.len(), 1);
+
+        let gap = &gaps[0];
+        assert_eq!(gap.kind, "segment");
+        assert_eq!(gap.from.segment_index, 0);
+        assert_eq!(gap.to.segment_index, 1);
+        assert_eq!(gap.from.point_index, 1);
+        assert_eq!(gap.to.point_index, 0);
+        assert!(gap.distance_m > 100.0); // ~111m per 0.001° at equator
+        assert!(gap.duration_seconds.is_none());
+    }
+
+    #[test]
+    fn compute_gap_metadata_detects_pause_on_single_segment() {
+        let segments = vec![vec![(0.0, 0.0), (0.0, 0.001), (0.0, 0.002)]];
+        let time_data = json!([
+            "2024-01-01T00:00:00Z",
+            "2024-01-01T00:01:00Z",
+            "2024-01-01T00:06:00Z"
+        ]);
+
+        let (segment_gaps, pause_gaps) = compute_gap_metadata(Some(&segments), Some(&time_data));
+
+        assert!(segment_gaps.is_none());
+        let gaps = pause_gaps.expect("Expected pause gaps");
+        assert_eq!(gaps.len(), 1);
+
+        let gap = &gaps[0];
+        assert_eq!(gap.kind, "pause");
+        assert_eq!(gap.from.segment_index, 0);
+        assert_eq!(gap.to.segment_index, 0);
+        assert_eq!(gap.from.point_index, 1);
+        assert_eq!(gap.to.point_index, 2);
+        assert_eq!(gap.duration_seconds, Some(300));
+        assert!(gap.distance_m > 100.0);
+    }
 
     // Helper functions for query building (these would be actual implementations)
     fn build_elevation_filter_conditions(params: &TrackGeoJsonQuery) -> String {

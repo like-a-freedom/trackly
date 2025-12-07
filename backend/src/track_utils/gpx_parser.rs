@@ -5,7 +5,9 @@ use crate::models::ParsedTrackData;
 use crate::track_utils::elevation::{
     calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data,
 };
-use crate::track_utils::geometry::haversine_distance;
+use crate::track_utils::geometry::{
+    geojson_from_segments, haversine_distance, length_km_for_segments, split_points_by_gap,
+};
 use crate::track_utils::time_utils::parse_gpx_time;
 use quick_xml::events::Event;
 use quick_xml::Reader;
@@ -115,32 +117,6 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         ele = None;
                         hr = None;
                         temp = None;
-                    }
-                    "wpt" => {
-                        in_wpt = true;
-                        lat = e.attributes().find_map(|a| {
-                            a.ok().and_then(|attr| {
-                                if attr.key.as_ref() == b"lat" {
-                                    std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
-                                } else {
-                                    None
-                                }
-                            })
-                        });
-                        lon = e.attributes().find_map(|a| {
-                            a.ok().and_then(|attr| {
-                                if attr.key.as_ref() == b"lon" {
-                                    std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
-                                } else {
-                                    None
-                                }
-                            })
-                        });
-                        ele = None;
-                        wpt_name = None;
-                        wpt_desc = None;
-                        wpt_type = None;
-                        wpt_sym = None;
                     }
                     "name" => {
                         if in_wpt {
@@ -384,6 +360,10 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         buf.clear();
     }
 
+    // Debug: log counts to help track down missing points in full parser
+    // Debugging helper: temporarily left to help track failing file parsing
+    // println!("GPX parse counts: trkpt={}, rtept={}", points.len(), rte_points.len());
+
     // If no track points, but route points exist, use them
     let (
         points,
@@ -419,20 +399,12 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         return Err("No points in GPX".to_string());
     }
 
-    fn points_to_geojson(points: &[(f64, f64)]) -> serde_json::Value {
-        serde_json::json!({
-            "type": "LineString",
-            "coordinates": points.iter().map(|(lat, lon)| vec![*lon, *lat]).collect::<Vec<_>>()
-        })
-    }
-
-    let geom_geojson = points_to_geojson(&points);
-
-    let mut length_km = 0.0;
-    for w in points.windows(2) {
-        length_km += haversine_distance(w[0], w[1]);
-    }
-    length_km /= 1000.0;
+    let max_gap_meters = std::env::var("TRACK_MAX_GAP_METERS")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok());
+    let segments = split_points_by_gap(&points, max_gap_meters);
+    let geom_geojson = geojson_from_segments(&segments);
+    let length_km = length_km_for_segments(&segments);
 
     let hash = {
         let mut hasher = Sha256::new();
@@ -706,4 +678,127 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         pace_data: final_pace_data,   // Add calculated pace data
         waypoints,                    // Add parsed waypoints
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_gpx;
+
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn with_env_var(key: &str, value: &str, f: impl FnOnce()) {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let previous = std::env::var(key).ok();
+        std::env::set_var(key, value);
+        f();
+        if let Some(prev) = previous {
+            std::env::set_var(key, prev);
+        } else {
+            std::env::remove_var(key);
+        }
+    }
+
+    #[test]
+    fn splits_large_gap_into_multiline() {
+        let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test">
+    <trk><name>Gap Test</name><trkseg>
+        <trkpt lat="0.0" lon="0.0"><ele>0.0</ele></trkpt>
+        <trkpt lat="0.0" lon="0.5"><ele>0.0</ele></trkpt>
+    </trkseg>
+    <trkseg>
+        <trkpt lat="20.0" lon="20.0"><ele>0.0</ele></trkpt>
+        <trkpt lat="20.0" lon="20.5"><ele>0.0</ele></trkpt>
+    </trkseg></trk>
+</gpx>"#;
+
+        let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
+        assert_eq!(parsed.geom_geojson["type"], "MultiLineString");
+
+        let segments = parsed
+            .geom_geojson
+            .get("coordinates")
+            .and_then(|c| c.as_array())
+            .expect("coordinates array");
+        assert_eq!(
+            segments.len(),
+            2,
+            "expected two segments after teleport split"
+        );
+
+        // Each leg ~55 km; total ~110 km, teleport ignored
+        assert!(parsed.length_km > 100.0 && parsed.length_km < 120.0);
+    }
+
+    #[test]
+    fn splits_teleport_with_default_threshold() {
+        // Ensure we rely on the hardcoded default (100km) for this test
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let original = std::env::var("TRACK_MAX_GAP_METERS").ok();
+        std::env::remove_var("TRACK_MAX_GAP_METERS");
+
+        let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test">
+    <trk><name>Teleport</name><trkseg>
+        <trkpt lat="0.0" lon="0.0"><ele>0.0</ele></trkpt>
+        <trkpt lat="0.0" lon="1.1"><ele>0.0</ele></trkpt>
+    </trkseg></trk>
+</gpx>"#;
+
+        // Gap ~122km (> default 100km) should split into two segments
+        let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
+        assert_eq!(parsed.geom_geojson["type"], "MultiLineString");
+        let segments = parsed
+            .geom_geojson
+            .get("coordinates")
+            .and_then(|c| c.as_array())
+            .expect("coordinates array");
+        assert_eq!(segments.len(), 2, "expected split into two segments");
+
+        // Restore prior env if it existed
+        if let Some(prev) = original {
+            std::env::set_var("TRACK_MAX_GAP_METERS", prev);
+        }
+    }
+
+    #[test]
+    fn respects_env_gap_threshold_to_keep_single_segment() {
+        let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test">
+    <trk><name>Teleport</name><trkseg>
+        <trkpt lat="0.0" lon="0.0"><ele>0.0</ele></trkpt>
+        <trkpt lat="0.0" lon="1.1"><ele>0.0</ele></trkpt>
+    </trkseg></trk>
+</gpx>"#;
+
+        with_env_var("TRACK_MAX_GAP_METERS", "200000", || {
+            let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
+            assert_eq!(parsed.geom_geojson["type"], "LineString");
+            let coords = parsed
+                .geom_geojson
+                .get("coordinates")
+                .and_then(|c| c.as_array())
+                .expect("coordinates array");
+            assert_eq!(coords.len(), 2, "should keep both points in one segment");
+        });
+    }
+
+    #[test]
+    fn uses_trkpt_time_as_recorded_at_when_metadata_missing() {
+        let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test">
+    <trk><name>Time Fallback</name><trkseg>
+        <trkpt lat="0.0" lon="0.0"><time>2024-01-01T00:00:00Z</time></trkpt>
+        <trkpt lat="0.0" lon="0.1"><time>2024-01-01T00:01:00Z</time></trkpt>
+    </trkseg></trk>
+</gpx>"#;
+
+        let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
+        let recorded = parsed
+            .recorded_at
+            .expect("recorded_at should be set from trkpt");
+        assert_eq!(recorded.to_rfc3339(), "2024-01-01T00:00:00+00:00");
+    }
+
+    // Integration/local-only test: removed because it depends on a local developer file
 }
