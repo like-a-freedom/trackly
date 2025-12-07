@@ -39,6 +39,23 @@ pub struct TrackListItem {
     pub url: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GapEndpoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub segment_index: usize,
+    pub point_index: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GapInfo {
+    pub kind: String, // "segment" or "pause"
+    pub from: GapEndpoint,
+    pub to: GapEndpoint,
+    pub distance_m: f64,
+    pub duration_seconds: Option<i64>,
+}
+
 #[derive(Serialize)]
 pub struct TrackDetail {
     pub id: Uuid,
@@ -46,6 +63,8 @@ pub struct TrackDetail {
     pub description: Option<String>,
     pub categories: Vec<String>,
     pub geom_geojson: serde_json::Value, // Store geometry as GeoJSON for API
+    pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
+    pub pause_gaps: Option<Vec<GapInfo>>, // Time-based gaps on continuous tracks
     pub length_km: f64,
     pub elevation_profile: Option<serde_json::Value>, // Keep as JSON for API flexibility
     pub hr_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
@@ -89,7 +108,9 @@ pub struct TrackSimplified {
     pub name: String,
     pub description: Option<String>,
     pub categories: Vec<String>,
-    pub geom_geojson: serde_json::Value, // Simplified geometry
+    pub geom_geojson: serde_json::Value,    // Simplified geometry
+    pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
+    pub pause_gaps: Option<Vec<GapInfo>>,   // Time-based gaps on continuous tracks
     pub length_km: f64,
     // Include data profiles for charts (but geometry will be simplified)
     pub elevation_profile: Option<serde_json::Value>,

@@ -1,4 +1,5 @@
 use crate::models::TrackDetail;
+use crate::track_utils::extract_segments_from_geojson;
 use chrono::Utc;
 
 /// Service for exporting tracks to GPX format
@@ -69,27 +70,10 @@ impl GpxExportService {
     }
 
     fn extract_coordinates(&self, geom_geojson: &serde_json::Value) -> Vec<(f64, f64)> {
-        if let Some(coords) = geom_geojson.get("coordinates") {
-            if let Some(coord_array) = coords.as_array() {
-                return coord_array
-                    .iter()
-                    .filter_map(|coord| {
-                        if let Some(pair) = coord.as_array() {
-                            if pair.len() >= 2 {
-                                let lon = pair[0].as_f64()?;
-                                let lat = pair[1].as_f64()?;
-                                Some((lat, lon))
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-            }
+        match extract_segments_from_geojson(geom_geojson) {
+            Ok(segments) => segments.into_iter().flatten().collect(),
+            Err(_) => Vec::new(),
         }
-        Vec::new()
     }
 
     fn generate_track_points(&self, coordinates: &[(f64, f64)], track: &TrackDetail) -> String {
@@ -192,6 +176,8 @@ mod tests {
                 "type": "LineString",
                 "coordinates": [[37.6176, 55.7558], [37.6177, 55.7559]]
             }),
+            segment_gaps: None,
+            pause_gaps: None,
             length_km: 0.1,
             elevation_profile: Some(json!([200.0, 210.0])),
             hr_data: Some(json!([120, 125])),

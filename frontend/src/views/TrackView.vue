@@ -32,6 +32,17 @@
         :color="getColorForId(track.id)"
         :zoom="zoom"
       />
+      <LPolyline
+        v-for="gap in pauseGapLines"
+        :key="gap.id"
+        :lat-lngs="gap.latlngs"
+        :color="gap.color"
+        :weight="4"
+        :opacity="0.7"
+        :dashArray="'8 8'"
+      >
+        <LTooltip sticky>{{ gap.label }}</LTooltip>
+      </LPolyline>
       <TrackDistanceMarkers
         v-if="track?.latlngs && track.latlngs.length >= 2"
         :latlngs="track.latlngs"
@@ -48,6 +59,35 @@
         :startTime="track.recorded_at"
         @marker-click="handleEndpointClick"
       />
+      <LCircleMarker
+        v-for="gap in segmentGapMarkers"
+        :key="gap.id"
+        :lat-lng="gap.position"
+        :radius="6"
+        color="#1f2937"
+        fillColor="#ffffff"
+        :fillOpacity="1"
+        :weight="2"
+      >
+        <LTooltip :permanent="false">
+          {{ gap.label }}<br />
+          {{ gap.detail }}
+        </LTooltip>
+      </LCircleMarker>
+      <LCircleMarker
+        v-for="boundary in segmentBoundaryMarkers"
+        :key="boundary.id"
+        :lat-lng="boundary.position"
+        :radius="5"
+        :color="boundary.color"
+        fillColor="#ffffff"
+        :fillOpacity="1"
+        :weight="2"
+      >
+        <LTooltip :permanent="false">
+          {{ boundary.label }}
+        </LTooltip>
+      </LCircleMarker>
       
       <Toast
         :message="(toast.value && toast.value.message) || ''"
@@ -80,6 +120,7 @@
 </template>
 
 <script setup>
+import { LCircleMarker, LPolyline, LTooltip } from '@vue-leaflet/vue-leaflet';
 import { ref, onMounted, computed, provide, watch, onUnmounted, onActivated, onDeactivated, nextTick, shallowRef } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import TrackMap from '../components/TrackMap.vue';
@@ -96,6 +137,7 @@ import { useSearchState } from '../composables/useSearchState';
 import { getSessionId } from '../utils/session';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 import { isLoopTrack } from '../utils/trackGeometry.js';
+import { buildBoundaryMarkers, buildPauseGapLines, buildSegmentColors, buildSegmentGapMarkers } from '../utils/gapVisualization';
 import '../styles/track-overlays.css';
 
 // Define component name for keep-alive
@@ -107,19 +149,31 @@ defineOptions({
 function getColorForId(id) {
   if (!id) return '#3498db';
   
-  // Convert id to a hash
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
     hash = id.charCodeAt(i) + ((hash << 5) - hash);
   }
   
-  // Generate a color from the hash
   const colors = [
     '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
     '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#f1c40f'
   ];
   
   return colors[Math.abs(hash) % colors.length];
+}
+
+function extractSegments(geomGeojson) {
+  if (!geomGeojson || !geomGeojson.coordinates) return [];
+
+  if (geomGeojson.type === 'MultiLineString') {
+    return geomGeojson.coordinates.map(line => line.map(([lng, lat]) => [lat, lng]));
+  }
+
+  if (geomGeojson.type === 'LineString') {
+    return [geomGeojson.coordinates.map(([lng, lat]) => [lat, lng])];
+  }
+
+  return [];
 }
 
 const router = useRouter();
@@ -182,17 +236,12 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
     
     // Process track data to create latlngs (same logic as before)
     if (track.value) {
-      // Extract latlngs from geom_geojson if available
-      if (track.value.geom_geojson && track.value.geom_geojson.coordinates) {
-        if (track.value.geom_geojson.type === 'LineString') {
-          track.value.latlngs = track.value.geom_geojson.coordinates.map(([lng, lat]) => [lat, lng]);
-        } else if (track.value.geom_geojson.type === 'MultiLineString') {
-          // Take the first line if it's a MultiLineString
-          track.value.latlngs = track.value.geom_geojson.coordinates[0].map(([lng, lat]) => [lat, lng]);
-        }
-      }
+      const segments = extractSegments(track.value.geom_geojson);
+      track.value.segments = segments;
+      track.value.latlngs = segments.length > 0 ? segments[0] : [];
+
       // Fallback: if track has path field, use it
-      else if (track.value.path && !track.value.latlngs) {
+      if ((!track.value.latlngs || track.value.latlngs.length === 0) && track.value.path) {
         track.value.latlngs = track.value.path;
       }
       
@@ -225,14 +274,15 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
 }, 300, { leading: false, trailing: true });
 
 // Computed polylines for TrackMap (converted from track data)
+const segmentColors = computed(() => buildSegmentColors(track.value?.segments?.length || (track.value?.latlngs ? 1 : 0)));
+
 const polylines = computed(() => {
-  if (!track.value || !track.value.latlngs) {
-    return [];
-  }
-  
-  const result = [{
-    latlngs: track.value.latlngs,
-    color: getColorForId(track.value.id), // Generate color based on track ID
+  if (!track.value) return [];
+
+  const segments = track.value.segments || (track.value.latlngs ? [track.value.latlngs] : []);
+  return segments.map((segment, index) => ({
+    latlngs: segment,
+    color: segmentColors.value[index] || getColorForId(track.value.id),
     properties: {
       id: track.value.id,
       name: track.value.name,
@@ -247,9 +297,15 @@ const polylines = computed(() => {
       created_at: track.value.created_at
     },
     showTooltip: false
-  }];
-  
-  return result;
+  }));
+});
+
+const segmentGapMarkers = computed(() => buildSegmentGapMarkers(track.value?.segment_gaps));
+
+const pauseGapLines = computed(() => buildPauseGapLines(track.value?.pause_gaps));
+
+const segmentBoundaryMarkers = computed(() => {
+  return buildBoundaryMarkers(track.value?.segments, segmentColors.value);
 });
 
 // Computed properties
@@ -274,15 +330,13 @@ const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">Op
 
 // Computed center based on track - avoids showing default St. Petersburg coordinates
 const center = computed(() => {
-  const latlngs = track.value?.latlngs;
-  if (!latlngs || latlngs.length === 0) {
-    return [0, 0]; // Will be overridden by fitBounds anyway
-  }
-  
+  const segments = track.value?.segments || (track.value?.latlngs ? [track.value.latlngs] : []);
+  const latlngs = segments.flat();
+  if (!latlngs || latlngs.length === 0) return [0, 0];
+
   const trackBoundsData = calculateBounds(latlngs);
   if (!trackBoundsData) return [0, 0];
-  
-  // Return center of track bounds
+
   return [
     (trackBoundsData.north + trackBoundsData.south) / 2,
     (trackBoundsData.east + trackBoundsData.west) / 2
@@ -291,16 +345,13 @@ const center = computed(() => {
 
 // Computed bounds for track - padding is handled by TrackMap with getDetailPanelPadding()
 const trackBounds = computed(() => {
-  // Only depend on track geometry data, not name/description to avoid unnecessary map repositioning
-  const latlngs = track.value?.latlngs;
-  if (!latlngs || latlngs.length === 0) {
-    return null;
-  }
-  
+  const segments = track.value?.segments || (track.value?.latlngs ? [track.value.latlngs] : []);
+  const latlngs = segments.flat();
+  if (!latlngs || latlngs.length === 0) return null;
+
   const bounds = calculateBounds(latlngs);
   if (!bounds) return null;
-  
-  // Return raw bounds - TrackMap will add padding for the detail panel
+
   return [
     [bounds.south, bounds.west],
     [bounds.north, bounds.east]
