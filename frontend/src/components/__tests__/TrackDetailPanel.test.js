@@ -282,6 +282,87 @@ describe('TrackDetailPanel', () => {
       // Chart section should not exist when no chart data available
       expect(wrapper.find('.chart-section').exists()).toBe(false);
     });
+
+    it('does not auto-start polling on mount', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null,
+        elevation_loss: null,
+        elevation_profile: null
+      };
+
+      global.fetch = vi.fn();
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation }
+      });
+
+      await wrapper.vm.$nextTick();
+
+      // Polling should not start automatically
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+      expect(wrapper.vm.enrichmentPollingInterval).toBe(null);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('stops polling in response to stop-elevation-polling event', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      wrapper = mount(TrackDetailPanel, { props: { track: trackNoElevation } });
+      await wrapper.vm.$nextTick();
+
+      // Manually start polling
+      wrapper.vm.startElevationPolling(trackNoElevation.id);
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(true);
+
+      // Dispatch stop event from 'parent'
+      window.dispatchEvent(new CustomEvent('stop-elevation-polling'));
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+      expect(wrapper.vm.enrichmentPollingInterval).toBe(null);
+    });
+
+    it('stops polling when track changes', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        id: 1,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null
+      };
+
+      const track2 = {
+        ...mockTrackMinimal,
+        id: 2,
+        length_km: 6.0,
+        elevation_enriched: true,
+        elevation_gain: 100
+      };
+
+      wrapper = mount(TrackDetailPanel, { props: { track: trackNoElevation } });
+      await wrapper.vm.$nextTick();
+
+      // Manually start polling
+      wrapper.vm.startElevationPolling(trackNoElevation.id);
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.isPollingForElevation).toBe(true);
+
+      // Change track prop to stop polling automatically
+      await wrapper.setProps({ track: track2 });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+      expect(wrapper.vm.enrichmentPollingInterval).toBe(null);
+    });
   });
 
   describe('Heart Rate Data Display', () => {
@@ -1553,7 +1634,7 @@ describe('TrackDetailPanel', () => {
       vi.useRealTimers();
     });
 
-    it('should start elevation polling for tracks without elevation data', async () => {
+    it('should NOT auto-start elevation polling for tracks without elevation data (manual start only)', async () => {
       const trackNoElevation = {
         ...mockTrackMinimal,
         length_km: 5.0,
@@ -1572,6 +1653,12 @@ describe('TrackDetailPanel', () => {
 
       await wrapper.vm.$nextTick();
 
+      // Polling should NOT auto-start; manual start is required
+      expect(wrapper.vm.isPollingForElevation).toBe(false);
+
+      // Manually start and verify
+      wrapper.vm.startElevationPolling(trackNoElevation.id);
+      await wrapper.vm.$nextTick();
       expect(wrapper.vm.isPollingForElevation).toBe(true);
     });
 
@@ -1695,7 +1782,7 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       // Manually start polling and test error handling
-      wrapper.vm.isPollingForElevation = true;
+      wrapper.vm.startElevationPolling(trackNoElevation.id);
 
       // Call polling method directly and handle error
       try {
@@ -1723,6 +1810,10 @@ describe('TrackDetailPanel', () => {
         props: { track: trackNoElevation, isVisible: true }
       });
 
+      await wrapper.vm.$nextTick();
+
+      // Manual start polling required
+      wrapper.vm.startElevationPolling(trackNoElevation.id);
       await wrapper.vm.$nextTick();
       expect(wrapper.vm.isPollingForElevation).toBe(true);
 
@@ -1761,7 +1852,7 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       // Manually start polling and test the update
-      wrapper.vm.isPollingForElevation = true;
+      wrapper.vm.startElevationPolling(trackNoElevation.id);
 
       // Call polling method directly to avoid timer issues
       await wrapper.vm.pollForElevationData();
