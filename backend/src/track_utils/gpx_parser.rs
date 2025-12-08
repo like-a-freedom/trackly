@@ -94,6 +94,32 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                         hr = None;
                         temp = None;
                     }
+                    "wpt" => {
+                        in_wpt = true;
+                        lat = e.attributes().find_map(|a| {
+                            a.ok().and_then(|attr| {
+                                if attr.key.as_ref() == b"lat" {
+                                    std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+                        lon = e.attributes().find_map(|a| {
+                            a.ok().and_then(|attr| {
+                                if attr.key.as_ref() == b"lon" {
+                                    std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
+                                } else {
+                                    None
+                                }
+                            })
+                        });
+                        ele = None;
+                        wpt_name = None;
+                        wpt_desc = None;
+                        wpt_type = None;
+                        wpt_sym = None;
+                    }
                     "rtept" => {
                         in_rtept = true;
                         lat = e.attributes().find_map(|a| {
@@ -728,6 +754,30 @@ mod tests {
 
         // Each leg ~55 km; total ~110 km, teleport ignored
         assert!(parsed.length_km > 100.0 && parsed.length_km < 120.0);
+    }
+
+    #[test]
+    fn parses_waypoints_into_parsed_track() {
+        let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test">
+    <wpt lat="1.0" lon="2.0">
+        <name>Test POI</name>
+        <ele>10</ele>
+    </wpt>
+    <trk><name>With Waypoints</name><trkseg>
+        <trkpt lat="0.0" lon="0.0"><ele>0.0</ele></trkpt>
+        <trkpt lat="0.0" lon="0.1"><ele>0.0</ele></trkpt>
+    </trkseg></trk>
+</gpx>"#;
+
+        let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
+        assert_eq!(parsed.waypoints.len(), 1, "expected one waypoint");
+
+        let poi = &parsed.waypoints[0];
+        assert_eq!(poi.name, "Test POI");
+        assert_eq!(poi.lat, 1.0);
+        assert_eq!(poi.lon, 2.0);
+        assert_eq!(poi.elevation, Some(10.0));
     }
 
     #[test]
