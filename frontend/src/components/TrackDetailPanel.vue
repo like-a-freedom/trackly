@@ -485,7 +485,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, nextTick, watch, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import ElevationChart from './ElevationChart.vue';
 import { 
@@ -539,32 +539,61 @@ const editedName = ref('');
 const savingName = ref(false);
 const nameError = ref('');
 
+function needsElevationPolling(trackData) {
+  if (!trackData) return false;
+
+  // Only poll if track is explicitly marked as NOT enriched
+  // This prevents polling for tracks that just don't have elevation data
+  if (!trackData.elevation_enriched) {
+    // Check if there's ANY elevation data at all
+    const hasAnyElevationData = 
+      trackData.elevation_profile || 
+      (trackData.elevation_gain && trackData.elevation_gain > 0) || 
+      (trackData.elevation_loss && trackData.elevation_loss > 0);
+    
+    // Only poll if:
+    // 1. Track is long enough to warrant elevation data
+    // 2. Track doesn't already have elevation data
+    // 3. Track is explicitly NOT enriched (meaning we tried to get data and failed)
+    if (trackData.length_km > 0 && !hasAnyElevationData) {
+      // Don't poll for tracks that were added before elevation enrichment was implemented
+      // Only poll if the track shows signs of being enrichment-ready
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // Reset panel state on mount to fix re-opening issues
 onMounted(() => {
   isClosing.value = false;
   isCollapsed.value = false;
   
-  // Auto-start polling for tracks without elevation data on mount
-  if (props.track) {
-    const hasNoElevationData = !props.track.elevation_enriched && 
-                              !props.track.elevation_gain && 
-                              !props.track.elevation_loss &&
-                              !props.track.elevation_profile;
-    
-    if (hasNoElevationData && props.track.length_km > 0 && !isPollingForElevation.value) {
-      console.info(`[TrackDetailPanel] Track ${props.track.id} has no elevation data on mount, starting auto-polling`);
-      startElevationPolling(props.track.id);
-    }
-  }
+  // Do not auto-start polling on mount by default to avoid unnecessary repeated requests.
+  // Polling is started manually via the 'Force update elevation' control or when the backend explicitly indicates in-progress state.
   // Setup tooltip handlers within this panel
   attachIconTooltipHandlers(flyoutContent.value);
 });
+
+// NOTE: We do not auto-start polling on component activation.
 
 // Cleanup on unmount
 onUnmounted(() => {
   stopElevationPolling();
   // Detach tooltip handlers
   detachIconTooltipHandlers(flyoutContent.value);
+  // Remove stop polling listener
+  window.removeEventListener('stop-elevation-polling', stopElevationPolling);
+});
+
+onDeactivated(() => {
+  stopElevationPolling();
+});
+
+// Listen for signal from parent (TrackView) to stop polling when deactivating
+onMounted(() => {
+  window.addEventListener('stop-elevation-polling', stopElevationPolling);
 });
 
 // Reset panel state when track changes
@@ -598,19 +627,44 @@ const linkCopied = ref(false);
 // --- Elevation enrichment state ---
 const enrichingElevation = ref(false);
 
-// --- Elevation enrichment polling ---
+// --- Elevation enrichment polling (with backoff and attempt limits) ---
 const enrichmentPollingInterval = ref(null);
 const isPollingForElevation = ref(false);
+const currentPollingTrackId = ref(null); // Track which track ID we're polling
+const pollingAttempts = ref(0);
+const POLLING_MAX_ATTEMPTS = 15; // Stop after too many attempts
+const POLLING_BASE_INTERVAL_MS = 3000; // initial interval
+const POLLING_MAX_INTERVAL_MS = 30000; // max backoff
 
 function startElevationPolling(trackId) {
   if (isPollingForElevation.value) return;
   
   isPollingForElevation.value = true;
+  currentPollingTrackId.value = trackId; // Remember which track we're polling for
+  pollingAttempts.value = 0;
   console.info(`[TrackDetailPanel] Starting elevation polling for track ${trackId}`);
-  
-  enrichmentPollingInterval.value = setInterval(async () => {
+
+  // Use recursive timeout with exponential backoff instead of setInterval
+  const scheduleNext = async () => {
+    if (!isPollingForElevation.value) return;
+    pollingAttempts.value += 1;
+
+    // If we've reached max attempts, stop polling
+    if (pollingAttempts.value > POLLING_MAX_ATTEMPTS) {
+      console.info(`[TrackDetailPanel] Reached max polling attempts (${POLLING_MAX_ATTEMPTS}) for ${trackId}, stopping`);
+      stopElevationPolling();
+      return;
+    }
+
     await pollForElevationData(trackId);
-  }, 3000); // Poll every 3 seconds
+
+    // Compute interval with exponential backoff
+    const interval = Math.min(POLLING_BASE_INTERVAL_MS * Math.pow(2, pollingAttempts.value - 1), POLLING_MAX_INTERVAL_MS);
+    enrichmentPollingInterval.value = setTimeout(scheduleNext, interval);
+  };
+
+  // Kick off the first call after a short delay to allow UI to settle
+  enrichmentPollingInterval.value = setTimeout(scheduleNext, POLLING_BASE_INTERVAL_MS);
 }
 
 // Tooltip placement helpers
@@ -706,6 +760,20 @@ function detachIconTooltipHandlers(container) {
 // Separate polling function for easier testing
 async function pollForElevationData(trackId) {
   try {
+    // Check if this polling is still for the current track we're viewing
+    // If track changed or component deactivated, stop polling
+    if (currentPollingTrackId.value !== trackId) {
+      console.log(`[TrackDetailPanel] Stopping poll for ${trackId} - current polling is for ${currentPollingTrackId.value}`);
+      stopElevationPolling();
+      return;
+    }
+
+    // Don't fetch if we're not actually polling (safety check)
+    if (!isPollingForElevation.value) {
+      console.log(`[TrackDetailPanel] Polling flag is false, stopping`);
+      return;
+    }
+
     const response = await fetch(`/tracks/${trackId || props.track.id}`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -788,10 +856,12 @@ async function pollForElevationData(trackId) {
 function stopElevationPolling() {
   if (enrichmentPollingInterval.value) {
     console.info(`[TrackDetailPanel] Stopping elevation polling`);
-    clearInterval(enrichmentPollingInterval.value);
+    clearTimeout(enrichmentPollingInterval.value);
     enrichmentPollingInterval.value = null;
   }
+  currentPollingTrackId.value = null; // Clear the track ID we were polling for
   isPollingForElevation.value = false;
+  pollingAttempts.value = 0;
 }
 
 // Computed property to safely parse time data
@@ -1054,21 +1124,12 @@ const track = ref(props.track);
 watch(() => props.track, (newTrack, oldTrack) => {
   track.value = newTrack;
   
-  // Auto-start polling for tracks without elevation data
+  // Ensure any existing polling is stopped when track changes
   if (newTrack && newTrack.id !== oldTrack?.id) {
-    // Stop any existing polling first
     stopElevationPolling();
-    
-    // Check if track has no elevation data but should be enriched automatically
-    const hasNoElevationData = !newTrack.elevation_enriched && 
-                              !newTrack.elevation_gain && 
-                              !newTrack.elevation_loss &&
-                              !newTrack.elevation_profile;
-    
-    if (hasNoElevationData && newTrack.length_km > 0) {
-      console.info(`[TrackDetailPanel] Track ${newTrack.id} has no elevation data, starting auto-polling`);
-      startElevationPolling(newTrack.id);
-    }
+    console.info(`[TrackDetailPanel] Track changed to ${newTrack.id} - auto-polling disabled (manual start only)`);
+    // We intentionally do NOT auto-start polling. Polling should be started
+    // only via explicit user action or external signals to avoid excessive background requests.
   }
 });
 

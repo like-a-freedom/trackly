@@ -196,6 +196,7 @@ const loading = ref(true);
 const track = shallowRef(null); // Use shallowRef for better performance
 const sessionId = getSessionId();
 const lastFetchZoom = ref(null); // Track last zoom used for fetching to avoid duplicates
+const lastFetchAt = ref(null); // Timestamp of last successful/started fetch for throttling
 const isInitialLoad = ref(true); // Track if this is the first load to prevent redundant fetches
 const currentTrackId = ref(null); // Track current processing track ID to prevent race conditions
 const mapStabilizationTimer = ref(null); // Timer to wait for map stabilization
@@ -386,7 +387,7 @@ const trackBounds = computed(() => {
 const { toast, showToast } = useToast();
 provide('toast', toast);
 
-async function fetchTrack(zoomLevel = null, forceTrackId = null) {
+async function fetchTrack(zoomLevel = null, forceTrackId = null, options = { force: false }) {
   // Use explicit track ID or current route track ID
   const id = forceTrackId || trackId.value;
   if (!id) {
@@ -405,6 +406,17 @@ async function fetchTrack(zoomLevel = null, forceTrackId = null) {
   // Use debounced function for performance
   const currentZoom = zoomLevel || zoom.value || 10;
   const roundedZoom = Math.round(currentZoom);
+
+  // Throttle repeated fetches for same track/zoom (unless forced)
+  const now = Date.now();
+  if (!options.force && !isInitialLoad.value && track.value && currentTrackId.value === id) {
+    const sameZoom = lastFetchZoom.value === roundedZoom;
+    const fetchedRecently = lastFetchAt.value && (now - lastFetchAt.value) < 30000; // 30s window
+    if (sameZoom && fetchedRecently) {
+      console.log(`Skip refetch for track ${id} at zoom ${roundedZoom} (last fetch ${now - lastFetchAt.value}ms ago)`);
+      return;
+    }
+  }
   
   // Skip if same zoom was already fetched for current track (prevent duplicates)
   if (!isInitialLoad.value && lastFetchZoom.value === roundedZoom && currentTrackId.value === id) {
@@ -415,6 +427,7 @@ async function fetchTrack(zoomLevel = null, forceTrackId = null) {
   console.log(`Fetching track ${id} with zoom ${roundedZoom} for performance optimization`);
   currentTrackId.value = id; // Mark this track as being processed
   lastFetchZoom.value = roundedZoom;
+  lastFetchAt.value = now;
   
   await debouncedFetchTrack(id, roundedZoom);
   
@@ -685,6 +698,10 @@ onDeactivated(() => {
     clearTimeout(mapStabilizationTimer.value);
     mapStabilizationTimer.value = null;
   }
+  
+  // Stop elevation polling in TrackDetailPanel by marking it as not for current track
+  // This prevents continued polling when navigating away from TrackView
+  window.dispatchEvent(new CustomEvent('stop-elevation-polling'));
 });
 
 // Handle route changes for keep-alive
