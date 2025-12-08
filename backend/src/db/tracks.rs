@@ -5,7 +5,7 @@ use crate::track_utils::{
     haversine_distance, length_km_for_segments, simplify_track_for_zoom, split_points_by_gap,
 };
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::sync::Arc;
 use std::time::Instant;
 use uuid::Uuid;
@@ -65,6 +65,45 @@ pub struct InsertTrackParams<'a> {
     pub pace_data_json: Option<serde_json::Value>,
 }
 
+fn sanitize_description(text: Option<&str>) -> Option<String> {
+    text.map(|raw| ammonia::clean(raw).to_string())
+}
+
+fn build_list_tracks_query(params: &crate::models::TrackListQuery) -> QueryBuilder<'_, Postgres> {
+    let mut builder = QueryBuilder::<Postgres>::new("SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks WHERE is_public = TRUE");
+
+    if let Some(cats) = params.categories.as_ref().filter(|c| !c.is_empty()) {
+        builder.push(" AND categories && ");
+        builder.push_bind(cats);
+    }
+    if let Some(min) = params.min_length {
+        builder.push(" AND length_km >= ");
+        builder.push_bind(min);
+    }
+    if let Some(max) = params.max_length {
+        builder.push(" AND length_km <= ");
+        builder.push_bind(max);
+    }
+    if let Some(min) = params.elevation_gain_min {
+        builder.push(" AND elevation_gain >= ");
+        builder.push_bind(min);
+    }
+    if let Some(max) = params.elevation_gain_max {
+        builder.push(" AND elevation_gain <= ");
+        builder.push_bind(max);
+    }
+    if let Some(min) = params.slope_min {
+        builder.push(" AND slope_min >= ");
+        builder.push_bind(min);
+    }
+    if let Some(max) = params.slope_max {
+        builder.push(" AND slope_max <= ");
+        builder.push_bind(max);
+    }
+
+    builder
+}
+
 pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Error> {
     let start = Instant::now();
     let InsertTrackParams {
@@ -108,6 +147,7 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         speed_data_json,
         pace_data_json,
     } = params;
+    let sanitized_description = sanitize_description(description.as_deref());
     sqlx::query(
         r#"
         INSERT INTO tracks (
@@ -124,7 +164,7 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     )
     .bind(id)
     .bind(name)
-    .bind(description)
+    .bind(sanitized_description)
     .bind(categories)
     .bind(auto_classifications)
     .bind(geom_geojson)
@@ -171,32 +211,10 @@ pub async fn list_tracks(
     pool: &Arc<PgPool>,
     params: &crate::models::TrackListQuery,
 ) -> Result<Vec<TrackListItem>, sqlx::Error> {
-    let mut query =
-        "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks WHERE is_public = TRUE".to_string();
-    let mut args: Vec<String> = Vec::new();
-    if let Some(ref cats) = params.categories {
-        query.push_str(" AND categories && $1");
-        args.push(format!("{{{}}}", cats.join(",")));
-    }
-    if let Some(min) = params.min_length {
-        query.push_str(&format!(" AND length_km >= {min}"));
-    }
-    if let Some(max) = params.max_length {
-        query.push_str(&format!(" AND length_km <= {max}"));
-    }
-    if let Some(min) = params.elevation_gain_min {
-        query.push_str(&format!(" AND elevation_gain >= {min}"));
-    }
-    if let Some(max) = params.elevation_gain_max {
-        query.push_str(&format!(" AND elevation_gain <= {max}"));
-    }
-    if let Some(min) = params.slope_min {
-        query.push_str(&format!(" AND slope_min >= {min}"));
-    }
-    if let Some(max) = params.slope_max {
-        query.push_str(&format!(" AND slope_max <= {max}"));
-    }
-    let rows = sqlx::query(&query).fetch_all(&**pool).await?;
+    let rows = build_list_tracks_query(params)
+        .build()
+        .fetch_all(&**pool)
+        .await?;
     let mut result = Vec::new();
     for row in rows {
         let id: Uuid = row
@@ -669,109 +687,79 @@ pub async fn list_tracks_geojson(
     // Build base SQL with zoom-based simplification using PostGIS ST_Simplify
     let use_postgis_simplification = track_mode.is_overview() && zoom_level <= 14.0;
 
-    let base_sql = if use_postgis_simplification {
-        // Use PostGIS ST_Simplify for overview mode with reasonable zoom levels
-        String::from(
-            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, slope_min, slope_max,
-             CASE 
-               WHEN ST_NPoints(geom) > 1000 THEN 
-                 ST_AsGeoJSON(ST_Simplify(geom, tolerance_for_zoom_degrees($5)))::jsonb
-               ELSE ST_AsGeoJSON(geom)::jsonb 
-             END as geom_json,
-             ST_NPoints(geom) as original_points",
-        )
+    let mut builder = QueryBuilder::<Postgres>::new("SELECT id, name, categories, length_km, elevation_gain, elevation_loss, slope_min, slope_max,");
+
+    if use_postgis_simplification {
+        builder.push(
+            " CASE WHEN ST_NPoints(geom) > 1000 THEN ST_AsGeoJSON(ST_Simplify(geom, tolerance_for_zoom_degrees(",
+        );
+        builder.push_bind(zoom_level);
+        builder.push(
+            ")))::jsonb ELSE ST_AsGeoJSON(geom)::jsonb END as geom_json, ST_NPoints(geom) as original_points",
+        );
     } else {
-        // Return full geometry for Rust-side processing
-        String::from(
-            "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, slope_min, slope_max, ST_AsGeoJSON(geom)::jsonb as geom_json,
-             ST_NPoints(geom) as original_points"
-        )
-    };
+        builder
+            .push(" ST_AsGeoJSON(geom)::jsonb as geom_json, ST_NPoints(geom) as original_points");
+    }
 
-    // Add properties based on mode
-    let properties_sql = if track_mode.is_overview() {
-        // Minimal properties for overview mode
-        ""
-    } else {
-        // Full properties for detail mode
-        ", avg_hr, avg_speed, duration_seconds, recorded_at"
-    };
+    if track_mode.is_detail() {
+        builder.push(", avg_hr, avg_speed, duration_seconds, recorded_at");
+    }
 
-    let full_sql = format!("{base_sql}{properties_sql} FROM tracks WHERE is_public = TRUE");
+    builder.push(" FROM tracks WHERE is_public = TRUE");
 
-    // Build additional filter conditions
-    let mut filter_conditions = Vec::new();
-
-    // Categories filtering with PostgreSQL array overlap operator
     if let Some(categories) = &filter_params.categories {
         if !categories.is_empty() {
-            // Use && operator to check if arrays have any common elements
-            let categories_str = categories
-                .iter()
-                .map(|c| format!("'{}'", c.replace("'", "''"))) // Escape single quotes
-                .collect::<Vec<_>>()
-                .join(",");
-            filter_conditions.push(format!("categories && ARRAY[{}]", categories_str));
+            builder.push(" AND categories && ");
+            builder.push_bind(categories);
         }
     }
 
     if let Some(min) = filter_params.min_length {
-        filter_conditions.push(format!("length_km >= {}", min));
+        builder.push(" AND length_km >= ");
+        builder.push_bind(min);
     }
 
     if let Some(max) = filter_params.max_length {
-        filter_conditions.push(format!("length_km <= {}", max));
+        builder.push(" AND length_km <= ");
+        builder.push_bind(max);
     }
 
     if let Some(min) = filter_params.elevation_gain_min {
-        filter_conditions.push(format!("elevation_gain >= {}", min));
+        builder.push(" AND elevation_gain >= ");
+        builder.push_bind(min);
     }
 
     if let Some(max) = filter_params.elevation_gain_max {
-        filter_conditions.push(format!("elevation_gain <= {}", max));
+        builder.push(" AND elevation_gain <= ");
+        builder.push_bind(max);
     }
 
     if let Some(min) = filter_params.slope_min {
-        filter_conditions.push(format!("slope_min >= {}", min));
+        builder.push(" AND slope_min >= ");
+        builder.push_bind(min);
     }
 
     if let Some(max) = filter_params.slope_max {
-        filter_conditions.push(format!("slope_max <= {}", max));
+        builder.push(" AND slope_max <= ");
+        builder.push_bind(max);
     }
 
-    let sql_with_filters = if filter_conditions.is_empty() {
-        full_sql.clone()
-    } else {
-        format!("{} AND {}", full_sql, filter_conditions.join(" AND "))
-    };
-
-    let rows = if let Some(bbox_str) = bbox {
+    if let Some(bbox_str) = bbox {
         let parts: Vec<&str> = bbox_str.split(',').collect();
         if parts.len() == 4 {
             let coords: Result<Vec<f64>, _> = parts.iter().map(|s| s.parse::<f64>()).collect();
             match coords {
                 Ok(c) => {
-                    let sql = format!(
-                        "{sql_with_filters} AND ST_Intersects(geom, ST_MakeEnvelope($1, $2, $3, $4, 4326))"
-                    );
-                    if use_postgis_simplification {
-                        sqlx::query(&sql)
-                            .bind(c[0])
-                            .bind(c[1])
-                            .bind(c[2])
-                            .bind(c[3])
-                            .bind(zoom_level)
-                            .fetch_all(&**pool)
-                            .await?
-                    } else {
-                        sqlx::query(&sql)
-                            .bind(c[0])
-                            .bind(c[1])
-                            .bind(c[2])
-                            .bind(c[3])
-                            .fetch_all(&**pool)
-                            .await?
-                    }
+                    builder.push(" AND ST_Intersects(geom, ST_MakeEnvelope(");
+                    builder.push_bind(c[0]);
+                    builder.push(", ");
+                    builder.push_bind(c[1]);
+                    builder.push(", ");
+                    builder.push_bind(c[2]);
+                    builder.push(", ");
+                    builder.push_bind(c[3]);
+                    builder.push(", 4326))");
                 }
                 Err(_) => {
                     eprintln!("Invalid bbox format: {bbox_str}");
@@ -788,14 +776,9 @@ pub async fn list_tracks_geojson(
                 features: vec![],
             });
         }
-    } else if use_postgis_simplification {
-        sqlx::query(&sql_with_filters)
-            .bind(zoom_level)
-            .fetch_all(&**pool)
-            .await?
-    } else {
-        sqlx::query(&sql_with_filters).fetch_all(&**pool).await?
-    };
+    }
+
+    let rows = builder.build().fetch_all(&**pool).await?;
 
     let features: Vec<TrackGeoJsonFeature> = rows
         .into_iter()
@@ -932,6 +915,7 @@ pub async fn update_track_description(
     new_description: &str,
 ) -> Result<(), sqlx::Error> {
     let start = Instant::now();
+    let sanitized = sanitize_description(Some(new_description));
     sqlx::query(
         r#"
         UPDATE tracks
@@ -940,7 +924,7 @@ pub async fn update_track_description(
         WHERE id = $2
         "#,
     )
-    .bind(new_description)
+    .bind(sanitized)
     .bind(track_id)
     .execute(&**pool)
     .await?;
@@ -1185,6 +1169,35 @@ mod tests {
     use super::*;
     use crate::models::TrackGeoJsonQuery;
     use serde_json::json;
+
+    #[test]
+    fn list_tracks_query_uses_binds_for_filters() {
+        let params = crate::models::TrackListQuery {
+            categories: Some(vec!["run".to_string(), "mtb".to_string()]),
+            min_length: Some(10.5),
+            max_length: Some(42.0),
+            elevation_gain_min: Some(100.0),
+            elevation_gain_max: Some(900.0),
+            slope_min: Some(1.5),
+            slope_max: Some(12.0),
+        };
+
+        let builder = build_list_tracks_query(&params);
+        let sql = builder.sql().to_string();
+
+        // Expect placeholders rather than inlined user input
+        assert!(sql.contains("$1"));
+        assert!(sql.contains("$2"));
+        assert!(!sql.contains("run"));
+        assert!(!sql.contains("10.5"));
+    }
+
+    #[test]
+    fn sanitize_description_strips_script_tags() {
+        let input = Some("<script>alert('x')</script><b>ok</b>");
+        let cleaned = sanitize_description(input);
+        assert_eq!(cleaned.as_deref(), Some("<b>ok</b>"));
+    }
 
     #[test]
     fn compute_gap_metadata_detects_segment_boundaries() {
