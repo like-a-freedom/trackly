@@ -1173,9 +1173,24 @@ watch(() => [
   }
 }, { deep: false });
 
-// Processed description with clickable links
+const escapeHtml = (text) => {
+  if (!text) return '';
+  return text.replace(/[&<>"]/g, (char) => {
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;'
+    };
+    return map[char] || char;
+  });
+};
+
+// Processed description with clickable links (escaped first for safety)
 const processedDescription = computed(() => {
-  return track.value?.description ? convertUrlsToLinks(track.value.description) : '';
+  if (!track.value?.description) return '';
+  const escaped = escapeHtml(track.value.description);
+  return convertUrlsToLinks(escaped);
 });
 
 // Distance formatting - memoized
