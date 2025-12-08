@@ -3,7 +3,7 @@ services:
   db:
     platform: linux/amd64
     container_name: trackly_db
-    image: postgis/postgis:17-3.5-alpine # ghcr.io/baosystems/postgis:17-master for native ARM64 support
+    image: imresamu/postgis:alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-trackly}
@@ -13,7 +13,7 @@ services:
       # only for development, debugging, and testing, do not expose in production
       - 5432:5432
     volumes:
-      - ./db_data:/var/lib/postgresql/data
+      - ./db_data:/var/lib/postgresql
     healthcheck:
       test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER}" ]
       interval: 10s
@@ -49,8 +49,8 @@ services:
     volumes:
       - ./frontend/Caddyfile:/etc/caddy/Caddyfile
     ports:
-      - 80:80
-      - 443:443
+      - 90:80
+      - 444:443
       - 2019:2019 # expose Caddy admin API for Prometheus metrics
     depends_on:
       - backend

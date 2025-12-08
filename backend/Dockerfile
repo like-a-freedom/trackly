@@ -29,7 +29,7 @@ RUN if [ "${TARGETARCH}" = "amd64" ]; then \
     && mv ./target/x86_64-unknown-linux-musl/release/backend /app/backend ;\
     fi
 
-FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/cc-debian13
 COPY --from=builder /app/backend /app/backend
 COPY migrations /app/migrations
 EXPOSE 8080
