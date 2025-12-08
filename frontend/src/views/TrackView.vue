@@ -203,6 +203,7 @@ const mapStabilizationTimer = ref(null); // Timer to wait for map stabilization
 const STABILIZATION_DELAY = 3000; // 3 seconds to wait for map auto-zoom to stabilize
 const lastPoiFetchedTrackId = ref(null); // Track which track ID has had POIs fetched to prevent duplicates
 const mapIsReady = ref(false); // Track if map is ready for POI clustering
+const fetchingTrack = ref(false); // Prevent duplicate track fetches
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -396,6 +397,12 @@ async function fetchTrack(zoomLevel = null, forceTrackId = null, options = { for
     loading.value = false;
     return;
   }
+
+  // Skip if a fetch for this track is already in flight
+  if (fetchingTrack.value && currentTrackId.value === id) {
+    console.log(`Fetch already in progress for track ${id}, skipping duplicate request`);
+    return;
+  }
   
   // Prevent fetching if this track is already being processed
   if (currentTrackId.value === id && !isInitialLoad.value) {
@@ -428,8 +435,13 @@ async function fetchTrack(zoomLevel = null, forceTrackId = null, options = { for
   currentTrackId.value = id; // Mark this track as being processed
   lastFetchZoom.value = roundedZoom;
   lastFetchAt.value = now;
-  
-  await debouncedFetchTrack(id, roundedZoom);
+  fetchingTrack.value = true;
+
+  try {
+    await debouncedFetchTrack(id, roundedZoom);
+  } finally {
+    fetchingTrack.value = false;
+  }
   
   // Start stabilization timer only on initial load to prevent zoom-triggered fetches
   if (isInitialLoad.value) {
