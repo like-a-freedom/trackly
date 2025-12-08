@@ -210,4 +210,39 @@ describe('TrackView Auto-Scaling', () => {
         const boundsProps = trackMapComponent.props('bounds');
         expect(boundsProps).toBeTruthy();
     });
+
+    it('dispatches stop-elevation-polling on deactivation (keep-alive)', async () => {
+        // Spy on window.dispatchEvent
+        const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+        const Parent = {
+            components: { TrackView },
+            template: `<div><keep-alive><track-view v-if="show" id="test-track-id"/></keep-alive></div>`,
+            setup() {
+                const { ref } = require('vue');
+                const show = ref(true);
+                return { show };
+            }
+        };
+
+        const parentWrapper = mount(Parent, {
+            global: {
+                stubs: {
+                    TrackMap: true,
+                    TrackDetailPanel: true,
+                    Toast: true
+                }
+            }
+        });
+
+        await nextTick();
+        // Deactivate TrackView by toggling `show` to false
+        parentWrapper.vm.show = false;
+        await nextTick();
+
+        // Expect that TrackView dispatched stop-elevation-polling
+        expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'stop-elevation-polling' }));
+        dispatchSpy.mockRestore();
+        parentWrapper.unmount();
+    });
 });

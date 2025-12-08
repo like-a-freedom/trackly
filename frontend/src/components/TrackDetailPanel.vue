@@ -656,7 +656,12 @@ function startElevationPolling(trackId) {
       return;
     }
 
-    await pollForElevationData(trackId);
+    try {
+      await pollForElevationData(trackId);
+    } catch (err) {
+      // If pollForElevationData ever throws (shouldn't), log but continue scheduling.
+      console.error(`[TrackDetailPanel] scheduleNext: poll failed: ${err?.message || err}`);
+    }
 
     // Compute interval with exponential backoff
     const interval = Math.min(POLLING_BASE_INTERVAL_MS * Math.pow(2, pollingAttempts.value - 1), POLLING_MAX_INTERVAL_MS);
@@ -760,10 +765,16 @@ function detachIconTooltipHandlers(container) {
 // Separate polling function for easier testing
 async function pollForElevationData(trackId) {
   try {
-    // Check if this polling is still for the current track we're viewing
-    // If track changed or component deactivated, stop polling
-    if (currentPollingTrackId.value !== trackId) {
-      console.log(`[TrackDetailPanel] Stopping poll for ${trackId} - current polling is for ${currentPollingTrackId.value}`);
+    // Resolve the effective trackId for this poll call. Accept explicit trackId,
+    // fallback to currentPollingTrackId (set when polling started), then props.track.id.
+    // This prevents callers from accidentally stopping the poll when they invoke
+    // pollForElevationData() without providing an argument.
+    const effectiveTrackId = trackId || currentPollingTrackId.value || props.track.id;
+
+    // If we have an active polling track recorded and it doesn't match the
+    // effectiveTrackId, then the poll is stale and should be stopped.
+    if (currentPollingTrackId.value && currentPollingTrackId.value !== effectiveTrackId) {
+      console.log(`[TrackDetailPanel] Stopping poll for ${effectiveTrackId} - current polling is for ${currentPollingTrackId.value}`);
       stopElevationPolling();
       return;
     }
@@ -774,7 +785,7 @@ async function pollForElevationData(trackId) {
       return;
     }
 
-    const response = await fetch(`/tracks/${trackId || props.track.id}`);
+    const response = await fetch(`/tracks/${effectiveTrackId}`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -821,9 +832,9 @@ async function pollForElevationData(trackId) {
       };
       
       // Dispatch global event for other components
-      window.dispatchEvent(new CustomEvent('track-elevation-updated', { 
+        window.dispatchEvent(new CustomEvent('track-elevation-updated', { 
         detail: { 
-          trackId: trackId || props.track.id,
+          trackId: effectiveTrackId,
           elevation_gain: updatedTrack.elevation_gain,
           elevation_loss: updatedTrack.elevation_loss,
           elevation_min: updatedTrack.elevation_min,
@@ -848,8 +859,9 @@ async function pollForElevationData(trackId) {
     }
   } catch (error) {
     console.error(`[TrackDetailPanel] Error polling elevation data: ${error.message}`);
-    // Continue polling on error
-    throw error; // Re-throw for test handling
+    // Do NOT re-throw here so that callers won't accidentally stop polling.
+    // We want polling to continue (scheduleNext will handle retries/backoff)
+    return;
   }
 }
 
