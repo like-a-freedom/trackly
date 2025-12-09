@@ -12,8 +12,12 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::time::{timeout, Duration};
 use tracing::{error, info};
 use uuid::Uuid;
+
+const ENQUEUE_GRACE_MS: u64 = 20;
 
 static ENRICHMENT_QUEUE: OnceCell<EnrichmentQueue> = OnceCell::new();
 
@@ -23,9 +27,15 @@ pub struct EnrichmentJob {
     pub coordinates: Vec<(f64, f64)>,
 }
 
+struct QueuedJob {
+    job: EnrichmentJob,
+    _permit: OwnedSemaphorePermit,
+}
+
 #[derive(Clone)]
 pub struct EnrichmentQueue {
-    sender: mpsc::Sender<EnrichmentJob>,
+    sender: mpsc::Sender<QueuedJob>,
+    permits: Arc<Semaphore>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -41,11 +51,58 @@ enum PersistError {
 }
 
 impl EnrichmentQueue {
-    pub fn enqueue(&self, job: EnrichmentJob) -> Result<(), EnqueueError> {
-        self.sender.try_send(job).map_err(|err| match err {
-            TrySendError::Full(_) => EnqueueError::Full,
-            TrySendError::Closed(_) => EnqueueError::NotInitialized,
-        })
+    async fn enqueue_with_grace(
+        &self,
+        job: EnrichmentJob,
+        grace: Duration,
+    ) -> Result<(), EnqueueError> {
+        let permit = match self.permits.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                if grace.is_zero() {
+                    return Err(EnqueueError::Full);
+                }
+
+                match timeout(grace, self.permits.clone().acquire_owned()).await {
+                    Ok(Ok(permit)) => permit,
+                    Ok(Err(_)) => return Err(EnqueueError::NotInitialized),
+                    Err(_) => return Err(EnqueueError::Full),
+                }
+            }
+        };
+
+        let queued = QueuedJob {
+            job,
+            _permit: permit,
+        };
+
+        match self.sender.try_send(queued) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Closed(queued)) => {
+                drop(queued);
+                Err(EnqueueError::NotInitialized)
+            }
+            Err(TrySendError::Full(queued)) => {
+                if grace.is_zero() {
+                    return Err(EnqueueError::Full);
+                }
+
+                match timeout(grace, self.sender.send(queued)).await {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(_)) => Err(EnqueueError::NotInitialized),
+                    Err(_) => Err(EnqueueError::Full),
+                }
+            }
+        }
+    }
+
+    pub async fn enqueue(&self, job: EnrichmentJob) -> Result<(), EnqueueError> {
+        self.enqueue_with_grace(job, Duration::from_millis(ENQUEUE_GRACE_MS))
+            .await
+    }
+
+    pub async fn try_enqueue(&self, job: EnrichmentJob) -> Result<(), EnqueueError> {
+        self.enqueue_with_grace(job, Duration::from_millis(0)).await
     }
 }
 
@@ -70,12 +127,22 @@ pub fn init_enrichment_queue(pool: Arc<PgPool>) {
     }
 }
 
-pub fn enqueue(job: EnrichmentJob) -> Result<(), EnqueueError> {
+pub async fn enqueue(job: EnrichmentJob) -> Result<(), EnqueueError> {
     ENRICHMENT_QUEUE
         .get()
         .cloned()
         .ok_or(EnqueueError::NotInitialized)?
         .enqueue(job)
+        .await
+}
+
+pub async fn try_enqueue(job: EnrichmentJob) -> Result<(), EnqueueError> {
+    ENRICHMENT_QUEUE
+        .get()
+        .cloned()
+        .ok_or(EnqueueError::NotInitialized)?
+        .try_enqueue(job)
+        .await
 }
 
 pub fn spawn_immediate_enrichment(pool: Arc<PgPool>, job: EnrichmentJob) {
@@ -89,16 +156,17 @@ where
     F: Fn(EnrichmentJob) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    let (sender, mut receiver) = mpsc::channel::<EnrichmentJob>(capacity);
+    let permits = Arc::new(Semaphore::new(capacity));
+    let (sender, mut receiver) = mpsc::channel::<QueuedJob>(capacity);
     let processor = Arc::new(processor);
 
     tokio::spawn(async move {
-        while let Some(job) = receiver.recv().await {
+        while let Some(QueuedJob { job, _permit }) = receiver.recv().await {
             (processor)(job).await;
         }
     });
 
-    EnrichmentQueue { sender }
+    EnrichmentQueue { sender, permits }
 }
 
 async fn run_enrichment_job(pool: Arc<PgPool>, job: EnrichmentJob) {
@@ -239,12 +307,14 @@ mod tests {
                 track_id: first,
                 coordinates: vec![(0.0, 0.0)],
             })
+            .await
             .unwrap();
         queue
             .enqueue(EnrichmentJob {
                 track_id: second,
                 coordinates: vec![(1.0, 1.0)],
             })
+            .await
             .unwrap();
 
         sleep(Duration::from_millis(50)).await;
@@ -261,12 +331,15 @@ mod tests {
                 track_id: Uuid::new_v4(),
                 coordinates: vec![(0.0, 0.0)],
             })
+            .await
             .unwrap();
 
-        let result = queue.enqueue(EnrichmentJob {
-            track_id: Uuid::new_v4(),
-            coordinates: vec![(1.0, 1.0)],
-        });
+        let result = queue
+            .try_enqueue(EnrichmentJob {
+                track_id: Uuid::new_v4(),
+                coordinates: vec![(1.0, 1.0)],
+            })
+            .await;
 
         assert_eq!(result, Err(EnqueueError::Full));
     }

@@ -1133,6 +1133,200 @@
                 "x": 0,
                 "y": 36
             },
+            "id": 50,
+            "title": "Bulk Operations",
+            "type": "row"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "insertNulls": false,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "ops"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 37
+            },
+            "id": 51,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "sum"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(rate(bulk_operations_total{job=\"trackly_backend\"}[5m])) by (operation)",
+                    "legendFormat": "{{operation}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Bulk Operations Rate",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "insertNulls": false,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 37
+            },
+            "id": 52,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max",
+                        "p95"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum(rate(bulk_operations_items_bucket{job=\"trackly_backend\"}[5m])) by (le, operation))",
+                    "legendFormat": "p95 {{operation}}",
+                    "refId": "A"
+                },
+                {
+                    "expr": "histogram_quantile(0.50, sum(rate(bulk_operations_items_bucket{job=\"trackly_backend\"}[5m])) by (le, operation))",
+                    "legendFormat": "p50 {{operation}}",
+                    "refId": "B"
+                }
+            ],
+            "title": "Bulk Operation Items Distribution",
+            "type": "timeseries"
+        },
+        {
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 45
+            },
             "id": 17,
             "title": "Resource Usage",
             "type": "row"
