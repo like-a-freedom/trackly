@@ -323,6 +323,37 @@ static TRACK_SLOPE_RECALC_DURATION_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
     hist
 });
 
+static TRACK_POI_LINK_DURATION_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
+    let opts = HistogramOpts::new("track_poi_link_duration_seconds", "POI link duration")
+        .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]);
+    let hist = HistogramVec::new(opts, &["operation"]).expect("hist vec");
+    REGISTRY
+        .register(Box::new(hist.clone()))
+        .expect("register track_poi_link_duration_seconds");
+    hist
+});
+
+static BULK_OPERATIONS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("bulk_operations_total", "Bulk DB operations by type");
+    let counter = IntCounterVec::new(opts, &["operation"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register bulk_operations_total");
+    counter
+});
+
+static BULK_OPERATIONS_ITEMS: Lazy<HistogramVec> = Lazy::new(|| {
+    let opts =
+        HistogramOpts::new("bulk_operations_items", "Items per bulk operation").buckets(vec![
+            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0,
+        ]);
+    let hist = HistogramVec::new(opts, &["operation"]).expect("hist vec");
+    REGISTRY
+        .register(Box::new(hist.clone()))
+        .expect("register bulk_operations_items");
+    hist
+});
+
 static DB_POOL: OnceCell<Arc<PgPool>> = OnceCell::new();
 
 #[derive(Clone)]
@@ -359,6 +390,9 @@ impl HttpMetricsLayer {
         let _ = &*BACKGROUND_TASKS_IN_FLIGHT;
         let _ = &*TRACK_SIMPLIFY_DURATION_SECONDS;
         let _ = &*TRACK_SLOPE_RECALC_DURATION_SECONDS;
+        let _ = &*TRACK_POI_LINK_DURATION_SECONDS;
+        let _ = &*BULK_OPERATIONS_TOTAL;
+        let _ = &*BULK_OPERATIONS_ITEMS;
         Self
     }
 }
@@ -668,6 +702,13 @@ pub fn record_poi_deleted(source: &str) {
     POIS_DELETED_TOTAL.with_label_values(&[source]).inc();
 }
 
+pub fn record_bulk_operation(operation: &str, count: usize) {
+    BULK_OPERATIONS_TOTAL.with_label_values(&[operation]).inc();
+    BULK_OPERATIONS_ITEMS
+        .with_label_values(&[operation])
+        .observe(count as f64);
+}
+
 static DB_POOL_MAX: OnceCell<i64> = OnceCell::new();
 
 pub fn set_db_pool(pool: Arc<PgPool>, max_connections: i64) {
@@ -684,6 +725,12 @@ pub fn observe_track_simplify(mode: &str, seconds: f64) {
 pub fn observe_slope_recalc(result: &str, seconds: f64) {
     TRACK_SLOPE_RECALC_DURATION_SECONDS
         .with_label_values(&[result])
+        .observe(seconds);
+}
+
+pub fn observe_poi_link_duration(operation: &str, seconds: f64) {
+    TRACK_POI_LINK_DURATION_SECONDS
+        .with_label_values(&[operation])
         .observe(seconds);
 }
 

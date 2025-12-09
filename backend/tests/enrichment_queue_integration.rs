@@ -26,6 +26,7 @@ async fn processes_jobs_across_batches() {
                 track_id: *id,
                 coordinates: vec![(0.0, 0.0)],
             })
+            .await
             .unwrap();
     }
 
@@ -46,12 +47,15 @@ async fn fails_when_queue_is_full() {
             track_id: Uuid::new_v4(),
             coordinates: vec![(0.0, 0.0)],
         })
+        .await
         .unwrap();
 
-    let second = queue.enqueue(EnrichmentJob {
-        track_id: Uuid::new_v4(),
-        coordinates: vec![(1.0, 1.0)],
-    });
+    let second = queue
+        .try_enqueue(EnrichmentJob {
+            track_id: Uuid::new_v4(),
+            coordinates: vec![(1.0, 1.0)],
+        })
+        .await;
 
     assert_eq!(second, Err(EnqueueError::Full));
 }

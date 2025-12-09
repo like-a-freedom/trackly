@@ -11,10 +11,12 @@ use std::time::Instant;
 use uuid::Uuid;
 
 pub async fn track_exists(pool: &Arc<PgPool>, hash: &str) -> Result<Option<Uuid>, sqlx::Error> {
+    let start = Instant::now();
     let rec = sqlx::query("SELECT id FROM tracks WHERE hash = $1")
         .bind(hash)
         .fetch_optional(&**pool)
         .await?;
+    crate::metrics::observe_db_query("track_exists", start.elapsed().as_secs_f64());
     Ok(rec.map(|row| {
         row.try_get::<Uuid, _>("id")
             .expect("Failed to get id from row: id column missing or wrong type")
