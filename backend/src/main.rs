@@ -3,7 +3,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use backend::{handlers, metrics};
+use backend::{handlers, metrics, services};
 use mimalloc::MiMalloc;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -59,6 +59,8 @@ async fn main() {
 
     metrics::set_db_pool(Arc::clone(&pool), max_connections as i64);
     metrics::initialize_metrics_baseline();
+
+    services::enrichment_queue::init_enrichment_queue(Arc::clone(&pool));
 
     // Run migrations automatically on startup
     info!("Running database migrations...");

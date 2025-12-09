@@ -7,10 +7,10 @@ use crate::{
     },
     metrics,
     models::{ParsedTrackData, ParsedWaypoint, TrackUploadResponse},
+    services::enrichment_queue,
     poi_deduplication::PoiDeduplicationService,
     track_utils::{
         self, extract_coordinates_from_geojson, parse_gpx_full, parse_gpx_minimal,
-        ElevationEnrichmentService,
     },
 };
 use axum::http::StatusCode;
@@ -18,7 +18,6 @@ use bytes::Bytes;
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::task;
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -145,7 +144,8 @@ impl TrackUploadService {
             metrics::record_track_category(category);
         }
 
-        self.maybe_start_elevation_enrichment(track_id, &parsed_data);
+        self.maybe_start_elevation_enrichment(track_id, &parsed_data)
+            .await;
         self.process_waypoints(track_id, parsed_data.waypoints.clone())
             .await;
 
@@ -245,7 +245,11 @@ impl TrackUploadService {
         })
     }
 
-    fn maybe_start_elevation_enrichment(&self, track_id: Uuid, parsed_data: &ParsedTrackData) {
+    async fn maybe_start_elevation_enrichment(
+        &self,
+        track_id: Uuid,
+        parsed_data: &ParsedTrackData,
+    ) {
         if !self.track_needs_enrichment(parsed_data) {
             metrics::record_track_enrich_status("skipped_not_needed");
             return;
@@ -268,94 +272,26 @@ impl TrackUploadService {
             }
         };
 
-        let pool = Arc::clone(&self.pool);
-        task::spawn(async move {
-            let _task_guard = metrics::BackgroundTaskGuard::new();
-            let enrich_start = Instant::now();
-            let enrichment_service = ElevationEnrichmentService::new();
-            match enrichment_service
-                .enrich_track_elevation(coordinates.clone())
-                .await
-            {
-                Ok(result) => {
-                    if let Err(e) = db::update_track_elevation(
-                        &pool,
-                        track_id,
-                        db::UpdateElevationParams {
-                            elevation_gain: result.metrics.elevation_gain,
-                            elevation_loss: result.metrics.elevation_loss,
-                            elevation_min: result.metrics.elevation_min,
-                            elevation_max: result.metrics.elevation_max,
-                            elevation_enriched: true,
-                            elevation_enriched_at: Some(result.enriched_at.naive_utc()),
-                            elevation_dataset: Some(result.dataset.clone()),
-                            elevation_profile: result.elevation_profile.clone(),
-                            elevation_api_calls: result.api_calls_used,
-                        },
-                    )
-                    .await
-                    {
-                        error!(?track_id, "Failed to update enriched elevation data: {}", e);
-                        metrics::record_track_enrich_status("failed_update_db");
-                        metrics::observe_track_enrich_duration(
-                            "failed_update_db",
-                            enrich_start.elapsed().as_secs_f64(),
-                        );
-                        return;
-                    }
+        let job = enrichment_queue::EnrichmentJob {
+            track_id,
+            coordinates,
+        };
 
-                    if let Some(profile) = result.elevation_profile {
-                        use crate::track_utils::slope::recalculate_slope_metrics;
-
-                        let slope_start = Instant::now();
-                        let slope_result = recalculate_slope_metrics(
-                            &coordinates,
-                            &profile,
-                            &format!("Track {}", track_id),
-                        );
-                        let slope_duration = slope_start.elapsed().as_secs_f64();
-
-                        if let Err(e) = db::update_track_slope(
-                            &pool,
-                            track_id,
-                            db::UpdateSlopeParams {
-                                slope_min: slope_result.slope_min,
-                                slope_max: slope_result.slope_max,
-                                slope_avg: slope_result.slope_avg,
-                                slope_histogram: slope_result.slope_histogram,
-                                slope_segments: slope_result.slope_segments,
-                            },
-                        )
-                        .await
-                        {
-                            error!(?track_id, "Failed to update slope data: {}", e);
-                            metrics::record_track_enrich_status("failed_update_slope");
-                            metrics::observe_track_enrich_duration(
-                                "failed_update_slope",
-                                enrich_start.elapsed().as_secs_f64(),
-                            );
-                            metrics::observe_slope_recalc("db_error", slope_duration);
-                        } else {
-                            metrics::observe_slope_recalc("success", slope_duration);
-                        }
-                    }
-
-                    metrics::record_track_enrich_status("success");
-                    metrics::observe_track_enrich_duration(
-                        "success",
-                        enrich_start.elapsed().as_secs_f64(),
-                    );
-                }
-                Err(e) => {
-                    error!(?track_id, "Failed to auto-enrich track elevation: {}", e);
-                    metrics::record_track_enrich_status("failed_remote");
-                    metrics::observe_track_enrich_duration(
-                        "failed_remote",
-                        enrich_start.elapsed().as_secs_f64(),
-                    );
-                }
+        match enrichment_queue::enqueue(job.clone()) {
+            Ok(()) => {
+                metrics::record_track_enrich_status("queued");
+                return;
             }
-        });
+            Err(enrichment_queue::EnqueueError::Full) => {
+                info!(%track_id, "enrichment queue is full; running inline fallback");
+                metrics::record_track_enrich_status("queue_full");
+            }
+            Err(enrichment_queue::EnqueueError::NotInitialized) => {
+                info!(%track_id, "enrichment queue not initialized; running inline fallback");
+            }
+        }
+
+        enrichment_queue::spawn_immediate_enrichment(Arc::clone(&self.pool), job);
     }
 
     fn track_needs_enrichment(&self, parsed_data: &ParsedTrackData) -> bool {
