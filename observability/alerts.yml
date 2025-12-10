@@ -135,6 +135,38 @@ groups:
         annotations:
           summary: "Slow elevation enrichment"
           description: "95th percentile enrichment time is {{ $value }}s"
+      - alert: EnrichmentQueueFull
+        expr: |
+          increase(track_enrich_requests_total{job="trackly_backend", status="queue_full"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: elevation
+        annotations:
+          summary: "Enrichment queue full events"
+          description: "Enrichment queue fallback occurred {{ $value }} times in the last 5m"
+
+      - alert: HighElevationAPICalls
+        expr: |
+          sum(increase(elevation_api_calls_total{job="trackly_backend"}[5m])) > 500
+        for: 5m
+        labels:
+          severity: warning
+          component: elevation
+        annotations:
+          summary: "High elevation API call rate"
+          description: "Elevation calls increased by {{ $value }} over 5 minutes"
+
+      - alert: SlowPOILink
+        expr: |
+          histogram_quantile(0.95, sum(rate(track_poi_link_duration_seconds_bucket{job="trackly_backend"}[5m])) by (le, operation)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: poi
+        annotations:
+          summary: "Slow POI linking"
+          description: "95th percentile POI linking time is {{ $value }}s for operation {{ $labels.operation }}"
 
   - name: trackly_resource_usage
     interval: 30s
