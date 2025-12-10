@@ -30,8 +30,8 @@ impl PoiDeduplicationService {
 
         for (idx, waypoint) in waypoints.iter().enumerate() {
             let key = Self::generate_dedup_key(waypoint);
-            if !seen.contains_key(&key) {
-                seen.insert(key, idx);
+            if let std::collections::hash_map::Entry::Vacant(e) = seen.entry(key) {
+                e.insert(idx);
                 result.push((idx, waypoint));
             }
         }

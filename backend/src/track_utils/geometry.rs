@@ -83,7 +83,14 @@ pub fn split_points_by_gap(
     let mut current: Vec<(f64, f64)> = vec![points[0]];
 
     for next in points.iter().skip(1) {
-        let prev = *current.last().unwrap();
+        let prev = match current.last() {
+            Some(&p) => p,
+            None => {
+                // Shouldn't happen since current initialized with points[0], but guard anyway
+                current.push(*next);
+                continue;
+            }
+        };
         let gap = haversine_distance(prev, *next);
 
         if gap > threshold {
@@ -117,12 +124,10 @@ pub fn length_km_for_segments(segments: &[Vec<(f64, f64)>]) -> f64 {
 /// Build GeoJSON from segments. Single segment => LineString, otherwise MultiLineString.
 pub fn geojson_from_segments(segments: &[Vec<(f64, f64)>]) -> Value {
     if segments.len() <= 1 {
-        let coords: Vec<Value> = segments
-            .first()
-            .unwrap_or(&Vec::new())
-            .iter()
-            .map(|(lat, lon)| json!([*lon, *lat]))
-            .collect();
+        let coords: Vec<Value> = match segments.first() {
+            Some(first) => first.iter().map(|(lat, lon)| json!([*lon, *lat])).collect(),
+            None => Vec::new(),
+        };
         return json!({
             "type": "LineString",
             "coordinates": coords,

@@ -129,21 +129,16 @@ async fn main() {
         max_body_size,
         max_body_size / (1024 * 1024)
     );
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| {
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
             eprintln!("Failed to bind to address {addr}: {e}");
-            // Consider a more graceful shutdown or specific error type if this were a library
             std::process::exit(1);
-        })
-        .unwrap();
+        }
+    };
 
-    axum::serve(listener, app.into_make_service())
-        .await
-        .map_err(|e| {
-            eprintln!("Server error: {e}");
-            // Consider a more graceful shutdown
-            std::process::exit(1);
-        })
-        .unwrap();
+    if let Err(e) = axum::serve(listener, app.into_make_service()).await {
+        eprintln!("Server error: {e}");
+        std::process::exit(1);
+    }
 }

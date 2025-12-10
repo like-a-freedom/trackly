@@ -135,7 +135,12 @@ fn normalize_session_id(raw: &str) -> Result<(Uuid, String), StatusCode> {
 }
 
 fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
-    let mut map = LAST_UPLOAD.lock().unwrap();
+    let mut map = LAST_UPLOAD
+        .lock()
+        .map_err(|e| {
+            error!(error = ?e, "LAST_UPLOAD mutex poisoned");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     if let Some(&last) = map.get(session_key) {
         if now < last + *UPLOAD_RATE_LIMIT_SECONDS {
             error!(
@@ -151,7 +156,11 @@ fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), Stat
 
 #[cfg(test)]
 fn reset_rate_limit_state() {
-    LAST_UPLOAD.lock().unwrap().clear();
+    // Clear the LAST_UPLOAD map for tests; if poisoned, log and skip the clear
+    match LAST_UPLOAD.lock() {
+        Ok(mut m) => m.clear(),
+        Err(e) => error!(error = ?e, "LAST_UPLOAD mutex poisoned - clear skipped"),
+    }
 }
 
 pub async fn upload_track(

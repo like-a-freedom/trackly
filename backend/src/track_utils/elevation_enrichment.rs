@@ -6,6 +6,7 @@ use reqwest;
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
+use crate::metrics;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
 
@@ -241,11 +242,19 @@ impl ElevationEnrichmentService {
 
         let mut enriched_points = Vec::new();
         let mut total_api_calls = 0u32;
+        // Track pending usage (persisted DB usage + in-job calls) to avoid exceeding daily limit
+        let mut current_usage = 0i32;
+        if let Some(pool) = &self.pool {
+            match db::get_today_api_usage(pool, &self.dataset).await {
+                Ok(v) => current_usage = v,
+                Err(e) => tracing::warn!("Failed to read today's API usage from DB: {}", e),
+            }
+        }
 
         // Process points in chunks to respect API limits
         for chunk in track_points.chunks(self.max_points_per_request) {
-            // Check daily API limit before making request
-            if self.is_daily_limit_exceeded().await? {
+            // Check daily API limit before making request - include in-flight usage of this job
+            if current_usage + (total_api_calls as i32) + 1 >= self.daily_limit as i32 {
                 error!("Daily API limit exceeded for service {}", self.dataset);
                 return Err(anyhow!(
                     "Daily API limit exceeded for service {}",
@@ -256,12 +265,10 @@ impl ElevationEnrichmentService {
             match self.fetch_elevations_batch_with_retry(chunk).await {
                 Ok(elevations) => {
                     enriched_points.extend(elevations);
-                    total_api_calls += 1;
 
-                    // Record API usage
-                    if let Err(e) = self.record_api_usage(1).await {
-                        tracing::warn!("Failed to record API usage: {}", e);
-                    }
+                    // Record API usage in Prometheus metric incrementally and update in-job counter.
+                    metrics::record_elevation_api_calls(&self.dataset, 1);
+                    total_api_calls += 1;
 
                     // Rate limiting - wait between requests
                     if chunk.len() == self.max_points_per_request
@@ -277,12 +284,9 @@ impl ElevationEnrichmentService {
                     // Try fallback service if available
                     if let Some(fallback_result) = self.try_fallback_service(chunk).await {
                         enriched_points.extend(fallback_result);
-                        total_api_calls += 1;
-
                         // Record API usage for fallback service too
-                        if let Err(e) = self.record_api_usage(1).await {
-                            tracing::warn!("Failed to record API usage for fallback: {}", e);
-                        }
+                        metrics::record_elevation_api_calls(&self.dataset, 1);
+                        total_api_calls += 1;
                         continue;
                     }
 
@@ -323,6 +327,13 @@ impl ElevationEnrichmentService {
             metrics.elevation_max.unwrap_or(0.0),
             total_api_calls
         );
+        // Persist daily usage to DB once per enrichment job (reduce per-chunk DB writes)
+        if total_api_calls > 0 {
+            match self.record_api_usage(total_api_calls).await {
+                Ok(_) => tracing::info!("Persisted {} elevation API calls to DB", total_api_calls),
+                Err(e) => tracing::warn!("Failed to persist elevation API usage to DB: {}", e),
+            }
+        }
 
         Ok(EnrichmentResult {
             metrics,
@@ -581,6 +592,7 @@ impl ElevationEnrichmentService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{with_temp_env, with_temp_env_async, with_temp_envs, with_temp_envs_async};
 
     #[test]
     fn test_needs_enrichment() {
@@ -616,22 +628,13 @@ mod tests {
 
     #[test]
     fn test_disabled_service() {
-        // Save original value
-        let original_value = std::env::var("ELEVATION_SERVICE").ok();
-
-        std::env::set_var("ELEVATION_SERVICE", "disabled");
-        let service = ElevationEnrichmentService::new();
-        assert_eq!(service.dataset, "disabled");
-        assert_eq!(service.max_points_per_request, 0);
-        assert_eq!(service.daily_limit, 0);
-        assert!(service.pool.is_none());
-
-        // Restore original value
-        if let Some(val) = original_value {
-            std::env::set_var("ELEVATION_SERVICE", val);
-        } else {
-            std::env::remove_var("ELEVATION_SERVICE");
-        }
+        with_temp_env("ELEVATION_SERVICE", Some("disabled"), || {
+            let service = ElevationEnrichmentService::new();
+            assert_eq!(service.dataset, "disabled");
+            assert_eq!(service.max_points_per_request, 0);
+            assert_eq!(service.daily_limit, 0);
+            assert!(service.pool.is_none());
+        });
     }
 
     #[test]
@@ -709,71 +712,50 @@ mod tests {
     #[tokio::test]
     #[ignore] // Ignored by default - requires network access
     async fn test_enrich_track_elevation_disabled_service() {
-        // Save original value
-        let original_value = std::env::var("ELEVATION_SERVICE").ok();
+        with_temp_env_async("ELEVATION_SERVICE", Some("disabled"), || async {
+            let service = ElevationEnrichmentService::new();
+            let track_points = vec![(55.0, 37.0)];
 
-        std::env::set_var("ELEVATION_SERVICE", "disabled");
+            let result = service.enrich_track_elevation(track_points).await;
 
-        let service = ElevationEnrichmentService::new();
-        let track_points = vec![(55.0, 37.0)];
-
-        let result = service.enrich_track_elevation(track_points).await;
-
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Elevation enrichment service is disabled"));
-
-        // Restore original value
-        if let Some(val) = original_value {
-            std::env::set_var("ELEVATION_SERVICE", val);
-        } else {
-            std::env::remove_var("ELEVATION_SERVICE");
-        }
+            assert!(result.is_err());
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("Elevation enrichment service is disabled"));
+        }).await;
     }
 
     #[tokio::test]
     async fn test_enrich_track_elevation_simple_disabled_check() {
-        // Save original value to restore after test
-        let original_value = std::env::var("ELEVATION_SERVICE").ok();
+        with_temp_env_async("ELEVATION_SERVICE", Some("disabled"), || async {
+            let service = ElevationEnrichmentService::new();
+            let track_points = vec![(55.0, 37.0), (55.1, 37.1)];
 
-        // Test with disabled service (simple case)
-        std::env::set_var("ELEVATION_SERVICE", "disabled");
+            let result = service.enrich_track_elevation(track_points).await;
 
-        let service = ElevationEnrichmentService::new();
-        let track_points = vec![(55.0, 37.0), (55.1, 37.1)];
-
-        let result = service.enrich_track_elevation(track_points).await;
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("disabled"));
-
-        // Restore original value
-        if let Some(val) = original_value {
-            std::env::set_var("ELEVATION_SERVICE", val);
-        } else {
-            std::env::remove_var("ELEVATION_SERVICE");
-        }
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("disabled"));
+        }).await;
     }
 
     #[tokio::test]
     async fn test_enrich_track_elevation_api_error_with_retry() {
         // Test with invalid URL to simulate API error
-        std::env::set_var("ELEVATION_SERVICE", "opentopodata");
-        std::env::set_var(
-            "ELEVATION_API_URL",
-            "http://invalid-url-that-does-not-exist/v1",
-        );
-        std::env::set_var("ELEVATION_DEFAULT_DATASET", "srtm90m");
-        std::env::set_var("ELEVATION_RATE_LIMIT", "0");
-        std::env::set_var("ELEVATION_RETRY_ATTEMPTS", "2"); // Reduce retries for faster test
-        std::env::set_var("ELEVATION_TIMEOUT", "1");
+        with_temp_envs_async(
+            &[
+                ("ELEVATION_SERVICE", Some("opentopodata")),
+                ("ELEVATION_API_URL", Some("http://invalid-url-that-does-not-exist/v1")),
+                ("ELEVATION_DEFAULT_DATASET", Some("srtm90m")),
+                ("ELEVATION_RATE_LIMIT", Some("0")),
+                ("ELEVATION_RETRY_ATTEMPTS", Some("2")),
+                ("ELEVATION_TIMEOUT", Some("1")),
+            ],
+            || async {
+                let service = ElevationEnrichmentService::new();
+                let track_points = vec![(55.0, 37.0)];
 
-        let service = ElevationEnrichmentService::new();
-        let track_points = vec![(55.0, 37.0)];
-
-        let result = service.enrich_track_elevation(track_points).await;
+                let result = service.enrich_track_elevation(track_points).await;
 
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
@@ -781,25 +763,24 @@ mod tests {
         // Just check that we got an error, don't be too specific about the message
         assert!(!error_msg.is_empty());
 
-        // Clean up
-        std::env::remove_var("ELEVATION_SERVICE");
-        std::env::remove_var("ELEVATION_API_URL");
-        std::env::remove_var("ELEVATION_DEFAULT_DATASET");
-        std::env::remove_var("ELEVATION_RATE_LIMIT");
-        std::env::remove_var("ELEVATION_RETRY_ATTEMPTS");
-        std::env::remove_var("ELEVATION_TIMEOUT");
+            },
+        ).await;
     }
 
     #[tokio::test]
     async fn test_enrich_track_elevation_fallback_service() {
         // Simple test for fallback service configuration
-        std::env::set_var("ELEVATION_SERVICE", "opentopodata");
-        std::env::set_var("ELEVATION_API_URL", "http://invalid-primary-url/v1");
-        std::env::set_var("ELEVATION_DEFAULT_DATASET", "srtm90m");
-        std::env::set_var("ELEVATION_FALLBACK_SERVICE", "open-elevation");
-        std::env::set_var("ELEVATION_RATE_LIMIT", "0");
-        std::env::set_var("ELEVATION_RETRY_ATTEMPTS", "1"); // Reduce retries
-        std::env::set_var("ELEVATION_TIMEOUT", "1");
+        with_temp_envs_async(
+            &[
+                ("ELEVATION_SERVICE", Some("opentopodata")),
+                ("ELEVATION_API_URL", Some("http://invalid-primary-url/v1")),
+                ("ELEVATION_DEFAULT_DATASET", Some("srtm90m")),
+                ("ELEVATION_FALLBACK_SERVICE", Some("open-elevation")),
+                ("ELEVATION_RATE_LIMIT", Some("0")),
+                ("ELEVATION_RETRY_ATTEMPTS", Some("1")),
+                ("ELEVATION_TIMEOUT", Some("1")),
+            ],
+            || async {
 
         // Create service with fallback configuration
         let service = ElevationEnrichmentService::new();
@@ -814,29 +795,23 @@ mod tests {
         // Just check that we got an error, don't be too specific about the message
         assert!(!error_msg.is_empty());
 
-        // Clean up
-        std::env::remove_var("ELEVATION_SERVICE");
-        std::env::remove_var("ELEVATION_API_URL");
-        std::env::remove_var("ELEVATION_DEFAULT_DATASET");
-        std::env::remove_var("ELEVATION_FALLBACK_SERVICE");
-        std::env::remove_var("ELEVATION_RATE_LIMIT");
-        std::env::remove_var("ELEVATION_RETRY_ATTEMPTS");
-        std::env::remove_var("ELEVATION_TIMEOUT");
+            },
+        ).await;
     }
 
     #[tokio::test]
     async fn test_enrich_track_elevation_batch_processing() {
         // Simple test without HTTP mocking - test basic batch processing logic
-        std::env::set_var("ELEVATION_SERVICE", "opentopodata");
-        std::env::set_var("ELEVATION_API_URL", "https://api.opentopodata.org/v1"); // Real URL that won't be called
-        std::env::set_var("ELEVATION_DEFAULT_DATASET", "srtm90m");
-        std::env::set_var("ELEVATION_BATCH_SIZE", "100");
-        std::env::set_var("ELEVATION_RATE_LIMIT", "0");
-        std::env::set_var("ELEVATION_TIMEOUT", "1"); // Very short timeout to force failure
-        std::env::set_var(
-            "ELEVATION_API_URL",
-            "http://invalid-nonexistent-domain.invalid/v1/test",
-        ); // Invalid URL to force error
+        with_temp_envs_async(
+            &[
+                ("ELEVATION_SERVICE", Some("opentopodata")),
+                ("ELEVATION_API_URL", Some("http://invalid-nonexistent-domain.invalid/v1/test")),
+                ("ELEVATION_DEFAULT_DATASET", Some("srtm90m")),
+                ("ELEVATION_BATCH_SIZE", Some("100")),
+                ("ELEVATION_RATE_LIMIT", Some("0")),
+                ("ELEVATION_TIMEOUT", Some("1")),
+            ],
+            || async {
 
         let service = ElevationEnrichmentService::new();
 
@@ -852,24 +827,23 @@ mod tests {
         // Just check that we got an error, don't be too specific about the message
         assert!(!error_msg.is_empty());
 
-        // Clean up
-        std::env::remove_var("ELEVATION_SERVICE");
-        std::env::remove_var("ELEVATION_API_URL");
-        std::env::remove_var("ELEVATION_DEFAULT_DATASET");
-        std::env::remove_var("ELEVATION_BATCH_SIZE");
-        std::env::remove_var("ELEVATION_RATE_LIMIT");
-        std::env::remove_var("ELEVATION_TIMEOUT");
+            },
+        ).await;
     }
 
     #[tokio::test]
     async fn test_enrich_track_elevation_malformed_api_response() {
         // This test is conceptual - testing that the service handles malformed responses
         // We'll test timeout instead which is easier to reproduce
-        std::env::set_var("ELEVATION_SERVICE", "opentopodata");
-        std::env::set_var("ELEVATION_API_URL", "https://httpbin.org/delay/10"); // This will timeout
-        std::env::set_var("ELEVATION_DEFAULT_DATASET", "srtm90m");
-        std::env::set_var("ELEVATION_RATE_LIMIT", "0");
-        std::env::set_var("ELEVATION_TIMEOUT", "1"); // 1 second timeout
+        with_temp_envs_async(
+            &[
+                ("ELEVATION_SERVICE", Some("opentopodata")),
+                ("ELEVATION_API_URL", Some("https://httpbin.org/delay/10")),
+                ("ELEVATION_DEFAULT_DATASET", Some("srtm90m")),
+                ("ELEVATION_RATE_LIMIT", Some("0")),
+                ("ELEVATION_TIMEOUT", Some("1")),
+            ],
+            || async {
 
         let service = ElevationEnrichmentService::new();
         let track_points = vec![(55.0, 37.0)];
@@ -882,22 +856,22 @@ mod tests {
         // Just check that we got an error, don't be too specific about the message
         assert!(!error_msg.is_empty());
 
-        // Clean up
-        std::env::remove_var("ELEVATION_SERVICE");
-        std::env::remove_var("ELEVATION_API_URL");
-        std::env::remove_var("ELEVATION_DEFAULT_DATASET");
-        std::env::remove_var("ELEVATION_RATE_LIMIT");
-        std::env::remove_var("ELEVATION_TIMEOUT");
+            },
+        ).await;
     }
 
     #[tokio::test]
     async fn test_enrich_track_elevation_timeout() {
         // Test actual timeout behavior
-        std::env::set_var("ELEVATION_SERVICE", "opentopodata");
-        std::env::set_var("ELEVATION_API_URL", "https://httpbin.org/delay/5"); // 5 second delay
-        std::env::set_var("ELEVATION_DEFAULT_DATASET", "srtm90m");
-        std::env::set_var("ELEVATION_RATE_LIMIT", "0");
-        std::env::set_var("ELEVATION_TIMEOUT", "1"); // 1 second timeout to force timeout
+        with_temp_envs_async(
+            &[
+                ("ELEVATION_SERVICE", Some("opentopodata")),
+                ("ELEVATION_API_URL", Some("https://httpbin.org/delay/5")),
+                ("ELEVATION_DEFAULT_DATASET", Some("srtm90m")),
+                ("ELEVATION_RATE_LIMIT", Some("0")),
+                ("ELEVATION_TIMEOUT", Some("1")),
+            ],
+            || async {
 
         let service = ElevationEnrichmentService::new();
         let track_points = vec![(55.0, 37.0)];
@@ -911,12 +885,8 @@ mod tests {
         // Just check that we got an error, don't be too specific about the message
         assert!(!error_msg.is_empty());
 
-        // Clean up
-        std::env::remove_var("ELEVATION_SERVICE");
-        std::env::remove_var("ELEVATION_API_URL");
-        std::env::remove_var("ELEVATION_DEFAULT_DATASET");
-        std::env::remove_var("ELEVATION_RATE_LIMIT");
-        std::env::remove_var("ELEVATION_TIMEOUT");
+            },
+        ).await;
     }
 
     #[test]
@@ -943,35 +913,35 @@ mod tests {
     #[test]
     fn test_service_configuration_additional() {
         // Test default configuration
-        std::env::remove_var("ELEVATION_SERVICE");
-        let _service = ElevationEnrichmentService::new();
+        with_temp_env("ELEVATION_SERVICE", None::<&str>, || {
+            let _service = ElevationEnrichmentService::new();
+        });
         // Should default to opentopodata
 
         // Test opentopodata configuration
-        std::env::set_var("ELEVATION_SERVICE", "opentopodata");
-        std::env::set_var("ELEVATION_DEFAULT_DATASET", "aster30m");
-        std::env::set_var("ELEVATION_BATCH_SIZE", "50");
-        std::env::set_var("ELEVATION_RATE_LIMIT", "1"); // 1 second rate limit, not 50
-        std::env::set_var("ELEVATION_DAILY_LIMIT", "10000");
-        std::env::set_var("ELEVATION_TIMEOUT", "30");
-        std::env::set_var("ELEVATION_RETRY_ATTEMPTS", "3");
-        let _service = ElevationEnrichmentService::new();
+        with_temp_envs(
+            &[
+                ("ELEVATION_SERVICE", Some("opentopodata")),
+                ("ELEVATION_DEFAULT_DATASET", Some("aster30m")),
+                ("ELEVATION_BATCH_SIZE", Some("50")),
+                ("ELEVATION_RATE_LIMIT", Some("1")),
+                ("ELEVATION_DAILY_LIMIT", Some("10000")),
+                ("ELEVATION_TIMEOUT", Some("30")),
+                ("ELEVATION_RETRY_ATTEMPTS", Some("3")),
+            ],
+            || {
+                let _service = ElevationEnrichmentService::new();
+            },
+        );
 
         // Test open-elevation configuration
-        std::env::set_var("ELEVATION_SERVICE", "open-elevation");
-        let _service = ElevationEnrichmentService::new();
+        with_temp_env("ELEVATION_SERVICE", Some("open-elevation"), || {
+            let _service = ElevationEnrichmentService::new();
+        });
 
-        std::env::set_var("ELEVATION_SERVICE", "opentopodata");
-        let _service = ElevationEnrichmentService::new();
-
-        // Clean up environment variables
-        std::env::remove_var("ELEVATION_SERVICE");
-        std::env::remove_var("ELEVATION_DEFAULT_DATASET");
-        std::env::remove_var("ELEVATION_BATCH_SIZE");
-        std::env::remove_var("ELEVATION_RATE_LIMIT");
-        std::env::remove_var("ELEVATION_DAILY_LIMIT");
-        std::env::remove_var("ELEVATION_TIMEOUT");
-        std::env::remove_var("ELEVATION_RETRY_ATTEMPTS");
+        with_temp_env("ELEVATION_SERVICE", Some("opentopodata"), || {
+            let _service = ElevationEnrichmentService::new();
+        });
     }
 
     // Mock tests would go here using mockito or similar
