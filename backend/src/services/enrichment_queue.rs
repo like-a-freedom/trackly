@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::{timeout, Duration};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 const ENQUEUE_GRACE_MS: u64 = 20;
@@ -175,6 +175,8 @@ async fn run_enrichment_job(pool: Arc<PgPool>, job: EnrichmentJob) {
     let coordinates = job.coordinates;
     let enrichment_service = ElevationEnrichmentService::new().with_pool(Arc::clone(&pool));
 
+    debug!(track_id = %job.track_id, endpoint = "enrichment_queue", "starting enrichment job");
+
     match enrichment_service
         .enrich_track_elevation(coordinates.clone())
         .await
@@ -186,6 +188,12 @@ async fn run_enrichment_job(pool: Arc<PgPool>, job: EnrichmentJob) {
                     metrics::observe_track_enrich_duration(
                         "success",
                         enrich_start.elapsed().as_secs_f64(),
+                    );
+                    info!(
+                        track_id = %job.track_id,
+                        api_calls = result.api_calls_used,
+                        endpoint = "enrichment_queue",
+                        "enrichment job completed"
                     );
                 }
                 Err(PersistError::Elevation(e)) => {
