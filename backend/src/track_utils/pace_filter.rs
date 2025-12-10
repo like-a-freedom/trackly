@@ -311,7 +311,9 @@ fn apply_smoothing(pace_data: &[Option<f64>], config: &PaceFilterConfig) -> Vec<
                 pace_data[start..end].iter().filter_map(|&p| p).collect();
 
             if !window_values.is_empty() {
-                window_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                window_values.sort_by(|a, b| {
+                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                });
                 let median = if window_values.len().is_multiple_of(2) {
                     (window_values[window_values.len() / 2 - 1]
                         + window_values[window_values.len() / 2])

@@ -201,6 +201,15 @@ static TRACK_ENRICH_REQUESTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
     counter
 });
 
+static ELEVATION_API_CALLS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("elevation_api_calls_total", "Elevation API calls by service");
+    let counter = IntCounterVec::new(opts, &["service"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register elevation_api_calls_total");
+    counter
+});
+
 static TRACK_EXPORT_DURATION_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
     let opts = HistogramOpts::new("track_export_duration_seconds", "GPX export duration")
         .buckets(vec![0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]);
@@ -440,6 +449,10 @@ pub fn initialize_metrics_baseline() {
     let _ = TRACK_ENRICH_DURATION_SECONDS.with_label_values(&["failed_remote"]);
     let _ = TRACK_SLOPE_RECALC_DURATION_SECONDS.with_label_values(&["success"]);
     let _ = TRACK_SLOPE_RECALC_DURATION_SECONDS.with_label_values(&["db_error"]);
+
+    // Elevation API calls counter baseline
+    let _ = ELEVATION_API_CALLS_TOTAL.with_label_values(&["opentopodata"]);
+    let _ = ELEVATION_API_CALLS_TOTAL.with_label_values(&["open-elevation"]);
 
     // Export/simplify/POI
     let _ = TRACK_EXPORT_DURATION_SECONDS.with_label_values(&["gpx"]);
@@ -777,6 +790,13 @@ pub fn record_track_enrich_status(status: &str) {
     TRACK_ENRICH_REQUESTS_TOTAL
         .with_label_values(&[status])
         .inc();
+}
+
+/// Record elevation API calls (for Prometheus). Service name like "opentopodata" or "open-elevation".
+pub fn record_elevation_api_calls(service: &str, count: u32) {
+    ELEVATION_API_CALLS_TOTAL
+        .with_label_values(&[service])
+        .inc_by(count as u64);
 }
 
 pub fn observe_track_export_duration(format: &str, seconds: f64) {

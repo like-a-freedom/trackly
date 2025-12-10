@@ -17,10 +17,12 @@ pub async fn track_exists(pool: &Arc<PgPool>, hash: &str) -> Result<Option<Uuid>
         .fetch_optional(&**pool)
         .await?;
     crate::metrics::observe_db_query("track_exists", start.elapsed().as_secs_f64());
-    Ok(rec.map(|row| {
-        row.try_get::<Uuid, _>("id")
-            .expect("Failed to get id from row: id column missing or wrong type")
-    }))
+    if let Some(row) = rec {
+        let id = row.try_get::<Uuid, _>("id")?;
+        Ok(Some(id))
+    } else {
+        Ok(None)
+    }
 }
 
 pub struct InsertTrackParams<'a> {
@@ -219,18 +221,10 @@ pub async fn list_tracks(
         .await?;
     let mut result = Vec::new();
     for row in rows {
-        let id: Uuid = row
-            .try_get::<Uuid, _>("id")
-            .expect("Failed to get id: id column missing or wrong type");
-        let name: String = row
-            .try_get("name")
-            .expect("Failed to get name: name column missing or wrong type");
-        let categories: Vec<String> = row
-            .try_get("categories")
-            .expect("Failed to get categories: categories column missing or wrong type");
-        let length_km: f64 = row
-            .try_get("length_km")
-            .expect("Failed to get length_km: length_km column missing or wrong type");
+        let id: Uuid = row.try_get::<Uuid, _>("id")?;
+        let name: String = row.try_get("name")?;
+        let categories: Vec<String> = row.try_get("categories")?;
+        let length_km: f64 = row.try_get("length_km")?;
         let elevation_gain: Option<f32> = row.try_get("elevation_gain").ok();
         let elevation_loss: Option<f32> = row.try_get("elevation_loss").ok();
         let elevation_enriched: Option<bool> = row.try_get("elevation_enriched").ok();
@@ -275,24 +269,14 @@ pub async fn get_track_detail(
             compute_gap_metadata(segments_for_metadata.as_deref(), time_data_raw.as_ref());
 
         Ok(Some(TrackDetail {
-            id: row
-                .try_get::<Uuid, _>("id")
-                .expect("Failed to get id: id column missing or wrong type"),
-            name: row
-                .try_get("name")
-                .expect("Failed to get name: name column missing or wrong type"),
-            description: row
-                .try_get("description")
-                .expect("Failed to get description: description column missing or wrong type"),
-            categories: row
-                .try_get("categories")
-                .expect("Failed to get categories: categories column missing or wrong type"),
+            id: row.try_get::<Uuid, _>("id")?,
+            name: row.try_get("name")?,
+            description: row.try_get("description")?,
+            categories: row.try_get("categories")?,
             auto_classifications: row
                 .try_get("auto_classifications")
                 .unwrap_or_else(|_| Vec::new()),
-            geom_geojson: row
-                .try_get::<serde_json::Value, _>("geom_geojson")
-                .expect("Failed to get geom_geojson"),
+            geom_geojson: row.try_get::<serde_json::Value, _>("geom_geojson")?,
             segment_gaps,
             pause_gaps,
             length_km: row
