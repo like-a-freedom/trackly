@@ -202,7 +202,10 @@ static TRACK_ENRICH_REQUESTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 static ELEVATION_API_CALLS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
-    let opts = Opts::new("elevation_api_calls_total", "Elevation API calls by service");
+    let opts = Opts::new(
+        "elevation_api_calls_total",
+        "Elevation API calls by service",
+    );
     let counter = IntCounterVec::new(opts, &["service"]).expect("counter vec");
     REGISTRY
         .register(Box::new(counter.clone()))
