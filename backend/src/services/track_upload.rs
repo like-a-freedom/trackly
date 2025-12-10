@@ -37,6 +37,7 @@ impl TrackUploadService {
         Self { pool }
     }
 
+    #[tracing::instrument(skip(self, request), fields(endpoint = "upload_track_service", file_name = %request.file_name))]
     pub async fn upload_track(
         &self,
         request: TrackUploadRequest,
@@ -149,6 +150,13 @@ impl TrackUploadService {
 
         metrics::observe_track_pipeline_latency("success", pipeline_start.elapsed().as_secs_f64());
 
+        info!(
+            track_id = %track_id,
+            length_km = parsed_data.length_km,
+            endpoint = "upload_track_service",
+            "track persisted"
+        );
+
         Ok(TrackUploadResponse {
             id: track_id,
             url: format!("/tracks/{track_id}"),
@@ -165,10 +173,11 @@ impl TrackUploadService {
         validate_text_field(&request.categories.join(","), MAX_FIELD_SIZE, "categories")?;
 
         if request.categories.len() > MAX_CATEGORIES {
-            error!(
-                "Too many categories: {} > {}",
-                request.categories.len(),
-                MAX_CATEGORIES
+            warn!(
+                endpoint = "upload_track_service",
+                categories = request.categories.len(),
+                max = MAX_CATEGORIES,
+                "too many categories"
             );
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -189,7 +198,12 @@ impl TrackUploadService {
             "gpx" => {
                 let minimal_start = Instant::now();
                 let minimal = parse_gpx_minimal(file_bytes.as_ref()).map_err(|e| {
-                    error!(?e, "[upload_track_service] failed to parse gpx minimally");
+                    warn!(
+                        error = ?e,
+                        endpoint = "upload_track_service",
+                        stage = "gpx_minimal",
+                        "failed to parse gpx"
+                    );
                     StatusCode::UNPROCESSABLE_ENTITY
                 })?;
                 metrics::observe_track_parse_duration(
@@ -207,6 +221,11 @@ impl TrackUploadService {
                     .is_some()
                 {
                     metrics::record_track_deduplicated("gpx_hash_match");
+                    warn!(
+                        hash = %minimal.hash,
+                        endpoint = "upload_track_service",
+                        "duplicate track detected by hash"
+                    );
                     return Err(StatusCode::CONFLICT);
                 }
                 let dedup_elapsed = dedup_db_start.elapsed().as_secs_f64();
@@ -219,7 +238,12 @@ impl TrackUploadService {
                 }
                 let full_parse_start = Instant::now();
                 let parsed = parse_gpx_full(file_bytes.as_ref()).map_err(|e| {
-                    error!(?e, "[upload_track_service] failed to parse gpx fully");
+                    warn!(
+                        error = ?e,
+                        endpoint = "upload_track_service",
+                        stage = "gpx_full",
+                        "failed to parse gpx"
+                    );
                     StatusCode::UNPROCESSABLE_ENTITY
                 })?;
                 let full_elapsed = full_parse_start.elapsed().as_secs_f64();
@@ -235,7 +259,12 @@ impl TrackUploadService {
             "kml" => {
                 let kml_parse_start = Instant::now();
                 let parsed = track_utils::parse_kml(file_bytes.as_ref()).map_err(|e| {
-                    error!(?e, "[upload_track_service] failed to parse kml");
+                    warn!(
+                        error = ?e,
+                        endpoint = "upload_track_service",
+                        stage = "kml_full",
+                        "failed to parse kml"
+                    );
                     StatusCode::UNPROCESSABLE_ENTITY
                 })?;
                 let kml_full_elapsed = kml_parse_start.elapsed().as_secs_f64();
@@ -257,6 +286,11 @@ impl TrackUploadService {
                     .is_some()
                 {
                     metrics::record_track_deduplicated("kml_hash_match");
+                    warn!(
+                        hash = %parsed.hash,
+                        endpoint = "upload_track_service",
+                        "duplicate track detected by hash"
+                    );
                     return Err(StatusCode::CONFLICT);
                 }
                 metrics::observe_db_query("track_exists", dedup_db_start.elapsed().as_secs_f64());
@@ -264,9 +298,9 @@ impl TrackUploadService {
                 Ok(parsed)
             }
             _ => {
-                error!(
-                    "[upload_track_service] unsupported file type: {}",
-                    extension
+                warn!(
+                    endpoint = "upload_track_service",
+                    extension, "unsupported file type"
                 );
                 Err(StatusCode::BAD_REQUEST)
             }
@@ -286,14 +320,16 @@ impl TrackUploadService {
         let coordinates = match extract_coordinates_from_geojson(&parsed_data.geom_geojson) {
             Ok(coords) if !coords.is_empty() => coords,
             Ok(_) => {
-                info!(%track_id, "[upload_track_service] no coordinates for enrichment");
+                info!(track_id = %track_id, endpoint = "upload_track_service", "no coordinates for enrichment");
                 metrics::record_track_enrich_status("skipped_no_coords");
                 return;
             }
             Err(e) => {
-                error!(
-                    "[upload_track_service] failed to extract coordinates for enrichment: {}",
-                    e
+                warn!(
+                    track_id = %track_id,
+                    error = ?e,
+                    endpoint = "upload_track_service",
+                    "failed to extract coordinates for enrichment"
                 );
                 metrics::record_track_enrich_status("failed_extract_coords");
                 return;
@@ -335,23 +371,26 @@ impl TrackUploadService {
         }
 
         info!(
-            ?track_id,
-            "[upload_track_service] Processing {} waypoints",
-            waypoints.len()
+            track_id = %track_id,
+            waypoints = waypoints.len(),
+            endpoint = "upload_track_service",
+            "processing waypoints"
         );
 
         let poi_start = Instant::now();
         if let Err(e) =
             PoiDeduplicationService::link_pois_to_track(&self.pool, track_id, waypoints).await
         {
-            error!(?track_id, ?e, "[upload_track_service] Failed to link POIs");
+            error!(track_id = %track_id, error = ?e, endpoint = "upload_track_service", "failed to link POIs");
         }
         let elapsed = poi_start.elapsed().as_secs_f64();
         crate::metrics::observe_poi_link_duration("process_waypoints", elapsed);
         if elapsed > 1.0 {
             warn!(
-                ?track_id,
-                "[upload_track_service] processing POIs took {:.3}s", elapsed
+                track_id = %track_id,
+                duration_secs = elapsed,
+                endpoint = "upload_track_service",
+                "processing POIs took longer than expected"
             );
         }
     }

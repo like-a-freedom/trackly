@@ -25,12 +25,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 // Safe error handling - don't expose internal details
 fn handle_db_error(err: sqlx::Error) -> StatusCode {
-    error!("Database error occurred: {}", err);
+    error!(error = ?err, "database error occurred");
     match err {
         sqlx::Error::RowNotFound => StatusCode::NOT_FOUND,
         sqlx::Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -121,14 +121,14 @@ static UPLOAD_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
 fn normalize_session_id(raw: &str) -> Result<(Uuid, String), StatusCode> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        error!("session_id field is empty after trimming");
+        warn!(reason = "empty_session_id", "session_id field is empty after trimming");
         return Err(StatusCode::BAD_REQUEST);
     }
 
     match Uuid::parse_str(trimmed) {
         Ok(uuid) => Ok((uuid, trimmed.to_string())),
         Err(e) => {
-            error!("Failed to parse session_id '{}': {}", trimmed, e);
+            warn!(reason = "invalid_session_id", session_id = %trimmed, error = ?e, "failed to parse session_id");
             Err(StatusCode::BAD_REQUEST)
         }
     }
@@ -143,9 +143,12 @@ fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), Stat
         })?;
     if let Some(&last) = map.get(session_key) {
         if now < last + *UPLOAD_RATE_LIMIT_SECONDS {
-            error!(
-                "[upload_track] rate limit hit for session_id: {}",
-                session_key
+            let retry_after = last + *UPLOAD_RATE_LIMIT_SECONDS - now;
+            warn!(
+                reason = "upload_rate_limited",
+                session_id = session_key,
+                retry_after_seconds = retry_after,
+                "upload_track rate limit hit"
             );
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
@@ -167,7 +170,7 @@ pub async fn upload_track(
     State(pool): State<Arc<PgPool>>,
     mut multipart: AxumMultipart,
 ) -> Result<Json<TrackUploadResponse>, StatusCode> {
-    info!("[upload_track] called");
+    info!(endpoint = "upload_track", "request received");
     let mut name = None;
     let mut description = None;
     let mut categories = Vec::new();
@@ -176,15 +179,15 @@ pub async fn upload_track(
     let mut file_name = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|e| {
-        error!("Failed to get next field: {}", e);
+        warn!(error = ?e, "multipart read failed");
         StatusCode::INTERNAL_SERVER_ERROR
     })? {
-        debug!(field_name = ?field.name(), "[upload_track] got field");
+        debug!(field_name = ?field.name(), "upload_track: received multipart field");
         if let Some(field_name) = field.name() {
             match field_name {
                 "name" => {
                     let name_text = field.text().await.map_err(|e| {
-                        error!("Failed to get text from field 'name': {}", e);
+                        warn!(error = ?e, field = "name", "failed to read text field");
                         StatusCode::BAD_REQUEST
                     })?;
                     validate_text_field(&name_text, MAX_NAME_LENGTH, "name")?;
@@ -192,7 +195,7 @@ pub async fn upload_track(
                 }
                 "description" => {
                     let desc_text = field.text().await.map_err(|e| {
-                        error!("Failed to get text from field 'description': {}", e);
+                        warn!(error = ?e, field = "description", "failed to read text field");
                         StatusCode::BAD_REQUEST
                     })?;
                     validate_text_field(&desc_text, MAX_DESCRIPTION_LENGTH, "description")?;
@@ -200,13 +203,13 @@ pub async fn upload_track(
                 }
                 "categories" => {
                     let cats = field.text().await.map_err(|e| {
-                        error!("Failed to get text from field 'categories': {}", e);
+                        warn!(error = ?e, field = "categories", "failed to read text field");
                         StatusCode::BAD_REQUEST
                     })?;
                     validate_text_field(&cats, MAX_FIELD_SIZE, "categories")?;
                     categories = cats.split(',').map(|s| s.trim().to_string()).collect();
                     if categories.len() > MAX_CATEGORIES {
-                        error!("Too many categories: {}", categories.len());
+                        warn!(categories = categories.len(), max = MAX_CATEGORIES, "too many categories");
                         return Err(StatusCode::BAD_REQUEST);
                     }
                     for cat in &categories {
@@ -215,7 +218,7 @@ pub async fn upload_track(
                 }
                 "session_id" => {
                     let sid_raw = field.text().await.map_err(|e| {
-                        error!("Failed to get text from field 'session_id': {}", e);
+                        warn!(error = ?e, field = "session_id", "failed to read text field");
                         StatusCode::BAD_REQUEST
                     })?;
                     let (parsed_session_id, normalized_session) = normalize_session_id(&sid_raw)?;
@@ -237,7 +240,7 @@ pub async fn upload_track(
                 "file" => {
                     file_name = field.file_name().map(|s| s.to_string());
                     let bytes = field.bytes().await.map_err(|e| {
-                        error!("Failed to get bytes from field 'file': {}", e);
+                        warn!(error = ?e, field = "file", "failed to read file bytes");
                         metrics::record_track_upload_failure("read_error");
                         StatusCode::PAYLOAD_TOO_LARGE
                     })?;
@@ -253,7 +256,7 @@ pub async fn upload_track(
     let file_bytes = match file_bytes {
         Some(b) => b,
         None => {
-            error!("[upload_track] no file provided");
+            warn!(reason = "missing_file", "upload_track request without file");
             metrics::record_track_upload_failure("validation");
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -261,7 +264,7 @@ pub async fn upload_track(
     let file_name = match file_name {
         Some(f) => f,
         None => {
-            error!("[upload_track] no file name provided");
+            warn!(reason = "missing_file_name", "upload_track request missing file name");
             metrics::record_track_upload_failure("validation");
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -297,6 +300,7 @@ pub async fn upload_track(
 
     let response = service.upload_track(request).await?;
     metrics::record_track_uploaded("anonymous");
+    info!(endpoint = "upload_track", track_id = %response.id, "track uploaded");
     Ok(Json(response))
 }
 
@@ -321,7 +325,7 @@ pub async fn get_track(
     Path(id): Path<Uuid>,
     Query(params): Query<TrackSimplificationQuery>,
 ) -> Result<Json<TrackDetail>, StatusCode> {
-    info!(?id, ?params.zoom, ?params.mode, "[get_track] called");
+    debug!(track_id = %id, zoom = ?params.zoom, mode = ?params.mode, endpoint = "get_track", "request received");
 
     // Use adaptive track detail if zoom/mode params are provided
     let result = if params.zoom.is_some() || params.mode.is_some() {
@@ -333,11 +337,11 @@ pub async fn get_track(
     match result {
         Ok(Some(track)) => Ok(Json(track)),
         Ok(None) => {
-            error!(?id, "[get_track] not found");
+            debug!(track_id = %id, endpoint = "get_track", "track not found");
             Err(StatusCode::NOT_FOUND)
         }
         Err(e) => {
-            error!(?e, "[get_track] db error");
+            error!(error = ?e, endpoint = "get_track", "db error");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -348,7 +352,7 @@ pub async fn get_track_simplified(
     Path(id): Path<Uuid>,
     Query(params): Query<TrackSimplificationQuery>,
 ) -> Result<Json<TrackSimplified>, StatusCode> {
-    info!(?id, ?params.zoom, ?params.mode, "[get_track_simplified] called");
+    debug!(track_id = %id, zoom = ?params.zoom, mode = ?params.mode, endpoint = "get_track_simplified", "request received");
 
     match db::get_track_detail_adaptive(&pool, id, params.zoom, params.mode.as_deref()).await {
         Ok(Some(track)) => {
@@ -401,17 +405,19 @@ pub async fn get_track_simplified(
                 track_id = %id,
                 zoom = params.zoom.unwrap_or(15.0),
                 mode = params.mode.as_deref().unwrap_or("detail"),
-                "[PERF] get_track_simplified completed with adaptive optimization"
+                endpoint = "get_track_simplified",
+                event = "adaptation_complete",
+                "adaptive optimization finished"
             );
 
             Ok(Json(simplified))
         }
         Ok(None) => {
-            error!(?id, "[get_track_simplified] not found");
+            debug!(track_id = %id, endpoint = "get_track_simplified", "track not found");
             Err(StatusCode::NOT_FOUND)
         }
         Err(e) => {
-            error!(?e, "[get_track_simplified] db error");
+            error!(error = ?e, endpoint = "get_track_simplified", "db error");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -476,7 +482,7 @@ pub async fn search_tracks(
     }
 
     let tracks = db::search_tracks(&pool, &params.query).await.map_err(|e| {
-        error!("Failed to search tracks: {}", e);
+        error!(error = ?e, endpoint = "search_tracks", "db error searching tracks");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -484,7 +490,7 @@ pub async fn search_tracks(
 }
 
 pub async fn health() -> &'static str {
-    info!("[health] called");
+    debug!(endpoint = "health", "health check");
     "ok"
 }
 
@@ -492,7 +498,7 @@ pub async fn export_track_gpx(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
 ) -> Result<axum::response::Response<axum::body::Body>, StatusCode> {
-    info!(?id, "[export_track_gpx] called");
+    debug!(track_id = %id, endpoint = "export_track_gpx", "request received");
     let start = Instant::now();
 
     match db::get_track_detail(&pool, id).await {
@@ -564,17 +570,17 @@ pub async fn enrich_elevation(
     let track = db::get_track_by_id(&pool, id)
         .await
         .map_err(|e| {
-            error!("Failed to get track {}: {}", id, e);
+            error!(track_id = %id, error = ?e, endpoint = "enrich_elevation", "failed to get track");
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or_else(|| {
-            error!("Track {} not found", id);
+            warn!(track_id = %id, endpoint = "enrich_elevation", "track not found");
             StatusCode::NOT_FOUND
         })?;
 
     // Check ownership
     if track.session_id != Some(payload.session_id) {
-        error!("Permission denied for track {}: user session mismatch", id);
+        warn!(track_id = %id, endpoint = "enrich_elevation", "permission denied: session mismatch");
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -586,10 +592,7 @@ pub async fn enrich_elevation(
         track.elevation_loss,
         payload.force.unwrap_or(false),
     ) {
-        info!(
-            "Track {} already has elevation data, skipping enrichment",
-            id
-        );
+        debug!(track_id = %id, endpoint = "enrich_elevation", "skipping: already enriched");
         return Ok(Json(EnrichElevationResponse {
             id,
             message: "Track already has elevation data".to_string(),
@@ -606,20 +609,16 @@ pub async fn enrich_elevation(
     let coordinates = match extract_coordinates_from_geojson(&track.geom_geojson) {
         Ok(coords) if !coords.is_empty() => coords,
         Ok(_) => {
-            error!("Track {} has no coordinates", id);
+            warn!(track_id = %id, endpoint = "enrich_elevation", reason = "no_coordinates", "cannot enrich track without coordinates");
             return Err(StatusCode::BAD_REQUEST);
         }
         Err(e) => {
-            error!("Failed to extract coordinates from track {}: {}", id, e);
+            warn!(track_id = %id, error = ?e, endpoint = "enrich_elevation", reason = "invalid_geojson", "failed to extract coordinates");
             return Err(StatusCode::BAD_REQUEST);
         }
     };
 
-    info!(
-        "Starting elevation enrichment for track {} with {} points",
-        id,
-        coordinates.len()
-    );
+    info!(track_id = %id, points = coordinates.len(), endpoint = "enrich_elevation", "starting elevation enrichment");
 
     // Enrich elevation data
     let enrichment_result = match enrichment_service
@@ -651,7 +650,7 @@ pub async fn enrich_elevation(
     )
     .await
     {
-        error!("Failed to update elevation data for track {}: {}", id, e);
+        error!(track_id = %id, error = ?e, endpoint = "enrich_elevation", "failed to update elevation data");
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
@@ -679,25 +678,27 @@ pub async fn enrich_elevation(
         )
         .await
         {
-            error!("Failed to update slope data for track {}: {}", id, e);
+            error!(track_id = %id, error = ?e, endpoint = "enrich_elevation", "failed to update slope data");
             metrics::observe_slope_recalc("db_error", slope_duration);
         } else {
             metrics::observe_slope_recalc("success", slope_duration);
             info!(
-                "Successfully calculated slope data for track {}: min={:.1}%, max={:.1}%, avg={:.1}%",
-                id,
-                slope_result.slope_min.unwrap_or(0.0),
-                slope_result.slope_max.unwrap_or(0.0),
-                slope_result.slope_avg.unwrap_or(0.0)
+                track_id = %id,
+                slope_min = slope_result.slope_min.unwrap_or(0.0),
+                slope_max = slope_result.slope_max.unwrap_or(0.0),
+                slope_avg = slope_result.slope_avg.unwrap_or(0.0),
+                endpoint = "enrich_elevation",
+                "slope metrics updated"
             );
         }
     }
 
     info!(
-        "Successfully enriched track {} with elevation data: gain={:.1}m, loss={:.1}m",
-        id,
-        enrichment_result.metrics.elevation_gain.unwrap_or(0.0),
-        enrichment_result.metrics.elevation_loss.unwrap_or(0.0)
+        track_id = %id,
+        gain_m = enrichment_result.metrics.elevation_gain.unwrap_or(0.0),
+        loss_m = enrichment_result.metrics.elevation_loss.unwrap_or(0.0),
+        endpoint = "enrich_elevation",
+        "elevation enrichment completed"
     );
 
     Ok(Json(EnrichElevationResponse {

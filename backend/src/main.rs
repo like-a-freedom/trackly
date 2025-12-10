@@ -3,7 +3,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use backend::{handlers, metrics, services};
+use backend::{handlers, logging, metrics, services};
 use mimalloc::MiMalloc;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -31,11 +31,7 @@ async fn main() {
         }
     }
 
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .event_format(tracing_subscriber::fmt::format().json())
-        .init();
+    logging::init();
 
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
@@ -63,12 +59,12 @@ async fn main() {
     services::enrichment_queue::init_enrichment_queue(Arc::clone(&pool));
 
     // Run migrations automatically on startup
-    info!("Running database migrations...");
+    info!(stage = "migrations", action = "start", "running database migrations");
     sqlx::migrate!("./migrations")
         .run(&*pool)
         .await
         .expect("Failed to run migrations");
-    info!("Database migrations completed successfully");
+    info!(stage = "migrations", action = "complete", "database migrations finished");
 
     let app = Router::new()
         .route("/health", get(handlers::health))
@@ -123,11 +119,11 @@ async fn main() {
         .layer(metrics::HttpMetricsLayer::new())
         .with_state(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    info!("listening on {}", addr);
+    info!(address = %addr, "listening");
     info!(
-        "max body size: {} bytes ({} MB)",
-        max_body_size,
-        max_body_size / (1024 * 1024)
+        max_body_bytes = max_body_size,
+        max_body_mb = max_body_size / (1024 * 1024),
+        "configured http body size limit"
     );
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => l,
