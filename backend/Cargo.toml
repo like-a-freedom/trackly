@@ -24,12 +24,22 @@ mimalloc = "0.1.48"
 prometheus = "0.14.0"
 
 # Database
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "uuid", "chrono", "macros", "migrate"] }
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio",
+    "postgres",
+    "uuid",
+    "chrono",
+    "macros",
+    "migrate",
+] }
 uuid = { version = "1.18.1", features = ["v4", "serde"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 
 # HTTP client
-reqwest = { version = "0.12.25", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12.25", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
 ammonia = "4.1.2"
 
 # File parsing
@@ -48,26 +58,20 @@ tokio-util = "0.7.17"
 assert_approx_eq = "1.1.0"
 mockito = "1.7.1"
 
-# Speed up compilation by pre-compiling dependencies
-[profile.dev.package."*"]
-opt-level = 1  # Light optimization for dependencies
-debug = false  # No debug info for dependencies
-
-# Optimizations for development builds
 [profile.dev]
-debug = 1          # Reduced debug info
-incremental = true # Enable incremental compilation
-codegen-units = 256 # More parallel code generation
-
-# Fast test builds
-[profile.test]
+opt-level = 0
 debug = 1
 incremental = true
-codegen-units = 256
-opt-level = 0
+codegen-units = 16
 
-# Optimizations for release builds
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.test]
+inherits = "dev"
+
 [profile.release]
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
