@@ -237,6 +237,28 @@ describe('TrackFilterControl', () => {
             expect(wrapper.find('.no-tracks-placeholder').exists()).toBe(false);
             expect(wrapper.find('.filter-section').exists()).toBe(true);
         });
+
+        it('shows "My tracks" option and emits myTracks when toggled', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasTracksInViewport: true
+                }),
+            });
+
+            const myTracksCheckbox = wrapper.find('#show-my-tracks');
+            expect(myTracksCheckbox.exists()).toBe(true);
+
+            // Toggle the checkbox
+            await myTracksCheckbox.setChecked(true);
+
+            await nextTick();
+
+            // Emitted update:filter should include myTracks = true
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+            const last = emitted[emitted.length - 1][0];
+            expect(last).toHaveProperty('myTracks', true);
+        });
     });
 
     describe('Category filtering', () => {
@@ -467,7 +489,8 @@ describe('TrackFilterControl', () => {
                     categories: ['hiking'],
                     lengthRange: [0, 50],
                     elevationGainRange: [0, 2000],
-                    slopeRange: [0, 20]
+                    slopeRange: [0, 20],
+                    myTracks: false
                 })
             );
         });
@@ -497,7 +520,8 @@ describe('TrackFilterControl', () => {
                     categories: [],
                     lengthRange: [0, 50],
                     elevationGainRange: [0, 2000],
-                    slopeRange: [0, 20]
+                    slopeRange: [0, 20],
+                    myTracks: false
                 })
             );
         });
@@ -612,7 +636,8 @@ describe('TrackFilterControl', () => {
                     categories: ['hiking', 'running', 'cycling'],
                     lengthRange: [0, 50],
                     elevationGainRange: [0, 2000],
-                    slopeRange: [0, 20]
+                    slopeRange: [0, 20],
+                    myTracks: false
                 })
             );
         });
@@ -1033,7 +1058,8 @@ describe('TrackFilterControl', () => {
                 categories: ['hiking', 'running'],
                 lengthRange: [0, 50],
                 elevationGainRange: [0, 2000],
-                slopeRange: [0, 20]
+                slopeRange: [0, 20],
+                myTracks: false
             });
         });
 
@@ -1244,7 +1270,8 @@ describe('TrackFilterControl', () => {
                     categories: ['hiking'],
                     lengthRange: [0, 50],
                     elevationGainRange: [300, 1800],
-                    slopeRange: [0, 20]
+                    slopeRange: [0, 20],
+                    myTracks: false
                 })
             );
         });

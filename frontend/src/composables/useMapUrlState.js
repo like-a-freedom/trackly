@@ -3,7 +3,7 @@
  * Enables shareable URLs by syncing zoom/center with query parameters
  */
 
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAdvancedDebounce } from './useAdvancedDebounce.js';
 
@@ -48,7 +48,7 @@ export function useMapUrlState(options = {}) {
   // Reactive state
   const isUpdatingFromUrl = ref(false);
   const hasUrlParams = ref(false);
-  
+
   // Track last update to prevent oscillation
   const lastUpdateTime = ref(0);
   const MIN_UPDATE_INTERVAL = 150; // Minimum time between updates in ms
@@ -101,13 +101,13 @@ export function useMapUrlState(options = {}) {
 
       // Only update if values actually changed
       const currentQuery = route.query;
-      const hasChanged = 
+      const hasChanged =
         currentQuery.zoom !== newQuery.zoom ||
         currentQuery.lat !== newQuery.lat ||
         currentQuery.lng !== newQuery.lng;
 
       if (hasChanged) {
-        router.replace({ 
+        router.replace({
           query: { ...currentQuery, ...newQuery }
         });
       }
@@ -121,18 +121,18 @@ export function useMapUrlState(options = {}) {
    */
   function updateFromUrl(zoom, center) {
     const urlParams = parseUrlParams();
-    
+
     isUpdatingFromUrl.value = true;
-    
+
     try {
       // Update zoom if it changed and is valid
       if (urlParams.hasValidParams && urlParams.zoom !== zoom.value) {
         zoom.value = urlParams.zoom;
       }
-      
+
       // Update center if it changed and is valid  
-      if (urlParams.hasValidParams && 
-          (urlParams.center[0] !== center.value[0] || urlParams.center[1] !== center.value[1])) {
+      if (urlParams.hasValidParams &&
+        (urlParams.center[0] !== center.value[0] || urlParams.center[1] !== center.value[1])) {
         center.value = [...urlParams.center];
       }
     } finally {
@@ -148,14 +148,14 @@ export function useMapUrlState(options = {}) {
    */
   function updateMapState(zoom, center) {
     const now = Date.now();
-    
+
     // Prevent too rapid updates that can cause oscillation
     if (now - lastUpdateTime.value < MIN_UPDATE_INTERVAL) {
       return;
     }
-    
+
     lastUpdateTime.value = now;
-    
+
     if (!isValidZoom(zoom) || !isValidLatLng(center)) {
       return;
     }
@@ -193,50 +193,53 @@ export function useMapUrlState(options = {}) {
 
   // Watch for route changes to update map state
   let routeUnwatch = null;
-  
-  onMounted(() => {
-    // Set up route watcher with proper cleanup
-    routeUnwatch = watch(
-      () => route.query,
-      (newQuery, oldQuery) => {
-        // Only react to map-related query changes
-        const mapQueryChanged = 
-          newQuery.zoom !== oldQuery?.zoom ||
-          newQuery.lat !== oldQuery?.lat ||
-          newQuery.lng !== oldQuery?.lng;
 
-        if (mapQueryChanged && !isUpdatingFromUrl.value) {
-          // External route change (browser back/forward, direct URL change)
-          const urlParams = parseUrlParams();
-          if (urlParams.hasValidParams) {
-            // Emit event for components to react to URL changes
-            window.dispatchEvent(new CustomEvent('mapUrlStateChanged', {
-              detail: {
-                zoom: urlParams.zoom,
-                center: urlParams.center,
-                source: 'url'
-              }
-            }));
+  // Register route watcher only when used inside a component setup lifecycle
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      // Set up route watcher with proper cleanup
+      routeUnwatch = watch(
+        () => route.query,
+        (newQuery, oldQuery) => {
+          // Only react to map-related query changes
+          const mapQueryChanged =
+            newQuery.zoom !== oldQuery?.zoom ||
+            newQuery.lat !== oldQuery?.lat ||
+            newQuery.lng !== oldQuery?.lng;
+
+          if (mapQueryChanged && !isUpdatingFromUrl.value) {
+            // External route change (browser back/forward, direct URL change)
+            const urlParams = parseUrlParams();
+            if (urlParams.hasValidParams) {
+              // Emit event for components to react to URL changes
+              window.dispatchEvent(new CustomEvent('mapUrlStateChanged', {
+                detail: {
+                  zoom: urlParams.zoom,
+                  center: urlParams.center,
+                  source: 'url'
+                }
+              }));
+            }
           }
-        }
-      },
-      { immediate: false }
-    );
-  });
+        },
+        { immediate: false }
+      );
+    });
 
-  onUnmounted(() => {
-    // Cleanup
-    if (routeUnwatch) {
-      routeUnwatch();
-    }
-    debouncedUpdateUrl.cancel();
-  });
+    onUnmounted(() => {
+      // Cleanup
+      if (routeUnwatch) {
+        routeUnwatch();
+      }
+      debouncedUpdateUrl.cancel();
+    });
+  }
 
   return {
     // State
     hasUrlParams,
     isUpdatingFromUrl,
-    
+
     // Methods
     updateMapState,
     updateFromUrl,
@@ -244,11 +247,11 @@ export function useMapUrlState(options = {}) {
     clearUrlParams,
     getCurrentMapUrl,
     parseUrlParams,
-    
+
     // Validation utilities
     isValidZoom,
     isValidLatLng,
-    
+
     // Internal methods (exposed for testing)
     _debouncedUpdateUrl: debouncedUpdateUrl
   };
@@ -264,7 +267,7 @@ export function useMapUrlStateListener() {
     const handler = (event) => callback(event.detail);
     listeners.value.push(handler);
     window.addEventListener('mapUrlStateChanged', handler);
-    
+
     return () => {
       window.removeEventListener('mapUrlStateChanged', handler);
       const index = listeners.value.indexOf(handler);

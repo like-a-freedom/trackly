@@ -1,7 +1,7 @@
 /**
  * Enhanced debouncing utilities for interactive operations
  */
-import { ref, watch, onUnmounted } from 'vue';
+import { ref, watch, onUnmounted, getCurrentInstance } from 'vue';
 
 // Advanced debounce with leading and trailing edge control
 export function useAdvancedDebounce(func, delay, options = {}) {
@@ -139,10 +139,13 @@ export function useReactiveDebounce(source, delay, options = {}) {
         debounced(newValue);
     }, { immediate: false });
 
-    onUnmounted(() => {
-        debounced.cancel();
-        stopWatcher();
-    });
+    // Only register lifecycle cleanup when called from a component setup context
+    if (getCurrentInstance()) {
+        onUnmounted(() => {
+            debounced.cancel();
+            stopWatcher();
+        });
+    }
 
     return {
         debouncedValue,
@@ -166,11 +169,14 @@ export function useMapDebounce() {
         callback(query);
     }, 400, { leading: false, trailing: true });
 
-    onUnmounted(() => {
-        zoomDebounce.cancel();
-        boundsDebounce.cancel();
-        searchDebounce.cancel();
-    });
+    // Register cleanup only when inside a component setup context
+    if (getCurrentInstance()) {
+        onUnmounted(() => {
+            zoomDebounce.cancel();
+            boundsDebounce.cancel();
+            searchDebounce.cancel();
+        });
+    }
 
     return {
         zoomDebounce,

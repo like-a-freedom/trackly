@@ -58,14 +58,29 @@ export function convertUrlsToLinks(text) {
   const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
 
   return text.replace(urlRegex, (url) => {
+    // Add small HTML entity decoder for the URL so that entities like &lt; &gt; are
+    // converted back to literal characters before percent-encoding. This ensures
+    // href attributes do not contain raw HTML entities that the browser may decode
+    // back into unsafe characters when parsing the attribute.
+    const htmlEntityMap = {
+      'lt': '<',
+      'gt': '>',
+      'amp': '&',
+      'quot': '"',
+      '#39': "'"
+    };
+    const decodeHtmlEntities = (s) => s.replace(/&(lt|gt|amp|quot|#39);/g, (_, name) => htmlEntityMap[name] || '&' + name + ';');
+
     // Add protocol if missing (for www. links)
-    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+    const rawUrl = url;
+    const unescapedUrl = decodeHtmlEntities(rawUrl);
+    const fullUrl = unescapedUrl.startsWith('http') ? unescapedUrl : `https://${unescapedUrl}`;
 
     // URL-encode the href for security (handles special characters properly)
     const encodedUrl = encodeURI(fullUrl);
 
-    // Also escape the visible text for security
-    const escapedVisibleText = url.replace(/[<>&"']/g, (char) => {
+    // Also escape the visible text for security (show escaped entities in visible text)
+    const escapedVisibleText = rawUrl.replace(/[<>&"']/g, (char) => {
       const entityMap = {
         '<': '&lt;',
         '>': '&gt;',
