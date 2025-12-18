@@ -14,7 +14,7 @@
       <div v-if="data.categories && data.categories.length" class="upload-label categories-section">
         Categories:
         <span class="category-tags">
-          <span v-for="cat in data.categories" :key="cat" class="category-tag">{{ cat }}</span>
+          <span v-for="cat in data.categories" :key="cat" class="category-tag">{{ capitalize(cat) }}</span>
         </span>
       </div>
     </div>
@@ -31,6 +31,7 @@ const props = defineProps({
 const { visible, x, y, data } = toRefs(props);
 
 import { formatDateTime } from '../utils/format';
+import { capitalize } from '../utils/string';
 
 // Format dataset name for display
 function formatDataset(dataset) {

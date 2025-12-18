@@ -144,7 +144,7 @@
                     class="category-checkbox"
                   />
                   <label :for="`category-${category}`" class="checkbox-label">
-                      {{ category }}
+                      {{ capitalize(category) }}
                   </label>
                 </div>
               </div>
@@ -225,6 +225,7 @@ import '@vueform/slider/themes/default.css';
 // Import debouncing functionality to prevent excessive filter updates
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 import { useUnits } from '../composables/useUnits';
+import { capitalize } from '../utils/string';
 
 const props = defineProps({
   categories: Array, // All available categories (viewport-based)

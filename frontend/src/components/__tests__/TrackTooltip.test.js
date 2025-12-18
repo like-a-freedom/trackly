@@ -318,9 +318,9 @@ describe('TrackTooltip', () => {
 
             const categoryTags = wrapper.findAll('.category-tag');
             expect(categoryTags).toHaveLength(3);
-            expect(categoryTags[0].text()).toBe('running');
-            expect(categoryTags[1].text()).toBe('park');
-            expect(categoryTags[2].text()).toBe('morning');
+            expect(categoryTags[0].text()).toBe('Running');
+            expect(categoryTags[1].text()).toBe('Park');
+            expect(categoryTags[2].text()).toBe('Morning');
         });
 
         it('does not display categories section when categories are empty', () => {

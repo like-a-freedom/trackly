@@ -6,6 +6,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted, inject } from 'vue';
+import { capitalize } from '../utils/string';
 import L from 'leaflet';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -97,7 +98,7 @@ function createTooltipContent(poi) {
   let html = `<div class="poi-tooltip"><strong>${name}</strong>`;
   
   if (category) {
-    html += `<br><span class="poi-category">${category}</span>`;
+    html += `<br><span class="poi-category">${capitalize(category)}</span>`;
   }
   if (elevation) {
     html += `<br><span class="poi-elevation">${Math.round(elevation)}m</span>`;
