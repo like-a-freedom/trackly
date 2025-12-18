@@ -662,7 +662,7 @@ onUnmounted(() => {
   border: 1px solid #e9ecef;
   border-radius: 6px;
   padding: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   animation: fadeInDown 0.2s ease;
 }
 
@@ -727,6 +727,11 @@ onUnmounted(() => {
   display: block;
   margin-bottom: 12px;
   font-weight: 500;
+}
+
+/* Space before actions for consistency with other sections */
+.filter-actions {
+  margin-top: 12px;
 }
 
 /* Add padding for the slider inside the filter-section */
