@@ -52,7 +52,7 @@
             <div class="track-meta">
               <span class="track-length">{{ formatDistance(track.length_km) }}</span>
               <span v-if="track.categories.length > 0" class="track-categories">
-                {{ track.categories.join(', ') }}
+                {{ track.categories.map(capitalize).join(', ') }}
               </span>
             </div>
           </div>
@@ -80,6 +80,7 @@
 <script setup>
 import { ref, watch, nextTick } from 'vue'
 import { useSearchState } from '../composables/useSearchState'
+import { capitalize } from '../utils/string'
 
 const props = defineProps({
   isVisible: {

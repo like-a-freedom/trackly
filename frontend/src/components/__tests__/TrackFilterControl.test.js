@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import TrackFilterControl from '../TrackFilterControl.vue';
+import { capitalize } from '../../utils/string';
 
 // Mock the Slider component
 vi.mock('@vueform/slider', () => ({
@@ -156,7 +157,7 @@ describe('TrackFilterControl', () => {
 
             categories.forEach((category, index) => {
                 expect(checkboxes[index].attributes('value')).toBe(category);
-                expect(wrapper.find(`label[for="category-${category}"]`).text()).toBe(category);
+                expect(wrapper.find(`label[for="category-${category}"]`).text()).toBe(capitalize(category));
             });
         });
 

@@ -18,7 +18,7 @@
         </div>
         <div class="poi-meta">
           <span v-if="poi.poi?.category || poi.category" class="poi-category">
-            {{ poi.poi?.category || poi.category }}
+            {{ capitalize(poi.poi?.category || poi.category) }}
           </span>
           <span v-if="poi.poi?.elevation || poi.elevation" class="poi-elevation">
             {{ formatElevation(poi.poi?.elevation || poi.elevation) }}
@@ -35,6 +35,7 @@
 <script setup>
 import { computed } from 'vue';
 import { LMarker, LIcon, LTooltip } from '@vue-leaflet/vue-leaflet';
+import { capitalize } from '../utils/string';
 
 const props = defineProps({
   poi: {
