@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import TrackSearch from '../TrackSearch.vue'
 
 // Mock fetch
@@ -83,7 +83,7 @@ describe('TrackSearch', () => {
 
     // Wait for the search to complete
     await wrapper.vm.$nextTick()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushPromises()
 
     expect(fetch).toHaveBeenCalledWith('/tracks/search?query=test')
   })
@@ -106,7 +106,7 @@ describe('TrackSearch', () => {
 
     // Wait for the search to complete
     await wrapper.vm.$nextTick()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushPromises()
 
     expect(wrapper.find('.no-results').exists()).toBe(true)
     expect(wrapper.text()).toContain('No tracks found. Please, refine your query.')
@@ -141,7 +141,7 @@ describe('TrackSearch', () => {
 
     // Wait for the search to complete
     await wrapper.vm.$nextTick()
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flushPromises()
 
     const resultItem = wrapper.find('.search-result-item')
     await resultItem.trigger('click')

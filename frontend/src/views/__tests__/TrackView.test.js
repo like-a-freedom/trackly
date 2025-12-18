@@ -122,8 +122,7 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await nextTick();
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await waitFor(() => wrapper.vm.track);
 
         // Check that trackBounds computed property works
         const trackBounds = wrapper.vm.trackBounds;
@@ -147,8 +146,7 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await nextTick();
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await waitFor(() => wrapper.vm.track);
 
         const trackBounds = wrapper.vm.trackBounds;
         const track = wrapper.vm.track;
@@ -171,8 +169,7 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await nextTick();
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await waitFor(() => wrapper.vm.track);
 
         const initialBounds = wrapper.vm.trackBounds;
 
@@ -200,8 +197,7 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await nextTick();
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await waitFor(() => wrapper.vm.track);
 
         const trackMapComponent = wrapper.findComponent({ name: 'TrackMap' });
         expect(trackMapComponent.exists()).toBe(true);
