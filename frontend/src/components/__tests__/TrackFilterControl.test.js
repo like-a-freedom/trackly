@@ -141,13 +141,15 @@ describe('TrackFilterControl', () => {
             expect(wrapper.find('.filter-actions').exists()).toBe(true);
         });
 
-        it('displays all category checkboxes', () => {
+        it('displays all category checkboxes', async () => {
             const categories = ['hiking', 'running', 'cycling', 'walking'];
             wrapper = mount(TrackFilterControl, {
                 props: createDefaultProps({
                     categories
                 }),
             });
+
+            await nextTick();
 
             const checkboxes = wrapper.findAll('.category-checkbox');
             expect(checkboxes.length).toBe(categories.length);
@@ -158,7 +160,7 @@ describe('TrackFilterControl', () => {
             });
         });
 
-        it('displays length range slider', () => {
+        it('displays length range slider', async () => {
             wrapper = mount(TrackFilterControl, {
                 props: createDefaultProps({
                     categories: ['hiking'],
@@ -167,11 +169,14 @@ describe('TrackFilterControl', () => {
                 }),
             });
 
+            await nextTick();
+
             const sliderMin = wrapper.find('[data-testid="slider-min"]');
             const sliderMax = wrapper.find('[data-testid="slider-max"]');
 
             expect(sliderMin.exists()).toBe(true);
             expect(sliderMax.exists()).toBe(true);
+            // Slider uses stable values which are initialized from props
             expect(sliderMin.attributes('min')).toBe('5');
             expect(sliderMin.attributes('max')).toBe('25');
         });
@@ -215,10 +220,12 @@ describe('TrackFilterControl', () => {
             expect(sliderMax.element.value).toBe('25');
         });
 
-        it('shows no-tracks placeholder when hasTracksInViewport is false', () => {
+        it('shows no-tracks placeholder when hasTracksInViewport is false and no stable categories', () => {
             wrapper = mount(TrackFilterControl, {
                 props: createDefaultProps({
-                    hasTracksInViewport: false
+                    hasTracksInViewport: false,
+                    categories: [],
+                    globalCategories: []
                 }),
             });
 
@@ -236,6 +243,8 @@ describe('TrackFilterControl', () => {
 
             expect(wrapper.find('.no-tracks-placeholder').exists()).toBe(false);
             expect(wrapper.find('.filter-section').exists()).toBe(true);
+            // Should show category filters
+            expect(wrapper.find('.category-checkboxes').exists()).toBe(true);
         });
 
         it('shows "My tracks" option and emits myTracks when toggled', async () => {
@@ -258,6 +267,61 @@ describe('TrackFilterControl', () => {
             expect(emitted).toBeTruthy();
             const last = emitted[emitted.length - 1][0];
             expect(last).toHaveProperty('myTracks', true);
+        });
+
+        it('shows My tracks checkbox and hides other filters when no tracks match filter', async () => {
+            // Start with tracks in viewport
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasTracksInViewport: true,
+                    categories: ['hiking', 'running'],
+                }),
+            });
+
+            await nextTick();
+
+            // Verify all filters are shown initially
+            expect(wrapper.find('.filter-section').exists()).toBe(true);
+            expect(wrapper.find('.category-checkboxes').exists()).toBe(true);
+            const myTracksCheckbox = wrapper.find('#show-my-tracks');
+            expect(myTracksCheckbox.exists()).toBe(true);
+
+            // Toggle myTracks ON
+            await myTracksCheckbox.setChecked(true);
+            await nextTick();
+
+            // Simulate no tracks matching the filter
+            await wrapper.setProps({ hasTracksInViewport: false });
+            await nextTick();
+
+            // My tracks checkbox should still be visible
+            expect(wrapper.find('#show-my-tracks').exists()).toBe(true);
+            // Other filters should be hidden
+            expect(wrapper.find('.category-checkboxes').exists()).toBe(false);
+            // Should show special message for no matching tracks
+            expect(wrapper.find('.no-tracks-placeholder').exists()).toBe(true);
+            expect(wrapper.text()).toContain('No matching tracks');
+            expect(wrapper.text()).toContain('Try disabling "My tracks" filter');
+        });
+
+        it('shows My tracks checkbox even when hasTracksInViewport is false but has stable categories', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasTracksInViewport: false,
+                    categories: ['hiking', 'running'],
+                    globalCategories: ['hiking', 'running', 'cycling'],
+                }),
+            });
+
+            await nextTick();
+
+            // My tracks checkbox should be visible
+            const myTracksCheckbox = wrapper.find('#show-my-tracks');
+            expect(myTracksCheckbox.exists()).toBe(true);
+
+            // But other filters should be hidden since hasTracksInViewport is false
+            expect(wrapper.find('.category-checkboxes').exists()).toBe(false);
+            expect(wrapper.find('[data-testid="slider-min"]').exists()).toBe(false);
         });
     });
 

@@ -112,28 +112,7 @@
         </div>
         <!-- Show filters when there are tracks in the area -->
         <template v-if="hasTracksInArea">
-          <div v-if="showCategories" class="filter-section">
-            <label>Categories</label>
-            <div class="category-checkboxes" @touchstart.stop @touchmove.stop @touchend.stop>
-              <div 
-                v-for="category in categories" 
-                :key="category" 
-                class="checkbox-item"
-              >
-                <input
-                  :id="`category-${category}`"
-                  v-model="selectedCategories"
-                  type="checkbox"
-                  :value="category"
-                  class="category-checkbox"
-                />
-                <label :for="`category-${category}`" class="checkbox-label">
-                    {{ category }}
-                </label>
-              </div>
-            </div>
-          </div>
-
+          <!-- My tracks checkbox is always shown -->
           <div class="filter-section my-tracks-section">
             <label>Ownership</label>
             <div class="checkbox-item">
@@ -147,47 +126,81 @@
             </div>
           </div>
 
-          <div v-if="showLength" class="filter-section">
-            <label>Track length (km):</label>
-            <Slider
-              v-model="lengthRange"
-              :min="minLength"
-              :max="maxLength"
-              :step="0.1"
-              :tooltip="true"
-              :lazy="true"
-              :format="val => val.toFixed(2)"
-              :range="true"
-            />
-          </div>
-          <div v-if="showElevation && hasElevationData" class="filter-section">
-            <label>Elevation gain (m):</label>
-            <Slider
-              v-model="elevationGainRange"
-              :min="minElevationGain"
-              :max="maxElevationGain"
-              :step="10"
-              :tooltip="true"
-              :lazy="true"
-              :format="val => `${Math.round(val)}m`"
-              :range="true"
-            />
-          </div>
-          <div v-if="showSlope && hasSlopeData" class="filter-section">
-            <label>Slope (%):</label>
-            <Slider
-              v-model="slopeRange"
-              :min="minSlope"
-              :max="maxSlope"
-              :step="0.1"
-              :tooltip="true"
-              :lazy="true"
-              :format="val => `${val.toFixed(1)}%`"
-              :range="true"
-            />
-          </div>
-          <div class="filter-actions">
-            <button @click="resetFilters">Reset</button>
+          <!-- Other filters shown only when there are actual tracks in viewport -->
+          <template v-if="hasTracksInViewport">
+            <div v-if="showCategories" class="filter-section">
+              <label>Categories</label>
+              <div class="category-checkboxes" @touchstart.stop @touchmove.stop @touchend.stop>
+                <div 
+                  v-for="category in stableCategories" 
+                  :key="category" 
+                  class="checkbox-item"
+                >
+                  <input
+                    :id="`category-${category}`"
+                    v-model="selectedCategories"
+                    type="checkbox"
+                    :value="category"
+                    class="category-checkbox"
+                  />
+                  <label :for="`category-${category}`" class="checkbox-label">
+                      {{ category }}
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="showLength" class="filter-section">
+              <label>Track length (km):</label>
+              <Slider
+                v-model="lengthRange"
+                :min="stableMinLength"
+                :max="stableMaxLength"
+                :step="0.1"
+                :tooltip="true"
+                :lazy="true"
+                :format="val => val.toFixed(2)"
+                :range="true"
+              />
+            </div>
+            <div v-if="showElevation && hasElevationData" class="filter-section">
+              <label>Elevation gain (m):</label>
+              <Slider
+                v-model="elevationGainRange"
+                :min="stableMinElevationGain"
+                :max="stableMaxElevationGain"
+                :step="10"
+                :tooltip="true"
+                :lazy="true"
+                :format="val => `${Math.round(val)}m`"
+                :range="true"
+              />
+            </div>
+            <div v-if="showSlope && hasSlopeData" class="filter-section">
+              <label>Slope (%):</label>
+              <Slider
+                v-model="slopeRange"
+                :min="stableMinSlope"
+                :max="stableMaxSlope"
+                :step="0.1"
+                :tooltip="true"
+                :lazy="true"
+                :format="val => `${val.toFixed(1)}%`"
+                :range="true"
+              />
+            </div>
+            <div class="filter-actions">
+              <button @click="resetFilters">Reset</button>
+            </div>
+          </template>
+          
+          <!-- Show message when My tracks is active but no tracks found -->
+          <div v-else-if="showMyTracks" class="no-tracks-placeholder">
+            <div class="placeholder-icon">🔍</div>
+            <div class="placeholder-text">
+              <h3>No matching tracks</h3>
+              <p>Try disabling "My tracks" filter</p>
+            </div>
           </div>
         </template>
 
@@ -240,8 +253,35 @@ const debouncedEmitFilter = useAdvancedDebounce((filterState) => {
   emit('update:filter', filterState);
 }, 100, { leading: false, trailing: true });
 
+// Track the previous myTracks value to detect changes
+let previousMyTracksValue = false;
+
+// Timeout for clearing pending state
+let pendingClearTimeout = null;
+
 // Also provide immediate emit for tests
 const emitFilter = (filterState) => {
+  // Check if myTracks filter specifically changed (this triggers server refetch)
+  const myTracksChanged = filterState.myTracks !== previousMyTracksValue;
+  previousMyTracksValue = filterState.myTracks;
+  
+  // If myTracks changed and we currently have tracks, mark as pending
+  // to prevent flickering during data refresh
+  if (myTracksChanged && props.hasTracksInViewport) {
+    hadTracksBeforeFilter.value = true;
+    isFilterPending.value = true;
+    
+    // Clear any existing timeout
+    if (pendingClearTimeout) {
+      clearTimeout(pendingClearTimeout);
+    }
+    
+    // Auto-clear pending state after a reasonable time (in case watch doesn't fire)
+    pendingClearTimeout = setTimeout(() => {
+      isFilterPending.value = false;
+    }, 1000);
+  }
+  
   if (import.meta.env.MODE === 'test') {
     // In test mode, emit immediately without debouncing
     emit('update:filter', filterState);
@@ -254,11 +294,96 @@ const emitFilter = (filterState) => {
 // Initialize global units (this ensures units are loaded on app startup)
 useUnits();
 
+// Track whether we're waiting for filter results to prevent flickering
+// when toggling filters like "My tracks"
+const isFilterPending = ref(false);
+const hadTracksBeforeFilter = ref(false);
+
 // Computed property to determine if there are tracks in the current area
+// Uses grace period after filter changes to prevent flickering
 const hasTracksInArea = computed(() => {
+  // If we're in a pending filter state and had tracks before, keep showing filters
+  // This prevents the "no tracks" placeholder from flickering during data refresh
+  if (isFilterPending.value && hadTracksBeforeFilter.value) {
+    return true;
+  }
+  
+  // If we have stable categories (meaning data was loaded at some point), show filters
+  // This prevents hiding filters when polylines temporarily becomes empty during updates
+  if (stableCategories.value.length > 0) {
+    return true;
+  }
+  
   // Use the prop passed from TrackMap that reflects actual tracks in viewport
   return props.hasTracksInViewport;
 });
+
+// Watch for changes in hasTracksInViewport to clear the pending state
+// when the data has stabilized after a filter change
+watch(() => props.hasTracksInViewport, (newValue, oldValue) => {
+  // If we're in pending state and we get actual data (or stable empty state),
+  // clear the pending flag after a brief delay to ensure data is settled
+  if (isFilterPending.value) {
+    // Clear any existing timeout
+    if (pendingClearTimeout) {
+      clearTimeout(pendingClearTimeout);
+    }
+    
+    // Use a small timeout to allow for any rapid state changes to settle
+    pendingClearTimeout = setTimeout(() => {
+      isFilterPending.value = false;
+      pendingClearTimeout = null;
+      // Only reset hadTracksBeforeFilter when we're sure the state is stable
+      if (!props.hasTracksInViewport) {
+        hadTracksBeforeFilter.value = false;
+      }
+      // Now update stable values since data has settled
+      updateStableValues();
+    }, 150);
+  }
+});
+
+// Update stable copies of props - only call when not in pending state
+function updateStableValues() {
+  // Update categories only if we have actual data, don't clear if empty
+  if (props.categories && props.categories.length > 0) {
+    stableCategories.value = [...props.categories];
+  } else if (props.globalCategories && props.globalCategories.length > 0 && stableCategories.value.length === 0) {
+    // If we have no stable categories yet, use global categories as fallback
+    stableCategories.value = [...props.globalCategories];
+  }
+  
+  if (typeof props.minLength === 'number') {
+    stableMinLength.value = props.minLength;
+  }
+  if (typeof props.maxLength === 'number') {
+    stableMaxLength.value = props.maxLength;
+  }
+  if (typeof props.minElevationGain === 'number') {
+    stableMinElevationGain.value = props.minElevationGain;
+  }
+  if (typeof props.maxElevationGain === 'number') {
+    stableMaxElevationGain.value = props.maxElevationGain;
+  }
+  if (typeof props.minSlope === 'number') {
+    stableMinSlope.value = props.minSlope;
+  }
+  if (typeof props.maxSlope === 'number') {
+    stableMaxSlope.value = props.maxSlope;
+  }
+}
+
+// Watch props changes and update stable values only when NOT in pending state
+watch(
+  () => [props.categories, props.minLength, props.maxLength, props.minElevationGain, props.maxElevationGain, props.minSlope, props.maxSlope],
+  () => {
+    // Only update stable values if we're not waiting for filter results
+    if (!isFilterPending.value) {
+      updateStableValues();
+    }
+  },
+  { deep: true }
+);
 
 const LOCAL_STORAGE_KEY = 'trackFiltersVue';
 const LOCAL_UI_KEY = 'trackFiltersVueOpen';
@@ -269,6 +394,16 @@ const lengthRange = ref([props.minLength, props.maxLength]);
 const elevationGainRange = ref([props.minElevationGain, props.maxElevationGain]);
 const slopeRange = ref([props.minSlope, props.maxSlope]);
 const isOpen = ref(true);
+
+// Stable local copies of props to prevent UI flickering during data refresh
+// These are only updated when NOT in a pending filter state
+const stableCategories = ref([]);
+const stableMinLength = ref(0);
+const stableMaxLength = ref(50);
+const stableMinElevationGain = ref(0);
+const stableMaxElevationGain = ref(2000);
+const stableMinSlope = ref(0);
+const stableMaxSlope = ref(20);
 
 // Filter visibility options
 const showFilterOptions = ref(false);
@@ -362,6 +497,34 @@ onMounted(() => {
   lengthRange.value = initialLengthRange;
   elevationGainRange.value = initialElevationGainRange;
   slopeRange.value = initialSlopeRange;
+  
+  // Initialize stable values from props, preferring globalCategories to avoid empty state
+  // Use categories if available and non-empty, otherwise use globalCategories
+  if (props.categories && props.categories.length > 0) {
+    stableCategories.value = [...props.categories];
+  } else if (props.globalCategories && props.globalCategories.length > 0) {
+    stableCategories.value = [...props.globalCategories];
+  } else {
+    stableCategories.value = [];
+  }
+  
+  // For ranges, prefer current viewport values if available, otherwise use global defaults
+  stableMinLength.value = typeof props.minLength === 'number' ? props.minLength : 
+                           (typeof props.globalMinLength === 'number' ? props.globalMinLength : 0);
+  stableMaxLength.value = typeof props.maxLength === 'number' ? props.maxLength : 
+                           (typeof props.globalMaxLength === 'number' ? props.globalMaxLength : 50);
+  stableMinElevationGain.value = typeof props.minElevationGain === 'number' ? props.minElevationGain : 
+                                  (typeof props.globalMinElevationGain === 'number' ? props.globalMinElevationGain : 0);
+  stableMaxElevationGain.value = typeof props.maxElevationGain === 'number' ? props.maxElevationGain : 
+                                  (typeof props.globalMaxElevationGain === 'number' ? props.globalMaxElevationGain : 2000);
+  stableMinSlope.value = typeof props.minSlope === 'number' ? props.minSlope : 
+                          (typeof props.globalMinSlope === 'number' ? props.globalMinSlope : 0);
+  stableMaxSlope.value = typeof props.maxSlope === 'number' ? props.maxSlope : 
+                          (typeof props.globalMaxSlope === 'number' ? props.globalMaxSlope : 20);
+  
+  // Synchronize previousMyTracksValue with the initial showMyTracks state
+  // to prevent false positive detection of "change" on first emit
+  previousMyTracksValue = showMyTracks.value;
 
   // Emit initial filter state
   emitFilter({
@@ -391,6 +554,11 @@ watch([showCategories, showLength, showElevation, showSlope], () => {
 });
 
 watch(() => props.categories, (newCategories) => {
+  // Don't re-emit during pending filter state to prevent flickering
+  if (isFilterPending.value) {
+    return;
+  }
+  
   // Don't automatically change user selections based on viewport changes
   // But we need to re-emit so parent gets filtered values for the new viewport
   const validCategories = newCategories ? selectedCategories.value.filter(cat => newCategories.includes(cat)) : selectedCategories.value;
@@ -400,6 +568,7 @@ watch(() => props.categories, (newCategories) => {
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
+    myTracks: showMyTracks.value,
   });
 });
 
@@ -541,6 +710,10 @@ onUnmounted(() => {
   // Clean up debounced function
   if (debouncedEmitFilter && debouncedEmitFilter.cancel) {
     debouncedEmitFilter.cancel();
+  }
+  // Clean up pending timeout
+  if (pendingClearTimeout) {
+    clearTimeout(pendingClearTimeout);
   }
 });
 </script>
