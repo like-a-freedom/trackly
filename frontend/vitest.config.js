@@ -23,7 +23,9 @@ export default defineConfig({
         // Ignore asset imports completely
         transformMode: {
             web: [/\.[jt]sx?$/, /\.vue$/]
-        }
+        },        // Improve test parallelism
+        threads: true,
+        maxThreads: '50%',
     },
     // Asset handling for test environment
     assetsInclude: ['**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.gif', '**/*.svg'],

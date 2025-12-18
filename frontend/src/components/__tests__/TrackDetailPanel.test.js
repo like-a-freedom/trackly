@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import TrackDetailPanel from '../TrackDetailPanel.vue';
 import ElevationChart from '../ElevationChart.vue';
 
@@ -957,7 +957,7 @@ describe('TrackDetailPanel', () => {
 
       // Wait for async operations
       await wrapper.vm.$nextTick();
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await flushPromises();
 
       expect(fetch).toHaveBeenCalledWith(`/tracks/${track.id}/export`);
       // Ensure at least one anchor element was created for download
@@ -1005,7 +1005,7 @@ describe('TrackDetailPanel', () => {
       await exportButton.trigger('click');
 
       await wrapper.vm.$nextTick();
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await flushPromises();
 
       expect(consoleSpy).toHaveBeenCalledWith('Export failed:', expect.any(Error));
       expect(exportButton.attributes('disabled')).toBe(undefined);
@@ -1375,7 +1375,7 @@ describe('TrackDetailPanel', () => {
       await forceUpdateBtn.trigger('click');
 
       // Wait for async operations
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await waitFor(() => mockShowConfirm.mock.calls.length > 0);
 
       expect(mockShowConfirm).toHaveBeenCalled();
       expect(global.fetch).toHaveBeenCalledWith('/tracks/1/enrich-elevation', {
@@ -1383,6 +1383,10 @@ describe('TrackDetailPanel', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: 'test-session', force: true })
       });
+
+      // Wait for enrichment flow to complete and toast to be shown
+      await waitFor(() => mockShowToast.mock.calls.length > 0);
+
       expect(mockShowToast).toHaveBeenCalledWith('Elevation data updated successfully!', 'success');
     });
 
@@ -1429,7 +1433,7 @@ describe('TrackDetailPanel', () => {
 
       // Clean up - resolve the promise so it doesn't leak
       resolveEnrichment();
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await flushPromises();
     });
 
     it('should handle 403 permission error', async () => {
@@ -1445,7 +1449,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await waitFor(() => mockShowToast.mock.calls.length > 0);
 
       expect(mockShowToast).toHaveBeenCalledWith('You are not allowed to update this track.', 'error');
     });
@@ -1463,7 +1467,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await waitFor(() => mockShowToast.mock.calls.length > 0);
 
       expect(mockShowToast).toHaveBeenCalledWith('API rate limit exceeded. Please try again later.', 'error');
     });
@@ -1481,7 +1485,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await waitFor(() => mockShowToast.mock.calls.length > 0);
 
       expect(mockShowToast).toHaveBeenCalledWith('Failed to update elevation data. Please try again.', 'error');
     });
@@ -1520,7 +1524,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await waitFor(() => wrapper.vm.track && wrapper.vm.track.elevation_gain === 650);
 
       // Check that track data was updated
       expect(wrapper.vm.track.elevation_gain).toBe(650);
@@ -1551,7 +1555,7 @@ describe('TrackDetailPanel', () => {
       await forceUpdateBtn.trigger('click');
 
       // Wait for all async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => global.dispatchEvent.mock.calls.length > 0);
       await wrapper.vm.$nextTick();
 
       expect(global.dispatchEvent).toHaveBeenCalledWith(
@@ -1583,7 +1587,7 @@ describe('TrackDetailPanel', () => {
       await forceUpdateBtn.trigger('click');
 
       // Wait for all async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => mockShowToast.mock.calls.length > 0);
       await wrapper.vm.$nextTick();
 
       expect(mockShowToast).toHaveBeenCalledWith(

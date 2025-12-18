@@ -137,7 +137,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for the component to update
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             const nameInput = wrapper.find('.track-name-input');
             expect(nameInput.exists()).toBe(true);
@@ -161,7 +161,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             expect(wrapper.find('.track-name-input').exists()).toBe(true);
             expect(wrapper.find('.track-category-select').exists()).toBe(true);
@@ -184,7 +184,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for async check to complete
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             const uploadBtn = wrapper.find('.upload-btn');
             expect(uploadBtn.attributes('disabled')).toBeUndefined();
@@ -260,7 +260,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             expect(mockCheckTrackDuplicate).toHaveBeenCalledWith({ file });
         });
@@ -285,7 +285,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             expect(wrapper.find('.upload-warning').exists()).toBe(true);
             expect(wrapper.text()).toContain('This track already exists');
@@ -311,7 +311,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             const uploadBtn = wrapper.find('.upload-btn');
             expect(uploadBtn.attributes('disabled')).toBeDefined();
@@ -336,7 +336,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for async operations and component updates
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             // Update track name
             const nameInput = wrapper.find('.track-name-input');
@@ -347,7 +347,7 @@ describe('UploadForm', () => {
 
             // Wait for async operations
             await wrapper.vm.$nextTick();
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await flushPromises();
 
             expect(mockUploadTrack).toHaveBeenCalledWith({
                 file: file,
@@ -374,7 +374,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await flushPromises();
 
             // Simulate selecting categories
             wrapper.vm.trackCategories = [
@@ -386,7 +386,7 @@ describe('UploadForm', () => {
 
             // Wait for async operations
             await wrapper.vm.$nextTick();
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await flushPromises();
 
             expect(mockUploadTrack).toHaveBeenCalledWith({
                 file: file,

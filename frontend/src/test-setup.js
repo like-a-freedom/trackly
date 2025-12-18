@@ -1,6 +1,7 @@
 // Test setup file for Vitest
 import { config } from '@vue/test-utils'
 import { vi } from 'vitest'
+import { nextTick } from 'vue'
 
 // Prevent Leaflet from trying to load any assets
 vi.mock('leaflet/dist/leaflet.css', () => ({}))
@@ -332,6 +333,22 @@ const localStorageMock = (() => {
 // Always assign a reliable localStorage mock for tests (overwrite anything present)
 global.localStorage = localStorageMock;
 window.localStorage = localStorageMock;
+
+// Global helper to wait for arbitrary conditions without relying on real timers
+global.waitFor = async (predicate, { timeout = 1000 } = {}) => {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        // Let Vue and microtasks settle
+        await nextTick();
+        await Promise.resolve();
+        try {
+            if (predicate()) return;
+        } catch (e) {
+            // Ignore intermediate errors until the condition stabilizes
+        }
+    }
+    throw new Error('waitFor: condition not met within timeout');
+};
 
 // Suppress Vue warnings during tests
 config.global.config.warnHandler = () => { };

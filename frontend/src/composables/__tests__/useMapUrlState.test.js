@@ -30,7 +30,7 @@ vi.mock('../useAdvancedDebounce.js', () => ({
     const debounced = (...args) => fn(...args);
     debounced.cancel = mockDebounced.cancel;
     debounced.pending = () => false;
-    debounced.flush = () => {};
+    debounced.flush = () => { };
     return debounced;
   })
 }));
@@ -39,10 +39,10 @@ describe('useMapUrlState', () => {
   beforeEach(() => {
     // Reset mocks
     vi.clearAllMocks();
-    
+
     // Reset route query
     mockRoute.query = {};
-    
+
     // Mock window.dispatchEvent
     vi.stubGlobal('dispatchEvent', vi.fn());
   });
@@ -59,7 +59,7 @@ describe('useMapUrlState', () => {
       });
 
       const result = mapUrlState.initializeFromUrl();
-      
+
       expect(result.zoom).toBe(12);
       expect(result.center).toEqual([55.0, 37.0]);
       expect(result.fromUrl).toBe(false);
@@ -78,7 +78,7 @@ describe('useMapUrlState', () => {
       });
 
       const result = mapUrlState.initializeFromUrl();
-      
+
       expect(result.zoom).toBe(14.5);
       expect(result.center).toEqual([55.7558, 37.6176]);
       expect(result.fromUrl).toBe(true);
@@ -97,7 +97,7 @@ describe('useMapUrlState', () => {
       });
 
       const result = mapUrlState.initializeFromUrl();
-      
+
       expect(result.zoom).toBe(12);
       expect(result.center).toEqual([55.0, 37.0]);
       expect(result.fromUrl).toBe(false);
@@ -129,7 +129,7 @@ describe('useMapUrlState', () => {
         expect(mapUrlState.isValidLatLng([55.0, 37.0])).toBe(true);
         expect(mapUrlState.isValidLatLng([-90, -180])).toBe(true);
         expect(mapUrlState.isValidLatLng([90, 180])).toBe(true);
-        
+
         // Invalid cases
         expect(mapUrlState.isValidLatLng([91, 0])).toBe(false); // lat > 90
         expect(mapUrlState.isValidLatLng([-91, 0])).toBe(false); // lat < -90
@@ -244,8 +244,8 @@ describe('useMapUrlState', () => {
     });
 
     it('should log warning for invalid parameters', () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+
       mockRoute.query = {
         zoom: 'invalid',
         lat: '999', // Invalid
@@ -274,7 +274,7 @@ describe('useMapUrlState', () => {
 
     beforeEach(() => {
       mapUrlState = useMapUrlState();
-      
+
       // Mock window.location
       delete window.location;
       window.location = {
@@ -308,13 +308,15 @@ describe('useMapUrlState', () => {
       mockRouter.replace.mockRejectedValueOnce(new Error('Router error'));
 
       const mapUrlState = useMapUrlState({ debounceMs: 0 });
-      // Wait for debounced function to execute
-      await new Promise(resolve => setTimeout(resolve, 350));
-      
+      // Fast-forward any scheduled timers
+      vi.useFakeTimers();
+      vi.runAllTimers();
+
       mapUrlState.updateMapState(14, [55, 37]);
-      
-      // Wait for debounced function to execute again
-      await new Promise(resolve => setTimeout(resolve, 350));
+
+      // Fast-forward debounced timers
+      vi.runAllTimers();
+      vi.useRealTimers();
 
       // Just verify that router.replace was called and the error didn't crash the app
       expect(mockRouter.replace).toHaveBeenCalledWith({
@@ -349,11 +351,11 @@ describe('useMapUrlState', () => {
   describe('cleanup', () => {
     it('should cancel debounced functions on cleanup', () => {
       const mapUrlState = useMapUrlState();
-      
+
       // Simulate component unmount by calling the cleanup function
       // Note: In real usage, this is handled by Vue's onUnmounted
       mapUrlState._debouncedUpdateUrl.cancel();
-      
+
       expect(mockDebounced.cancel).toHaveBeenCalled();
     });
   });

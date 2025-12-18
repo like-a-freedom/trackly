@@ -152,7 +152,7 @@ describe.skip('HomeView Integration Tests', () => {
       await nextTick();
 
       const trackMap = wrapper.findComponent({ name: 'TrackMap' });
-      
+
       // Simulate zoom change from map
       await trackMap.vm.$emit('update:zoom', 15);
       await nextTick();
@@ -166,7 +166,7 @@ describe.skip('HomeView Integration Tests', () => {
 
       const trackMap = wrapper.findComponent({ name: 'TrackMap' });
       const newCenter = [55.7558, 37.6176];
-      
+
       // Simulate center change from map
       await trackMap.vm.$emit('update:center', newCenter);
       await nextTick();
@@ -180,7 +180,7 @@ describe.skip('HomeView Integration Tests', () => {
 
       const trackMap = wrapper.findComponent({ name: 'TrackMap' });
       const originalZoom = trackMap.props('zoom');
-      
+
       // Simulate invalid zoom change
       await trackMap.vm.$emit('update:zoom', NaN);
       await nextTick();
@@ -195,7 +195,7 @@ describe.skip('HomeView Integration Tests', () => {
 
       const trackMap = wrapper.findComponent({ name: 'TrackMap' });
       const originalCenter = trackMap.props('center');
-      
+
       // Simulate invalid center change
       await trackMap.vm.$emit('update:center', [NaN, 37.6176]);
       await nextTick();
@@ -211,13 +211,13 @@ describe.skip('HomeView Integration Tests', () => {
       await nextTick();
 
       const trackMap = wrapper.findComponent({ name: 'TrackMap' });
-      
+
       // Simulate zoom change
       await trackMap.vm.$emit('update:zoom', 16);
       await nextTick();
 
       // Wait for debounced save (may need to flush timers in real test)
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await waitFor(() => localStorageMock.setItem.mock.calls.length > 0);
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         'trackly_map_position',
@@ -226,7 +226,7 @@ describe.skip('HomeView Integration Tests', () => {
     });
 
     it('should handle localStorage errors gracefully', async () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
       localStorageMock.setItem.mockImplementationOnce(() => {
         throw new Error('localStorage full');
       });
@@ -235,7 +235,7 @@ describe.skip('HomeView Integration Tests', () => {
       await nextTick();
 
       const trackMap = wrapper.findComponent({ name: 'TrackMap' });
-      
+
       // This should not throw
       await trackMap.vm.$emit('update:zoom', 16);
       await nextTick();
@@ -252,7 +252,7 @@ describe.skip('HomeView Integration Tests', () => {
   describe('Component Lifecycle', () => {
     it('should clean up event listeners on unmount', async () => {
       const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
-      
+
       const wrapper = mount(HomeView);
       await nextTick();
 
@@ -293,7 +293,7 @@ describe.skip('HomeView Integration Tests', () => {
         return null;
       });
 
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
       // Should not throw and should use defaults
       const wrapper = mount(HomeView);
