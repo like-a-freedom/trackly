@@ -256,6 +256,26 @@ describe('useTracks composable', () => {
             );
         });
 
+        it('should include owner_session_id when provided', async () => {
+            const mockBounds = {
+                getSouthWest: () => ({ lat: 50, lng: 10 }),
+                getNorthEast: () => ({ lat: 51, lng: 11 })
+            };
+
+            fetchMock.mockResolvedValue({
+                ok: true,
+                json: async () => ({ type: 'FeatureCollection', features: [] })
+            });
+
+            const { fetchTracksInBounds } = useTracks();
+            await fetchTracksInBounds(mockBounds, { ownerSessionId: 'abc-123' });
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                expect.stringContaining('owner_session_id=abc-123'),
+                expect.any(Object)
+            );
+        });
+
         it('should handle invalid response data', async () => {
             const mockBounds = {
                 getSouthWest: () => ({ lat: 50, lng: 10 }),

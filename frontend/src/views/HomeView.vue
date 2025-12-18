@@ -20,6 +20,7 @@
       @trackMouseMove="onTrackMouseMove"
       @trackMouseOut="onTrackMouseOut"
       @open-search="openSearch"
+      @filter-changed="onFilterChanged"
     >
       <TrackTooltip
         :visible="tooltip.visible && !!tooltip.data"
@@ -142,6 +143,8 @@ const mapInstance = ref(null); // Store map instance for invalidateSize on activ
 const dragActive = ref(false);
 const uploadFormExpanded = ref(false); // По умолчанию свернута
 const { polylines, fetchTracksInBounds, uploadTrack, error, updateTrackInPolylines } = useTracks();
+// Keep track of the latest filter state coming from TrackMap/TrackFilterControl
+const currentFilterState = ref(null);
 const tooltip = reactive({ visible: false, x: 0, y: 0, data: null });
 const { showToast, toast } = useToast();
 const { clearSearchState, searchResults, searchQuery, hasSearchState } = useSearchState();
@@ -306,7 +309,9 @@ function onMapReady(e) {
   bounds.value = map.getBounds();
   const options = { 
     zoom: zoom.value, 
-    mode: 'overview' 
+    mode: 'overview',
+    // Include owner_session_id if "My tracks" filter is active
+    ownerSessionId: currentFilterState.value?.myTracks ? sessionId : undefined
   };
   fetchTracksInBounds(bounds.value, options);
 }
@@ -322,6 +327,21 @@ function onBoundsUpdate(newBounds) {
   
   // Use debounced function for API calls
   debouncedFetchTracks(newBounds);
+}
+
+// Called when filters change in TrackMap/TrackFilterControl (bubbled up)
+function onFilterChanged(newFilterState) {
+  currentFilterState.value = newFilterState;
+  // Immediately refresh tracks to reflect server-side filters like "My tracks"
+  if (bounds.value) {
+    const options = {
+      zoom: zoom.value,
+      mode: 'overview',
+      forceRefresh: true,
+      ownerSessionId: newFilterState?.myTracks ? sessionId : undefined
+    };
+    fetchTracksInBounds(bounds.value, options);
+  }
 }
 
 async function onTrackClick(poly, event) {

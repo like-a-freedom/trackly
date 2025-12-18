@@ -329,7 +329,9 @@ const localStorageMock = (() => {
         __getStore: () => store
     };
 })();
-global.localStorage = global.localStorage || localStorageMock;
+// Always assign a reliable localStorage mock for tests (overwrite anything present)
+global.localStorage = localStorageMock;
+window.localStorage = localStorageMock;
 
 // Suppress Vue warnings during tests
 config.global.config.warnHandler = () => { };
@@ -340,3 +342,22 @@ config.global.config = {
     warnHandler: () => { }, // Suppress all Vue warnings
     errorHandler: () => { } // Suppress all Vue errors
 };
+
+// Suppress console warnings/errors and info/log to keep test output clean by default.
+// You can disable suppression for a run by setting SUPPRESS_TEST_CONSOLE=false in the environment.
+// Tests can still spy on console methods using `vi.spyOn(console, 'warn')` / `vi.spyOn(console, 'error')` / `vi.spyOn(console, 'log')`.
+const __originalConsoleWarn = console.warn;
+const __originalConsoleError = console.error;
+const __originalConsoleLog = console.log;
+const __originalConsoleInfo = console.info;
+if (process.env.SUPPRESS_TEST_CONSOLE !== 'false') {
+    console.warn = (..._args) => { /* suppressed during tests */ };
+    console.error = (..._args) => { /* suppressed during tests */ };
+    console.log = (..._args) => { /* suppressed during tests */ };
+    console.info = (..._args) => { /* suppressed during tests */ };
+}
+// Keep originals available for debugging if needed
+global.__originalConsoleWarn = __originalConsoleWarn;
+global.__originalConsoleError = __originalConsoleError;
+global.__originalConsoleLog = __originalConsoleLog;
+global.__originalConsoleInfo = __originalConsoleInfo;

@@ -165,7 +165,11 @@ export function useTracks() {
         // Build URL with zoom and mode parameters for optimization
         const zoom = options.zoom || 12; // Default zoom
         const mode = options.mode || 'overview'; // Default mode for track lists
-        const url = `/tracks?bbox=${bboxString}&zoom=${zoom}&mode=${mode}`;
+        let url = `/tracks?bbox=${bboxString}&zoom=${zoom}&mode=${mode}`;
+        // If owner_session_id is provided ("My tracks" filter), append it so backend can return owner-only results
+        if (options && options.ownerSessionId) {
+            url += `&owner_session_id=${encodeURIComponent(options.ownerSessionId)}`;
+        }
 
         try {
             currentController = new AbortController();

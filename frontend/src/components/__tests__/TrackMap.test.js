@@ -250,6 +250,37 @@ describe('TrackMap', () => {
             expect(wrapper.emitted('update:zoom')).toBeTruthy();
             expect(wrapper.emitted('update:zoom')[0]).toEqual([12]);
         });
+
+        it('should emit a single debounced filter-changed event and dedupe identical updates', async () => {
+            vi.useFakeTimers();
+            wrapper = mount(TrackMap, { props: defaultProps });
+
+            const sampleFilter = {
+                categories: ['running'],
+                lengthRange: [5, 15],
+                elevationGainRange: [0, 500],
+                slopeRange: [0, 10],
+                myTracks: false
+            };
+
+            // First update should schedule a debounced emit
+            wrapper.vm.onFilterChange(sampleFilter);
+            // Fast-forward timers past debounce delay
+            vi.advanceTimersByTime(200);
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.emitted('filter-changed')).toBeTruthy();
+            expect(wrapper.emitted('filter-changed').length).toBe(1);
+
+            // Emit the same filter again; dedupe should prevent a new emit
+            wrapper.vm.onFilterChange(sampleFilter);
+            vi.advanceTimersByTime(300);
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.emitted('filter-changed').length).toBe(1);
+
+            vi.useRealTimers();
+        });
     });
 
     describe('Error Handling', () => {

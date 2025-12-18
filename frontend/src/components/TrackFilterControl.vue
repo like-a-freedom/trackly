@@ -60,7 +60,7 @@
         <!-- Filter options dropdown -->
         <div v-if="showFilterOptions" class="filter-options-panel">
           <div class="options-header">
-            <span class="options-title">Show filters:</span>
+            <span class="options-title">Show filters</span>
           </div>
           <div class="options-checkboxes">
             <div class="checkbox-item">
@@ -107,12 +107,13 @@
                 <span v-if="!hasSlopeData" class="disabled-hint">(no data)</span>
               </label>
             </div>
+
           </div>
         </div>
         <!-- Show filters when there are tracks in the area -->
         <template v-if="hasTracksInArea">
           <div v-if="showCategories" class="filter-section">
-            <label>Categories:</label>
+            <label>Categories</label>
             <div class="category-checkboxes" @touchstart.stop @touchmove.stop @touchend.stop>
               <div 
                 v-for="category in categories" 
@@ -127,11 +128,25 @@
                   class="category-checkbox"
                 />
                 <label :for="`category-${category}`" class="checkbox-label">
-                  {{ category }}
+                    {{ category }}
                 </label>
               </div>
             </div>
           </div>
+
+          <div class="filter-section my-tracks-section">
+            <label>Ownership</label>
+            <div class="checkbox-item">
+              <input
+                id="show-my-tracks"
+                v-model="showMyTracks"
+                type="checkbox"
+                class="option-checkbox"
+              />
+              <label for="show-my-tracks" class="checkbox-label">My tracks</label>
+            </div>
+          </div>
+
           <div v-if="showLength" class="filter-section">
             <label>Track length (km):</label>
             <Slider
@@ -261,6 +276,8 @@ const showCategories = ref(true);
 const showLength = ref(true);
 const showElevation = ref(true);
 const showSlope = ref(true);
+// New option: show only tracks owned by current session
+const showMyTracks = ref(false);
 
 // Flag to track if values were restored from localStorage
 const restoredFromLocalStorage = ref(false);
@@ -289,6 +306,8 @@ onMounted(() => {
       showLength.value = options.showLength ?? true;
       showElevation.value = options.showElevation ?? true;
       showSlope.value = options.showSlope ?? true;
+      // Load the "my tracks" visibility option if present
+      showMyTracks.value = options.showMyTracks ?? false;
     }
   } catch {}
 
@@ -330,6 +349,9 @@ onMounted(() => {
           restoredFromLocalStorage.value = true;
         }
       }
+      if (typeof savedFilters.myTracks === 'boolean') {
+        showMyTracks.value = savedFilters.myTracks;
+      }
     } catch (e) {
       console.error('Failed to parse filter state from localStorage:', e);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -347,6 +369,7 @@ onMounted(() => {
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
+    myTracks: showMyTracks.value,
   });
 });
 
@@ -362,6 +385,7 @@ watch([showCategories, showLength, showElevation, showSlope], () => {
       showLength: showLength.value,
       showElevation: showElevation.value,
       showSlope: showSlope.value,
+      showMyTracks: showMyTracks.value,
     }));
   } catch {}
 });
@@ -400,7 +424,7 @@ watch(
   }
 );
 
-watch([selectedCategories, lengthRange, elevationGainRange, slopeRange], ([cats, lengthRange, elevationGainRange, slopeRange], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange]) => {
+watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTracks], ([cats, lengthRange, elevationGainRange, slopeRange, myTracks], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange, oldMyTracks]) => {
   // Emit validated values (filtered to what's available in current viewport)
   const validCategories = props.categories ? cats.filter(cat => props.categories.includes(cat)) : cats;
   let validLengthRange = lengthRange;
@@ -448,6 +472,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange], ([cats,
     lengthRange: validLengthRange,
     elevationGainRange: validElevationGainRange,
     slopeRange: validSlopeRange,
+    myTracks: showMyTracks.value,
   });
   
   // Always persist user's actual choice (not the clamped values)
@@ -457,6 +482,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange], ([cats,
       lengthRange: lengthRange,
       elevationGainRange: elevationGainRange,
       slopeRange: slopeRange,
+      myTracks: showMyTracks.value,
     }));
   }
 }, { deep: true });
@@ -468,13 +494,27 @@ function resetFilters() {
   lengthRange.value = [props.globalMinLength || 0, props.globalMaxLength || 50];
   elevationGainRange.value = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
   slopeRange.value = [props.globalMinSlope || 0, props.globalMaxSlope || 20];
+  showMyTracks.value = false;
   // Immediately persist reset state
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
     categories: selectedCategories.value,
     lengthRange: lengthRange.value,
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
+    myTracks: showMyTracks.value,
   }));
+  // Also persist options (visibility checkbox state)
+  try {
+    localStorage.setItem(LOCAL_FILTER_OPTIONS_KEY, JSON.stringify({
+      showCategories: showCategories.value,
+      showLength: showLength.value,
+      showElevation: showElevation.value,
+      showSlope: showSlope.value,
+      showMyTracks: showMyTracks.value,
+    }));
+  } catch (e) {
+    // ignore
+  }
 }
 
 function toggleOpen() {
@@ -642,11 +682,16 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.option-checkbox {
+.option-checkbox,
+.category-checkbox {
   width: 16px;
   height: 16px;
-  margin: 0;
+  margin: 0 !important;
+  padding: 0;
   cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  top: 2px; /* Align checkbox center with text center */
 }
 
 .option-checkbox:disabled {
@@ -731,15 +776,10 @@ onUnmounted(() => {
 
 .checkbox-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Align to top, then adjust checkbox manually */
   gap: 8px;
-}
-
-.category-checkbox {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  cursor: pointer;
+  min-height: 24px;
+  position: relative;
 }
 
 .checkbox-label {
@@ -747,8 +787,10 @@ onUnmounted(() => {
   font-weight: 400;
   cursor: pointer;
   margin: 0;
+  padding: 0;
   flex: 1;
-  line-height: 1.2;
+  line-height: 1.4; /* Natural line height for better readability */
+  padding-top: 0;
 }
 
 .track-filter-control,

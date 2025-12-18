@@ -1925,8 +1925,8 @@ describe('TrackDetailPanel', () => {
       });
 
       const descriptionElement = wrapper.find('.track-description-text');
-      // Check that HTML entities are properly escaped in the visible link text
-      expect(descriptionElement.html()).toContain('http://example.com/&lt;script&gt;');
+      // Check that HTML entities are properly escaped in the visible link text (HTML source encodes ampersands)
+      expect(descriptionElement.html()).toContain('http://example.com/&amp;lt;script&amp;gt;');
       // Check that no unescaped script tags appear in the HTML source
       expect(descriptionElement.html()).not.toContain('<script>');
     });

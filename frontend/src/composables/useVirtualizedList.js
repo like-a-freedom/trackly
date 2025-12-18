@@ -1,7 +1,7 @@
 /**
  * Composable for implementing virtual scrolling for large lists
  */
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, getCurrentInstance } from 'vue';
 
 export function useVirtualizedList(items, itemHeight = 50, containerHeight = 400) {
     const scrollTop = ref(0);
@@ -38,18 +38,20 @@ export function useVirtualizedList(items, itemHeight = 50, containerHeight = 400
         scrollTop.value = event.target.scrollTop;
     };
 
-    // Setup scroll listener
-    onMounted(() => {
-        if (containerRef.value) {
-            containerRef.value.addEventListener('scroll', handleScroll);
-        }
-    });
+    // Setup scroll listener only when used within a component setup
+    if (getCurrentInstance()) {
+        onMounted(() => {
+            if (containerRef.value) {
+                containerRef.value.addEventListener('scroll', handleScroll);
+            }
+        });
 
-    onUnmounted(() => {
-        if (containerRef.value) {
-            containerRef.value.removeEventListener('scroll', handleScroll);
-        }
-    });
+        onUnmounted(() => {
+            if (containerRef.value) {
+                containerRef.value.removeEventListener('scroll', handleScroll);
+            }
+        });
+    }
 
     return {
         containerRef,

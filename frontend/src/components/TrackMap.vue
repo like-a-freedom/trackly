@@ -111,7 +111,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'mapReady', 'trackClick', 'trackMouseOver', 'trackMouseMove', 'trackMouseOut',
-  'update:center', 'update:zoom', 'update:bounds', 'open-search'
+  'update:center', 'update:zoom', 'update:bounds', 'open-search', 'filter-changed'
 ]);
 
 // State management for map and animations
@@ -689,13 +689,26 @@ const debouncedOnFilterChange = useAdvancedDebounce((newFilterState) => {
   filterState.value = { ...newFilterState };
   // Use debounced filter update to prevent excessive re-renders
   debouncedFilterUpdate();
+  // Propagate (debounced) to parent to avoid spamming requests
+  emit('filter-changed', newFilterState);
 }, 150, { leading: false, trailing: true });
 
 function onFilterChange(newFilterState) {
+  // Ignore emissions that don't change the filter to avoid event loops
+  try {
+    if (JSON.stringify(filterState.value) === JSON.stringify(newFilterState)) {
+      return;
+    }
+  } catch (e) {
+    // If serialization fails for some reason, fall back to processing
+  }
+
   if (import.meta.env.MODE === 'test') {
     // In test mode, update immediately without debouncing
     filterState.value = { ...newFilterState };
     debouncedFilterUpdate();
+    // Propagate filter up so parent (HomeView) can trigger server-side fetches (e.g., My tracks)
+    emit('filter-changed', newFilterState);
   } else {
     // In production, use debounced function to prevent excessive updates
     debouncedOnFilterChange(newFilterState);

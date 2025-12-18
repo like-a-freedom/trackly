@@ -22,6 +22,8 @@ pub struct TrackListQuery {
     pub elevation_gain_max: Option<f32>,
     pub slope_min: Option<f32>,
     pub slope_max: Option<f32>,
+    /// When set, restrict results to tracks owned by this session (show private and public tracks)
+    pub owner_session_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -178,6 +180,8 @@ pub struct TrackGeoJsonQuery {
     pub elevation_gain_max: Option<f32>,
     pub slope_min: Option<f32>,
     pub slope_max: Option<f32>,
+    /// When set, restrict results to tracks owned by this session (show private and public tracks)
+    pub owner_session_id: Option<Uuid>,
 }
 
 // Custom deserializer to handle both comma-separated string and array formats
@@ -373,6 +377,7 @@ mod tests {
             elevation_gain_max: None,
             slope_min: None,
             slope_max: None,
+            owner_session_id: None,
         };
 
         assert_eq!(query_overview.zoom, Some(10.0));
@@ -389,6 +394,7 @@ mod tests {
             elevation_gain_max: None,
             slope_min: None,
             slope_max: None,
+            owner_session_id: None,
         };
 
         assert_eq!(query_detail.zoom, Some(15.0));

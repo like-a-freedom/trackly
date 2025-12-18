@@ -74,7 +74,16 @@ fn sanitize_description(text: Option<&str>) -> Option<String> {
 }
 
 fn build_list_tracks_query(params: &crate::models::TrackListQuery) -> QueryBuilder<'_, Postgres> {
-    let mut builder = QueryBuilder::<Postgres>::new("SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks WHERE is_public = TRUE");
+    let mut builder = QueryBuilder::<Postgres>::new("SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks");
+
+    // If owner_session_id provided, return tracks owned by that session (include private tracks).
+    if let Some(owner) = params.owner_session_id {
+        builder.push(" WHERE session_id = ");
+        builder.push_bind(owner);
+    } else {
+        // Default: only public tracks
+        builder.push(" WHERE is_public = TRUE");
+    }
 
     if let Some(cats) = params.categories.as_ref().filter(|c| !c.is_empty()) {
         builder.push(" AND categories && ");
@@ -692,7 +701,16 @@ pub async fn list_tracks_geojson(
         builder.push(", avg_hr, avg_speed, duration_seconds, recorded_at");
     }
 
-    builder.push(" FROM tracks WHERE is_public = TRUE");
+    builder.push(" FROM tracks");
+
+    // If owner_session_id provided, return tracks owned by that session (include private tracks);
+    // otherwise, only public tracks are returned
+    if let Some(owner) = filter_params.owner_session_id {
+        builder.push(" WHERE session_id = ");
+        builder.push_bind(owner);
+    } else {
+        builder.push(" WHERE is_public = TRUE");
+    }
 
     if let Some(categories) = &filter_params.categories {
         if !categories.is_empty() {
@@ -1166,6 +1184,7 @@ mod tests {
             elevation_gain_max: Some(900.0),
             slope_min: Some(1.5),
             slope_max: Some(12.0),
+            owner_session_id: None,
         };
 
         let builder = build_list_tracks_query(&params);
@@ -1279,6 +1298,7 @@ mod tests {
             slope_min: None,
             slope_max: None,
             categories: None,
+            owner_session_id: None,
         };
 
         // In a real implementation, we would extract the query building logic
@@ -1314,6 +1334,7 @@ mod tests {
             slope_min: None,
             slope_max: None,
             categories: None,
+            owner_session_id: None,
         };
 
         let filter_conditions = build_elevation_filter_conditions(&params);
@@ -1332,6 +1353,7 @@ mod tests {
             slope_min: None,
             slope_max: None,
             categories: None,
+            owner_session_id: None,
         };
 
         let filter_conditions = build_elevation_filter_conditions(&params_negative);
@@ -1353,6 +1375,7 @@ mod tests {
             slope_min: None,
             slope_max: None,
             categories: None,
+            owner_session_id: None,
         };
 
         let filter_conditions = build_elevation_filter_conditions(&params);
@@ -1376,6 +1399,7 @@ mod tests {
             slope_min: Some(5.0),
             slope_max: None,
             categories: None,
+            owner_session_id: None,
         };
 
         let filter_conditions = build_slope_filter_conditions(&params_min);
@@ -1393,6 +1417,7 @@ mod tests {
             slope_min: None,
             slope_max: Some(15.0),
             categories: None,
+            owner_session_id: None,
         };
 
         let filter_conditions = build_slope_filter_conditions(&params_max);
@@ -1410,6 +1435,7 @@ mod tests {
             slope_min: Some(3.0),
             slope_max: Some(12.0),
             categories: None,
+            owner_session_id: None,
         };
 
         let filter_conditions = build_slope_filter_conditions(&params_range);
@@ -1431,6 +1457,7 @@ mod tests {
             slope_min: Some(2.0),
             slope_max: Some(20.0),
             categories: None,
+            owner_session_id: None,
         };
 
         let elevation_conditions = build_elevation_filter_conditions(&params);
@@ -1460,6 +1487,17 @@ mod tests {
         // 1. Creating test tracks with different elevation values
         // 2. Applying various elevation filters
         // 3. Verifying correct tracks are returned
+        // Requires test database setup and transaction rollback
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_owner_filter_in_list_tracks_geojson() {
+        // This test would verify that owner_session_id filter works correctly
+        // in the list_tracks_geojson function by:
+        // 1. Creating a test track owned by a specific session id (private)
+        // 2. Ensuring it is not returned by default (public-only query)
+        // 3. Querying with owner_session_id set and ensuring the track is returned
         // Requires test database setup and transaction rollback
     }
 
