@@ -1717,7 +1717,7 @@
             "pluginVersion": "12.3.0",
             "targets": [
                 {
-                    "expr": "db_pool_connections{job=\"trackly_backend\", state=\"in_use\"} / db_pool_connections{job=\"trackly_backend\", state=\"max\"}",
+                    "expr": "((avg_over_time(db_pool_connections{job=\"trackly_backend\",state=\"in_use\"}[5m]) or vector(0)) / ignoring(state) (avg_over_time(db_pool_connections{job=\"trackly_backend\",state=\"max\"}[5m]) or vector(1))) * 100",
                     "refId": "A"
                 }
             ],
