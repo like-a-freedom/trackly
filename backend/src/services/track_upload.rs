@@ -164,6 +164,12 @@ impl TrackUploadService {
     }
 
     fn validate_request(&self, request: &TrackUploadRequest) -> Result<(), StatusCode> {
+        // Require at least one category
+        if request.categories.is_empty() {
+            warn!(endpoint = "upload_track_service", "no categories selected");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
         if let Some(name) = &request.name {
             validate_text_field(name, MAX_NAME_LENGTH, "name")?;
         }

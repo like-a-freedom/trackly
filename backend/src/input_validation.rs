@@ -46,10 +46,35 @@ pub fn validate_file_extension(filename: &str) -> Result<String, StatusCode> {
     Ok(ext)
 }
 
+pub fn validate_categories_non_empty(categories: &[String]) -> Result<(), StatusCode> {
+    if categories.is_empty() {
+        error!("No categories provided");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
+}
+
 pub fn sanitize_input(input: &str) -> String {
     input
         .trim()
         .chars()
         .filter(|c| c.is_alphanumeric() || " .,;:!?-_()[]{}".contains(*c))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_categories_non_empty_ok() {
+        let cats = vec!["hiking".to_string()];
+        assert!(validate_categories_non_empty(&cats).is_ok());
+    }
+
+    #[test]
+    fn validate_categories_non_empty_err() {
+        let cats: Vec<String> = vec![];
+        assert!(validate_categories_non_empty(&cats).is_err());
+    }
 }

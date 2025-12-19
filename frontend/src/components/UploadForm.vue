@@ -42,7 +42,7 @@
           :object="true"
           placeholder="Select or create categories"
           class="track-category-select"
-          append-to-body
+          :append-to-body="true"
           position="auto"
           :max-height="220"
           @mousedown.stop
@@ -59,16 +59,19 @@
         </div>
       </transition>
       <transition name="fade-slide">
+        <div v-if="selectedFile && !trackExists && trackCategories.length === 0 && !warning && !checkingExists" class="upload-warning">
+          Please select at least one category.
+        </div>
+      </transition>
+      <transition name="fade-slide">
         <div v-if="uploadSuccess" class="upload-success">
           <div class="success-header">
-            <div class="success-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20,6 9,17 4,12"></polyline>
-              </svg>
-            </div>
-            <div class="success-message">
-              Track uploaded successfully!
-            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20,6 9,17 4,12"></polyline>
+            </svg>
+          </div>
+          <div class="success-message">
+            Track uploaded successfully!
           </div>
           <div v-if="uploadedTrackData" class="success-actions">
             <button 
@@ -101,7 +104,7 @@
           </div>
         </div>
       </transition>
-      <button v-if="selectedFile" type="submit" class="upload-btn" :disabled="!selectedFile || trackExists || checkingExists">Upload</button>
+      <button v-if="selectedFile" type="submit" class="upload-btn" :disabled="!selectedFile || trackExists || checkingExists || trackCategories.length === 0">Upload</button>
     </form>
   </div>
 </template>
@@ -179,6 +182,10 @@ function onDrop(event) {
 }
 async function handleUpload() {
   if (!selectedFile.value || trackExists.value || checkingExists.value) return;
+  if (trackCategories.value.length === 0) {
+    warning.value = 'Please select at least one category.';
+    return;
+  }
   try {
     const response = await uploadTrack({
       file: selectedFile.value,
@@ -350,7 +357,8 @@ async function copyTrackUrl() {
   border: none;
   border-radius: 4px;
   background: none;
-  min-height: 38px;
+  /* slightly increase min-height to reduce vertical shift when tags are added */
+  min-height: 44px;
 }
 .upload-warning {
   display: flex;

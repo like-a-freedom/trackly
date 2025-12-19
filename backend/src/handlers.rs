@@ -258,7 +258,20 @@ pub async fn upload_track(
                         StatusCode::BAD_REQUEST
                     })?;
                     validate_text_field(&cats, MAX_FIELD_SIZE, "categories")?;
-                    categories = cats.split(',').map(|s| s.trim().to_string()).collect();
+                    // filter out empty segments like "" in case of trailing commas
+                    categories = cats
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if categories.is_empty() {
+                        warn!(
+                            reason = "no_categories",
+                            "upload_track request without categories"
+                        );
+                        metrics::record_track_upload_failure("validation");
+                        return Err(StatusCode::BAD_REQUEST);
+                    }
                     if categories.len() > MAX_CATEGORIES {
                         warn!(
                             categories = categories.len(),
@@ -333,6 +346,11 @@ pub async fn upload_track(
     }
     if let Some(ref d) = description {
         validate_text_field(d, MAX_DESCRIPTION_LENGTH, "description")?;
+    }
+    if categories.is_empty() {
+        error!("No categories provided");
+        metrics::record_track_upload_failure("validation");
+        return Err(StatusCode::BAD_REQUEST);
     }
     if categories.len() > MAX_CATEGORIES {
         error!(
