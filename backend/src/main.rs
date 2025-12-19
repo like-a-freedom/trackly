@@ -114,8 +114,8 @@ async fn main() {
         .route(
             "/tracks/{track_id}/pois/{poi_id}",
             axum::routing::delete(handlers::unlink_track_poi),
-        )
-        .layer(DefaultBodyLimit::max(max_body_size))
+        )        // Debug endpoints (disabled by default)
+        .route("/debug/background_task", get(handlers::debug_background_task))        .layer(DefaultBodyLimit::max(max_body_size))
         .layer(metrics::HttpMetricsLayer::new())
         .with_state(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));

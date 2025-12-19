@@ -494,6 +494,32 @@ pub async fn health() -> &'static str {
     "ok"
 }
 
+/// Debug endpoint: spawn a background task that holds a BackgroundTaskGuard for `duration` seconds.
+/// Enabled only when `ENABLE_DEBUG_ENDPOINTS` env var is set to `1`.
+pub async fn debug_background_task(Query(params): axum::extract::Query<std::collections::HashMap<String, String>>)
+-> Result<axum::response::Json<serde_json::Value>, axum::http::StatusCode> {
+    // Guard: only enabled when env var explicitly set
+    if std::env::var("ENABLE_DEBUG_ENDPOINTS").ok().as_deref() != Some("1") {
+        return Err(axum::http::StatusCode::NOT_FOUND);
+    }
+
+    let duration_secs = params
+        .get("duration")
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(5);
+
+    // Spawn a background task that holds the BackgroundTaskGuard for the duration
+    tokio::spawn(async move {
+        let _guard = crate::metrics::BackgroundTaskGuard::new();
+        tokio::time::sleep(std::time::Duration::from_secs(duration_secs)).await;
+    });
+
+    Ok(axum::Json(serde_json::json!({
+        "status": "ok",
+        "duration_secs": duration_secs
+    })))
+}
+
 pub async fn export_track_gpx(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
