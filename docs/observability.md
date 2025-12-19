@@ -130,8 +130,7 @@
 ```
 - Add `or vector(0)` fallbacks where appropriate to ensure panels show `0` instead of "No data" when series are absent.
 - Prefer `increase(...[1h])` for stat panels that summarize events over a window (e.g., "POIs Created (1h)").
-- Debug/testing endpoints: to test background tasks the backend exposes `/debug/background_task?duration=<secs>` (gated by env `ENABLE_DEBUG_ENDPOINTS=1`). Use it to generate measurable `background_tasks_in_flight` spikes for verification.
-- Validate dashboard JSON before committing: ensure multi-line descriptions are JSON-escaped (`\n`) and the file passes `python -m json.tool` (or `jq .`).
+
 
 These implementation notes are applied in `observability/dashboards/technical-metrics.json` (uid `trackly-technical`) and should be used as a template when creating new panels or dashboards for the service.
 
