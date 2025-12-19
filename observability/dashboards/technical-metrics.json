@@ -109,15 +109,7 @@
                 "type": "prometheus",
                 "uid": "victoriametrics"
             },
-            "description": "**What**: Percentage of requests completing within 2 seconds (performance SLI).
-
-**Why**: Measures user experience - slow requests frustrate users.
-
-**Targets**: ✅ >95% (most requests fast) | ⚠️ 85-95% (degraded) | 🚨 <85% (critical).
-
-**Interpretation**: Based on Apdex: <0.5s satisfied, <2s tolerable, >2s frustrated.
-
-**Actions**: If low, check 'Latency Breakdown' for bottlenecks (DB queries, parsing, enrichment).",
+            "description": "**What**: Percentage of requests completing within 2 seconds (performance SLI).\n\n**Why**: Measures user experience - slow requests frustrate users.\n\n**Targets**: ✅ >95% (most requests fast) | ⚠️ 85-95% (degraded) | 🚨 <85% (critical).\n\n**Interpretation**: Based on Apdex: <0.5s satisfied, <2s tolerable, >2s frustrated.\n\n**Actions**: If low, check 'Latency Breakdown' for bottlenecks (DB queries, parsing, enrichment).",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -184,15 +176,7 @@
                 "type": "prometheus",
                 "uid": "victoriametrics"
             },
-            "description": "**What**: Percentage of successful HTTP requests (non-5xx status codes) over 5m window.
-
-**Why**: Primary availability SLI - measures if service works for end users.
-
-**Targets**: ✅ >99.9% (excellent) | ⚠️ 99-99.9% (degraded) | 🚨 <99% (critical).
-
-**Interpretation**: Drop indicates backend errors affecting users. Each 0.1% drop = ~1 failed request per 1000.
-
-**Actions**: If degraded, check 'Error Analysis' section for breakdown by status code and endpoint.",
+            "description": "**What**: Percentage of successful HTTP requests (non-5xx status codes) over 5m window.\n\n**Why**: Primary availability SLI - measures if service works for end users.\n\n**Targets**: ✅ >99.9% (excellent) | ⚠️ 99-99.9% (degraded) | 🚨 <99% (critical).\n\n**Interpretation**: Drop indicates backend errors affecting users. Each 0.1% drop = ~1 failed request per 1000.\n\n**Actions**: If degraded, check 'Error Analysis' section for breakdown by status code and endpoint.",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -448,15 +432,7 @@
                 "type": "prometheus",
                 "uid": "victoriametrics"
             },
-            "description": "**What**: HTTP requests per second (RPS) by method and route.
-
-**Why**: Part of Golden Signals (Traffic) - shows service load and usage patterns.
-
-**Normal**: 1-50 RPS depending on time of day. Weekdays higher than weekends.
-
-**Interpretation**: Sudden drops may indicate upstream problems or outages. Sudden spikes may be traffic surge or abuse.
-
-**Actions**: For drops, check reverse proxy, DNS, upstream services. For spikes, check if legitimate traffic or consider rate limiting.",
+            "description": "**What**: HTTP requests per second (RPS) by method and route.\n\n**Why**: Part of Golden Signals (Traffic) - shows service load and usage patterns.\n\n**Normal**: 1-50 RPS depending on time of day. Weekdays higher than weekends.\n\n**Interpretation**: Sudden drops may indicate upstream problems or outages. Sudden spikes may be traffic surge or abuse.\n\n**Actions**: For drops, check reverse proxy, DNS, upstream services. For spikes, check if legitimate traffic or consider rate limiting.",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -681,15 +657,7 @@
                 "y": 17
             },
             "id": 7,
-            "description": "**What**: HTTP request duration percentiles (p50/p95/p99) - time to complete requests.
-
-**Why**: Part of Golden Signals (Latency) - shows typical and worst-case performance.
-
-**Targets**: p95 ✅ <500ms | ⚠️ 500ms-2s | 🚨 >2s.
-
-**Interpretation**: p50 = median (50% faster), p95 = 95% faster, p99 = worst 1%. Rising p95/p99 indicates performance degradation.
-
-**Actions**: If p95 high, check DB Query Latency, Track Processing, or Elevation API latency panels below.",
+            "description": "**What**: HTTP request duration percentiles (p50/p95/p99) - time to complete requests.\n\n**Why**: Part of Golden Signals (Latency) - shows typical and worst-case performance.\n\n**Targets**: p95 ✅ <500ms | ⚠️ 500ms-2s | 🚨 >2s.\n\n**Interpretation**: p50 = median (50% faster), p95 = 95% faster, p99 = worst 1%. Rising p95/p99 indicates performance degradation.\n\n**Actions**: If p95 high, check DB Query Latency, Track Processing, or Elevation API latency panels below.",
             "options": {
                 "legend": {
                     "calcs": [
@@ -902,15 +870,7 @@
                 "y": 26
             },
             "id": 10,
-            "description": "**What**: Database connection pool state - in_use, idle, max connections.
-
-**Why**: Part of USE method (Utilization) - shows DB resource usage and capacity.
-
-**Targets**: in_use ✅ <70% of max | ⚠️ 70-90% | 🚨 >90% (near exhaustion).
-
-**Interpretation**: Stacked view shows total connections. If in_use approaches max, new requests will wait or fail.
-
-**Actions**: If saturated, increase pool size in config or optimize query efficiency. Check DB Query Latency for slow queries.",
+            "description": "**What**: Database connection pool state - in_use, idle, max connections.\n\n**Why**: Part of USE method (Utilization) - shows DB resource usage and capacity.\n\n**Targets**: in_use ✅ <70% of max | ⚠️ 70-90% | 🚨 >90% (near exhaustion).\n\n**Interpretation**: Stacked view shows total connections. If in_use approaches max, new requests will wait or fail.\n\n**Actions**: If saturated, increase pool size in config or optimize query efficiency. Check DB Query Latency for slow queries.",
             "options": {
                 "legend": {
                     "calcs": [
@@ -1013,15 +973,7 @@
                 "y": 26
             },
             "id": 12,
-            "description": "**What**: Database query operations per second by operation type (SELECT, INSERT, UPDATE, DELETE).
-
-**Why**: Shows DB load and query patterns.
-
-**Normal**: Varies with traffic. SELECT typically highest, followed by INSERT.
-
-**Interpretation**: Spikes correlate with request rate. Unusual patterns may indicate inefficient queries.
-
-**Actions**: If query rate high relative to request rate, investigate N+1 queries or missing batching.",
+            "description": "**What**: Database query operations per second by operation type (SELECT, INSERT, UPDATE, DELETE).\n\n**Why**: Shows DB load and query patterns.\n\n**Normal**: Varies with traffic. SELECT typically highest, followed by INSERT.\n\n**Interpretation**: Spikes correlate with request rate. Unusual patterns may indicate inefficient queries.\n\n**Actions**: If query rate high relative to request rate, investigate N+1 queries or missing batching.",
             "options": {
                 "legend": {
                     "calcs": [
@@ -1223,15 +1175,7 @@
                 "y": 35
             },
             "id": 14,
-            "description": "**What**: p95 latency for track parsing (GPX/FIT/KML) and full pipeline processing.
-
-**Why**: Business metric - measures user-facing upload performance.
-
-**Targets**: Parse p95 ✅ <200ms | ⚠️ 200-500ms | 🚨 >500ms. Pipeline ✅ <1s | ⚠️ 1-3s | 🚨 >3s.
-
-**Interpretation**: Parse shows file format overhead. Pipeline includes DB writes, deduplication, POI linking.
-
-**Actions**: If Parse slow, check file sizes and complexity. If Pipeline slow, check DB Pool Utilization and Query Latency.",
+            "description": "**What**: p95 latency for track parsing (GPX/FIT/KML) and full pipeline processing.\n\n**Why**: Business metric - measures user-facing upload performance.\n\n**Targets**: Parse p95 ✅ <200ms | ⚠️ 200-500ms | 🚨 >500ms. Pipeline ✅ <1s | ⚠️ 1-3s | 🚨 >3s.\n\n**Interpretation**: Parse shows file format overhead. Pipeline includes DB writes, deduplication, POI linking.\n\n**Actions**: If Parse slow, check file sizes and complexity. If Pipeline slow, check DB Pool Utilization and Query Latency.",
             "options": {
                 "legend": {
                     "calcs": [
@@ -1773,15 +1717,7 @@
                 "y": 52
             },
             "id": 18,
-            "description": "**What**: Number of background tasks currently executing (max over 5m window).
-
-**Why**: Shows async workload - tasks that don't block HTTP requests.
-
-**Targets**: ✅ <10 (low) | ⚠️ 10-50 (moderate) | 🚨 >50 (high concurrency).
-
-**Interpretation**: Gauge metric, short-lived tasks may show 0. Using max_over_time to catch spikes.
-
-**Actions**: If consistently high, review background task usage. Use /debug/background_task (ENABLE_DEBUG_ENDPOINTS=1) to test.",
+            "description": "**What**: Number of background tasks currently executing (max over 5m window).\n\n**Why**: Shows async workload - tasks that don't block HTTP requests.\n\n**Targets**: ✅ <10 (low) | ⚠️ 10-50 (moderate) | 🚨 >50 (high concurrency).\n\n**Interpretation**: Gauge metric, short-lived tasks may show 0. Using max_over_time to catch spikes.\n\n**Actions**: If consistently high, review background task usage. Use /debug/background_task (ENABLE_DEBUG_ENDPOINTS=1) to test.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
@@ -1848,15 +1784,7 @@
                 "y": 52
             },
             "id": 19,
-            "description": "**What**: Database connection pool utilization percentage (in_use / max * 100).
-
-**Why**: Part of USE method (Utilization) - critical resource saturation metric.
-
-**Targets**: ✅ <70% (healthy headroom) | ⚠️ 70-90% (approaching limit) | 🚨 >90% (saturated).
-
-**Interpretation**: Uses avg_over_time[5m] for stability. High utilization causes request queueing and timeouts.
-
-**Actions**: If >90%, increase pool max_connections or optimize query efficiency. Check DB Query Latency for slow queries blocking connections.",
+            "description": "**What**: Database connection pool utilization percentage (in_use / max * 100).\n\n**Why**: Part of USE method (Utilization) - critical resource saturation metric.\n\n**Targets**: ✅ <70% (healthy headroom) | ⚠️ 70-90% (approaching limit) | 🚨 >90% (saturated).\n\n**Interpretation**: Uses avg_over_time[5m] for stability. High utilization causes request queueing and timeouts.\n\n**Actions**: If >90%, increase pool max_connections or optimize query efficiency. Check DB Query Latency for slow queries blocking connections.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
@@ -2178,15 +2106,7 @@
                 "y": 59
             },
             "id": 28,
-            "description": "**What**: Number of times enrichment queue reached capacity in last hour.
-
-**Why**: Saturation metric - indicates backpressure and potential data loss.
-
-**Targets**: ✅ 0 (no saturation) | ⚠️ 1-10 (occasional) | 🚨 >10 (frequent saturation).
-
-**Interpretation**: Queue full means new enrichment requests are rejected/dropped. Indicates enrichment can't keep up with upload rate.
-
-**Actions**: If frequent, increase queue capacity or enrichment worker count. Check Elevation API latency for slowdowns.",
+            "description": "**What**: Number of times enrichment queue reached capacity in last hour.\n\n**Why**: Saturation metric - indicates backpressure and potential data loss.\n\n**Targets**: ✅ 0 (no saturation) | ⚠️ 1-10 (occasional) | 🚨 >10 (frequent saturation).\n\n**Interpretation**: Queue full means new enrichment requests are rejected/dropped. Indicates enrichment can't keep up with upload rate.\n\n**Actions**: If frequent, increase queue capacity or enrichment worker count. Check Elevation API latency for slowdowns.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
@@ -2283,15 +2203,7 @@
                 "y": 67
             },
             "id": 60,
-            "description": "**What**: Rate of calls to external elevation API services (open-elevation, etc).
-
-**Why**: Business metric - shows external API dependency and cost.
-
-**Normal**: Correlates with track uploads needing enrichment. 0-10 RPS typical.
-
-**Interpretation**: By service breakdown shows primary vs fallback API usage.
-
-**Actions**: If rate high, check enrichment batching efficiency. Monitor API costs and rate limits.",
+            "description": "**What**: Rate of calls to external elevation API services (open-elevation, etc).\n\n**Why**: Business metric - shows external API dependency and cost.\n\n**Normal**: Correlates with track uploads needing enrichment. 0-10 RPS typical.\n\n**Interpretation**: By service breakdown shows primary vs fallback API usage.\n\n**Actions**: If rate high, check enrichment batching efficiency. Monitor API costs and rate limits.",
             "options": {
                 "legend": {
                     "calcs": [
@@ -2450,15 +2362,7 @@
                 "y": 75
             },
             "id": 62,
-            "description": "**What**: Total POIs (Points of Interest) created in last hour.
-
-**Why**: Business metric - shows POI discovery and auto-linking activity.
-
-**Normal**: Depends on track uploads with new locations. 0-50 per hour typical.
-
-**Interpretation**: Counts new POI entities created when tracks pass through previously unknown locations.
-
-**Actions**: If unexpectedly high, check for duplicate POI creation bugs. If 0 during active uploads, check POI detection logic.",
+            "description": "**What**: Total POIs (Points of Interest) created in last hour.\n\n**Why**: Business metric - shows POI discovery and auto-linking activity.\n\n**Normal**: Depends on track uploads with new locations. 0-50 per hour typical.\n\n**Interpretation**: Counts new POI entities created when tracks pass through previously unknown locations.\n\n**Actions**: If unexpectedly high, check for duplicate POI creation bugs. If 0 during active uploads, check POI detection logic.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
@@ -2521,15 +2425,7 @@
                 "y": 75
             },
             "id": 63,
-            "description": "**What**: POIs deleted or unlinked from tracks in last hour.
-
-**Why**: Business metric - shows POI cleanup and deduplication.
-
-**Normal**: Lower than creation rate. 0-10 per hour typical.
-
-**Interpretation**: POIs deleted when no longer referenced by any tracks, or explicitly unlinked.
-
-**Actions**: If high, verify deduplication logic isn't too aggressive. Check track deletion patterns.",
+            "description": "**What**: POIs deleted or unlinked from tracks in last hour.\n\n**Why**: Business metric - shows POI cleanup and deduplication.\n\n**Normal**: Lower than creation rate. 0-10 per hour typical.\n\n**Interpretation**: POIs deleted when no longer referenced by any tracks, or explicitly unlinked.\n\n**Actions**: If high, verify deduplication logic isn't too aggressive. Check track deletion patterns.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
@@ -2688,15 +2584,7 @@
                 "y": 81
             },
             "id": 66,
-            "description": "**What**: Tracks identified as duplicates in last hour, by deduplication reason.
-
-**Why**: Business metric - shows duplicate detection effectiveness.
-
-**Normal**: 5-20% of uploads may be duplicates. Varies by user behavior.
-
-**Interpretation**: By reason: hash_match (exact duplicate), spatial_temporal (similar route/time), etc.
-
-**Actions**: If too high (>50%), users may be confused about upload status. If too low, deduplication may be too lenient.",
+            "description": "**What**: Tracks identified as duplicates in last hour, by deduplication reason.\n\n**Why**: Business metric - shows duplicate detection effectiveness.\n\n**Normal**: 5-20% of uploads may be duplicates. Varies by user behavior.\n\n**Interpretation**: By reason: hash_match (exact duplicate), spatial_temporal (similar route/time), etc.\n\n**Actions**: If too high (>50%), users may be confused about upload status. If too low, deduplication may be too lenient.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
@@ -2760,15 +2648,7 @@
                 "y": 81
             },
             "id": 67,
-            "description": "**What**: Tracks deleted in last hour, by result (success/failure).
-
-**Why**: Business metric - tracks user cleanup actions and retention.
-
-**Normal**: Low volume, occasional user deletions. <10 per hour typical.
-
-**Interpretation**: 'success' = cleanly deleted, 'failure' = deletion errors (referential integrity, permissions).
-
-**Actions**: If high failure rate, check database constraints and logs for errors.",
+            "description": "**What**: Tracks deleted in last hour, by result (success/failure).\n\n**Why**: Business metric - tracks user cleanup actions and retention.\n\n**Normal**: Low volume, occasional user deletions. <10 per hour typical.\n\n**Interpretation**: 'success' = cleanly deleted, 'failure' = deletion errors (referential integrity, permissions).\n\n**Actions**: If high failure rate, check database constraints and logs for errors.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
