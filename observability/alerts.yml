@@ -221,6 +221,50 @@ groups:
           summary: "High track deduplication rate"
           description: "{{ $value | humanizePercentage }} of track uploads are duplicates"
 
+      - alert: LowD7Retention
+        expr: |
+          retention_d7 < 0.2
+        for: 1h
+        labels:
+          severity: critical
+          component: product
+        annotations:
+          summary: "Day-7 retention below 20%"
+          description: "7-day retention is {{ $value | humanizePercentage }} which is below target"
+
+      - alert: LowEnrichmentAdoption
+        expr: |
+          sum(increase(track_enrich_requests_total{status="success"}[7d])) / sum(increase(tracks_uploaded_total[7d])) < 0.4
+        for: 6h
+        labels:
+          severity: warning
+          component: product
+        annotations:
+          summary: "Low enrichment adoption"
+          description: "Enrichment adoption over the last 7d is {{ $value | humanizePercentage }}"
+
+      - alert: HighZeroResultRate
+        expr: |
+          zero_result_rate_7d > 0.2
+        for: 1h
+        labels:
+          severity: warning
+          component: product
+        annotations:
+          summary: "High zero-result rate in search"
+          description: "Zero-result searches are {{ $value | humanizePercentage }} over 7d"
+
+      - alert: HighChurnRisk
+        expr: |
+          sessions_churn_rate > 0.2
+        for: 24h
+        labels:
+          severity: warning
+          component: product
+        annotations:
+          summary: "High churn risk fraction"
+          description: "{{ $value | humanizePercentage }} of active sessions are at risk of churn (no activity in last 14d but had activity in last 30d)"
+
   - name: trackly_frontend_health
     interval: 30s
     rules:

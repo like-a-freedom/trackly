@@ -282,8 +282,21 @@ pub struct UpdateTrackNameRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct UpdateTrackCategoriesRequest {
+    pub categories: Vec<String>,
+    pub session_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct TrackSearchQuery {
     pub query: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MapInteractionEvent {
+    pub action: String,
+    pub zoom: Option<f64>,
+    pub session_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]

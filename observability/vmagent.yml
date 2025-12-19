@@ -55,4 +55,4 @@ remote_write:
         action: keep
       # Keep only necessary labels to reduce cardinality
       - action: labelkeep
-        regex: '__name__|job|instance|service|component|env|version|method|route|status_class|operation|format|source|category|reason|result|state|outcome|mode'
+        regex: '__name__|job|instance|service|component|env|version|method|route|status_class|operation|format|source|category|reason|result|state|outcome|mode|ownership|referrer|query_type|result_type|field|action|zoom_bucket|session_hash|activity' 

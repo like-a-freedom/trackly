@@ -1,0 +1,81 @@
+groups:
+  - name: trackly_product_recording_rules
+    interval: 1m
+    rules:
+      - record: engagement_score_7d
+        expr: |
+          sum by (session_hash) (
+            10 * increase(trackly_session_heartbeat{activity="upload"}[7d]) +
+            2 * increase(trackly_session_heartbeat{activity="view"}[7d]) +
+            10 * increase(trackly_session_heartbeat{activity="enrich"}[7d]) +
+            5 * increase(trackly_session_heartbeat{activity="edit"}[7d]) +
+            5 * increase(trackly_session_heartbeat{activity="search"}[7d]) +
+            5 * increase(trackly_session_heartbeat{activity="export"}[7d])
+          )
+      - record: sessions_active_1d
+        expr: |
+          count(count_over_time(trackly_session_heartbeat[1d]) by (session_hash))
+      - record: sessions_active_7d
+        expr: |
+          count(count_over_time(trackly_session_heartbeat[7d]) by (session_hash))
+      - record: sessions_active_30d
+        expr: |
+          count(count_over_time(trackly_session_heartbeat[30d]) by (session_hash))
+      - record: sessions_churn_risk
+        expr: |
+          count(
+            count_over_time(trackly_session_heartbeat[30d]) by (session_hash)
+            unless
+            count_over_time(trackly_session_heartbeat[14d]) by (session_hash)
+          )
+      - record: sessions_churn_rate
+        expr: |
+          sessions_churn_risk / sessions_active_30d
+      - record: funnel_uploads_7d
+        expr: |
+          sum(increase(tracks_uploaded_total[7d]))
+      - record: funnel_views_7d
+        expr: |
+          sum(increase(track_views_total[7d]))
+      - record: funnel_enrich_success_7d
+        expr: |
+          sum(increase(track_enrich_requests_total{status="success"}[7d]))
+      - record: funnel_exports_7d
+        expr: |
+          sum(increase(track_exports_total[7d]))
+      - record: funnel_edits_7d
+        expr: |
+          sum(increase(track_edits_total[7d]))
+      - record: funnel_deletes_7d
+        expr: |
+          sum(increase(tracks_deleted_total{result="success"}[7d]))
+      - record: zero_result_rate_7d
+        expr: |
+          sum(increase(track_searches_total{result_type="zero"}[7d])) / sum(increase(track_searches_total[7d]))
+      - record: retention_d1
+        expr: |
+          count(
+            count_over_time(trackly_session_heartbeat[1d] offset 1d) by (session_hash)
+            and
+            count_over_time(trackly_session_heartbeat[1d]) by (session_hash)
+          )
+          /
+          count(count_over_time(trackly_session_heartbeat[1d] offset 1d) by (session_hash))
+      - record: retention_d7
+        expr: |
+          count(
+            count_over_time(trackly_session_heartbeat[7d] offset 7d) by (session_hash)
+            and
+            count_over_time(trackly_session_heartbeat[7d]) by (session_hash)
+          )
+          /
+          count(count_over_time(trackly_session_heartbeat[7d] offset 7d) by (session_hash))
+      - record: retention_d30
+        expr: |
+          count(
+            count_over_time(trackly_session_heartbeat[30d] offset 30d) by (session_hash)
+            and
+            count_over_time(trackly_session_heartbeat[30d]) by (session_hash)
+          )
+          /
+          count(count_over_time(trackly_session_heartbeat[30d] offset 30d) by (session_hash))
