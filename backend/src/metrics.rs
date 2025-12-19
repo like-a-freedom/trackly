@@ -204,7 +204,10 @@ static TRACK_ENRICH_REQUESTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 static TRACK_VIEWS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
-    let opts = Opts::new("track_views_total", "Track detail views by ownership and referrer");
+    let opts = Opts::new(
+        "track_views_total",
+        "Track detail views by ownership and referrer",
+    );
     let counter = IntCounterVec::new(opts, &["ownership", "referrer"]).expect("counter vec");
     REGISTRY
         .register(Box::new(counter.clone()))
@@ -213,7 +216,10 @@ static TRACK_VIEWS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 static TRACK_SEARCHES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
-    let opts = Opts::new("track_searches_total", "Track search queries by result and type");
+    let opts = Opts::new(
+        "track_searches_total",
+        "Track search queries by result and type",
+    );
     let counter = IntCounterVec::new(opts, &["result_type", "query_type"]).expect("counter vec");
     REGISTRY
         .register(Box::new(counter.clone()))
@@ -240,7 +246,10 @@ static TRACK_EXPORTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
 });
 
 static MAP_INTERACTIONS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
-    let opts = Opts::new("map_interactions_total", "Map interactions by action and zoom bucket");
+    let opts = Opts::new(
+        "map_interactions_total",
+        "Map interactions by action and zoom bucket",
+    );
     let counter = IntCounterVec::new(opts, &["action", "zoom_bucket"]).expect("counter vec");
     REGISTRY
         .register(Box::new(counter.clone()))
@@ -826,7 +835,11 @@ pub fn record_track_view(ownership: &str, referrer: &str) {
 }
 
 pub fn record_track_search(result_type: &str, query_type: &str) {
-    let result_label = if result_type == "zero" { "zero" } else { "success" };
+    let result_label = if result_type == "zero" {
+        "zero"
+    } else {
+        "success"
+    };
     let query_label = match query_type {
         "category" => "category",
         "location" => "location",
@@ -845,9 +858,7 @@ pub fn record_track_edit(field: &str) {
         "categories" => "categories",
         _ => "other",
     };
-    TRACK_EDITS_TOTAL
-        .with_label_values(&[field_label])
-        .inc();
+    TRACK_EDITS_TOTAL.with_label_values(&[field_label]).inc();
 }
 
 pub fn record_track_export(format: &str) {
@@ -857,9 +868,7 @@ pub fn record_track_export(format: &str) {
         "fit" => "fit",
         _ => "other",
     };
-    TRACK_EXPORTS_TOTAL
-        .with_label_values(&[fmt_label])
-        .inc();
+    TRACK_EXPORTS_TOTAL.with_label_values(&[fmt_label]).inc();
 }
 
 pub fn record_map_interaction(action: &str, zoom_bucket: &str) {

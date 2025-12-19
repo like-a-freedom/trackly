@@ -79,3 +79,23 @@ groups:
           )
           /
           count(count_over_time(trackly_session_heartbeat[30d] offset 30d) by (session_hash))
+
+      # Engagement segments (passive/active/power) derived from engagement_score_7d
+      - record: engagement_segment_passive
+        expr: |
+          count(engagement_score_7d < 21)
+      - record: engagement_segment_active
+        expr: |
+          count(engagement_score_7d >= 21 and engagement_score_7d <= 50)
+      - record: engagement_segment_power
+        expr: |
+          count(engagement_score_7d > 50)
+
+      # New sessions approximation: sessions active in 1d but not in previous 30d window
+      - record: new_sessions_1d_approx
+        expr: |
+          count(
+            count_over_time(trackly_session_heartbeat[1d]) by (session_hash)
+            unless
+            count_over_time(trackly_session_heartbeat[30d] offset 1d) by (session_hash)
+          )
