@@ -1,4 +1,5 @@
 use crate::db;
+use crate::metrics;
 use crate::track_utils::elevation::{calculate_elevation_metrics, ElevationMetrics};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
@@ -6,7 +7,6 @@ use reqwest;
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
-use crate::metrics;
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
 
@@ -592,7 +592,9 @@ impl ElevationEnrichmentService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{with_temp_env, with_temp_env_async, with_temp_envs, with_temp_envs_async};
+    use crate::test_utils::{
+        with_temp_env, with_temp_env_async, with_temp_envs, with_temp_envs_async,
+    };
 
     #[test]
     fn test_needs_enrichment() {
@@ -723,7 +725,8 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("Elevation enrichment service is disabled"));
-        }).await;
+        })
+        .await;
     }
 
     #[tokio::test]
@@ -736,7 +739,8 @@ mod tests {
 
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("disabled"));
-        }).await;
+        })
+        .await;
     }
 
     #[tokio::test]
@@ -745,7 +749,10 @@ mod tests {
         with_temp_envs_async(
             &[
                 ("ELEVATION_SERVICE", Some("opentopodata")),
-                ("ELEVATION_API_URL", Some("http://invalid-url-that-does-not-exist/v1")),
+                (
+                    "ELEVATION_API_URL",
+                    Some("http://invalid-url-that-does-not-exist/v1"),
+                ),
                 ("ELEVATION_DEFAULT_DATASET", Some("srtm90m")),
                 ("ELEVATION_RATE_LIMIT", Some("0")),
                 ("ELEVATION_RETRY_ATTEMPTS", Some("2")),
@@ -757,14 +764,14 @@ mod tests {
 
                 let result = service.enrich_track_elevation(track_points).await;
 
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        eprintln!("Error message: {}", error_msg);
-        // Just check that we got an error, don't be too specific about the message
-        assert!(!error_msg.is_empty());
-
+                assert!(result.is_err());
+                let error_msg = result.unwrap_err().to_string();
+                eprintln!("Error message: {}", error_msg);
+                // Just check that we got an error, don't be too specific about the message
+                assert!(!error_msg.is_empty());
             },
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -781,22 +788,21 @@ mod tests {
                 ("ELEVATION_TIMEOUT", Some("1")),
             ],
             || async {
+                // Create service with fallback configuration
+                let service = ElevationEnrichmentService::new();
+                let track_points = vec![(55.0, 37.0)];
 
-        // Create service with fallback configuration
-        let service = ElevationEnrichmentService::new();
-        let track_points = vec![(55.0, 37.0)];
+                let result = service.enrich_track_elevation(track_points).await;
 
-        let result = service.enrich_track_elevation(track_points).await;
-
-        // Expect failure since both primary and fallback will fail (invalid URLs)
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        eprintln!("Fallback service error: {}", error_msg);
-        // Just check that we got an error, don't be too specific about the message
-        assert!(!error_msg.is_empty());
-
+                // Expect failure since both primary and fallback will fail (invalid URLs)
+                assert!(result.is_err());
+                let error_msg = result.unwrap_err().to_string();
+                eprintln!("Fallback service error: {}", error_msg);
+                // Just check that we got an error, don't be too specific about the message
+                assert!(!error_msg.is_empty());
             },
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -805,30 +811,32 @@ mod tests {
         with_temp_envs_async(
             &[
                 ("ELEVATION_SERVICE", Some("opentopodata")),
-                ("ELEVATION_API_URL", Some("http://invalid-nonexistent-domain.invalid/v1/test")),
+                (
+                    "ELEVATION_API_URL",
+                    Some("http://invalid-nonexistent-domain.invalid/v1/test"),
+                ),
                 ("ELEVATION_DEFAULT_DATASET", Some("srtm90m")),
                 ("ELEVATION_BATCH_SIZE", Some("100")),
                 ("ELEVATION_RATE_LIMIT", Some("0")),
                 ("ELEVATION_TIMEOUT", Some("1")),
             ],
             || async {
+                let service = ElevationEnrichmentService::new();
 
-        let service = ElevationEnrichmentService::new();
+                // Create 2 track points for testing
+                let track_points: Vec<(f64, f64)> = vec![(55.0, 37.0), (55.001, 37.001)];
 
-        // Create 2 track points for testing
-        let track_points: Vec<(f64, f64)> = vec![(55.0, 37.0), (55.001, 37.001)];
+                let result = service.enrich_track_elevation(track_points).await;
 
-        let result = service.enrich_track_elevation(track_points).await;
-
-        // Expect connection error since we're using invalid URL
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        eprintln!("Batch processing error: {}", error_msg);
-        // Just check that we got an error, don't be too specific about the message
-        assert!(!error_msg.is_empty());
-
+                // Expect connection error since we're using invalid URL
+                assert!(result.is_err());
+                let error_msg = result.unwrap_err().to_string();
+                eprintln!("Batch processing error: {}", error_msg);
+                // Just check that we got an error, don't be too specific about the message
+                assert!(!error_msg.is_empty());
             },
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -844,20 +852,19 @@ mod tests {
                 ("ELEVATION_TIMEOUT", Some("1")),
             ],
             || async {
+                let service = ElevationEnrichmentService::new();
+                let track_points = vec![(55.0, 37.0)];
 
-        let service = ElevationEnrichmentService::new();
-        let track_points = vec![(55.0, 37.0)];
+                let result = service.enrich_track_elevation(track_points).await;
 
-        let result = service.enrich_track_elevation(track_points).await;
-
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        eprintln!("Malformed response error: {}", error_msg);
-        // Just check that we got an error, don't be too specific about the message
-        assert!(!error_msg.is_empty());
-
+                assert!(result.is_err());
+                let error_msg = result.unwrap_err().to_string();
+                eprintln!("Malformed response error: {}", error_msg);
+                // Just check that we got an error, don't be too specific about the message
+                assert!(!error_msg.is_empty());
             },
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -872,21 +879,20 @@ mod tests {
                 ("ELEVATION_TIMEOUT", Some("1")),
             ],
             || async {
+                let service = ElevationEnrichmentService::new();
+                let track_points = vec![(55.0, 37.0)];
 
-        let service = ElevationEnrichmentService::new();
-        let track_points = vec![(55.0, 37.0)];
+                // Test the enrichment with timeout
+                let result = service.enrich_track_elevation(track_points).await;
 
-        // Test the enrichment with timeout
-        let result = service.enrich_track_elevation(track_points).await;
-
-        assert!(result.is_err()); // Should fail due to timeout
-        let error_msg = result.unwrap_err().to_string();
-        eprintln!("Timeout error: {}", error_msg);
-        // Just check that we got an error, don't be too specific about the message
-        assert!(!error_msg.is_empty());
-
+                assert!(result.is_err()); // Should fail due to timeout
+                let error_msg = result.unwrap_err().to_string();
+                eprintln!("Timeout error: {}", error_msg);
+                // Just check that we got an error, don't be too specific about the message
+                assert!(!error_msg.is_empty());
             },
-        ).await;
+        )
+        .await;
     }
 
     #[test]

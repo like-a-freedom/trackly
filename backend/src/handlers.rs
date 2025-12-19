@@ -10,13 +10,13 @@ use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
 use crate::track_utils::{
     calculate_file_hash, extract_coordinates_from_geojson, ElevationEnrichmentService,
 };
+use axum::http::header::REFERER;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
-use axum::http::header::REFERER;
 use axum_extra::extract::multipart::Multipart as AxumMultipart;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -122,7 +122,10 @@ static UPLOAD_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
 fn normalize_session_id(raw: &str) -> Result<(Uuid, String), StatusCode> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        warn!(reason = "empty_session_id", "session_id field is empty after trimming");
+        warn!(
+            reason = "empty_session_id",
+            "session_id field is empty after trimming"
+        );
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -146,7 +149,13 @@ fn derive_referrer(headers: &HeaderMap) -> &'static str {
     headers
         .get(REFERER)
         .and_then(|v| v.to_str().ok())
-        .map(|v| if v.contains("/tracks/search") { "search" } else { "direct" })
+        .map(|v| {
+            if v.contains("/tracks/search") {
+                "search"
+            } else {
+                "direct"
+            }
+        })
         .unwrap_or("direct")
 }
 
@@ -179,12 +188,10 @@ fn detect_search_query_type(query: &str) -> &'static str {
 }
 
 fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
-    let mut map = LAST_UPLOAD
-        .lock()
-        .map_err(|e| {
-            error!(error = ?e, "LAST_UPLOAD mutex poisoned");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let mut map = LAST_UPLOAD.lock().map_err(|e| {
+        error!(error = ?e, "LAST_UPLOAD mutex poisoned");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     if let Some(&last) = map.get(session_key) {
         if now < last + *UPLOAD_RATE_LIMIT_SECONDS {
             let retry_after = last + *UPLOAD_RATE_LIMIT_SECONDS - now;
@@ -253,7 +260,11 @@ pub async fn upload_track(
                     validate_text_field(&cats, MAX_FIELD_SIZE, "categories")?;
                     categories = cats.split(',').map(|s| s.trim().to_string()).collect();
                     if categories.len() > MAX_CATEGORIES {
-                        warn!(categories = categories.len(), max = MAX_CATEGORIES, "too many categories");
+                        warn!(
+                            categories = categories.len(),
+                            max = MAX_CATEGORIES,
+                            "too many categories"
+                        );
                         return Err(StatusCode::BAD_REQUEST);
                     }
                     for cat in &categories {
@@ -308,7 +319,10 @@ pub async fn upload_track(
     let file_name = match file_name {
         Some(f) => f,
         None => {
-            warn!(reason = "missing_file_name", "upload_track request missing file name");
+            warn!(
+                reason = "missing_file_name",
+                "upload_track request missing file name"
+            );
             metrics::record_track_upload_failure("validation");
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -620,8 +634,9 @@ pub async fn health() -> &'static str {
 
 /// Debug endpoint: spawn a background task that holds a BackgroundTaskGuard for `duration` seconds.
 /// Enabled only when `ENABLE_DEBUG_ENDPOINTS` env var is set to `1`.
-pub async fn debug_background_task(Query(params): axum::extract::Query<std::collections::HashMap<String, String>>)
--> Result<axum::response::Json<serde_json::Value>, axum::http::StatusCode> {
+pub async fn debug_background_task(
+    Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<axum::response::Json<serde_json::Value>, axum::http::StatusCode> {
     // Guard: only enabled when env var explicitly set
     if std::env::var("ENABLE_DEBUG_ENDPOINTS").ok().as_deref() != Some("1") {
         return Err(axum::http::StatusCode::NOT_FOUND);
