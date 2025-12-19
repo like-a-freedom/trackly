@@ -27,7 +27,7 @@ vi.spyOn(VueRouter, 'useRouter').mockReturnValue({
 vi.mock('@vueform/multiselect', () => ({
     default: {
         name: 'Multiselect',
-        props: ['modelValue', 'mode', 'closeOnSelect', 'searchable', 'createOption', 'options', 'object', 'placeholder'],
+        props: ['modelValue', 'mode', 'closeOnSelect', 'searchable', 'createOption', 'options', 'object', 'placeholder', 'position', 'appendToBody'],
         emits: ['update:modelValue'],
         template: `
       <div class="multiselect-mock">
@@ -165,6 +165,14 @@ describe('UploadForm', () => {
 
             expect(wrapper.find('.track-name-input').exists()).toBe(true);
             expect(wrapper.find('.track-category-select').exists()).toBe(true);
+
+            // Ensure Multiselect receives stable placement props to avoid teleport-induced jumping
+            const ms = wrapper.findComponent({ name: 'Multiselect' });
+            expect(ms.exists()).toBe(true);
+            const props = ms.props();
+            expect(props.position).toBe('auto');
+            // camelCased prop name in props() is appendToBody
+            expect(props.appendToBody).toBe(true);
         });
 
         it('enables upload button after valid file selection', async () => {
@@ -187,7 +195,8 @@ describe('UploadForm', () => {
             await flushPromises();
 
             const uploadBtn = wrapper.find('.upload-btn');
-            expect(uploadBtn.attributes('disabled')).toBeUndefined();
+            // Button should be disabled because no categories are selected yet
+            expect(uploadBtn.attributes('disabled')).toBeDefined();
         });
     });
 
@@ -286,9 +295,13 @@ describe('UploadForm', () => {
 
             // Wait for async operations
             await flushPromises();
+            // Wait for any transition/DOM update frames so leave transitions finish
+            await wrapper.vm.$nextTick();
 
             expect(wrapper.find('.upload-warning').exists()).toBe(true);
             expect(wrapper.text()).toContain('This track already exists');
+            // When duplicate detected, don't show the "Please select at least one category." hint
+            expect(wrapper.text()).not.toContain('Please select at least one category.');
         });
 
         it('disables upload button when track exists', async () => {
@@ -349,12 +362,10 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
             await flushPromises();
 
-            expect(mockUploadTrack).toHaveBeenCalledWith({
-                file: file,
-                name: 'My Custom Track',
-                categories: []
-            });
-            expect(wrapper.emitted('uploaded')).toBeTruthy();
+            // Should not be called because categories are required
+            expect(mockUploadTrack).not.toHaveBeenCalled();
+            expect(wrapper.emitted('uploaded')).toBeFalsy();
+            expect(wrapper.vm.warning).toBe('Please select at least one category.');
         });
 
         it('calls uploadTrack with categories', async () => {
@@ -402,6 +413,8 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            // select categories to satisfy new requirement
+            wrapper.vm.trackCategories = [{ value: 'hiking', label: 'Hiking' }];
 
             await wrapper.find('.upload-form').trigger('submit');
 
@@ -464,6 +477,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'hiking', label: 'Hiking' }];
             await wrapper.find('.upload-form').trigger('submit');
             await wrapper.vm.$nextTick();
             expect(wrapper.find('.upload-success').exists()).toBe(true);
@@ -478,6 +492,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'hiking', label: 'Hiking' }];
 
             // Trigger form submit and wait for async upload to complete
             await wrapper.find('.upload-form').trigger('submit');
@@ -817,6 +832,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'running', label: 'Running' }];
 
             await wrapper.find('.upload-form').trigger('submit');
             await wrapper.vm.$nextTick();
@@ -834,6 +850,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'running', label: 'Running' }];
 
             await wrapper.find('.upload-form').trigger('submit');
             await wrapper.vm.$nextTick();
@@ -853,6 +870,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'running', label: 'Running' }];
 
             await wrapper.find('.upload-form').trigger('submit');
             await wrapper.vm.$nextTick();
@@ -883,6 +901,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'running', label: 'Running' }];
 
             await wrapper.find('.upload-form').trigger('submit');
             await wrapper.vm.$nextTick();
@@ -1012,6 +1031,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'hiking', label: 'Hiking' }];
 
             await wrapper.find('.upload-form').trigger('submit');
             await wrapper.vm.$nextTick();
@@ -1060,6 +1080,7 @@ describe('UploadForm', () => {
             wrapper.vm.selectedFile = file;
             wrapper.vm.trackExists = false;
             wrapper.vm.checkingExists = false;
+            wrapper.vm.trackCategories = [{ value: 'hiking', label: 'Hiking' }];
 
             await wrapper.find('.upload-form').trigger('submit');
             await wrapper.vm.$nextTick();
