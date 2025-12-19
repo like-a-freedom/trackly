@@ -1187,12 +1187,12 @@
             "pluginVersion": "12.3.0",
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.95, sum(rate(track_parse_duration_seconds_bucket{job=\"trackly_backend\"}[5m])) by (le, format))",
+                    "expr": "histogram_quantile(0.95, sum(increase(track_parse_duration_seconds_bucket{job=\"trackly_backend\"}[1h])) by (le, format)) or vector(0)",
                     "legendFormat": "Parse p95 {{format}}",
                     "refId": "A"
                 },
                 {
-                    "expr": "histogram_quantile(0.95, sum(rate(track_pipeline_latency_seconds_bucket{job=\"trackly_backend\"}[5m])) by (le, outcome))",
+                    "expr": "histogram_quantile(0.95, sum(increase(track_pipeline_latency_seconds_bucket{job=\"trackly_backend\"}[1h])) by (le, outcome)) or vector(0)",
                     "legendFormat": "Pipeline p95 {{outcome}}",
                     "refId": "B"
                 }
@@ -1284,12 +1284,90 @@
             "pluginVersion": "12.3.0",
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.95, sum(rate(track_enrich_duration_seconds_bucket{job=\"trackly_backend\"}[5m])) by (le, status))",
+                    "expr": "histogram_quantile(0.95, sum(increase(track_enrich_duration_seconds_bucket{job=\"trackly_backend\"}[1h])) by (le, status)) or vector(0)",
                     "legendFormat": "p95 {{status}}",
                     "refId": "A"
                 }
             ],
             "title": "Elevation Enrichment Latency",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "lineInterpolation": "linear",
+                        "linewidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "none"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 59
+            },
+            "id": 27,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "hideZeros": false,
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "pluginVersion": "12.3.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_enrich_duration_seconds_count{job=\"trackly_backend\"}[1h])) by (status)",
+                    "legendFormat": "{{status}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Enrichment Attempts (1h by status)",
             "type": "timeseries"
         },
         {
