@@ -54,7 +54,21 @@
         />
       </template>
       <transition name="fade-slide">
-        <div v-if="warning" class="upload-warning">
+        <div v-if="trackExists" class="upload-warning upload-warning-centered">
+          <span>Track already exists</span>
+          <button 
+            v-if="existingTrackId"
+            @click="navigateToExistingTrack" 
+            class="track-link-btn"
+            title="View existing track"
+            aria-label="View existing track"
+          >
+            Show track
+          </button>
+        </div>
+      </transition>
+      <transition name="fade-slide">
+        <div v-if="!trackExists && warning" :class="['upload-warning', { 'upload-warning-centered': warning && warning.includes('exists') }]">
           {{ warning }}
         </div>
       </transition>
@@ -64,15 +78,8 @@
         </div>
       </transition>
       <transition name="fade-slide">
-        <div v-if="uploadSuccess" class="upload-success">
-          <div class="success-header">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="20,6 9,17 4,12"></polyline>
-            </svg>
-          </div>
-          <div class="success-message">
-            Track uploaded successfully!
-          </div>
+        <div v-if="uploadSuccess" class="upload-success upload-success-harmonized">
+          <span class="success-text">Track uploaded successfully!</span>
           <div v-if="uploadedTrackData" class="success-actions">
             <button 
               @click="navigateToTrack" 
@@ -89,14 +96,14 @@
               :title="copyingLink ? 'Copying...' : linkCopied ? 'Link copied!' : 'Copy track link'"
               aria-label="Copy track link"
             >
-              <svg v-if="!copyingLink && !linkCopied" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg v-if="!copyingLink && !linkCopied" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.53 1.53"></path>
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.53-1.53"></path>
               </svg>
-              <svg v-else-if="linkCopied" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg v-else-if="linkCopied" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="20,6 9,17 4,12"></polyline>
               </svg>
-              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"></path>
               </svg>
@@ -123,6 +130,7 @@ const dragActive = ref(props.dragActive);
 const trackName = ref("");
 const trackCategories = ref([]); // Array of objects: { value, label }
 const trackExists = ref(false);
+const existingTrackId = ref(null); // Store existing track ID for duplicate case
 const checkingExists = ref(false);
 const warning = ref("");
 const uploadSuccess = ref(false);
@@ -141,13 +149,15 @@ watch(() => props.dragActive, v => dragActive.value = v);
 watch(selectedFile, async () => {
   warning.value = "";
   trackExists.value = false;
+  existingTrackId.value = null;
   // Do not reset uploadSuccess here, so the message stays visible after upload
   if (selectedFile.value) {
     checkingExists.value = true;
-    const { alreadyExists, warning: warnMsg } = await checkTrackDuplicate({
+    const { alreadyExists, id, warning: warnMsg } = await checkTrackDuplicate({
       file: selectedFile.value
     });
     trackExists.value = alreadyExists;
+    existingTrackId.value = id || null;
     warning.value = warnMsg || "";
     checkingExists.value = false;
   }
@@ -222,6 +232,13 @@ async function handleUpload() {
 function navigateToTrack() {
   if (uploadedTrackData.value && uploadedTrackData.value.id) {
     router.push(`/track/${uploadedTrackData.value.id}`);
+  }
+}
+
+// Function to navigate to existing track (for duplicate case)
+function navigateToExistingTrack() {
+  if (existingTrackId.value) {
+    router.push(`/track/${existingTrackId.value}`);
   }
 }
 
@@ -363,103 +380,98 @@ async function copyTrackUrl() {
 .upload-warning {
   display: flex;
   align-items: center;
+  gap: 8px;
   background: #fff4f4;
   color: #c00;
   border: 1px solid #f3bcbc;
   border-radius: 5px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   font-size: 13px;
   margin-bottom: 2px;
   margin-top: 2px;
-  min-height: 28px;
+  min-height: 32px;
   font-weight: 500;
   box-shadow: 0 1px 2px rgba(200,0,0,0.04);
 }
-.upload-success {
-  background: rgba(22, 163, 74, 0.05);
-  border: 1px solid rgba(22, 163, 74, 0.2);
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 16px;
+
+/* Centered layout for prominent single-line warnings (e.g., duplicate detection) */
+.upload-warning-centered {
+  justify-content: center;
+  text-align: center;
 }
 
-.success-header {
+/* Harmonized success notification: matches warning style exactly */
+.upload-success-harmonized {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-bottom: 12px;
-}
-
-.success-icon {
-  display: flex;
-  align-items: center;
-  color: #16a34a;
-  flex-shrink: 0;
-}
-
-.success-message {
-  color: #15803d;
+  background: #f0fbf4;
+  color: #157a3a;
+  border: 1px solid #d9f0e0;
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  min-height: 32px;
   font-weight: 500;
-  font-size: 14px;
-  margin: 0;
+  box-shadow: 0 1px 2px rgba(21,122,58,0.04);
+}
+
+.success-text {
+  color: #157a3a;
 }
 
 .success-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 26px; /* Align with message text */
+  gap: 6px;
+  margin-left: 4px;
 }
 .track-link-btn {
   background: #16a34a;
   color: white;
   border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 13px;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: auto;
+  white-space: nowrap;
+  min-height: 26px;
 }
 
 .track-link-btn:hover {
   background: #15803d;
-  transform: translateY(-1px);
 }
 
 .copy-link-btn {
-  background: rgba(22, 163, 74, 0.1);
+  background: transparent;
   color: #16a34a;
-  border: 1px solid rgba(22, 163, 74, 0.3);
-  border-radius: 6px;
-  padding: 8px;
+  border: 1px solid rgba(22, 163, 74, 0.4);
+  border-radius: 4px;
+  padding: 4px 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
+  transition: background 0.15s ease;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
-  height: 36px;
+  min-height: 26px;
+  min-width: 26px;
 }
 
 .copy-link-btn:hover:not(:disabled) {
-  background: rgba(22, 163, 74, 0.15);
-  border-color: rgba(22, 163, 74, 0.4);
-  transform: translateY(-1px);
+  background: rgba(22, 163, 74, 0.08);
 }
 
 .copy-link-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
-}
-
-.track-link-btn:active, .copy-link-btn:active {
-  transform: scale(0.95);
 }
 
 .fade-slide-enter-active, .fade-slide-leave-active {
