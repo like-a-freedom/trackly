@@ -246,6 +246,14 @@ docker run -d \
 - `pois_created_total` - POIs created
 - `pois_deleted_total` - POIs deleted/unlinked
 
+### Product observability metrics
+- `track_views_total` - track detail views (labels: ownership, referrer)
+- `track_searches_total` - track searches (labels: result_type, query_type)
+- `track_edits_total` - track metadata edits (labels: field)
+- `track_exports_total` - track exports (labels: format)
+- `map_interactions_total` - map interactions (labels: action, zoom_bucket)
+- `trackly_session_heartbeat` - session activity heartbeat (labels: session_hash, activity)
+
 ### Resource metrics
 - `background_tasks_in_flight` - background jobs in flight
 
@@ -268,6 +276,15 @@ Metrics include the following labels:
 - `state` - pool state (idle, in_use)
 - `outcome` - result (success, failed)
 - `mode` - mode (detail, overview)
+- `ownership` - track ownership (own, public)
+- `referrer` - traffic source (direct, search, link)
+- `result_type` - search result (zero, success)
+- `query_type` - search query type (name, category, location, meta)
+- `field` - edit field (name, description, categories)
+- `action` - map action (zoom, pan, layer_switch)
+- `zoom_bucket` - zoom level bucket (low, mid, high)
+- `session_hash` - hashed session ID for privacy
+- `activity` - session activity type (view, upload, edit, search, export, enrich, map)
 
 ## Best practices
 
@@ -281,6 +298,10 @@ Metrics include the following labels:
 ```
 -retentionPeriod=30d  # Keep data for 30 days
 ```
+
+7. **Recording rules** - apply `observability/recording_rules.yml` to VictoriaMetrics/vmalert (or Prometheus) so heavy derived queries are precomputed and dashboards are faster.
+
+8. **Alerts** - product-level alerts live in `observability/alerts.yml`. New product alerts have been added for retention, enrichment adoption, zero-result rate and churn risk.
 
 5. **Backup** - make regular backups of critical metric data
 

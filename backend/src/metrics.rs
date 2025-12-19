@@ -13,10 +13,12 @@ use once_cell::sync::{Lazy, OnceCell};
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower::{Layer, Service};
 use tracing::info;
+use uuid::Uuid;
 
 static REGISTRY: Lazy<Registry> =
     Lazy::new(|| Registry::new_custom(None, Some(static_labels())).unwrap());
@@ -198,6 +200,63 @@ static TRACK_ENRICH_REQUESTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
     REGISTRY
         .register(Box::new(counter.clone()))
         .expect("register track_enrich_requests_total");
+    counter
+});
+
+static TRACK_VIEWS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("track_views_total", "Track detail views by ownership and referrer");
+    let counter = IntCounterVec::new(opts, &["ownership", "referrer"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register track_views_total");
+    counter
+});
+
+static TRACK_SEARCHES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("track_searches_total", "Track search queries by result and type");
+    let counter = IntCounterVec::new(opts, &["result_type", "query_type"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register track_searches_total");
+    counter
+});
+
+static TRACK_EDITS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("track_edits_total", "Track metadata edits by field");
+    let counter = IntCounterVec::new(opts, &["field"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register track_edits_total");
+    counter
+});
+
+static TRACK_EXPORTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("track_exports_total", "Track exports by format");
+    let counter = IntCounterVec::new(opts, &["format"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register track_exports_total");
+    counter
+});
+
+static MAP_INTERACTIONS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("map_interactions_total", "Map interactions by action and zoom bucket");
+    let counter = IntCounterVec::new(opts, &["action", "zoom_bucket"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register map_interactions_total");
+    counter
+});
+
+static SESSION_HEARTBEAT: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new(
+        "trackly_session_heartbeat",
+        "Session heartbeat for engagement and retention",
+    );
+    let counter = IntCounterVec::new(opts, &["session_hash", "activity"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register trackly_session_heartbeat");
     counter
 });
 
@@ -405,6 +464,12 @@ impl HttpMetricsLayer {
         let _ = &*TRACK_POI_LINK_DURATION_SECONDS;
         let _ = &*BULK_OPERATIONS_TOTAL;
         let _ = &*BULK_OPERATIONS_ITEMS;
+        let _ = &*TRACK_VIEWS_TOTAL;
+        let _ = &*TRACK_SEARCHES_TOTAL;
+        let _ = &*TRACK_EDITS_TOTAL;
+        let _ = &*TRACK_EXPORTS_TOTAL;
+        let _ = &*MAP_INTERACTIONS_TOTAL;
+        let _ = &*SESSION_HEARTBEAT;
         Self
     }
 }
@@ -464,6 +529,45 @@ pub fn initialize_metrics_baseline() {
     let _ = POIS_CREATED_TOTAL.with_label_values(&["manual"]);
     let _ = POIS_DELETED_TOTAL.with_label_values(&["unlink_track"]);
     let _ = POIS_DELETED_TOTAL.with_label_values(&["delete_poi"]);
+
+    // Product observability
+    let _ = TRACK_VIEWS_TOTAL.with_label_values(&["unknown", "direct"]);
+    let _ = TRACK_VIEWS_TOTAL.with_label_values(&["own", "direct"]);
+    let _ = TRACK_VIEWS_TOTAL.with_label_values(&["public", "direct"]);
+    let _ = TRACK_VIEWS_TOTAL.with_label_values(&["own", "search"]);
+    let _ = TRACK_VIEWS_TOTAL.with_label_values(&["public", "search"]);
+    let _ = TRACK_VIEWS_TOTAL.with_label_values(&["own", "link"]);
+    let _ = TRACK_VIEWS_TOTAL.with_label_values(&["public", "link"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "name"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "name"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "category"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "category"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "location"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "location"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "meta"]);
+    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "meta"]);
+    let _ = TRACK_EDITS_TOTAL.with_label_values(&["name"]);
+    let _ = TRACK_EDITS_TOTAL.with_label_values(&["description"]);
+    let _ = TRACK_EDITS_TOTAL.with_label_values(&["categories"]);
+    let _ = TRACK_EXPORTS_TOTAL.with_label_values(&["gpx"]);
+    let _ = TRACK_EXPORTS_TOTAL.with_label_values(&["kml"]);
+    let _ = TRACK_EXPORTS_TOTAL.with_label_values(&["fit"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["zoom", "low"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["zoom", "mid"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["zoom", "high"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["pan", "low"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["pan", "mid"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["pan", "high"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["layer_switch", "low"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["layer_switch", "mid"]);
+    let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["layer_switch", "high"]);
+    let _ = SESSION_HEARTBEAT.with_label_values(&["0000000000000000", "view"]);
+    let _ = SESSION_HEARTBEAT.with_label_values(&["0000000000000000", "upload"]);
+    let _ = SESSION_HEARTBEAT.with_label_values(&["0000000000000000", "edit"]);
+    let _ = SESSION_HEARTBEAT.with_label_values(&["0000000000000000", "search"]);
+    let _ = SESSION_HEARTBEAT.with_label_values(&["0000000000000000", "export"]);
+    let _ = SESSION_HEARTBEAT.with_label_values(&["0000000000000000", "enrich"]);
+    let _ = SESSION_HEARTBEAT.with_label_values(&["0000000000000000", "map"]);
 
     // Background workers gauge
     BACKGROUND_TASKS_IN_FLIGHT.set(0);
@@ -704,6 +808,106 @@ pub fn record_track_category(category: &str) {
     TRACK_CATEGORIES_TOTAL.with_label_values(&[category]).inc();
 }
 
+pub fn record_track_view(ownership: &str, referrer: &str) {
+    let ownership_label = match ownership {
+        "own" => "own",
+        "public" => "public",
+        _ => "unknown",
+    };
+    let referrer_label = match referrer {
+        "direct" => "direct",
+        "search" => "search",
+        "link" => "link",
+        _ => "direct",
+    };
+    TRACK_VIEWS_TOTAL
+        .with_label_values(&[ownership_label, referrer_label])
+        .inc();
+}
+
+pub fn record_track_search(result_type: &str, query_type: &str) {
+    let result_label = if result_type == "zero" { "zero" } else { "success" };
+    let query_label = match query_type {
+        "category" => "category",
+        "location" => "location",
+        "meta" => "meta",
+        _ => "name",
+    };
+    TRACK_SEARCHES_TOTAL
+        .with_label_values(&[result_label, query_label])
+        .inc();
+}
+
+pub fn record_track_edit(field: &str) {
+    let field_label = match field {
+        "name" => "name",
+        "description" => "description",
+        "categories" => "categories",
+        _ => "other",
+    };
+    TRACK_EDITS_TOTAL
+        .with_label_values(&[field_label])
+        .inc();
+}
+
+pub fn record_track_export(format: &str) {
+    let fmt_label = match format {
+        "gpx" => "gpx",
+        "kml" => "kml",
+        "fit" => "fit",
+        _ => "other",
+    };
+    TRACK_EXPORTS_TOTAL
+        .with_label_values(&[fmt_label])
+        .inc();
+}
+
+pub fn record_map_interaction(action: &str, zoom_bucket: &str) {
+    let action_label = match action {
+        "zoom" => "zoom",
+        "pan" => "pan",
+        "layer_switch" => "layer_switch",
+        _ => "other",
+    };
+    let bucket_label = match zoom_bucket {
+        "low" => "low",
+        "mid" => "mid",
+        "high" => "high",
+        _ => "mid",
+    };
+    MAP_INTERACTIONS_TOTAL
+        .with_label_values(&[action_label, bucket_label])
+        .inc();
+}
+
+fn hash_session_id(session_id: &Uuid) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(session_id.as_bytes());
+    let digest = hasher.finalize();
+    let hex = format!("{:x}", digest);
+    hex.chars().take(16).collect()
+}
+
+pub fn record_session_activity(session_id: Option<Uuid>, activity: &str) {
+    let Some(session_uuid) = session_id else {
+        return;
+    };
+    let activity_label = match activity {
+        "view" => "view",
+        "upload" => "upload",
+        "edit" => "edit",
+        "search" => "search",
+        "export" => "export",
+        "enrich" => "enrich",
+        "map" => "map",
+        _ => "other",
+    };
+    let hash = hash_session_id(&session_uuid);
+    SESSION_HEARTBEAT
+        .with_label_values(&[hash.as_str(), activity_label])
+        .inc();
+}
+
 pub fn observe_track_length_km(source: &str, length_km: f64) {
     TRACK_LENGTH_KM_BUCKET
         .with_label_values(&[source])
@@ -845,5 +1049,10 @@ mod tests {
         assert!(body_str.contains("tracks_uploaded_total"));
         assert!(body_str.contains("track_enrich_requests_total"));
         assert!(body_str.contains("track_upload_failures_total"));
+        assert!(body_str.contains("track_views_total"));
+        assert!(body_str.contains("track_searches_total"));
+        assert!(body_str.contains("track_edits_total"));
+        assert!(body_str.contains("track_exports_total"));
+        assert!(body_str.contains("trackly_session_heartbeat"));
     }
 }

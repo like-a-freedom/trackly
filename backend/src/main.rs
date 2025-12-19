@@ -87,6 +87,10 @@ async fn main() {
             "/tracks/{id}/name",
             axum::routing::patch(handlers::update_track_name),
         )
+        .route(
+            "/tracks/{id}/categories",
+            axum::routing::patch(handlers::update_track_categories),
+        )
         .route("/tracks/{id}/export", get(handlers::export_track_gpx))
         .route(
             "/tracks/{id}/enrich-elevation",
@@ -103,6 +107,10 @@ async fn main() {
         .route(
             "/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
+        )
+        .route(
+            "/observability/map-interactions",
+            post(handlers::record_map_interaction),
         )
         // POI routes
         .route("/pois", get(handlers::get_pois).post(handlers::create_poi))

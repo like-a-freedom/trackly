@@ -12,10 +12,11 @@ use crate::track_utils::{
 };
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
+use axum::http::header::REFERER;
 use axum_extra::extract::multipart::Multipart as AxumMultipart;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -131,6 +132,49 @@ fn normalize_session_id(raw: &str) -> Result<(Uuid, String), StatusCode> {
             warn!(reason = "invalid_session_id", session_id = %trimmed, error = ?e, "failed to parse session_id");
             Err(StatusCode::BAD_REQUEST)
         }
+    }
+}
+
+fn parse_session_header(headers: &HeaderMap) -> Option<Uuid> {
+    headers
+        .get("x-session-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| Uuid::parse_str(v.trim()).ok())
+}
+
+fn derive_referrer(headers: &HeaderMap) -> &'static str {
+    headers
+        .get(REFERER)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| if v.contains("/tracks/search") { "search" } else { "direct" })
+        .unwrap_or("direct")
+}
+
+fn classify_ownership(track_session: Option<Uuid>, request_session: Option<Uuid>) -> &'static str {
+    match (track_session, request_session) {
+        (Some(owner), Some(requester)) if owner == requester => "own",
+        (Some(_), _) => "public",
+        _ => "unknown",
+    }
+}
+
+fn bucket_zoom_level(zoom: Option<f64>) -> &'static str {
+    match zoom {
+        Some(z) if z < 10.0 => "low",
+        Some(z) if z < 14.0 => "mid",
+        Some(_) => "high",
+        None => "mid",
+    }
+}
+
+fn detect_search_query_type(query: &str) -> &'static str {
+    let lower = query.to_lowercase();
+    if lower.contains("#") {
+        "meta"
+    } else if lower.contains(',') || lower.contains("lat") || lower.contains("lon") {
+        "location"
+    } else {
+        "name"
     }
 }
 
@@ -300,6 +344,7 @@ pub async fn upload_track(
 
     let response = service.upload_track(request).await?;
     metrics::record_track_uploaded("anonymous");
+    metrics::record_session_activity(session_id, "upload");
     info!(endpoint = "upload_track", track_id = %response.id, "track uploaded");
     Ok(Json(response))
 }
@@ -324,6 +369,7 @@ pub async fn get_track(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
     Query(params): Query<TrackSimplificationQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<TrackDetail>, StatusCode> {
     debug!(track_id = %id, zoom = ?params.zoom, mode = ?params.mode, endpoint = "get_track", "request received");
 
@@ -334,8 +380,15 @@ pub async fn get_track(
         db::get_track_detail(&pool, id).await
     };
 
+    let session_id = parse_session_header(&headers);
     match result {
-        Ok(Some(track)) => Ok(Json(track)),
+        Ok(Some(track)) => {
+            let ownership = classify_ownership(track.session_id, session_id);
+            let referrer = derive_referrer(&headers);
+            metrics::record_track_view(ownership, referrer);
+            metrics::record_session_activity(session_id, "view");
+            Ok(Json(track))
+        }
         Ok(None) => {
             debug!(track_id = %id, endpoint = "get_track", "track not found");
             Err(StatusCode::NOT_FOUND)
@@ -351,11 +404,17 @@ pub async fn get_track_simplified(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
     Query(params): Query<TrackSimplificationQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<TrackSimplified>, StatusCode> {
     debug!(track_id = %id, zoom = ?params.zoom, mode = ?params.mode, endpoint = "get_track_simplified", "request received");
 
     match db::get_track_detail_adaptive(&pool, id, params.zoom, params.mode.as_deref()).await {
         Ok(Some(track)) => {
+            let session_id = parse_session_header(&headers);
+            let ownership = classify_ownership(track.session_id, session_id);
+            let referrer = derive_referrer(&headers);
+            metrics::record_track_view(ownership, referrer);
+            metrics::record_session_activity(session_id, "view");
             // Convert TrackDetail to TrackSimplified
             let simplified = TrackSimplified {
                 id: track.id,
@@ -442,6 +501,8 @@ pub async fn update_track_description(
     db::update_track_description(&pool, id, &payload.description)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    metrics::record_track_edit("description");
+    metrics::record_session_activity(Some(payload.session_id), "edit");
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -470,23 +531,86 @@ pub async fn update_track_name(
     db::update_track_name(&pool, id, payload.name.trim())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    metrics::record_track_edit("name");
+    metrics::record_session_activity(Some(payload.session_id), "edit");
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn update_track_categories(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateTrackCategoriesRequest>,
+) -> Result<StatusCode, StatusCode> {
+    // Check that track exists and session_id matches owner
+    let track = db::get_track_detail(&pool, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let track = match track {
+        Some(t) => t,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+    if track.session_id != Some(payload.session_id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let mut categories: Vec<String> = payload
+        .categories
+        .iter()
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect();
+
+    if categories.len() > MAX_CATEGORIES {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    for cat in &categories {
+        validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
+    }
+
+    db::update_track_categories(&pool, id, &categories)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    metrics::record_track_edit("categories");
+    metrics::record_session_activity(Some(payload.session_id), "edit");
     Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn search_tracks(
     State(pool): State<Arc<PgPool>>,
     Query(params): Query<TrackSearchQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<TrackSearchResult>>, StatusCode> {
     if params.query.trim().is_empty() {
         return Ok(Json(vec![]));
     }
 
+    let session_id = parse_session_header(&headers);
     let tracks = db::search_tracks(&pool, &params.query).await.map_err(|e| {
         error!(error = ?e, endpoint = "search_tracks", "db error searching tracks");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
+    let result_type = if tracks.is_empty() { "zero" } else { "success" };
+    let query_type = detect_search_query_type(&params.query);
+    metrics::record_track_search(result_type, query_type);
+    metrics::record_session_activity(session_id, "search");
+
     Ok(Json(tracks))
+}
+
+pub async fn record_map_interaction(
+    Json(event): Json<MapInteractionEvent>,
+) -> Result<StatusCode, StatusCode> {
+    let action_label = match event.action.as_str() {
+        "zoom" => "zoom",
+        "pan" => "pan",
+        "layer_switch" => "layer_switch",
+        _ => "other",
+    };
+    let zoom_bucket = bucket_zoom_level(event.zoom);
+    metrics::record_map_interaction(action_label, zoom_bucket);
+    metrics::record_session_activity(event.session_id, "map");
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn health() -> &'static str {
@@ -523,9 +647,11 @@ pub async fn debug_background_task(Query(params): axum::extract::Query<std::coll
 pub async fn export_track_gpx(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
+    headers: HeaderMap,
 ) -> Result<axum::response::Response<axum::body::Body>, StatusCode> {
     debug!(track_id = %id, endpoint = "export_track_gpx", "request received");
     let start = Instant::now();
+    let session_id = parse_session_header(&headers);
 
     match db::get_track_detail(&pool, id).await {
         Ok(Some(track)) => {
@@ -545,6 +671,8 @@ pub async fn export_track_gpx(
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
             metrics::observe_track_export_duration("gpx", start.elapsed().as_secs_f64());
+            metrics::record_track_export("gpx");
+            metrics::record_session_activity(session_id, "export");
 
             Ok(response)
         }
@@ -619,6 +747,7 @@ pub async fn enrich_elevation(
         payload.force.unwrap_or(false),
     ) {
         debug!(track_id = %id, endpoint = "enrich_elevation", "skipping: already enriched");
+        metrics::record_session_activity(Some(payload.session_id), "enrich");
         return Ok(Json(EnrichElevationResponse {
             id,
             message: "Track already has elevation data".to_string(),
@@ -726,6 +855,8 @@ pub async fn enrich_elevation(
         endpoint = "enrich_elevation",
         "elevation enrichment completed"
     );
+
+    metrics::record_session_activity(Some(payload.session_id), "enrich");
 
     Ok(Json(EnrichElevationResponse {
         id,

@@ -958,6 +958,28 @@ pub async fn update_track_name(
     Ok(())
 }
 
+pub async fn update_track_categories(
+    pool: &Arc<PgPool>,
+    track_id: Uuid,
+    categories: &[String],
+) -> Result<(), sqlx::Error> {
+    let start = Instant::now();
+    sqlx::query(
+        r#"
+        UPDATE tracks
+        SET categories = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        "#,
+    )
+    .bind(categories)
+    .bind(track_id)
+    .execute(&**pool)
+    .await?;
+    metrics::observe_db_query("update_track_categories", start.elapsed().as_secs_f64());
+    Ok(())
+}
+
 pub async fn delete_track(pool: &Arc<PgPool>, track_id: Uuid) -> Result<u64, sqlx::Error> {
     let start = Instant::now();
     let result = sqlx::query(

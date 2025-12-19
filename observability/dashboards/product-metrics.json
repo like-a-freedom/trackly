@@ -1751,6 +1751,768 @@
             ],
             "title": "Deduplication Rate (24h)",
             "type": "stat"
+        },
+        {
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 78
+            },
+            "id": 30,
+            "title": "Engagement & Discovery",
+            "type": "row"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 20 },
+                            { "color": "green", "value": 100 }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 0,
+                "y": 79
+            },
+            "id": 31,
+            "description": "Track Views (24h). Recommended thresholds: red <20, yellow 20-99, green >=100. Tune product thresholds as needed.",
+            "options": { 
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_views_total{job=\"trackly_backend\"}[24h]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Track Views (24h)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 10 },
+                            { "color": "green", "value": 50 }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 4,
+                "y": 79
+            },
+            "id": 32,
+            "description": "Track Searches (24h). Recommended thresholds: red <10, yellow 10-49, green >=50. Adjust for product targets.",
+            "options": { 
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_searches_total{job=\"trackly_backend\"}[24h]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Track Searches (24h)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.1
+                            },
+                            {
+                                "color": "red",
+                                "value": 0.2
+                            }
+                        ]
+                    },
+                    "unit": "percentunit"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 8,
+                "y": 79
+            },
+            "id": 33,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_searches_total{job=\"trackly_backend\",result_type=\"zero\"}[7d])) / sum(increase(track_searches_total{job=\"trackly_backend\"}[7d]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Zero-Result Rate (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 12,
+                "y": 79
+            },
+            "id": 34,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_edits_total{job=\"trackly_backend\"}[7d]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Track Edits (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 16,
+                "y": 79
+            },
+            "id": 35,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_exports_total{job=\"trackly_backend\"}[7d]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Track Exports (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 4,
+                "x": 20,
+                "y": 79
+            },
+            "id": 36,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(map_interactions_total{job=\"trackly_backend\"}[24h]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Map Interactions (24h)",
+            "type": "stat"
+        },
+        {
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 85
+            },
+            "id": 37,
+            "title": "Sessions",
+            "type": "row"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 10 },
+                            { "color": "green", "value": 100 }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 86
+            },
+            "id": 38,
+            "description": "Active Sessions (24h). Recommended thresholds: red <10, yellow 10-99, green >=100.",
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[24h]) by (session_hash))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Active Sessions (24h)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 86
+            },
+            "id": 39,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(map_interactions_total{job=\"trackly_backend\"}[7d]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Map Interactions (7d)",
+            "type": "stat"
+        },
+        {
+            "collapsed": false,
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 92 },
+            "id": 40,
+            "title": "Ratios & Adoption",
+            "type": "row"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" } },
+            "gridPos": { "h": 12, "w": 24, "x": 0, "y": 86 },
+            "id": 50,
+            "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "tooltip": { "mode": "single" } },
+            "pluginVersion": "11.0.0",
+            "targets": [ { "expr": "engagement_score_7d", "refId": "A" } ],
+            "title": "Engagement Score (per session, 7d)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" } },
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 98 },
+            "id": 51,
+            "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, "tooltip": { "mode": "single" } },
+            "pluginVersion": "11.0.0",
+            "targets": [ { "expr": "funnel_uploads_7d", "refId": "A" }, { "expr": "funnel_views_7d", "refId": "B" }, { "expr": "funnel_enrich_success_7d", "refId": "C" }, { "expr": "funnel_exports_7d", "refId": "D" }, { "expr": "funnel_edits_7d", "refId": "E" }, { "expr": "funnel_deletes_7d", "refId": "F" } ],
+            "title": "Funnel: Upload → View → Enrich → Export → Edit → Delete (7d)",
+            "type": "bargauge"
+        }
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "View-to-Upload Ratio (7d). Target >2.0 (green), Warning <1.5 (yellow), Critical <1.0 (red).",
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 1.0 },
+                            { "color": "green", "value": 2.0 }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": { "h": 6, "w": 6, "x": 0, "y": 93 },
+            "id": 41,
+            "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "sum(increase(track_views_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))", "refId": "A" }
+            ],
+            "title": "View-to-Upload Ratio (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "Enrichment Adoption (7d): enrichment success / uploads. Target >60% (green).",
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 0.4 },
+                            { "color": "green", "value": 0.6 }
+                        ]
+                    },
+                    "unit": "percentunit"
+                }
+            },
+            "gridPos": { "h": 6, "w": 6, "x": 6, "y": 93 },
+            "id": 42,
+            "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "sum(increase(track_enrich_requests_total{job=\"trackly_backend\", status=\"success\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))", "refId": "A" }
+            ],
+            "title": "Enrichment Adoption (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "Export Adoption (7d): exports / uploading sessions. Target >30% (green).",
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 0.15 },
+                            { "color": "green", "value": 0.3 }
+                        ]
+                    },
+                    "unit": "percentunit"
+                }
+            },
+            "gridPos": { "h": 6, "w": 6, "x": 12, "y": 93 },
+            "id": 43,
+            "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "sum(increase(track_exports_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))", "refId": "A" }
+            ],
+            "title": "Export Adoption (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "Track Edits by Field (7d): name vs description vs categories.",
+            "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" } },
+            "gridPos": { "h": 6, "w": 6, "x": 18, "y": 93 },
+            "id": 44,
+            "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "pieType": "pie", "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false }, "tooltip": { "mode": "single" } },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "sum(increase(track_edits_total{job=\"trackly_backend\"}[7d])) by (field)", "legendFormat": "{{field}}", "refId": "A" }
+            ],
+            "title": "Edits by Field (7d)",
+            "type": "piechart"
+        },
+        {
+            "collapsed": false,
+            "gridPos": { "h": 1, "w": 24, "x": 0, "y": 99 },
+            "id": 45,
+            "title": "Retention & Churn",
+            "type": "row"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "Active Sessions (7d): distinct session hashes with heartbeat.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 50 },
+                            { "color": "green", "value": 200 }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": { "h": 6, "w": 6, "x": 0, "y": 100 },
+            "id": 46,
+            "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[7d]) by (session_hash))", "refId": "A" }
+            ],
+            "title": "Active Sessions (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "Active Sessions (30d): distinct session hashes with heartbeat.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 100 },
+                            { "color": "green", "value": 500 }
+                        ]
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": { "h": 6, "w": 6, "x": 6, "y": 100 },
+            "id": 47,
+            "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[30d]) by (session_hash))", "refId": "A" }
+            ],
+            "title": "Active Sessions (30d)",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "Deletion Rate (7d): deleted / uploaded. Target <5% (green), Warning >8% (red).",
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "green", "value": null },
+                            { "color": "yellow", "value": 0.05 },
+                            { "color": "red", "value": 0.08 }
+                        ]
+                    },
+                    "unit": "percentunit"
+                }
+            },
+            "gridPos": { "h": 6, "w": 6, "x": 12, "y": 100 },
+            "id": 48,
+            "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "sum(increase(tracks_deleted_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))", "refId": "A" }
+            ],
+            "title": "Deletion Rate (7d)",
+            "type": "stat"
+        },
+        {
+            "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+            "description": "POI Creation Rate (7d): POIs created / uploads. Indicates power user activity.",
+            "fieldConfig": {
+                "defaults": {
+                    "color": { "mode": "thresholds" },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "yellow", "value": 0.1 },
+                            { "color": "green", "value": 0.15 }
+                        ]
+                    },
+                    "unit": "percentunit"
+                }
+            },
+            "gridPos": { "h": 6, "w": 6, "x": 18, "y": 100 },
+            "id": 49,
+            "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showPercentChange": false, "textMode": "auto", "wideLayout": true },
+            "pluginVersion": "11.0.0",
+            "targets": [
+                { "expr": "sum(increase(pois_created_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))", "refId": "A" }
+            ],
+            "title": "POI Creation Rate (7d)",
+            "type": "stat"
         }
     ],
     "refresh": "30s",
