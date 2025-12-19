@@ -553,7 +553,7 @@ pub async fn update_track_categories(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let mut categories: Vec<String> = payload
+    let categories: Vec<String> = payload
         .categories
         .iter()
         .map(|c| c.trim().to_string())
