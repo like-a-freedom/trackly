@@ -59,12 +59,20 @@ async fn main() {
     services::enrichment_queue::init_enrichment_queue(Arc::clone(&pool));
 
     // Run migrations automatically on startup
-    info!(stage = "migrations", action = "start", "running database migrations");
+    info!(
+        stage = "migrations",
+        action = "start",
+        "running database migrations"
+    );
     sqlx::migrate!("./migrations")
         .run(&*pool)
         .await
         .expect("Failed to run migrations");
-    info!(stage = "migrations", action = "complete", "database migrations finished");
+    info!(
+        stage = "migrations",
+        action = "complete",
+        "database migrations finished"
+    );
 
     let app = Router::new()
         .route("/health", get(handlers::health))
@@ -122,8 +130,12 @@ async fn main() {
         .route(
             "/tracks/{track_id}/pois/{poi_id}",
             axum::routing::delete(handlers::unlink_track_poi),
-        )        // Debug endpoints (disabled by default)
-        .route("/debug/background_task", get(handlers::debug_background_task))        .layer(DefaultBodyLimit::max(max_body_size))
+        ) // Debug endpoints (disabled by default)
+        .route(
+            "/debug/background_task",
+            get(handlers::debug_background_task),
+        )
+        .layer(DefaultBodyLimit::max(max_body_size))
         .layer(metrics::HttpMetricsLayer::new())
         .with_state(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));

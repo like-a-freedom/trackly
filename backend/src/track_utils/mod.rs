@@ -21,8 +21,8 @@ pub use elevation::{
 };
 pub use elevation_enrichment::{ElevationEnrichmentService, EnrichmentResult};
 pub use geometry::{
-  extract_coordinates_from_geojson, extract_segments_from_geojson, geojson_from_segments,
-  haversine_distance, length_km_for_segments, parse_linestring_wkt, split_points_by_gap,
+    extract_coordinates_from_geojson, extract_segments_from_geojson, geojson_from_segments,
+    haversine_distance, length_km_for_segments, parse_linestring_wkt, split_points_by_gap,
 };
 pub use gpx_parser::parse_gpx;
 pub use hash::calculate_file_hash;
