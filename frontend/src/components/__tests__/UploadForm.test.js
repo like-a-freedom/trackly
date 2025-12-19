@@ -287,7 +287,8 @@ describe('UploadForm', () => {
 
             mockCheckTrackDuplicate.mockResolvedValue({
                 alreadyExists: true,
-                warning: 'This track already exists'
+                id: 'existing-track-123',
+                warning: 'Track already exists'
             });
 
             await input.trigger('change');
@@ -299,9 +300,45 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             expect(wrapper.find('.upload-warning').exists()).toBe(true);
-            expect(wrapper.text()).toContain('This track already exists');
+            const warn = wrapper.find('.upload-warning');
+            expect(warn.text()).toContain('Track already exists');
+            // Warning should be centered for duplicate detection
+            expect(warn.classes()).toContain('upload-warning-centered');
+            // Should show "Show track" button
+            expect(warn.find('.track-link-btn').exists()).toBe(true);
+            expect(warn.find('.track-link-btn').text()).toBe('Show track');
             // When duplicate detected, don't show the "Please select at least one category." hint
             expect(wrapper.text()).not.toContain('Please select at least one category.');
+        });
+
+        it('navigates to existing track when Show track button is clicked in duplicate warning', async () => {
+            wrapper = mount(UploadForm);
+
+            const file = new File(['test'], 'duplicate.gpx', { type: 'application/gpx+xml' });
+            const input = wrapper.find('#track-upload');
+
+            Object.defineProperty(input.element, 'files', {
+                value: [file],
+                writable: false,
+            });
+
+            mockCheckTrackDuplicate.mockResolvedValue({
+                alreadyExists: true,
+                id: 'existing-track-456',
+                warning: 'Track already exists'
+            });
+
+            await input.trigger('change');
+            await wrapper.vm.$nextTick();
+            await flushPromises();
+            await wrapper.vm.$nextTick();
+
+            const showTrackBtn = wrapper.find('.upload-warning .track-link-btn');
+            expect(showTrackBtn.exists()).toBe(true);
+
+            await showTrackBtn.trigger('click');
+
+            expect(mockPush).toHaveBeenCalledWith('/track/existing-track-456');
         });
 
         it('disables upload button when track exists', async () => {
@@ -317,6 +354,7 @@ describe('UploadForm', () => {
 
             mockCheckTrackDuplicate.mockResolvedValue({
                 alreadyExists: true,
+                id: 'duplicate-track-789',
                 warning: 'Track exists'
             });
 
@@ -328,6 +366,66 @@ describe('UploadForm', () => {
 
             const uploadBtn = wrapper.find('.upload-btn');
             expect(uploadBtn.attributes('disabled')).toBeDefined();
+        });
+
+        it('does not show Show track button when track exists without ID', async () => {
+            wrapper = mount(UploadForm);
+
+            const file = new File(['test'], 'duplicate.gpx', { type: 'application/gpx+xml' });
+            const input = wrapper.find('#track-upload');
+
+            Object.defineProperty(input.element, 'files', {
+                value: [file],
+                writable: false,
+            });
+
+            mockCheckTrackDuplicate.mockResolvedValue({
+                alreadyExists: true,
+                id: null, // No ID provided
+                warning: 'Track exists'
+            });
+
+            await input.trigger('change');
+            await wrapper.vm.$nextTick();
+            await flushPromises();
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.find('.upload-warning').exists()).toBe(true);
+            expect(wrapper.find('.upload-warning .track-link-btn').exists()).toBe(false);
+        });
+
+        it('clears existing track ID when new file is selected', async () => {
+            wrapper = mount(UploadForm);
+
+            // First, select a duplicate file
+            const duplicateFile = new File(['test'], 'duplicate.gpx', { type: 'application/gpx+xml' });
+
+            mockCheckTrackDuplicate.mockResolvedValue({
+                alreadyExists: true,
+                id: 'existing-id-123',
+                warning: 'Track already exists'
+            });
+
+            wrapper.vm.selectedFile = duplicateFile;
+            await wrapper.vm.$nextTick();
+            await flushPromises();
+
+            expect(wrapper.vm.existingTrackId).toBe('existing-id-123');
+
+            // Now select a new file
+            const newFile = new File(['new'], 'new.gpx', { type: 'application/gpx+xml' });
+
+            mockCheckTrackDuplicate.mockResolvedValue({
+                alreadyExists: false,
+                id: null,
+                warning: ''
+            });
+
+            wrapper.vm.selectedFile = newFile;
+            await wrapper.vm.$nextTick();
+            await flushPromises();
+
+            expect(wrapper.vm.existingTrackId).toBeNull();
         });
     });
 
@@ -838,10 +936,16 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             expect(wrapper.find('.upload-success').exists()).toBe(true);
-            expect(wrapper.find('.success-message').text()).toContain('Track uploaded successfully!');
+            expect(wrapper.find('.success-text').text()).toContain('Track uploaded successfully!');
             expect(wrapper.find('.success-actions').exists()).toBe(true);
             expect(wrapper.find('.track-link-btn').exists()).toBe(true);
             expect(wrapper.find('.copy-link-btn').exists()).toBe(true);
+
+            // Visual layout: success container should use harmonized style with compact inline structure
+            const container = wrapper.find('.upload-success');
+            expect(container.classes()).toContain('upload-success-harmonized');
+            expect(wrapper.find('.success-text').exists()).toBe(true);
+            expect(wrapper.find('.success-actions').exists()).toBe(true);
         });
 
         it('navigates to track when View Track button is clicked', async () => {
@@ -960,7 +1064,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
 
             expect(wrapper.find('.upload-success').exists()).toBe(true);
-            expect(wrapper.find('.success-message').exists()).toBe(true);
+            expect(wrapper.find('.success-text').exists()).toBe(true);
             expect(wrapper.find('.success-actions').exists()).toBe(false);
         });
 
