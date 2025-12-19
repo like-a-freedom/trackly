@@ -35,7 +35,7 @@ struct OpenElevationPoint {
 #[allow(dead_code)] // Fields are used for API response deserialization
 struct ElevationPoint {
     dataset: String,
-    elevation: f64,
+    elevation: Option<f64>,
     location: Location,
 }
 
@@ -299,7 +299,7 @@ impl ElevationEnrichmentService {
         let elevations = self.interpolate_missing_elevations(&enriched_points);
         let nodata_count = enriched_points
             .iter()
-            .filter(|p| p.elevation.is_nan())
+            .filter(|p| p.elevation.is_none())
             .count();
 
         if elevations.is_empty() {
@@ -542,7 +542,7 @@ impl ElevationEnrichmentService {
                 let (lat, lon) = points[i];
                 ElevationPoint {
                     dataset: "open-elevation".to_string(),
-                    elevation: point.elevation,
+                    elevation: Some(point.elevation),
                     location: Location { lat, lng: lon },
                 }
             })
@@ -583,9 +583,87 @@ impl ElevationEnrichmentService {
             return Vec::new();
         }
 
-        // OpenTopoData API doesn't return NODATA values - all points have elevations
-        // But we keep this method for potential future use with other APIs
-        points.iter().map(|p| p.elevation).collect()
+        // Collect Option values
+        let values: Vec<Option<f64>> = points.iter().map(|p| p.elevation).collect();
+
+        // If no known values at all, return empty - caller treats as error
+        if !values.iter().any(|v| v.is_some()) {
+            return Vec::new();
+        }
+
+        let mut result: Vec<f64> = vec![f64::NAN; values.len()];
+
+        // Fill known values
+        for (i, v) in values.iter().enumerate() {
+            if let Some(val) = v {
+                result[i] = *val;
+            }
+        }
+
+        // Interpolate runs of missing values
+        let n = result.len();
+        let mut i = 0usize;
+        while i < n {
+            if result[i].is_nan() {
+                // find previous known
+                let mut prev = None;
+                if i > 0 {
+                    let mut j = i;
+                    while j > 0 {
+                        j -= 1;
+                        if !result[j].is_nan() {
+                            prev = Some((j, result[j]));
+                            break;
+                        }
+                        if j == 0 {
+                            break;
+                        }
+                    }
+                }
+
+                // find next known
+                let mut next = None;
+                let mut k = i + 1;
+                while k < n {
+                    if !result[k].is_nan() {
+                        next = Some((k, result[k]));
+                        break;
+                    }
+                    k += 1;
+                }
+
+                if let (Some((pj, pv)), Some((nj, nv))) = (prev, next) {
+                    // linear interpolation between pj..nj
+                    let span = (nj - pj) as f64;
+                    let mut idx = pj + 1;
+                    while idx < nj {
+                        let t = (idx - pj) as f64 / span;
+                        result[idx] = pv + (nv - pv) * t;
+                        idx += 1;
+                    }
+                    i = nj + 1;
+                } else if let Some((_pj, pv)) = prev {
+                    // fill with previous value
+                    result[i] = pv;
+                    i += 1;
+                } else if let Some((_nj, nv)) = next {
+                    // fill with next value
+                    let mut idx = i;
+                    while idx < n && result[idx].is_nan() {
+                        result[idx] = nv;
+                        idx += 1;
+                    }
+                    i = idx;
+                } else {
+                    // no prev or next (shouldn't happen since we checked any known), but be safe
+                    i += 1;
+                }
+            } else {
+                i += 1;
+            }
+        }
+
+        result
     }
 }
 
@@ -647,17 +725,38 @@ mod tests {
         let points = vec![
             ElevationPoint {
                 dataset: "test".to_string(),
-                elevation: 100.0,
+                elevation: Some(100.0),
                 location: Location { lat: 0.0, lng: 0.0 },
             },
             ElevationPoint {
                 dataset: "test".to_string(),
-                elevation: 200.0,
+                elevation: Some(200.0),
                 location: Location { lat: 0.0, lng: 0.0 },
             },
         ];
         let result = service.interpolate_missing_elevations(&points);
         assert_eq!(result, vec![100.0, 200.0]);
+
+        // Test case: Missing value interpolation
+        let points = vec![
+            ElevationPoint {
+                dataset: "test".to_string(),
+                elevation: Some(100.0),
+                location: Location { lat: 0.0, lng: 0.0 },
+            },
+            ElevationPoint {
+                dataset: "test".to_string(),
+                elevation: None,
+                location: Location { lat: 0.0, lng: 0.0 },
+            },
+            ElevationPoint {
+                dataset: "test".to_string(),
+                elevation: Some(160.0),
+                location: Location { lat: 0.0, lng: 0.0 },
+            },
+        ];
+        let result = service.interpolate_missing_elevations(&points);
+        assert_eq!(result, vec![100.0, 130.0, 160.0]);
 
         // Test case: Empty points
         let points: Vec<ElevationPoint> = vec![];
