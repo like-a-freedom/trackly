@@ -2292,11 +2292,11 @@
             "pluginVersion": "12.3.0",
             "targets": [
                 {
-                    "expr": "sum(rate(pois_created_total{job=\"trackly_backend\"}[5m]))",
+                    "expr": "sum(increase(pois_created_total{job=\"trackly_backend\"}[1h]))",
                     "refId": "A"
                 }
             ],
-            "title": "POIs Created (rate 5m)",
+            "title": "POIs Created (increase 1h)",
             "type": "stat"
         },
         {
@@ -2354,11 +2354,11 @@
             "pluginVersion": "12.3.0",
             "targets": [
                 {
-                    "expr": "sum(rate(pois_deleted_total{job=\"trackly_backend\"}[5m]))",
+                    "expr": "sum(increase(pois_deleted_total{job=\"trackly_backend\"}[1h]))",
                     "refId": "A"
                 }
             ],
-            "title": "POIs Deleted/Unlinked (rate 5m)",
+            "title": "POIs Deleted/Unlinked (increase 1h)",
             "type": "stat"
         },
         {
@@ -2512,12 +2512,12 @@
             "pluginVersion": "12.3.0",
             "targets": [
                 {
-                    "expr": "sum(rate(tracks_deduplicated_total{job=\"trackly_backend\"}[5m])) by (reason)",
+                    "expr": "sum(increase(tracks_deduplicated_total{job=\"trackly_backend\"}[1h])) by (reason)",
                     "legendFormat": "{{reason}}",
                     "refId": "A"
                 }
             ],
-            "title": "Tracks Deduplicated (rate by reason 5m)",
+            "title": "Tracks Deduplicated (increase by reason 1h)",
             "type": "stat"
         },
         {
@@ -2575,12 +2575,12 @@
             "pluginVersion": "12.3.0",
             "targets": [
                 {
-                    "expr": "sum(rate(tracks_deleted_total{job=\"trackly_backend\"}[5m])) by (result)",
+                    "expr": "sum(increase(tracks_deleted_total{job=\"trackly_backend\"}[1h])) by (result)",
                     "legendFormat": "{{result}}",
                     "refId": "A"
                 }
             ],
-            "title": "Tracks Deleted (rate by result 5m)",
+            "title": "Tracks Deleted (increase by result 1h)",
             "type": "stat"
         },
         {
