@@ -745,7 +745,7 @@ watch([
             innerHtml += `<span class="tooltip-label">Slope:</span>`;
             innerHtml += `<span class="tooltip-value slope-value" style="color: ${slopeColor}">${slopeValue.toFixed(1)}%</span>`;
             innerHtml += `</div>`;
-            innerHtml += `<div class="tooltip-slope-category" style="background-color: ${slopeColor}20; border-left: 3px solid ${slopeColor}">`;
+            innerHtml += `<div class="tooltip-slope-category" style="background: linear-gradient(90deg, ${slopeColor}15 0%, ${slopeColor}08 100%); border-left: 3px solid ${slopeColor}; color: ${slopeColor};">`;
             innerHtml += `${slopeCategory}`;
             innerHtml += `</div>`;
           }
@@ -1094,6 +1094,11 @@ onUnmounted(() => {
   border-radius: 4px;
   transition: all 0.1s ease;
   position: relative;
+  margin-bottom: 6px;
+}
+
+.tooltip-row:last-of-type {
+  margin-bottom: 0;
 }
 
 .tooltip-row:hover {
@@ -1124,6 +1129,12 @@ onUnmounted(() => {
   margin-left: -2px;
 }
 
+.tooltip-row.slope {
+  border-left: 2px solid rgba(54, 162, 235, 1);
+  padding-left: 8px;
+  margin-left: -2px;
+}
+
 .tooltip-icon {
   font-size: 14px;
   width: 16px;
@@ -1150,15 +1161,20 @@ onUnmounted(() => {
 }
 
 .tooltip-slope-category {
-  margin-top: 6px;
-  padding: 4px 8px;
+  margin-top: 2px;
+  margin-bottom: 0;
+  margin-left: -2px;
+  margin-right: 0;
+  padding: 6px 10px;
   border-radius: 4px;
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   text-align: center;
   color: #1a1a1a;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  width: calc(100% + 2px);
 }
 </style>
