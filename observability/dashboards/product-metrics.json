@@ -19,6 +19,7 @@
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 1,
+    "id": 0,
     "links": [],
     "panels": [
         {
@@ -771,7 +772,7 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 4,
+                "w": 6,
                 "x": 0,
                 "y": 25
             },
@@ -829,8 +830,8 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 4,
-                "x": 4,
+                "w": 6,
+                "x": 6,
                 "y": 25
             },
             "id": 15,
@@ -887,8 +888,8 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 4,
-                "x": 8,
+                "w": 6,
+                "x": 12,
                 "y": 25
             },
             "id": 16,
@@ -953,8 +954,8 @@
             },
             "gridPos": {
                 "h": 6,
-                "w": 4,
-                "x": 12,
+                "w": 6,
+                "x": 18,
                 "y": 25
             },
             "id": 17,
@@ -2274,11 +2275,69 @@
             "pluginVersion": "12.3.1",
             "targets": [
                 {
-                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[24h]) by (session_hash))",
+                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[24h]))) > 0)",
                     "refId": "A"
                 }
             ],
             "title": "Active Sessions (24h)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": 0
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 69
+            },
+            "id": 39,
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
+            },
+            "pluginVersion": "12.3.1",
+            "targets": [
+                {
+                    "expr": "sum(increase(map_interactions_total{job=\"trackly_backend\"}[7d]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Map Interactions (7d)",
             "type": "stat"
         },
         {
@@ -2344,7 +2403,7 @@
                 "overrides": []
             },
             "gridPos": {
-                "h": 12,
+                "h": 9,
                 "w": 24,
                 "x": 0,
                 "y": 75
@@ -2381,70 +2440,12 @@
             "type": "timeseries"
         },
         {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "victoriametrics"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": 0
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 12,
-                "x": 12,
-                "y": 87
-            },
-            "id": 39,
-            "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "percentChangeColorMode": "standard",
-                "reduceOptions": {
-                    "calcs": [
-                        "sum"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-            },
-            "pluginVersion": "12.3.1",
-            "targets": [
-                {
-                    "expr": "sum(increase(map_interactions_total{job=\"trackly_backend\"}[7d]))",
-                    "refId": "A"
-                }
-            ],
-            "title": "Map Interactions (7d)",
-            "type": "stat"
-        },
-        {
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 93
+                "y": 84
             },
             "id": 40,
             "panels": [],
@@ -2488,7 +2489,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 0,
-                "y": 94
+                "y": 85
             },
             "id": 41,
             "options": {
@@ -2555,7 +2556,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 6,
-                "y": 94
+                "y": 85
             },
             "id": 42,
             "options": {
@@ -2622,7 +2623,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 12,
-                "y": 94
+                "y": 85
             },
             "id": 43,
             "options": {
@@ -2679,7 +2680,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 18,
-                "y": 94
+                "y": 85
             },
             "id": 44,
             "options": {
@@ -2746,7 +2747,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 100
+                "y": 91
             },
             "id": 51,
             "options": {
@@ -2797,9 +2798,13 @@
                 {
                     "expr": "funnel_edits_7d",
                     "refId": "E"
+                },
+                {
+                    "expr": "funnel_deletes_7d",
+                    "refId": "F"
                 }
             ],
-            "title": "Funnel: Upload → View → Enrich → Export → Edit (7d)",
+            "title": "Funnel: Upload → View → Enrich → Export → Edit → Delete (7d)",
             "type": "bargauge"
         },
         {
@@ -2808,7 +2813,7 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 108
+                "y": 99
             },
             "id": 45,
             "panels": [],
@@ -2852,7 +2857,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 0,
-                "y": 109
+                "y": 100
             },
             "id": 46,
             "options": {
@@ -2875,7 +2880,7 @@
             "pluginVersion": "12.3.1",
             "targets": [
                 {
-                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[7d]) by (session_hash))",
+                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[7d]))) > 0)",
                     "refId": "A"
                 }
             ],
@@ -2919,7 +2924,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 6,
-                "y": 109
+                "y": 100
             },
             "id": 47,
             "options": {
@@ -2942,7 +2947,7 @@
             "pluginVersion": "12.3.1",
             "targets": [
                 {
-                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[30d]) by (session_hash))",
+                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[30d]))) > 0)",
                     "refId": "A"
                 }
             ],
@@ -2986,7 +2991,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 12,
-                "y": 109
+                "y": 100
             },
             "id": 48,
             "options": {
@@ -3053,7 +3058,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 18,
-                "y": 109
+                "y": 100
             },
             "id": 49,
             "options": {
@@ -3103,5 +3108,5 @@
     "timezone": "browser",
     "title": "Trackly - Product Metrics",
     "uid": "trackly-product",
-    "version": 4
+    "version": 6
 }
