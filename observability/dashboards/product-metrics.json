@@ -2196,7 +2196,7 @@
             "pluginVersion": "11.0.0",
             "targets": [
                 {
-                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[24h]) by (session_hash))",
+                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[24h]))) > 0)",
                     "refId": "A"
                 }
             ],
@@ -2696,7 +2696,7 @@
             "pluginVersion": "11.0.0",
             "targets": [
                 {
-                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[7d]) by (session_hash))",
+                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[7d]))) > 0)",
                     "refId": "A"
                 }
             ],
@@ -2761,7 +2761,7 @@
             "pluginVersion": "11.0.0",
             "targets": [
                 {
-                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[30d]) by (session_hash))",
+                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[30d]))) > 0)",
                     "refId": "A"
                 }
             ],
