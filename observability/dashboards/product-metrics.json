@@ -1779,24 +1779,6 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                }
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
                                 "color": "red",
                                 "value": null
                             },
@@ -1851,24 +1833,6 @@
             "datasource": {
                 "type": "prometheus",
                 "uid": "victoriametrics"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                }
             },
             "fieldConfig": {
                 "defaults": {
@@ -2412,15 +2376,11 @@
                 {
                     "expr": "funnel_edits_7d",
                     "refId": "E"
-                },
-                {
-                    "expr": "funnel_deletes_7d",
-                    "refId": "F"
                 }
             ],
-            "title": "Funnel: Upload → View → Enrich → Export → Edit → Delete (7d)",
+            "title": "Funnel: Upload → View → Enrich → Export → Edit (7d)",
             "type": "bargauge"
-        }
+        },
         {
             "datasource": {
                 "type": "prometheus",
