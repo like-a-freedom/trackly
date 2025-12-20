@@ -14,19 +14,19 @@ groups:
           )
       - record: sessions_active_1d
         expr: |
-          count(count_over_time(trackly_session_heartbeat[1d]) by (session_hash))
+          count((sum by (session_hash) (count_over_time(trackly_session_heartbeat[1d]))) > 0)
       - record: sessions_active_7d
         expr: |
-          count(count_over_time(trackly_session_heartbeat[7d]) by (session_hash))
+          count((sum by (session_hash) (count_over_time(trackly_session_heartbeat[7d]))) > 0)
       - record: sessions_active_30d
         expr: |
-          count(count_over_time(trackly_session_heartbeat[30d]) by (session_hash))
+          count((sum by (session_hash) (count_over_time(trackly_session_heartbeat[30d]))) > 0)
       - record: sessions_churn_risk
         expr: |
           count(
-            count_over_time(trackly_session_heartbeat[30d]) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[30d]))
             unless
-            count_over_time(trackly_session_heartbeat[14d]) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[14d]))
           )
       - record: sessions_churn_rate
         expr: |
@@ -55,30 +55,30 @@ groups:
       - record: retention_d1
         expr: |
           count(
-            count_over_time(trackly_session_heartbeat[1d] offset 1d) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[1d] offset 1d))
             and
-            count_over_time(trackly_session_heartbeat[1d]) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[1d]))
           )
           /
-          count(count_over_time(trackly_session_heartbeat[1d] offset 1d) by (session_hash))
+          count(sum by (session_hash) (count_over_time(trackly_session_heartbeat[1d] offset 1d)))
       - record: retention_d7
         expr: |
           count(
-            count_over_time(trackly_session_heartbeat[7d] offset 7d) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[7d] offset 7d))
             and
-            count_over_time(trackly_session_heartbeat[7d]) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[7d]))
           )
           /
-          count(count_over_time(trackly_session_heartbeat[7d] offset 7d) by (session_hash))
+          count(sum by (session_hash) (count_over_time(trackly_session_heartbeat[7d] offset 7d)))
       - record: retention_d30
         expr: |
           count(
-            count_over_time(trackly_session_heartbeat[30d] offset 30d) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[30d] offset 30d))
             and
-            count_over_time(trackly_session_heartbeat[30d]) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[30d]))
           )
           /
-          count(count_over_time(trackly_session_heartbeat[30d] offset 30d) by (session_hash))
+          count(sum by (session_hash) (count_over_time(trackly_session_heartbeat[30d] offset 30d)))
 
       # Engagement segments (passive/active/power) derived from engagement_score_7d
       - record: engagement_segment_passive
@@ -95,7 +95,7 @@ groups:
       - record: new_sessions_1d_approx
         expr: |
           count(
-            count_over_time(trackly_session_heartbeat[1d]) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[1d]))
             unless
-            count_over_time(trackly_session_heartbeat[30d] offset 1d) by (session_hash)
+            sum by (session_hash) (count_over_time(trackly_session_heartbeat[30d] offset 1d))
           )
