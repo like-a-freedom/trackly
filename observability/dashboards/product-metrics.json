@@ -19,7 +19,6 @@
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 1,
-    "id": null,
     "links": [],
     "panels": [
         {
@@ -31,6 +30,7 @@
                 "y": 0
             },
             "id": 1,
+            "panels": [],
             "title": "Track Upload Activity",
             "type": "row"
         },
@@ -50,12 +50,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -69,6 +70,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -80,7 +82,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[24h]))",
@@ -106,12 +108,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -125,6 +128,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -136,7 +140,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))",
@@ -162,12 +166,13 @@
                         "steps": [
                             {
                                 "color": "yellow",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -181,6 +186,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -192,7 +198,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_deduplicated_total{job=\"trackly_backend\"}[24h]))",
@@ -218,12 +224,13 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -237,6 +244,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -248,7 +256,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_upload_failures_total{job=\"trackly_backend\"}[24h]))",
@@ -274,12 +282,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -293,6 +302,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -304,7 +314,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_deleted_total{job=\"trackly_backend\", result=\"success\"}[24h]))",
@@ -330,7 +340,7 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -343,7 +353,8 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -357,6 +368,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -368,7 +380,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(rate(tracks_uploaded_total{job=\"trackly_backend\"}[1h])) / (sum(rate(tracks_uploaded_total{job=\"trackly_backend\"}[1h])) + sum(rate(track_upload_failures_total{job=\"trackly_backend\"}[1h])))",
@@ -395,13 +407,14 @@
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
+                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         },
                         "insertNulls": false,
                         "lineInterpolation": "linear",
@@ -411,6 +424,7 @@
                             "type": "linear"
                         },
                         "showPoints": "never",
+                        "showValues": false,
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -426,12 +440,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -451,11 +466,12 @@
                     "showLegend": true
                 },
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "multi",
                     "sort": "desc"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(rate(tracks_uploaded_total{job=\"trackly_backend\"}[5m])) by (source)",
@@ -488,13 +504,14 @@
                     },
                     "custom": {
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         }
                     },
                     "mappings": []
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -524,12 +541,14 @@
                     "fields": "",
                     "values": false
                 },
+                "sort": "desc",
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "single",
                     "sort": "none"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[24h])) by (source)",
@@ -549,6 +568,7 @@
                 "y": 15
             },
             "id": 10,
+            "panels": [],
             "title": "Track Characteristics",
             "type": "row"
         },
@@ -569,13 +589,14 @@
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
+                        "barWidthFactor": 0.6,
                         "drawStyle": "bars",
                         "fillOpacity": 100,
                         "gradientMode": "none",
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         },
                         "insertNulls": false,
                         "lineInterpolation": "linear",
@@ -585,6 +606,7 @@
                             "type": "linear"
                         },
                         "showPoints": "never",
+                        "showValues": false,
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -600,12 +622,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -625,11 +648,12 @@
                     "showLegend": true
                 },
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "multi",
                     "sort": "desc"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_length_km_bucket_bucket{job=\"trackly_backend\"}[24h])) by (le)",
@@ -653,13 +677,14 @@
                     },
                     "custom": {
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         }
                     },
                     "mappings": []
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -689,12 +714,14 @@
                     "fields": "",
                     "values": false
                 },
+                "sort": "desc",
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "single",
                     "sort": "none"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_categories_total{job=\"trackly_backend\"}[7d])) by (category)",
@@ -714,6 +741,7 @@
                 "y": 24
             },
             "id": 13,
+            "panels": [],
             "title": "Feature Usage",
             "type": "row"
         },
@@ -733,12 +761,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -752,6 +781,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -763,7 +793,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_enrich_requests_total{job=\"trackly_backend\", status=\"success\"}[24h]))",
@@ -789,12 +819,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -808,6 +839,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -819,7 +851,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(pois_created_total{job=\"trackly_backend\"}[24h]))",
@@ -845,12 +877,13 @@
                         "steps": [
                             {
                                 "color": "yellow",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -864,6 +897,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -875,7 +909,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(pois_deleted_total{job=\"trackly_backend\"}[24h]))",
@@ -901,7 +935,7 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -914,7 +948,8 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
@@ -928,6 +963,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -939,7 +975,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(rate(track_enrich_requests_total{job=\"trackly_backend\", status=\"success\"}[1h])) / sum(rate(track_enrich_requests_total{job=\"trackly_backend\"}[1h]))",
@@ -966,13 +1002,14 @@
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
+                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         },
                         "insertNulls": false,
                         "lineInterpolation": "linear",
@@ -982,6 +1019,7 @@
                             "type": "linear"
                         },
                         "showPoints": "never",
+                        "showValues": false,
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -997,12 +1035,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -1022,11 +1061,12 @@
                     "showLegend": true
                 },
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "multi",
                     "sort": "desc"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(rate(track_enrich_requests_total{job=\"trackly_backend\"}[5m])) by (status)",
@@ -1054,13 +1094,14 @@
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
+                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         },
                         "insertNulls": false,
                         "lineInterpolation": "linear",
@@ -1070,6 +1111,7 @@
                             "type": "linear"
                         },
                         "showPoints": "never",
+                        "showValues": false,
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -1085,12 +1127,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -1110,11 +1153,12 @@
                     "showLegend": true
                 },
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "multi",
                     "sort": "desc"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(rate(pois_created_total{job=\"trackly_backend\"}[5m])) by (source)",
@@ -1139,6 +1183,7 @@
                 "y": 39
             },
             "id": 20,
+            "panels": [],
             "title": "API Usage Patterns",
             "type": "row"
         },
@@ -1159,13 +1204,14 @@
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
+                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         },
                         "insertNulls": false,
                         "lineInterpolation": "linear",
@@ -1175,6 +1221,7 @@
                             "type": "linear"
                         },
                         "showPoints": "never",
+                        "showValues": false,
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -1190,12 +1237,13 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "reqps"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -1215,11 +1263,12 @@
                     "showLegend": true
                 },
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "multi",
                     "sort": "desc"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "topk(10, sum(rate(http_requests_total{job=\"trackly_backend\"}[5m])) by (route))",
@@ -1245,6 +1294,9 @@
                         "cellOptions": {
                             "type": "auto"
                         },
+                        "footer": {
+                            "reducers": []
+                        },
                         "inspect": false
                     },
                     "mappings": [],
@@ -1253,11 +1305,12 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     }
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 8,
@@ -1268,17 +1321,9 @@
             "id": 22,
             "options": {
                 "cellHeight": "sm",
-                "footer": {
-                    "countRows": false,
-                    "fields": "",
-                    "reducer": [
-                        "sum"
-                    ],
-                    "show": false
-                },
                 "showHeader": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(http_requests_total{job=\"trackly_backend\"}[24h])) by (route, method)",
@@ -1312,9 +1357,10 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 65
+                "y": 48
             },
             "id": 23,
+            "panels": [],
             "title": "Track Export & Data Flow",
             "type": "row"
         },
@@ -1335,13 +1381,14 @@
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
+                        "barWidthFactor": 0.6,
                         "drawStyle": "bars",
                         "fillOpacity": 50,
                         "gradientMode": "none",
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         },
                         "insertNulls": false,
                         "lineInterpolation": "linear",
@@ -1351,6 +1398,7 @@
                             "type": "linear"
                         },
                         "showPoints": "never",
+                        "showValues": false,
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -1366,18 +1414,19 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 12,
                 "x": 0,
-                "y": 66
+                "y": 49
             },
             "id": 24,
             "options": {
@@ -1390,11 +1439,12 @@
                     "showLegend": true
                 },
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "multi",
                     "sort": "desc"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_export_duration_seconds_count{job=\"trackly_backend\"}[1h])) by (format)",
@@ -1421,18 +1471,19 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 12,
-                "y": 66
+                "y": 49
             },
             "id": 25,
             "options": {
@@ -1440,6 +1491,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -1451,7 +1503,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_export_duration_seconds_count{job=\"trackly_backend\"}[24h]))",
@@ -1473,9 +1525,9 @@
                     },
                     "custom": {
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         }
                     },
                     "mappings": [],
@@ -1487,7 +1539,7 @@
                 "h": 6,
                 "w": 6,
                 "x": 18,
-                "y": 66
+                "y": 49
             },
             "id": 26,
             "options": {
@@ -1508,12 +1560,14 @@
                     "fields": "",
                     "values": false
                 },
+                "sort": "desc",
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "single",
                     "sort": "none"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_upload_failures_total{job=\"trackly_backend\"}[24h])) by (reason)",
@@ -1542,13 +1596,14 @@
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
+                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
+                            "legend": false,
                             "tooltip": false,
-                            "viz": false,
-                            "legend": false
+                            "viz": false
                         },
                         "insertNulls": false,
                         "lineInterpolation": "linear",
@@ -1558,6 +1613,7 @@
                             "type": "linear"
                         },
                         "showPoints": "never",
+                        "showValues": false,
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -1573,18 +1629,19 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 12,
                 "x": 0,
-                "y": 72
+                "y": 55
             },
             "id": 27,
             "options": {
@@ -1597,11 +1654,12 @@
                     "showLegend": true
                 },
                 "tooltip": {
+                    "hideZeros": false,
                     "mode": "multi",
                     "sort": "desc"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[1h]))",
@@ -1639,7 +1697,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -1652,13 +1710,14 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 12,
-                "y": 72
+                "y": 55
             },
             "id": 28,
             "options": {
@@ -1666,6 +1725,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -1677,7 +1737,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(rate(track_enrich_requests_total{job=\"trackly_backend\", outcome=\"success\"}[5m])) / sum(rate(track_enrich_requests_total{job=\"trackly_backend\"}[5m]))",
@@ -1704,7 +1764,7 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -1717,13 +1777,14 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 18,
-                "y": 72
+                "y": 55
             },
             "id": 29,
             "options": {
@@ -1731,6 +1792,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -1742,7 +1804,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_deduplicated_total{job=\"trackly_backend\"}[24h])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[24h]))",
@@ -1758,9 +1820,10 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 78
+                "y": 61
             },
             "id": 30,
+            "panels": [],
             "title": "Engagement & Discovery",
             "type": "row"
         },
@@ -1769,6 +1832,7 @@
                 "type": "prometheus",
                 "uid": "victoriametrics"
             },
+            "description": "Track Views (24h). Recommended thresholds: red <20, yellow 20-99, green >=100. Tune product thresholds as needed.",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -1780,7 +1844,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -1793,21 +1857,22 @@
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 4,
                 "x": 0,
-                "y": 79
+                "y": 62
             },
             "id": 31,
-            "description": "Track Views (24h). Recommended thresholds: red <20, yellow 20-99, green >=100. Tune product thresholds as needed.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -1819,7 +1884,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_views_total{job=\"trackly_backend\"}[24h]))",
@@ -1834,6 +1899,7 @@
                 "type": "prometheus",
                 "uid": "victoriametrics"
             },
+            "description": "Track Searches (24h). Recommended thresholds: red <10, yellow 10-49, green >=50. Adjust for product targets.",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -1845,7 +1911,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -1858,21 +1924,22 @@
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 4,
                 "x": 4,
-                "y": 79
+                "y": 62
             },
             "id": 32,
-            "description": "Track Searches (24h). Recommended thresholds: red <10, yellow 10-49, green >=50. Adjust for product targets.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -1884,7 +1951,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_searches_total{job=\"trackly_backend\"}[24h]))",
@@ -1910,7 +1977,7 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -1923,13 +1990,14 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 4,
                 "x": 8,
-                "y": 79
+                "y": 62
             },
             "id": 33,
             "options": {
@@ -1937,6 +2005,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -1948,7 +2017,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_searches_total{job=\"trackly_backend\",result_type=\"zero\"}[7d])) / sum(increase(track_searches_total{job=\"trackly_backend\"}[7d]))",
@@ -1974,18 +2043,19 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 4,
                 "x": 12,
-                "y": 79
+                "y": 62
             },
             "id": 34,
             "options": {
@@ -1993,6 +2063,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -2004,7 +2075,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_edits_total{job=\"trackly_backend\"}[7d]))",
@@ -2030,18 +2101,19 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 4,
                 "x": 16,
-                "y": 79
+                "y": 62
             },
             "id": 35,
             "options": {
@@ -2049,6 +2121,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -2060,7 +2133,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_exports_total{job=\"trackly_backend\"}[7d]))",
@@ -2086,18 +2159,19 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 4,
                 "x": 20,
-                "y": 79
+                "y": 62
             },
             "id": 36,
             "options": {
@@ -2105,6 +2179,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -2116,7 +2191,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(map_interactions_total{job=\"trackly_backend\"}[24h]))",
@@ -2132,9 +2207,10 @@
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 85
+                "y": 68
             },
             "id": 37,
+            "panels": [],
             "title": "Sessions",
             "type": "row"
         },
@@ -2143,6 +2219,7 @@
                 "type": "prometheus",
                 "uid": "victoriametrics"
             },
+            "description": "Active Sessions (24h). Recommended thresholds: red <10, yellow 10-99, green >=100.",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -2154,7 +2231,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -2167,21 +2244,22 @@
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 12,
                 "x": 0,
-                "y": 86
+                "y": 69
             },
             "id": 38,
-            "description": "Active Sessions (24h). Recommended thresholds: red <10, yellow 10-99, green >=100.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2193,10 +2271,10 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
-                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[24h]))) > 0)",
+                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[24h]) by (session_hash))",
                     "refId": "A"
                 }
             ],
@@ -2211,7 +2289,41 @@
             "fieldConfig": {
                 "defaults": {
                     "color": {
-                        "mode": "thresholds"
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisBorderShow": false,
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "barWidthFactor": 0.6,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "insertNulls": false,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "showValues": false,
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
                     },
                     "mappings": [],
                     "thresholds": {
@@ -2219,80 +2331,28 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
                             }
                         ]
                     },
                     "unit": "short"
-                }
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 12,
-                "x": 12,
-                "y": 86
-            },
-            "id": 39,
-            "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "reduceOptions": {
-                    "calcs": [
-                        "sum"
-                    ],
-                    "fields": "",
-                    "values": false
                 },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-            },
-            "pluginVersion": "11.0.0",
-            "targets": [
-                {
-                    "expr": "sum(increase(map_interactions_total{job=\"trackly_backend\"}[7d]))",
-                    "refId": "A"
-                }
-            ],
-            "title": "Map Interactions (7d)",
-            "type": "stat"
-        },
-        {
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 92
-            },
-            "id": 40,
-            "title": "Ratios & Adoption",
-            "type": "row"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "victoriametrics"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "unit": "short"
-                }
+                "overrides": []
             },
             "gridPos": {
                 "h": 12,
                 "w": 24,
                 "x": 0,
-                "y": 86
+                "y": 75
             },
             "id": 50,
             "options": {
                 "legend": {
+                    "calcs": [],
                     "displayMode": "list",
                     "placement": "bottom",
                     "showLegend": true
@@ -2305,10 +2365,12 @@
                     "values": false
                 },
                 "tooltip": {
-                    "mode": "single"
+                    "hideZeros": false,
+                    "mode": "single",
+                    "sort": "none"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "engagement_score_7d",
@@ -2326,24 +2388,35 @@
             "fieldConfig": {
                 "defaults": {
                     "color": {
-                        "mode": "palette-classic"
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": 0
+                            }
+                        ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
-                "h": 8,
+                "h": 6,
                 "w": 12,
-                "x": 0,
-                "y": 98
+                "x": 12,
+                "y": 87
             },
-            "id": 51,
+            "id": 39,
             "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": true
-                },
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "sum"
@@ -2351,35 +2424,32 @@
                     "fields": "",
                     "values": false
                 },
-                "tooltip": {
-                    "mode": "single"
-                }
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
-                    "expr": "funnel_uploads_7d",
+                    "expr": "sum(increase(map_interactions_total{job=\"trackly_backend\"}[7d]))",
                     "refId": "A"
-                },
-                {
-                    "expr": "funnel_views_7d",
-                    "refId": "B"
-                },
-                {
-                    "expr": "funnel_enrich_success_7d",
-                    "refId": "C"
-                },
-                {
-                    "expr": "funnel_exports_7d",
-                    "refId": "D"
-                },
-                {
-                    "expr": "funnel_edits_7d",
-                    "refId": "E"
                 }
             ],
-            "title": "Funnel: Upload → View → Enrich → Export → Edit (7d)",
-            "type": "bargauge"
+            "title": "Map Interactions (7d)",
+            "type": "stat"
+        },
+        {
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 93
+            },
+            "id": 40,
+            "panels": [],
+            "title": "Ratios & Adoption",
+            "type": "row"
         },
         {
             "datasource": {
@@ -2398,26 +2468,27 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
-                                "value": 1.0
+                                "value": 1
                             },
                             {
                                 "color": "green",
-                                "value": 2.0
+                                "value": 2
                             }
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 0,
-                "y": 93
+                "y": 94
             },
             "id": 41,
             "options": {
@@ -2425,6 +2496,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2436,7 +2508,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_views_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))",
@@ -2463,7 +2535,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -2476,13 +2548,14 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 6,
-                "y": 93
+                "y": 94
             },
             "id": 42,
             "options": {
@@ -2490,6 +2563,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2501,7 +2575,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_enrich_requests_total{job=\"trackly_backend\", status=\"success\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))",
@@ -2528,7 +2602,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -2541,13 +2615,14 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 12,
-                "y": 93
+                "y": 94
             },
             "id": 43,
             "options": {
@@ -2555,6 +2630,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2566,7 +2642,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_exports_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))",
@@ -2587,14 +2663,23 @@
                     "color": {
                         "mode": "palette-classic"
                     },
+                    "custom": {
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        }
+                    },
+                    "mappings": [],
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 18,
-                "y": 93
+                "y": 94
             },
             "id": 44,
             "options": {
@@ -2611,11 +2696,14 @@
                     "fields": "",
                     "values": false
                 },
+                "sort": "desc",
                 "tooltip": {
-                    "mode": "single"
+                    "hideZeros": false,
+                    "mode": "single",
+                    "sort": "none"
                 }
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(track_edits_total{job=\"trackly_backend\"}[7d])) by (field)",
@@ -2627,14 +2715,103 @@
             "type": "piechart"
         },
         {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": 0
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 100
+            },
+            "id": 51,
+            "options": {
+                "displayMode": "gradient",
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "maxVizHeight": 300,
+                "minVizHeight": 16,
+                "minVizWidth": 8,
+                "namePlacement": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "showUnfilled": true,
+                "sizing": "auto",
+                "tooltip": {
+                    "mode": "single"
+                },
+                "valueMode": "color"
+            },
+            "pluginVersion": "12.3.1",
+            "targets": [
+                {
+                    "expr": "funnel_uploads_7d",
+                    "refId": "A"
+                },
+                {
+                    "expr": "funnel_views_7d",
+                    "refId": "B"
+                },
+                {
+                    "expr": "funnel_enrich_success_7d",
+                    "refId": "C"
+                },
+                {
+                    "expr": "funnel_exports_7d",
+                    "refId": "D"
+                },
+                {
+                    "expr": "funnel_edits_7d",
+                    "refId": "E"
+                }
+            ],
+            "title": "Funnel: Upload → View → Enrich → Export → Edit (7d)",
+            "type": "bargauge"
+        },
+        {
             "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
-                "y": 99
+                "y": 108
             },
             "id": 45,
+            "panels": [],
             "title": "Retention & Churn",
             "type": "row"
         },
@@ -2655,7 +2832,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -2668,13 +2845,14 @@
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 0,
-                "y": 100
+                "y": 109
             },
             "id": 46,
             "options": {
@@ -2682,6 +2860,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2693,10 +2872,10 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
-                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[7d]))) > 0)",
+                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[7d]) by (session_hash))",
                     "refId": "A"
                 }
             ],
@@ -2720,7 +2899,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -2733,13 +2912,14 @@
                         ]
                     },
                     "unit": "short"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 6,
-                "y": 100
+                "y": 109
             },
             "id": 47,
             "options": {
@@ -2747,6 +2927,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2758,10 +2939,10 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
-                    "expr": "count((sum by (session_hash) (count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[30d]))) > 0)",
+                    "expr": "count(count_over_time(trackly_session_heartbeat{job=\"trackly_backend\"}[30d]) by (session_hash))",
                     "refId": "A"
                 }
             ],
@@ -2785,7 +2966,7 @@
                         "steps": [
                             {
                                 "color": "green",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -2798,13 +2979,14 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 12,
-                "y": 100
+                "y": 109
             },
             "id": 48,
             "options": {
@@ -2812,6 +2994,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2823,7 +3006,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(tracks_deleted_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))",
@@ -2850,7 +3033,7 @@
                         "steps": [
                             {
                                 "color": "red",
-                                "value": null
+                                "value": 0
                             },
                             {
                                 "color": "yellow",
@@ -2863,13 +3046,14 @@
                         ]
                     },
                     "unit": "percentunit"
-                }
+                },
+                "overrides": []
             },
             "gridPos": {
                 "h": 6,
                 "w": 6,
                 "x": 18,
-                "y": 100
+                "y": 109
             },
             "id": 49,
             "options": {
@@ -2877,6 +3061,7 @@
                 "graphMode": "area",
                 "justifyMode": "auto",
                 "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                     "calcs": [
                         "lastNotNull"
@@ -2888,7 +3073,7 @@
                 "textMode": "auto",
                 "wideLayout": true
             },
-            "pluginVersion": "11.0.0",
+            "pluginVersion": "12.3.1",
             "targets": [
                 {
                     "expr": "sum(increase(pois_created_total{job=\"trackly_backend\"}[7d])) / sum(increase(tracks_uploaded_total{job=\"trackly_backend\"}[7d]))",
@@ -2899,8 +3084,9 @@
             "type": "stat"
         }
     ],
+    "preload": false,
     "refresh": "30s",
-    "schemaVersion": 39,
+    "schemaVersion": 42,
     "tags": [
         "trackly",
         "product",
@@ -2910,13 +3096,12 @@
         "list": []
     },
     "time": {
-        "from": "now-24h",
+        "from": "now-5m",
         "to": "now"
     },
     "timepicker": {},
     "timezone": "browser",
     "title": "Trackly - Product Metrics",
     "uid": "trackly-product",
-    "version": 1,
-    "weekStart": ""
+    "version": 4
 }

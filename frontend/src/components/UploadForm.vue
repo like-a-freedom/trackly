@@ -184,6 +184,14 @@ function onDrop(event) {
   const file = event.dataTransfer.files[0];
   if (file) {
     selectedFile.value = file;
+    // Populate trackName from original filename (without extension)
+    try {
+      trackName.value = file.name.replace(/\.[^.]+$/, "").normalize('NFC');
+    } catch (e) {
+      // If normalize is unavailable or fails, fallback to raw name without extension
+      trackName.value = file.name.replace(/\.[^.]+$/, "");
+    }
+
     uploadSuccess.value = false; // Hide success message on new file
     uploadedTrackData.value = null; // Clear uploaded track data
     copyingLink.value = false; // Reset copying state

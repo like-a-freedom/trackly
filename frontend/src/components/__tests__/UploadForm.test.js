@@ -241,6 +241,29 @@ describe('UploadForm', () => {
             expect(wrapper.emitted('update:dragActive')[0]).toEqual([false]);
         });
 
+        it('sets track name from dropped file', async () => {
+            wrapper = mount(UploadForm);
+
+            const file = new File(['test'], 'dropped-name.gpx', { type: 'application/gpx+xml' });
+            const dropEvent = {
+                dataTransfer: {
+                    files: [file]
+                }
+            };
+
+            mockCheckTrackDuplicate.mockResolvedValue({ alreadyExists: false, warning: '' });
+
+            await wrapper.find('.upload-form').trigger('drop', dropEvent);
+
+            // Allow the watcher and microtasks to run
+            await wrapper.vm.$nextTick();
+            await flushPromises();
+
+            const nameInput = wrapper.find('.track-name-input');
+            expect(nameInput.exists()).toBe(true);
+            expect(nameInput.element.value).toBe('dropped-name');
+        });
+
         it('adds drag-active class when dragActive prop is true', async () => {
             wrapper = mount(UploadForm, {
                 props: { dragActive: true }
