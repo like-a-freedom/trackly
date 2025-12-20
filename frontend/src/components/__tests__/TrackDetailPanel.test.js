@@ -963,6 +963,59 @@ describe('TrackDetailPanel', () => {
       // Ensure at least one anchor element was created for download
       const anchorCalls = document.createElement.mock.calls.filter(c => c[0] === 'a');
       expect(anchorCalls.length).toBeGreaterThan(0);
+
+      // Inspect created <a> element to ensure filename logic ran
+      const createdAnchorResult = document.createElement.mock.results.find(r => r.value && r.value.tagName && r.value.tagName.toLowerCase() === 'a');
+      expect(createdAnchorResult).toBeDefined();
+      const createdAnchor = createdAnchorResult.value;
+      // When server supplies Content-Disposition with filename, we should use it
+      expect(createdAnchor.download).toBe('test-track.gpx');
+
+    });
+
+    it('should preserve Cyrillic track names when no header filename is provided', async () => {
+      // Mock fetch response without content-disposition header
+      global.fetch.mockResolvedValue({
+        ok: true,
+        headers: new Map(),
+        blob: () => Promise.resolve(new Blob(['<gpx></gpx>'], { type: 'application/gpx+xml' }))
+      });
+
+      const track = { ...mockTrackComplete, name: 'Мой трек' };
+      const wrapper = mount(TrackDetailPanel, { props: { track, isVisible: true } });
+
+      document.createElement.mockClear();
+      const exportButton = wrapper.find('.export-gpx-btn');
+      await exportButton.trigger('click');
+      await wrapper.vm.$nextTick();
+      await flushPromises();
+
+      const createdAnchorResult = document.createElement.mock.results.find(r => r.value && r.value.tagName && r.value.tagName.toLowerCase() === 'a');
+      expect(createdAnchorResult).toBeDefined();
+      const createdAnchor = createdAnchorResult.value;
+      expect(createdAnchor.download).toBe('Мой_трек.gpx');
+    });
+
+    it('should fallback to track id when sanitized name is empty', async () => {
+      global.fetch.mockResolvedValue({
+        ok: true,
+        headers: new Map(),
+        blob: () => Promise.resolve(new Blob(['<gpx></gpx>'], { type: 'application/gpx+xml' }))
+      });
+
+      const track = { ...mockTrackComplete, id: 42, name: '///' };
+      const wrapper = mount(TrackDetailPanel, { props: { track, isVisible: true } });
+
+      document.createElement.mockClear();
+      const exportButton = wrapper.find('.export-gpx-btn');
+      await exportButton.trigger('click');
+      await wrapper.vm.$nextTick();
+      await flushPromises();
+
+      const createdAnchorResult = document.createElement.mock.results.find(r => r.value && r.value.tagName && r.value.tagName.toLowerCase() === 'a');
+      expect(createdAnchorResult).toBeDefined();
+      const createdAnchor = createdAnchorResult.value;
+      expect(createdAnchor.download).toBe('track-42.gpx');
     });
 
     it('should disable export button during export', async () => {

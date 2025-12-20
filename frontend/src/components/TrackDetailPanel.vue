@@ -1544,11 +1544,70 @@ async function exportTrack() {
     const link = document.createElement('a');
     link.href = url;
     
-    // Let the browser use the filename from Content-Disposition header
-    // If that fails, use track name as fallback
-    const trackName = track.value.name || 'Unnamed Track';
-    const sanitizedName = trackName.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '_');
-    link.download = `${sanitizedName}.gpx`;
+    // Determine filename: prefer Content-Disposition header filename, else sanitize track name preserving Unicode.
+    function sanitizeFilename(name, fallback) {
+      if (!name) return fallback;
+      // Normalize to decompose combined characters, if available
+      const normalized = name && typeof name.normalize === 'function' ? name.normalize('NFKD') : name;
+      // Allow Unicode letters/numbers, spaces, hyphens, underscores and dots; remove other characters
+      const cleaned = String(normalized).replace(/[^ -\u007F]/gu, '').replace(/[^\p{L}\p{N}\s\-_\.]+/gu, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+      const collapsed = cleaned.trim().replace(/\s+/g, '_').replace(/_+/g, '_');
+      const trimmed = collapsed.replace(/^\.+|\.+$/g, '');
+      return trimmed || fallback;
+    }
+
+    // Try to extract filename from Content-Disposition header
+    let filename = null;
+    let disposition = null;
+    try {
+      if (response && response.headers) {
+        if (typeof response.headers.get === 'function') {
+          disposition = response.headers.get('content-disposition');
+        } else if (response.headers instanceof Map) {
+          disposition = response.headers.get('content-disposition');
+        }
+      }
+    } catch (e) {
+      disposition = null;
+    }
+
+    if (disposition) {
+      const m1 = disposition.match(/filename\*=UTF-8''([^;\n]+)/i);
+      const m2 = disposition.match(/filename\s*=\s*"?([^";\n]+)"?/i);
+      let rawName = null;
+      if (m1) rawName = decodeURIComponent(m1[1]);
+      else if (m2) rawName = m2[1];
+      if (rawName) {
+        // Strip path and extension
+        rawName = rawName.split('/').pop().replace(/\.[^.]+$/, '');
+        filename = sanitizeFilename(rawName, '');
+      }
+    }
+
+    if (!filename) {
+      const trackName = track.value && track.value.name ? track.value.name : '';
+      // Try robust Unicode-preserving sanitization first (may throw if Unicode property escapes are not supported)
+      try {
+        const alt = trackName ? trackName.replace(/[^ -\uFFFF\p{L}\p{N}\s\-_\.]+/gu, '').trim().replace(/\s+/g, '_') : '';
+        filename = sanitizeFilename(trackName, alt) || alt;
+      } catch (e) {
+        // Fallback to earlier sanitizer that may strip non-ASCII but guarantees a safe name
+        filename = sanitizeFilename(trackName, '');
+      }
+    }
+
+    // If filename is still empty use track-id; otherwise ensure it doesn't contain path separators or unsafe chars
+    if (filename) {
+      const unsafe = /[\/<>:\"\\|?*\x00-\x1F]/;
+      if (unsafe.test(filename)) {
+        const cleaned2 = filename.replace(/[\/<>:\"\\|?*\x00-\x1F]+/g, '').replace(/\s+/g,'_');
+        filename = cleaned2 || `track-${track.value.id}`;
+      }
+    } else {
+      filename = `track-${track.value.id}`;
+    }
+
+    link.download = `${filename}.gpx`;
     
     // Trigger download
     document.body.appendChild(link);
