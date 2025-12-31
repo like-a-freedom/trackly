@@ -68,6 +68,8 @@ Trackly is laser-focused on doing one thing well: **storing, viewing and advance
 
 ## ✨ Key Features
 
+- 🔎 Dynamic sitemap: backend exposes `/sitemap.xml` which lists public tracks for search engine indexing (auto-generated from public tracks).
+
 ### Core Functionality
 - 📤 **Supporting GPX format only** — Focused on the most widely used GPS track format for now
 - 🗺️ **Interactive maps** — View tracks on OpenStreetMap (Leaflet)
@@ -176,6 +178,8 @@ docker-compose -f docker-compose.dev.yaml up --build
 - 🌐 Frontend: http://localhost:81
 - 🔧 Backend API: http://localhost:8080
 - 🗄️ PostgreSQL: localhost:5432
+
+**Quick SEO checks:** See `frontend/SEO.md` for a short guide to verify base meta tags, `robots.txt`, `sitemap.xml`, and how to run a local Lighthouse smoke test.
 
 ### Environment variables
 

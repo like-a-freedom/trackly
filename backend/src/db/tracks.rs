@@ -257,6 +257,31 @@ pub async fn list_tracks(
     Ok(result)
 }
 
+/// Entry used for sitemap generation
+pub struct SitemapEntry {
+    pub id: Uuid,
+    pub lastmod: chrono::DateTime<chrono::Utc>,
+}
+
+/// Return list of public tracks with last modification time for sitemap generation
+pub async fn list_public_tracks_for_sitemap(
+    pool: &Arc<PgPool>,
+) -> Result<Vec<SitemapEntry>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT id, COALESCE(updated_at, created_at) as lastmod FROM tracks WHERE is_public = TRUE",
+    )
+    .fetch_all(&**pool)
+    .await?;
+    let mut out = Vec::new();
+    for row in rows {
+        let id: Uuid = row.try_get::<Uuid, _>("id")?;
+        let lastmod: chrono::DateTime<chrono::Utc> =
+            row.try_get::<chrono::DateTime<chrono::Utc>, _>("lastmod")?;
+        out.push(SitemapEntry { id, lastmod });
+    }
+    Ok(out)
+}
+
 pub async fn get_track_detail(
     pool: &Arc<PgPool>,
     id: Uuid,

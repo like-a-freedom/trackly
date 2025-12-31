@@ -32,6 +32,7 @@ services:
       UPLOAD_RATE_LIMIT_SECONDS: ${UPLOAD_RATE_LIMIT_SECONDS:-10}
       SERVICE_NAME: trackly_backend
       APP_ENV: dev
+      SITE_URL: ${SITE_URL:-http://localhost:8080}
       DATABASE_MAX_CONNECTIONS: ${DATABASE_MAX_CONNECTIONS:-5}
       TRACK_MAX_GAP_METERS: ${TRACK_MAX_GAP_METERS:-500}
       TRACK_LIST_SIMPLIFY_MIN_POINTS: ${TRACK_LIST_SIMPLIFY_MIN_POINTS:-1000}
@@ -56,6 +57,9 @@ services:
     container_name: trackly_frontend
     restart: unless-stopped
     build: ./frontend
+    environment:
+      # Use SITE_URL (set for backend) as default; can override VITE_SITE_URL for frontend
+      VITE_SITE_URL: ${VITE_SITE_URL:-${SITE_URL:-http://localhost:90}}
     volumes:
       - ./frontend/Caddyfile:/etc/caddy/Caddyfile
     ports:
