@@ -33,6 +33,8 @@ services:
       UPLOAD_RATE_LIMIT_SECONDS: ${UPLOAD_RATE_LIMIT_SECONDS:-10}
       SERVICE_NAME: trackly_backend
       APP_ENV: prod
+      # Public-facing base URL used for canonical links and sitemap (override in env for production)
+      SITE_URL: ${SITE_URL:-https://example.com}
       DATABASE_MAX_CONNECTIONS: ${DATABASE_MAX_CONNECTIONS:-5}
       TRACK_MAX_GAP_METERS: ${TRACK_MAX_GAP_METERS:-500}
       TRACK_SIMPLIFY_MIN_RATIO: ${TRACK_SIMPLIFY_MIN_RATIO:-0.01}
@@ -64,6 +66,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    environment:
+      # Frontend runtime base URL for canonical/OG tags
+      VITE_SITE_URL: ${VITE_SITE_URL:-${SITE_URL:-https://example.com}}
     volumes:
       - ./frontend/Caddyfile:/etc/caddy/Caddyfile:ro
     ports:

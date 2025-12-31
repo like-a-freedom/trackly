@@ -2,8 +2,49 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Trackly</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="index, follow" />
+    <meta name="description" content="Trackly — platform to store and visualize GPS tracks and routes. View, analyze, and share your routes." />
+    <title>Trackly — Tracks &amp; Routes</title>
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="Trackly — Tracks &amp; Routes" />
+    <meta property="og:description" content="Platform to store and visualize GPS tracks and routes. View path, elevation and POIs for each track." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://your-domain.example/" />
+    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@trackly" />
+    <meta name="twitter:title" content="Trackly — Tracks &amp; Routes" />
+    <meta name="twitter:description" content="Platform to store and visualize GPS tracks and routes." />
+    <meta name="twitter:image" content="/og-image.png" />
+
+    <link rel="canonical" href="https://your-domain.example/" />
+
+    <!-- Dynamically set canonical & og:url from env var VITE_SITE_URL (fallback to current value) -->
+    <script type="module">
+      const SITE = import.meta.env.VITE_SITE_URL || (typeof window !== 'undefined' && window.location.origin) || 'https://your-domain.example';
+      // set canonical
+      let canonical = document.querySelector('link[rel="canonical"]');
+      if (!canonical) {
+        canonical = document.createElement('link');
+        canonical.setAttribute('rel', 'canonical');
+        document.head.appendChild(canonical);
+      }
+      canonical.setAttribute('href', SITE + '/');
+
+      // set og:url
+      let ogUrl = document.querySelector('meta[property="og:url"]');
+      if (!ogUrl) {
+        ogUrl = document.createElement('meta');
+        ogUrl.setAttribute('property', 'og:url');
+        document.head.appendChild(ogUrl);
+      }
+      ogUrl.setAttribute('content', SITE + '/');
+    </script>
+
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>

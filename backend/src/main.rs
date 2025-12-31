@@ -135,6 +135,7 @@ async fn main() {
             "/debug/background_task",
             get(handlers::debug_background_task),
         )
+        .route("/sitemap.xml", get(handlers::sitemap))
         .layer(DefaultBodyLimit::max(max_body_size))
         .layer(metrics::HttpMetricsLayer::new())
         .with_state(pool);

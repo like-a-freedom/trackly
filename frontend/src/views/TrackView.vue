@@ -138,6 +138,7 @@ import { useSearchState } from '../composables/useSearchState';
 import { getSessionId } from '../utils/session';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 import { isLoopTrack } from '../utils/trackGeometry.js';
+import { useHead } from '@vueuse/head';
 import { buildBoundaryMarkers, buildPauseGapLines, buildSegmentColors, buildSegmentGapMarkers } from '../utils/gapVisualization';
 import '../styles/track-overlays.css';
 
@@ -246,6 +247,49 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
       // Fallback: if track has path field, use it
       if ((!track.value.latlngs || track.value.latlngs.length === 0) && track.value.path) {
         track.value.latlngs = track.value.path;
+      }
+
+      // Set page head/meta for SEO (title, meta tags, canonical, JSON-LD)
+      try {
+        useHead({
+          title: `${track.value.name} — Trackly`,
+          meta: [
+            { name: 'description', content: track.value.description || 'Просмотрите трек и его параметры на Trackly.' },
+            { property: 'og:title', content: track.value.name || 'Trackly — треки и маршруты' },
+            { property: 'og:description', content: track.value.description || 'Просмотрите трек и его параметры на Trackly.' },
+            { property: 'og:type', content: 'article' },
+            { property: 'og:url', content: `${(import.meta.env.VITE_SITE_URL || 'https://your-domain.example').replace(/\/+$/,'')}/track/${track.value.id}` },
+            { name: 'twitter:card', content: 'summary_large_image' },
+            { name: 'twitter:title', content: track.value.name || '' },
+            { name: 'twitter:description', content: track.value.description || '' }
+          ],
+          link: [
+            { rel: 'canonical', href: `${(import.meta.env.VITE_SITE_URL || 'https://your-domain.example').replace(/\/+$/,'')}/track/${track.value.id}` }
+          ],
+          script: [
+            {
+              type: 'application/ld+json',
+              children: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": track.value.name,
+                "description": track.value.description,
+                "url": `https://your-domain.example/track/${track.value.id}`,
+                "mainEntity": (track.value.latlngs && track.value.latlngs[0]) ? {
+                  "@type": "Place",
+                  "name": track.value.name,
+                  "geo": {
+                    "@type": "GeoCoordinates",
+                    "latitude": track.value.latlngs[0][0],
+                    "longitude": track.value.latlngs[0][1]
+                  }
+                } : undefined
+              })
+            }
+          ]
+        });
+      } catch (err) {
+        console.warn('[TrackView] Failed to update head/meta for track:', err);
       }
       
       // Track positioning is handled entirely by TrackMap's fitBounds with trackBounds

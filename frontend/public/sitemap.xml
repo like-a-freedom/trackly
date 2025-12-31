@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NOTE: In production, prefer backend `GET /sitemap.xml` which generates a sitemap from public tracks -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Add public pages here or let the backend generate sitemap dynamically -->
+  <url>
+    <loc>https://your-domain.example/</loc>
+    <priority>1.00</priority>
+  </url>
+</urlset>
