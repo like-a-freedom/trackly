@@ -229,6 +229,60 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
     // Allow small rounding differences
     const diff = Math.abs(dims.width - dims.scrollWidth);
     expect(diff).toBeLessThan(3);
+
+    // Open the dropdown and assert it aligns to the LEFT edge of the container (not centered)
+    // Try to open the dropdown: debug inner HTML if clicks don't work
+    await multiselect.scrollIntoViewIfNeeded();
+    const inner = await multiselect.innerHTML();
+    console.warn('DEBUG multiselect inner:', inner.slice(0,1200));
+
+    const input = multiselect.locator('input').first();
+    if (await input.count() > 0) {
+      // attempt clicking the wrapper; if input is visible, try clicking it
+      await multiselect.locator('.multiselect-wrapper').click({ force: true });
+      try {
+        await input.click();
+      } catch (e) {
+        // ignore
+      }
+      // Try to open the menu via keyboard (Enter/Space/ArrowDown)
+      await input.focus();
+      // Type a small character to open search/options in tags mode
+      await input.type('w');
+      await page.waitForTimeout(150);
+    } else {
+      await multiselect.locator('.multiselect-wrapper').click({ force: true });
+      await page.keyboard.press('ArrowDown');
+    }
+
+    const containerRect = await multiselect.evaluate((el) => el.getBoundingClientRect());
+
+    // Wait until a 'Walking' node appears below the trigger (the dropdown's option)
+    await page.waitForFunction((containerBottom) => {
+      return Array.from(document.querySelectorAll('*')).some(n => n.textContent && n.textContent.trim() === 'Walking' && n.getBoundingClientRect().top > containerBottom + 4);
+    }, containerRect.bottom);
+
+    // Find the menu option that is visually in the dropdown (not the tag inside the trigger)
+    const menuLeft = await page.evaluate((containerBottom) => {
+      const matching = Array.from(document.querySelectorAll('*')).filter(n => n.textContent && n.textContent.trim() === 'Walking');
+      for (const n of matching) {
+        const r = n.getBoundingClientRect();
+        // consider nodes that are positioned below the trigger (dropdown)
+        if (r.top > containerBottom + 4) {
+          return r.left;
+        }
+      }
+      return null;
+    }, containerRect.bottom);
+
+    // menuLeft may be null if the dropdown didn't render as expected
+    expect(menuLeft).not.toBeNull();
+    const leftDiff = Math.abs(containerRect.left - menuLeft);
+    // allow small layout padding and rounding differences
+    expect(leftDiff).toBeLessThan(16);
+
+    // Close dropdown
+    await page.keyboard.press('Escape');
   });
 
   test('should show saving indicator during update', async ({ page, context }) => {
