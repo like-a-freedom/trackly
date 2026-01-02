@@ -211,7 +211,7 @@
             placeholder="Select categories"
             class="track-category-select-inline"
             :append-to-body="true"
-            position="auto"
+            position="bottom-start"
             :max-height="220"
             :disabled="savingCategories"
             @change="onCategoriesChange"
@@ -3141,6 +3141,29 @@ defineExpose({
     width: 100% !important;
     display: block;
   }
+}
+
+/* Ensure dropdown menu (popper/content) aligns to the LEFT edge of the multiselect trigger/container */
+/* Target common classnames used by @vueform/multiselect and provide a robust fallback */
+.track-category-select-inline .multiselect__content,
+.track-category-select-inline .multiselect__menu,
+.track-category-select-inline .multiselect__popper,
+.track-category-select-inline .multiselect__options,
+.track-category-select-inline .ms-content,
+.track-category-select-inline .ms-panel,
+.track-category-select-inline .ms-dropdown {
+  left: 0 !important;
+  right: auto !important;
+  transform-origin: left top !important;
+  transform: translateX(0) !important; /* remove centering transform from popper */
+}
+
+/* If the multiselect uses an inline absolute positioned wrapper, also ensure it aligns */
+.track-category-select-inline [style*="position: absolute"] {
+  left: 0 !important;
+  right: auto !important;
+  transform-origin: left top !important;
+  transform: translateX(0) !important;
 }
 
 .saving-indicator {
