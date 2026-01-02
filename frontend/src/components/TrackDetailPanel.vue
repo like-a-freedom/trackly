@@ -196,11 +196,33 @@
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
           </span>
+          <button v-if="isOwner && !isEditingCategories" class="edit-categories-btn" @click="startEditCategories" title="Edit categories" aria-label="Edit categories">
+            Edit categories
+          </button>
         </div>
-        <div class="categories">
+
+        <div v-if="!isEditingCategories" class="categories">
           <span v-for="category in track.categories" :key="category" class="category-tag">
             {{ formatCategory(category) }}
           </span>
+        </div>
+
+        <div v-else class="categories-edit">
+          <div class="existing-tags">
+            <span v-for="(cat, idx) in editedCategories" :key="cat" class="category-tag editable">
+              {{ formatCategory(cat) }}
+              <button class="remove-tag" @click="removeEditedCategory(idx)" aria-label="Remove category">✕</button>
+            </span>
+          </div>
+          <div class="add-category">
+            <input v-model="newCategoryInput" @keydown.enter.prevent="addEditedCategory" placeholder="Add category and press Enter" maxlength="100" />
+            <button @click="addEditedCategory">Add</button>
+          </div>
+          <div class="edit-actions">
+            <button @click="saveCategories" :disabled="savingCategories" class="save-btn">{{ savingCategories ? 'Saving...' : 'Save' }}</button>
+            <button @click="cancelEditCategories" :disabled="savingCategories" class="cancel-btn">Cancel</button>
+          </div>
+          <div v-if="categoriesError" class="edit-error">{{ categoriesError }}</div>
         </div>
       </div>
 
@@ -497,7 +519,7 @@ import {
   convertUrlsToLinks,
   formatDateTime
 } from '../utils/format';
-import { validateSpeedData, formatSpeed, formatPace, calculatePaceFromSpeed } from '../composables/useTracks';
+import { validateSpeedData, formatSpeed, formatPace, calculatePaceFromSpeed, useTracks } from '../composables/useTracks';
 import { useUnits } from '../composables/useUnits';
 import { useMemoizedComputed } from '../composables/useMemoization';
 import { clearCacheByPattern } from '../composables/useMemoization';
@@ -524,7 +546,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close', 'description-updated', 'name-updated', 'deleted', 'chart-point-hover', 'chart-point-leave', 'chart-point-click']);
+const emit = defineEmits(['close', 'description-updated', 'name-updated', 'categories-updated', 'deleted', 'chart-point-hover', 'chart-point-leave', 'chart-point-click']);
 const route = useRoute();
 const isClosing = ref(false);
 const isCollapsed = ref(false);
@@ -622,6 +644,89 @@ const isEditingDescription = ref(false);
 const editedDescription = ref('');
 const savingDescription = ref(false);
 const descriptionError = ref('');
+
+// --- Categories editing state ---
+const isEditingCategories = ref(false);
+const editedCategories = ref(props.track && props.track.categories ? [...props.track.categories] : []);
+const newCategoryInput = ref('');
+const savingCategories = ref(false);
+const categoriesError = ref('');
+
+const MAX_CATEGORIES = 50;
+const MAX_CATEGORY_LENGTH = 100;
+
+const { updateTrackCategories } = useTracks();
+
+function startEditCategories() {
+  isEditingCategories.value = true;
+  editedCategories.value = props.track && props.track.categories ? [...props.track.categories] : [];
+  newCategoryInput.value = '';
+  categoriesError.value = '';
+}
+
+function cancelEditCategories() {
+  isEditingCategories.value = false;
+  editedCategories.value = props.track && props.track.categories ? [...props.track.categories] : [];
+  newCategoryInput.value = '';
+  categoriesError.value = '';
+}
+
+function addEditedCategory() {
+  const v = (newCategoryInput.value || '').trim();
+  if (!v) return;
+  if (v.length > MAX_CATEGORY_LENGTH) {
+    categoriesError.value = `Category must be at most ${MAX_CATEGORY_LENGTH} characters.`;
+    return;
+  }
+  if (editedCategories.value.includes(v)) {
+    categoriesError.value = 'Category already added.';
+    newCategoryInput.value = '';
+    return;
+  }
+  if (editedCategories.value.length >= MAX_CATEGORIES) {
+    categoriesError.value = `Maximum ${MAX_CATEGORIES} categories allowed.`;
+    return;
+  }
+  editedCategories.value.push(v);
+  newCategoryInput.value = '';
+  categoriesError.value = '';
+}
+
+function removeEditedCategory(idx) {
+  editedCategories.value.splice(idx, 1);
+}
+
+async function saveCategories() {
+  categoriesError.value = '';
+  if (!editedCategories.value || editedCategories.value.length === 0) {
+    categoriesError.value = 'At least one category is required.';
+    return;
+  }
+  // Validate lengths
+  for (const c of editedCategories.value) {
+    if (c.length > MAX_CATEGORY_LENGTH) {
+      categoriesError.value = `Category must be at most ${MAX_CATEGORY_LENGTH} characters.`;
+      return;
+    }
+  }
+
+  savingCategories.value = true;
+  try {
+    await updateTrackCategories(props.track.id, editedCategories.value);
+    isEditingCategories.value = false;
+    emit('categories-updated', editedCategories.value);
+    showToast('Categories updated', 'success');
+  } catch (err) {
+    console.error('Failed to update categories', err);
+    if (err && err.message && err.message.includes('403')) {
+      categoriesError.value = 'You are not allowed to edit categories for this track.';
+    } else {
+      categoriesError.value = err.message || 'Failed to update categories.';
+    }
+  } finally {
+    savingCategories.value = false;
+  }
+}
 
 // --- Export state ---
 const exportingTrack = ref(false);
