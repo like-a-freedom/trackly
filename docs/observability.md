@@ -99,6 +99,7 @@
     - **Service Level Indicators (SLIs)**: Backend Status, Availability SLI (non-5xx), Latency SLI (requests & Apdex), Error Budget/Availability.
     - **Golden Signals (RED / USE)**: Traffic (RPS), Errors (4xx/5xx), Duration (p50/p95/p99), Saturation resources (DB pool, in-flight requests, queue depth), and Background Tasks.
     - **Business Metrics**: Track uploads, deduplication, POIs created/deleted, enrichment attempts and outcomes.
+      - **Category edits**: `track_category_edits_total{action}` counts edit operations (action ∈ {set, add, remove}); `track_category_edits_by_category_total{action,category}` breaks edits down per category. Example: `sum(increase(track_category_edits_total{job="trackly_backend"}[24h]))` shows total category edits in 24h, and `sum(increase(track_category_edits_by_category_total{job="trackly_backend"}[7d])) by (category)` shows per-category edit activity.
     - **Debugging & Detailed Views**: Bulk operations, GPX export, DB slow queries, background task tests.
   - **Backend API Golden Signals** (detailed views): latency by route, error rates, top failing endpoints, pipeline durations.
   - **Backend Product Metrics**: tracks uploaded over time, dedup hits, categories distribution, POIs created, enrichment success/failure, export counts.

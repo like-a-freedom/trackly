@@ -1302,6 +1302,34 @@
         },
         {
             "datasource": {
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 1,
+                "w": 6,
+                "x": 18,
+                "y": 35
+            },
+            "id": 311,
+            "options": {
+                "wideLayout": true
+            },
+            "pluginVersion": "12.3.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_category_edits_total{job=\"trackly_backend\"}[24h]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Category Edits (24h)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
                 "type": "prometheus",
                 "uid": "victoriametrics"
             },
@@ -1473,6 +1501,31 @@
                 }
             ],
             "title": "Track Processing Operations",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 43
+            },
+            "id": 312,
+            "pluginVersion": "12.3.0",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_category_edits_by_category_total{job=\"trackly_backend\"}[1h])) by (category)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Category Edits by Category (1h)",
             "type": "timeseries"
         },
         {

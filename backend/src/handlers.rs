@@ -22,7 +22,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -585,12 +585,18 @@ pub async fn update_track_categories(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    // Build sanitized new categories list
     let categories: Vec<String> = payload
         .categories
         .iter()
         .map(|c| c.trim().to_string())
         .filter(|c| !c.is_empty())
         .collect();
+
+    // Require at least one category (same rule as upload)
+    if categories.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     if categories.len() > MAX_CATEGORIES {
         return Err(StatusCode::BAD_REQUEST);
@@ -599,9 +605,30 @@ pub async fn update_track_categories(
         validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
     }
 
+    // Compute diffs for metric reporting
+    let prev_set: HashSet<String> = track.categories.into_iter().collect();
+    let new_set: HashSet<String> = categories.iter().cloned().collect();
+    let added: Vec<String> = new_set.difference(&prev_set).cloned().collect();
+    let removed: Vec<String> = prev_set.difference(&new_set).cloned().collect();
+
     db::update_track_categories(&pool, id, &categories)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Metrics: record each assigned category (as at upload)
+    for cat in &categories {
+        metrics::record_track_category(cat);
+    }
+
+    // Record edits: overall 'set' operation and per-category add/remove
+    metrics::record_track_category_edit("set");
+    for cat in &added {
+        metrics::record_track_category_edit_by_category("add", cat);
+    }
+    for cat in &removed {
+        metrics::record_track_category_edit_by_category("remove", cat);
+    }
+
     metrics::record_track_edit("categories");
     metrics::record_session_activity(Some(payload.session_id), "edit");
     Ok(StatusCode::NO_CONTENT)
