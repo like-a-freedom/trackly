@@ -1,0 +1,42 @@
+{
+    "id": "test-track-single",
+    "name": "Single Segment Test Track",
+    "geom_geojson": {
+        "type": "LineString",
+        "coordinates": [
+            [
+                -122.4200,
+                37.7740
+            ],
+            [
+                -122.4190,
+                37.7745
+            ]
+        ]
+    },
+    "properties": {
+        "id": "test-track-single",
+        "color": "#abc123"
+    },
+    "latlngs": [
+        [
+            37.7740,
+            -122.4200
+        ],
+        [
+            37.7745,
+            -122.4190
+        ]
+    ],
+    "segments": [
+        {
+            "id": 0,
+            "color": "#abc123"
+        }
+    ],
+    "length_km": 0.1,
+    "elevation_profile": [
+        100,
+        105
+    ]
+}

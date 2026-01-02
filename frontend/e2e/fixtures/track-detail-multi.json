@@ -1,0 +1,60 @@
+{
+    "id": "test-track-multi",
+    "name": "E2E Multi Segment Track",
+    "geom_geojson": {
+        "type": "MultiLineString",
+        "coordinates": [
+            [
+                [
+                    -122.4200,
+                    37.7740
+                ],
+                [
+                    -122.4195,
+                    37.7745
+                ]
+            ],
+            [
+                [
+                    -122.4185,
+                    37.7748
+                ],
+                [
+                    -122.4180,
+                    37.7750
+                ],
+                [
+                    -122.4170,
+                    37.7755
+                ]
+            ]
+        ]
+    },
+    "segments": [
+        {
+            "id": 0,
+            "color": "#00ff00"
+        },
+        {
+            "id": 1,
+            "color": "#ff0000"
+        }
+    ],
+    "length_km": 0.8,
+    "elevation_profile": [
+        100,
+        105,
+        110,
+        115
+    ],
+    "segment_gaps": [
+        {
+            "id": "gap-1",
+            "latlng": [
+                37.7747,
+                -122.4190
+            ],
+            "label": "gap"
+        }
+    ]
+}

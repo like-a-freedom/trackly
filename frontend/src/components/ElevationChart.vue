@@ -1,5 +1,5 @@
 <template>
-  <div class="elevation-chart-container">
+  <div class="elevation-chart-container" tabindex="0" ref="chartContainer" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @keydown="onKeyDown">
     <Line v-if="chartData.datasets && chartData.datasets.length > 0" 
           :key="`chart-${props.chartMode}`"
           :data="chartData" 
@@ -122,8 +122,243 @@ const props = defineProps({
   }
 });
 
+// Define emits for chart interaction
+const emit = defineEmits(['chart-point-hover', 'chart-point-leave', 'chart-point-click']);
+
 // Router for detecting route changes
 const router = useRouter();
+
+// State for hover/click interactions
+const isChartPointFixed = ref(false);
+const lastEmittedPoint = ref(null);
+let hoverRafId = null;
+
+// Determine if we should use reduced FPS for performance
+const shouldReduceFPS = computed(() => {
+  const hardwareConcurrency = navigator.hardwareConcurrency || 4;
+  const trackLength = props.coordinateData?.length || 0;
+  return hardwareConcurrency < 4 || trackLength > 5000 || !window.requestAnimationFrame;
+});
+
+// Utility function to emit chart-point-hover with RAF throttling
+function emitChartPointHover(payload) {
+  // Skip if point is fixed
+  if (isChartPointFixed.value) return;
+  
+  // Skip if same point (avoid duplicate emissions)
+  const payloadKey = `${payload.index}_${payload.distanceKm}`;
+  if (lastEmittedPoint.value === payloadKey) return;
+  lastEmittedPoint.value = payloadKey;
+  
+  // Use RAF for throttling in production, immediate in test mode
+  if (import.meta.env.MODE === 'test') {
+    emit('chart-point-hover', payload);
+    return;
+  }
+  
+  // Cancel previous RAF if exists
+  if (hoverRafId) {
+    cancelAnimationFrame(hoverRafId);
+  }
+  
+  // Use RAF or fallback throttle based on performance criteria
+  if (window.requestAnimationFrame && !shouldReduceFPS.value) {
+    hoverRafId = requestAnimationFrame(() => {
+      emit('chart-point-hover', payload);
+      hoverRafId = null;
+    });
+  } else {
+    // Reduced FPS mode - throttle to 33ms (~30 FPS)
+    setTimeout(() => {
+      emit('chart-point-hover', payload);
+      hoverRafId = null;
+    }, 33);
+  }
+}
+
+// Helpers for touch/keyboard support
+const chartContainer = ref(null);
+const lastTouchInfo = ref({ time: 0, x: 0, y: 0, moved: false });
+const lastTouchedIndex = ref(null);
+const activeKeyboardIndex = ref(null);
+
+function parseDistanceLabel(label) {
+  const distanceMatch = String(label).match(/([\d.]+)\s*(km|mi)/);
+  return distanceMatch ? parseFloat(distanceMatch[1]) : 0;
+}
+
+function buildPayloadForIndex(index, isFixed = false) {
+  const labels = chartData.value.labels || [];
+  const datasets = chartData.value.datasets || [];
+  const pointIndex = Math.max(0, Math.min(index, labels.length - 1));
+  const xLabel = labels[pointIndex] || '0 km';
+  const distanceKm = parseDistanceLabel(xLabel);
+
+  // Elevation from elevation dataset
+  let elevation = null;
+  let slope = null;
+  datasets.forEach(ds => {
+    if (ds.yAxisID === 'y-elevation' && ds.data && ds.data[pointIndex] !== undefined) {
+      const raw = ds.data[pointIndex];
+      elevation = (raw && raw.y !== undefined) ? raw.y : raw;
+      if (raw && raw.slope !== undefined) slope = raw.slope;
+    }
+  });
+
+  // Map chart index to underlying coordinate/time arrays proportionally when lengths differ
+  const totalDistanceKm = props.totalDistance || 0;
+  const mapToDataIndex = (length) => {
+    if (!length || length <= 0) return null;
+    if (labels.length <= 1) return 0;
+
+    const ratio = pointIndex / (labels.length - 1);
+    const distanceRatio = totalDistanceKm > 0 ? Math.min(1, Math.max(0, distanceKm / totalDistanceKm)) : null;
+
+    // Snap aggressively to the final coordinate when hovering near the right edge
+    if (ratio >= 0.97 || (distanceRatio !== null && distanceRatio >= 0.97)) {
+      return length - 1;
+    }
+
+    const baseRatio = distanceRatio !== null ? Math.max(ratio, distanceRatio) : ratio;
+    return Math.min(length - 1, Math.max(0, Math.round(baseRatio * (length - 1))));
+  };
+
+  const coordinateIndex = mapToDataIndex(props.coordinateData?.length || 0);
+  const timeIndex = mapToDataIndex(props.timeData?.length || 0);
+
+  let latlng = null;
+  let time = null;
+  if (coordinateIndex !== null && props.coordinateData && props.coordinateData[coordinateIndex]) {
+    latlng = props.coordinateData[coordinateIndex];
+  }
+  if (timeIndex !== null && props.timeData && props.timeData[timeIndex]) {
+    time = props.timeData[timeIndex];
+  }
+
+  const payload = {
+    index: pointIndex,
+    coordinateIndex,
+    distanceKm,
+    elevation,
+    latlng,
+    isFixed: isFixed
+  };
+  if (slope !== null) payload.slope = slope;
+  if (time !== null) payload.time = time;
+  return payload;
+}
+
+function getIndexFromClientX(clientX) {
+  if (!chartContainer.value) return 0;
+  const rect = chartContainer.value.getBoundingClientRect ? chartContainer.value.getBoundingClientRect() : { left: 0, width: 0 };
+  const labels = chartData.value.labels || [];
+  const width = rect.width || 1;
+  const x = clientX - (rect.left || 0);
+  const ratio = Math.max(0, Math.min(1, x / width));
+  const idx = Math.round(ratio * ((labels.length || 1) - 1));
+  return idx;
+}
+
+function processTouchPoint(clientX, clientY) {
+  const idx = getIndexFromClientX(clientX);
+  lastTouchedIndex.value = idx;
+  const payload = buildPayloadForIndex(idx, false);
+  emitChartPointHover(payload);
+}
+
+function onTouchStart(event) {
+  try {
+    const t = (event.touches && event.touches[0]) || event;
+    lastTouchInfo.value = { time: Date.now(), x: t.clientX || 0, y: t.clientY || 0, moved: false };
+    processTouchPoint(t.clientX || 0, t.clientY || 0);
+  } catch (e) {
+    console.warn('[ElevationChart] touchstart error', e);
+  }
+}
+
+function onTouchMove(event) {
+  try {
+    const t = (event.touches && event.touches[0]) || event;
+    const dx = Math.abs(t.clientX - lastTouchInfo.value.x);
+    const dy = Math.abs(t.clientY - lastTouchInfo.value.y);
+    if (dx > 5 || dy > 5) lastTouchInfo.value.moved = true;
+    processTouchPoint(t.clientX || 0, t.clientY || 0);
+  } catch (e) {
+    console.warn('[ElevationChart] touchmove error', e);
+  }
+}
+
+function onTouchEnd(event) {
+  try {
+    const duration = Date.now() - lastTouchInfo.value.time;
+    // Treat as tap if short and not moved
+    if (!lastTouchInfo.value.moved && duration < 300 && lastTouchedIndex.value !== null) {
+      // Toggle fixed state
+      isChartPointFixed.value = !isChartPointFixed.value;
+      const payload = buildPayloadForIndex(lastTouchedIndex.value, isChartPointFixed.value);
+      emit('chart-point-click', payload);
+    } else {
+      emitChartPointLeave(false);
+    }
+  } catch (e) {
+    console.warn('[ElevationChart] touchend error', e);
+  }
+}
+
+function onKeyDown(event) {
+  try {
+    const labels = chartData.value.labels || [];
+    if (!labels || labels.length === 0) return;
+
+    if (event.key === 'ArrowRight') {
+      if (activeKeyboardIndex.value === null) {
+        activeKeyboardIndex.value = 0;
+      } else {
+        activeKeyboardIndex.value = Math.min((labels.length - 1), (activeKeyboardIndex.value + 1));
+      }
+      const payload = buildPayloadForIndex(activeKeyboardIndex.value, false);
+      emitChartPointHover(payload);
+      event.preventDefault();
+    } else if (event.key === 'ArrowLeft') {
+      if (activeKeyboardIndex.value === null) {
+        activeKeyboardIndex.value = labels.length - 1;
+      } else {
+        activeKeyboardIndex.value = Math.max(0, (activeKeyboardIndex.value - 1));
+      }
+      const payload = buildPayloadForIndex(activeKeyboardIndex.value, false);
+      emitChartPointHover(payload);
+      event.preventDefault();
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      // Toggle fixed on Enter/Space
+      if (activeKeyboardIndex.value === null) activeKeyboardIndex.value = 0;
+      isChartPointFixed.value = !isChartPointFixed.value;
+      const payload = buildPayloadForIndex(activeKeyboardIndex.value, isChartPointFixed.value);
+      emit('chart-point-click', payload);
+      event.preventDefault();
+    }
+  } catch (e) {
+    console.warn('[ElevationChart] keydown handler error', e);
+  }
+}
+
+// Utility function to emit chart-point-leave
+function emitChartPointLeave(clearFixed = false) {
+  // Clear last emitted point tracking
+  lastEmittedPoint.value = null;
+  
+  // Cancel any pending RAF
+  if (hoverRafId) {
+    cancelAnimationFrame(hoverRafId);
+    hoverRafId = null;
+  }
+  
+  // If clearing fixed state, reset it
+  if (clearFixed) {
+    isChartPointFixed.value = false;
+  }
+  
+  emit('chart-point-leave', { clearFixed });
+}
 
 // Utility function to clean up tooltip
 function cleanupTooltip() {
@@ -694,6 +929,9 @@ watch([
           tooltipEl.style.visibility = 'hidden';
         }
       }, 200);
+      
+      // Emit chart-point-leave when tooltip is hidden
+      emitChartPointLeave(false);
       return;
     }
     
@@ -705,16 +943,23 @@ watch([
       
       let innerHtml = '<div class="tooltip-header">';
       
+      // Prepare payload for chart-point-hover event
+      let hoverPayload = null;
+      
       // Distance information
       if (dataPoints.length > 0) {
         const xValue = dataPoints[0].label;
         innerHtml += `<div class="tooltip-distance">📍 ${xValue}</div>`;
         
-        // Add time information if available
         const pointIndex = dataPoints[0].dataIndex;
-        if (props.timeData && props.timeData[pointIndex]) {
-          const timeValue = props.timeData[pointIndex];
-          const timeFormatted = formatTime(timeValue);
+        hoverPayload = buildPayloadForIndex(pointIndex, isChartPointFixed.value);
+        
+        // Emit hover event with RAF throttling
+        emitChartPointHover(hoverPayload);
+        
+        // Add time information if available (prefer mapped time from payload)
+        if (hoverPayload && hoverPayload.time !== undefined && hoverPayload.time !== null) {
+          const timeFormatted = formatTime(hoverPayload.time);
           innerHtml += `<div class="tooltip-time">⏱️ ${timeFormatted}</div>`;
         }
       }
@@ -806,6 +1051,20 @@ watch([
       mode: 'nearest',
       axis: 'x',
       intersect: false,
+    },
+    onClick: (event, elements, chart) => {
+      // Handle click on chart to toggle fixed state
+      if (elements.length > 0) {
+        const element = elements[0];
+        const pointIndex = element.index;
+        const willBeFixed = !isChartPointFixed.value;
+        isChartPointFixed.value = willBeFixed;
+        
+        const clickPayload = buildPayloadForIndex(pointIndex, willBeFixed);
+        if (clickPayload) {
+          emit('chart-point-click', clickPayload);
+        }
+      }
     },
     onHover: (event, elements) => {
       // Change cursor to crosshair when hovering over chart
@@ -967,16 +1226,20 @@ function formatTime(timeValue) {
   return 'Unknown';
 }
 
-// ESC key handler to hide tooltip
+// ESC key handler to hide tooltip and clear fixed point
 function handleEscapeKey(event) {
   if (event.key === 'Escape' || event.keyCode === 27) {
     cleanupTooltip();
+    // Emit leave event with clearFixed to reset fixed state
+    emitChartPointLeave(true);
   }
 }
 
 // Route change handler to clean tooltip
 function handleRouteChange() {
   cleanupTooltip();
+  // Also clear any chart interaction state
+  emitChartPointLeave(true);
 }
 
 // Setup event listeners
@@ -994,12 +1257,35 @@ onBeforeUnmount(() => {
   
   // Clean up tooltip before unmounting
   cleanupTooltip();
+  
+  // Cancel any pending RAF
+  if (hoverRafId) {
+    cancelAnimationFrame(hoverRafId);
+    hoverRafId = null;
+  }
 });
 
 // Cleanup custom tooltip on component unmount
 onUnmounted(() => {
   cleanupTooltip();
+  
+  // Cancel any pending RAF
+  if (hoverRafId) {
+    cancelAnimationFrame(hoverRafId);
+    hoverRafId = null;
+  }
 });
+
+// Expose debug helper for deterministic unit testing (non-production only)
+if (import.meta.env.MODE !== 'production') {
+  try {
+    if (typeof defineExpose === 'function') {
+      defineExpose({ __debugBuildPayloadForIndex: buildPayloadForIndex });
+    }
+  } catch (e) {
+    // no-op if defineExpose is unavailable in the test environment
+  }
+}
 </script>
 
 <style scoped>

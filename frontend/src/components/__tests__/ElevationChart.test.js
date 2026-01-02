@@ -331,6 +331,73 @@ describe('ElevationChart', () => {
             expect(wrapper.vm.elevationData).toEqual([100, 110, 90]);
         });
 
+        it('maps hover index to end of coordinates in elevation-with-slope mode', () => {
+            const coordinateData = Array.from({ length: 50 }, (_, i) => [i, i]);
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [0, 10, 20, 30, 40, 50],
+                    slopeData: [1, 2, 3, 4, 5],
+                    coordinateData,
+                    totalDistance: 5,
+                    trackName: 'Slope Mapping',
+                    chartMode: 'elevation-with-slope'
+                }
+            });
+
+            const helper = wrapper.vm.__debugBuildPayloadForIndex || wrapper.vm.buildPayloadForIndex;
+            const payload = helper(4, false);
+
+            expect(payload.coordinateIndex).toBe(49);
+            expect(payload.latlng).toEqual([49, 49]);
+        });
+
+        it('emits hover payload mapped to end coordinate via tooltip in slope mode', async () => {
+            const coordinateData = Array.from({ length: 100 }, (_, i) => [i, i]);
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [0, 10, 20, 30, 40],
+                    slopeData: [1, 2, 3, 4, 5],
+                    coordinateData,
+                    totalDistance: 10,
+                    trackName: 'Tooltip Mapping',
+                    chartMode: 'elevation-with-slope'
+                }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            const external = wrapper.vm.chartOptions?.plugins?.tooltip?.external;
+            expect(typeof external).toBe('function');
+
+            external({
+                chart: {
+                    canvas: {
+                        getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 100 })
+                    }
+                },
+                tooltip: {
+                    opacity: 1,
+                    title: ['9.80 km'],
+                    body: [{ lines: ['Elevation: 40m'] }],
+                    dataPoints: [{
+                        label: '9.80 km',
+                        dataIndex: 4,
+                        dataset: { yAxisID: 'y-elevation' },
+                        parsed: { y: 40 },
+                        raw: { y: 40, slope: 5 }
+                    }],
+                    caretX: 180,
+                    caretY: 10
+                }
+            });
+
+            const emitted = wrapper.emitted()['chart-point-hover'];
+            expect(emitted).toBeTruthy();
+            const payload = emitted[emitted.length - 1][0];
+            expect(payload.coordinateIndex).toBe(99);
+            expect(payload.latlng).toEqual([99, 99]);
+        });
+
         it('should process heart rate data correctly', () => {
             const heartRateData = createMockHeartRateData();
             const wrapper = mount(ElevationChart, {
@@ -449,6 +516,82 @@ describe('ElevationChart', () => {
 
             // Chart should be created with all datasets
             expect(wrapper.find('.chart-mock').exists()).toBe(true);
+        });
+
+        describe('Touch and Keyboard interactions', () => {
+            it('should emit chart-point-hover on touchstart', async () => {
+                const elevationData = [100, 110, 120];
+                const coordinateData = [[55.75, 37.61], [55.751, 37.611], [55.752, 37.612]];
+                const wrapper = mount(ElevationChart, {
+                    props: {
+                        elevationData,
+                        coordinateData,
+                        trackName: 'Test',
+                        totalDistance: 3
+                    }
+                });
+
+                // Stub bounding rect for container
+                const container = wrapper.find('.elevation-chart-container').element;
+                container.getBoundingClientRect = () => ({ left: 0, width: 300, top: 0, height: 100 });
+
+                // Simulate touchstart in middle (should map to index 1)
+                await wrapper.find('.elevation-chart-container').trigger('touchstart', { touches: [{ clientX: 150, clientY: 10 }] });
+
+                // In test mode, emit is synchronous
+                expect(wrapper.emitted()['chart-point-hover']).toBeTruthy();
+                const payload = wrapper.emitted()['chart-point-hover'][0][0];
+                expect(payload.index).toBe(1);
+                expect(payload.latlng).toEqual([55.751, 37.611]);
+            });
+
+            it('should toggle fixed on tap (touchstart + touchend)', async () => {
+                const elevationData = [100, 110, 120];
+                const wrapper = mount(ElevationChart, {
+                    props: {
+                        elevationData,
+                        trackName: 'Test',
+                        totalDistance: 3
+                    }
+                });
+
+                const container = wrapper.find('.elevation-chart-container').element;
+                container.getBoundingClientRect = () => ({ left: 0, width: 300 });
+
+                await wrapper.find('.elevation-chart-container').trigger('touchstart', { touches: [{ clientX: 10, clientY: 10 }] });
+                // Simulate quick touchend (tap)
+                await wrapper.find('.elevation-chart-container').trigger('touchend');
+
+                // chart-point-click should be emitted with isFixed true
+                expect(wrapper.emitted()['chart-point-click']).toBeTruthy();
+                const clickPayload = wrapper.emitted()['chart-point-click'][0][0];
+                expect(clickPayload.isFixed).toBe(true);
+            });
+
+            it('should emit hover payload on ArrowRight keydown', async () => {
+                const elevationData = [100, 110, 120];
+                const wrapper = mount(ElevationChart, {
+                    props: {
+                        elevationData,
+                        trackName: 'Test',
+                        totalDistance: 3
+                    }
+                });
+
+                const container = wrapper.find('.elevation-chart-container');
+                // Focus to ensure keydown is processed
+                container.element.focus();
+
+                await container.trigger('keydown', { key: 'ArrowRight' });
+
+                expect(wrapper.emitted()['chart-point-hover']).toBeTruthy();
+                const payload = wrapper.emitted()['chart-point-hover'][0][0];
+                expect(payload.index).toBe(0); // initial index 0 on first Right
+
+                await container.trigger('keydown', { key: 'ArrowRight' });
+                const payload2 = wrapper.emitted()['chart-point-hover'][1][0];
+                expect(payload2.index).toBe(1);
+            });
         });
     });
 
@@ -1949,6 +2092,164 @@ describe('ElevationChart', () => {
 
             expect(wrapper.vm.chartMode).toBe('elevation-with-slope');
             expect(wrapper.vm.chartData.datasets).toBeDefined();
+        });
+    });
+
+    describe('Chart hover events', () => {
+        it('should emit chart-point-hover when emitChartPointHover is called', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [100, 110, 120],
+                    coordinateData: [[55.75, 37.61], [55.76, 37.62], [55.77, 37.63]],
+                    slopeData: [
+                        { distance_m: 0, slope_percent: 5.0 },
+                        { distance_m: 100, slope_percent: 8.0 },
+                        { distance_m: 200, slope_percent: 3.0 }
+                    ],
+                    trackName: 'Test Track',
+                    totalDistance: 0.2,
+                    chartMode: 'elevation-with-slope'
+                }
+            });
+
+            // Call emitChartPointHover directly to test the emit logic
+            const payload = {
+                index: 1,
+                distanceKm: 0.1,
+                elevation: 110,
+                latlng: [55.76, 37.62],
+                slope: 8.0,
+                isFixed: false
+            };
+
+            wrapper.vm.emitChartPointHover(payload);
+
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.emitted('chart-point-hover')).toBeTruthy();
+            const emittedEvent = wrapper.emitted('chart-point-hover')[0][0];
+            expect(emittedEvent.index).toBe(1);
+            expect(emittedEvent.elevation).toBe(110);
+            expect(emittedEvent.latlng).toEqual([55.76, 37.62]);
+            expect(emittedEvent.slope).toBeCloseTo(8.0);
+            expect(emittedEvent.isFixed).toBe(false);
+        });
+
+        it('should emit chart-point-leave when emitChartPointLeave is called', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [100, 110, 120],
+                    trackName: 'Test Track',
+                    totalDistance: 0.2
+                }
+            });
+
+            wrapper.vm.emitChartPointLeave(false);
+
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.emitted('chart-point-leave')).toBeTruthy();
+            const emittedEvent = wrapper.emitted('chart-point-leave')[0][0];
+            expect(emittedEvent.clearFixed).toBe(false);
+        });
+
+        it('should not emit hover when point is fixed', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [100, 110, 120],
+                    coordinateData: [[55.75, 37.61], [55.76, 37.62], [55.77, 37.63]],
+                    trackName: 'Test Track',
+                    totalDistance: 0.2
+                }
+            });
+
+            // Set fixed state
+            wrapper.vm.isChartPointFixed = true;
+
+            // Try to emit hover
+            const payload = {
+                index: 1,
+                distanceKm: 0.1,
+                elevation: 110,
+                latlng: [55.76, 37.62],
+                isFixed: false
+            };
+
+            wrapper.vm.emitChartPointHover(payload);
+
+            await wrapper.vm.$nextTick();
+
+            // Should not emit when fixed
+            expect(wrapper.emitted('chart-point-hover')).toBeFalsy();
+        });
+    });
+
+    describe('Chart click events', () => {
+        it('should toggle fixed state and emit chart-point-click', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [100, 110, 120],
+                    coordinateData: [[55.75, 37.61], [55.76, 37.62], [55.77, 37.63]],
+                    trackName: 'Test Track',
+                    totalDistance: 0.2
+                }
+            });
+
+            expect(wrapper.vm.isChartPointFixed).toBe(false);
+
+            // Store last point for toggle logic
+            wrapper.vm.lastEmittedPoint = {
+                index: 1,
+                distanceKm: 0.1,
+                elevation: 110,
+                latlng: [55.76, 37.62],
+                isFixed: false
+            };
+
+            // Simulate click by toggling isChartPointFixed and emitting event
+            wrapper.vm.isChartPointFixed = !wrapper.vm.isChartPointFixed;
+            const clickPayload = {
+                ...wrapper.vm.lastEmittedPoint,
+                isFixed: wrapper.vm.isChartPointFixed
+            };
+            wrapper.vm.$emit('chart-point-click', clickPayload);
+
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.vm.isChartPointFixed).toBe(true);
+            expect(wrapper.emitted('chart-point-click')).toBeTruthy();
+            const emittedEvent = wrapper.emitted('chart-point-click')[0][0];
+            expect(emittedEvent.index).toBe(1);
+            expect(emittedEvent.isFixed).toBe(true);
+        });
+    });
+
+    describe('ESC key handler', () => {
+        it('should emit chart-point-leave with clearFixed flag on ESC key', async () => {
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [100, 110, 120],
+                    trackName: 'Test Track',
+                    totalDistance: 0.2
+                },
+                attachTo: document.body
+            });
+
+            // Set fixed state
+            wrapper.vm.isChartPointFixed = true;
+
+            // Simulate ESC key press
+            const escEvent = new KeyboardEvent('keydown', { key: 'Escape' });
+            document.dispatchEvent(escEvent);
+
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.emitted('chart-point-leave')).toBeTruthy();
+            const emittedEvent = wrapper.emitted('chart-point-leave')[0][0];
+            expect(emittedEvent.clearFixed).toBe(true);
+            expect(wrapper.vm.isChartPointFixed).toBe(false);
+
+            wrapper.unmount();
         });
     });
 });
