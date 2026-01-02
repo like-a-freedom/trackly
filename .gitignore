@@ -130,3 +130,4 @@ tests/rustdoc-gui/src/**.lock
 flake.lock
 /default.nix
 frontend/test-results/
+frontend/test-results/.last-run.json

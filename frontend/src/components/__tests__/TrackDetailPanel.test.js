@@ -527,7 +527,7 @@ describe('TrackDetailPanel', () => {
 
       // Clean up
       resolveSave();
-      await savePromise.catch(() => {});
+      await savePromise.catch(() => { });
     });
 
     it('has predefined categories list', () => {
@@ -539,7 +539,7 @@ describe('TrackDetailPanel', () => {
       expect(wrapper.vm.categoriesList).toBeDefined();
       expect(Array.isArray(wrapper.vm.categoriesList)).toBe(true);
       expect(wrapper.vm.categoriesList.length).toBeGreaterThan(0);
-      
+
       // Check for common categories
       const categoryValues = wrapper.vm.categoriesList.map(c => c.value);
       expect(categoryValues).toContain('hiking');
