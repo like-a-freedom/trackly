@@ -331,6 +331,73 @@ describe('ElevationChart', () => {
             expect(wrapper.vm.elevationData).toEqual([100, 110, 90]);
         });
 
+        it('maps hover index to end of coordinates in elevation-with-slope mode', () => {
+            const coordinateData = Array.from({ length: 50 }, (_, i) => [i, i]);
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [0, 10, 20, 30, 40, 50],
+                    slopeData: [1, 2, 3, 4, 5],
+                    coordinateData,
+                    totalDistance: 5,
+                    trackName: 'Slope Mapping',
+                    chartMode: 'elevation-with-slope'
+                }
+            });
+
+            const helper = wrapper.vm.__debugBuildPayloadForIndex || wrapper.vm.buildPayloadForIndex;
+            const payload = helper(4, false);
+
+            expect(payload.coordinateIndex).toBe(49);
+            expect(payload.latlng).toEqual([49, 49]);
+        });
+
+        it('emits hover payload mapped to end coordinate via tooltip in slope mode', async () => {
+            const coordinateData = Array.from({ length: 100 }, (_, i) => [i, i]);
+            const wrapper = mount(ElevationChart, {
+                props: {
+                    elevationData: [0, 10, 20, 30, 40],
+                    slopeData: [1, 2, 3, 4, 5],
+                    coordinateData,
+                    totalDistance: 10,
+                    trackName: 'Tooltip Mapping',
+                    chartMode: 'elevation-with-slope'
+                }
+            });
+
+            await wrapper.vm.$nextTick();
+
+            const external = wrapper.vm.chartOptions?.plugins?.tooltip?.external;
+            expect(typeof external).toBe('function');
+
+            external({
+                chart: {
+                    canvas: {
+                        getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 100 })
+                    }
+                },
+                tooltip: {
+                    opacity: 1,
+                    title: ['9.80 km'],
+                    body: [{ lines: ['Elevation: 40m'] }],
+                    dataPoints: [{
+                        label: '9.80 km',
+                        dataIndex: 4,
+                        dataset: { yAxisID: 'y-elevation' },
+                        parsed: { y: 40 },
+                        raw: { y: 40, slope: 5 }
+                    }],
+                    caretX: 180,
+                    caretY: 10
+                }
+            });
+
+            const emitted = wrapper.emitted()['chart-point-hover'];
+            expect(emitted).toBeTruthy();
+            const payload = emitted[emitted.length - 1][0];
+            expect(payload.coordinateIndex).toBe(99);
+            expect(payload.latlng).toEqual([99, 99]);
+        });
+
         it('should process heart rate data correctly', () => {
             const heartRateData = createMockHeartRateData();
             const wrapper = mount(ElevationChart, {
