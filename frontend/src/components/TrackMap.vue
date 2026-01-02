@@ -2070,13 +2070,7 @@ onUnmounted(() => {
   }
 });
 
-if (typeof defineExpose === 'function') {
-  try {
-    defineExpose({ leafletMap });
-  } catch (e) {
-    // no-op if defineExpose is unavailable at runtime
-  }
-}
+defineExpose({ leafletMap });
 
 // Watch for incoming marker updates and update segment highlight
 watch(() => props.markerLatLng, (newVal) => {
