@@ -59,10 +59,16 @@ function onOverlayClick() {
   }
 }
 
-defineExpose({
-  show,
-  hide
-});
+if (typeof defineExpose === 'function') {
+  try {
+    defineExpose({
+      show,
+      hide
+    });
+  } catch (e) {
+    // no-op if defineExpose macro is not available at runtime
+  }
+}
 </script>
 
 <style scoped>
