@@ -22,7 +22,6 @@ anyhow = "1.0.100"
 once_cell = "1.21.3"
 mimalloc = "0.1.48"
 prometheus = "0.14.0"
-
 # Database
 sqlx = { version = "0.8.6", features = [
     "runtime-tokio",
@@ -34,20 +33,17 @@ sqlx = { version = "0.8.6", features = [
 ] }
 uuid = { version = "1.18.1", features = ["v4", "serde"] }
 chrono = { version = "0.4.42", features = ["serde"] }
-
 # HTTP client
 reqwest = { version = "0.12.25", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
 ammonia = "4.1.2"
-
 # File parsing
 quick-xml = "0.38.4"
 kml = "0.12.0"
 geo = "0.32.0"
 geo-types = "0.7.18"
-
 # Multipart
 axum-extra = { version = "0.12.2", features = ["multipart", "typed-header"] }
 sha2 = "0.10.9"
