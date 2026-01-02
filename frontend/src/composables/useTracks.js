@@ -410,6 +410,32 @@ export function useTracks() {
         }
     }
 
+    async function updateTrackCategories(id, categories) {
+        // Send PATCH request to update categories for track with session_id
+        error.value = null;
+        try {
+            const body = {
+                session_id: getSessionId(),
+                categories
+            };
+            const response = await fetch(`/tracks/${id}/categories`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || 'Failed to update categories');
+            }
+            // Update cached track data if present
+            updateTrackInPolylines(id, { categories });
+            return true;
+        } catch (e) {
+            error.value = e.message || 'Unknown error updating categories';
+            throw e;
+        }
+    }
+
     return {
         polylines,
         tracksCollection,
@@ -420,6 +446,7 @@ export function useTracks() {
         fetchTrackDetail,
         processTrackData,
         updateTrackInPolylines,
+        updateTrackCategories,
         // Export utility functions
         validateSpeedData,
         formatSpeed,

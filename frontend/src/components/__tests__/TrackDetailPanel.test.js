@@ -34,6 +34,8 @@ vi.mock('../ElevationChart.vue', () => ({
 }));
 
 // Mock the useTracks composable
+const mockUpdateTrackCategories = vi.fn(async (id, categories) => true);
+const mockUpdateTrackInPolylines = vi.fn();
 vi.mock('../../composables/useTracks', () => ({
   formatSpeed: vi.fn((speed, unit = 'kmh') => {
     if (typeof speed !== 'number' || speed < 0) return 'N/A';
@@ -75,8 +77,13 @@ vi.mock('../../composables/useTracks', () => ({
     const minutes = Math.floor(pace);
     const seconds = Math.round((pace - minutes) * 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')} ${unit}`;
+  }),
+  useTracks: () => ({
+    updateTrackCategories: mockUpdateTrackCategories,
+    updateTrackInPolylines: mockUpdateTrackInPolylines
   })
 }));
+
 
 // Mock DOM elements for GPX export functionality
 beforeEach(() => {
@@ -419,6 +426,69 @@ describe('TrackDetailPanel', () => {
       });
 
       expect(wrapper.text()).not.toContain('Categories');
+    });
+
+    it('shows edit categories button when owner', () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      expect(wrapper.find('.edit-categories-btn').exists()).toBe(true);
+    });
+  });
+
+  describe('Categories Editing', () => {
+    it('enters edit mode and allows add/remove and save', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      // Enter edit mode
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isEditingCategories).toBe(true);
+
+      // Add a new category
+      const input = wrapper.find('.add-category input');
+      await input.setValue('Trail');
+      await wrapper.find('.add-category button').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.text()).toContain('Trail');
+
+      // Remove an existing category
+      const removeButtons = wrapper.findAll('.remove-tag');
+      // Remove first category
+      await removeButtons[0].trigger('click');
+      await wrapper.vm.$nextTick();
+
+      // Save categories
+      await wrapper.find('.save-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      // Ensure composable was called with updated categories
+      expect(mockUpdateTrackCategories).toHaveBeenCalled();
+      expect(wrapper.emitted('categories-updated')).toBeTruthy();
+    });
+
+    it('validates empty categories on save', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: { ...mockTrackComplete, categories: ['Only'] }, isOwner: true }
+      });
+
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      // Remove the existing category
+      await wrapper.find('.remove-tag').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      // Try to save
+      await wrapper.find('.save-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('.edit-error').text()).toBe('At least one category is required.');
     });
   });
 
