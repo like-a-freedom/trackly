@@ -356,7 +356,10 @@ export function useTracks() {
 
             console.log(`Fetching track detail: ${endpoint}`);
 
-            const response = await fetch(endpoint);
+            // Include session id header so backend can classify ownership
+            const sessionId = getSessionId();
+            const headers = sessionId ? { 'x-session-id': sessionId } : {};
+            const response = await fetch(endpoint, { headers });
             if (!response.ok) {
                 throw new Error(`Failed to fetch track detail: ${response.status} ${response.statusText}`);
             }
