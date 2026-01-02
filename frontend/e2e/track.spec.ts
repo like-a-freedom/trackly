@@ -316,6 +316,61 @@ test('gap-line, slope tooltip & multi-segment color checks (production interacti
   await page.waitForTimeout(150);
 });
 
+test('slope mode hover aligns marker with track end', async ({ page }: { page: Page }) => {
+  const trackId = testTracks['test-track-e2e'];
+  await page.goto(`/track/${trackId}?autoPan=1`);
+
+  const slopeToggle = page.locator('[data-testid="elevation-slope-toggle"]');
+  await slopeToggle.click();
+
+  const chartCanvas = page.locator('.elevation-chart-container canvas');
+  await expect(chartCanvas).toBeVisible();
+
+  // Hover near the end of the chart to trigger the last label/index
+  const box = await chartCanvas.boundingBox();
+  if (!box) throw new Error('Chart canvas bounding box not found');
+  const targetX = box.x + box.width * 0.98;
+  const targetY = box.y + box.height * 0.5;
+  await page.mouse.move(targetX, targetY);
+  await page.waitForTimeout(250);
+
+  const trackEnd = await page.evaluate(async (id) => {
+    const res = await fetch(`/tracks/${id}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const geom = data.geom_geojson;
+    if (!geom || !geom.coordinates) return null;
+    const coords = geom.type === 'MultiLineString' ? geom.coordinates.flat(1) : geom.coordinates;
+    if (!Array.isArray(coords) || coords.length === 0) return null;
+    const last = coords[coords.length - 1];
+    if (!Array.isArray(last) || last.length < 2) return null;
+    const [lng, lat] = last;
+    return { lat, lng };
+  }, trackId);
+
+  expect(trackEnd).not.toBeNull();
+
+  const markerLatLng = await page.evaluate(() => (window.__e2e?.getLastMarkerLatLng?.() ?? null));
+  expect(markerLatLng).not.toBeNull();
+
+  const debug = await page.evaluate(() => ({
+    lastHoverPayload: window.__e2e?.getLastHoverPayload?.() ?? null,
+    coordinateLength: window.__e2e?.getCoordinateDataLength?.() ?? null,
+    markerDetails: window.__e2e?.getLastMarkerDetails?.() ?? null
+  }));
+
+  if (debug.coordinateLength && debug.lastHoverPayload && typeof debug.lastHoverPayload.coordinateIndex === 'number') {
+    expect(debug.lastHoverPayload.coordinateIndex).toBe(debug.coordinateLength - 1);
+  }
+
+  const latDiff = Math.abs(markerLatLng!.lat - trackEnd!.lat);
+  const lngDiff = Math.abs(markerLatLng!.lng - trackEnd!.lng);
+
+  // Require the marker to be very close to the actual end point
+  expect(latDiff).toBeLessThan(0.002);
+  expect(lngDiff).toBeLessThan(0.002);
+});
+
 test('touch flow: move then tap fixes and auto-pans (production interactions)', async ({ page }: { page: Page }) => {
   const trackId = testTracks['test-track-multi'];
   await page.goto(`/track/${trackId}?autoPan=1`);

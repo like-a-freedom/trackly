@@ -704,20 +704,33 @@ function handleChartPointHover(payload) {
   
   // Store hover point
   chartHoverPoint.value = payload;
+
+  // Expose last hover payload for E2E/debugging in non-production modes
+  if (import.meta.env.MODE !== 'production') {
+    try {
+      window.__e2e = window.__e2e || {};
+      window.__e2e.lastHoverPayload = payload;
+    } catch (e) {
+      // ignore in environments without window
+    }
+  }
   
   // Reconstruct latlng if missing
+  const effectiveIndex = payload.coordinateIndex !== undefined && payload.coordinateIndex !== null
+    ? payload.coordinateIndex
+    : payload.index;
   let latlng = payload.latlng;
   
-  if (!latlng && payload.index !== undefined) {
+  if (!latlng && effectiveIndex !== undefined) {
     // Try to get from coordinateData
-    if (coordinateData.value && coordinateData.value[payload.index]) {
-      latlng = coordinateData.value[payload.index];
+    if (coordinateData.value && coordinateData.value[effectiveIndex]) {
+      latlng = coordinateData.value[effectiveIndex];
     } else if (track.value && track.value.latlngs) {
       // Fallback: proportional mapping or interpolation
       const trackLatlngs = track.value.latlngs;
       if (trackLatlngs.length > 0) {
         // Simple proportional mapping
-        const ratio = payload.index / Math.max(coordinateData.value?.length || 1, 1);
+        const ratio = (typeof effectiveIndex === 'number' ? effectiveIndex : 0) / Math.max(coordinateData.value?.length || 1, 1);
         const trackIndex = Math.min(
           Math.round(ratio * (trackLatlngs.length - 1)),
           trackLatlngs.length - 1
@@ -736,7 +749,7 @@ function handleChartPointHover(payload) {
       let accumulatedLength = 0;
       for (let i = 0; i < track.value.segments.length; i++) {
         const segmentLength = track.value.segments[i].length;
-        if (payload.index < accumulatedLength + segmentLength) {
+        if (effectiveIndex < accumulatedLength + segmentLength) {
           segmentIndex = i;
           break;
         }
@@ -749,6 +762,7 @@ function handleChartPointHover(payload) {
       distanceKm: payload.distanceKm,
       elevation: payload.elevation,
       slope: payload.slope,
+      coordinateIndex: effectiveIndex,
       segmentIndex,
       isFixed: !!payload.isFixed
     };
@@ -932,6 +946,22 @@ onMounted(async () => {
     window.__e2e.getLastMarkerDetails = () => {
       try {
         return markerLatLng && markerLatLng.value ? { ...markerLatLng.value } : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    window.__e2e.getCoordinateDataLength = () => {
+      try {
+        return coordinateData && coordinateData.value ? coordinateData.value.length : 0;
+      } catch (e) {
+        return 0;
+      }
+    };
+
+    window.__e2e.getLastHoverPayload = () => {
+      try {
+        return window.__e2e && window.__e2e.lastHoverPayload ? { ...window.__e2e.lastHoverPayload } : null;
       } catch (e) {
         return null;
       }

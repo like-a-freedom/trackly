@@ -285,6 +285,21 @@ describe('TrackView Auto-Scaling', () => {
         expect(wrapper.vm.markerLatLng.latlng).toEqual(coordData[1]);
     });
 
+    it('prefers coordinateIndex over index when mapping hover to latlng', async () => {
+        wrapper = createWrapper();
+        await waitFor(() => wrapper.vm.track);
+
+        const coordData = wrapper.vm.coordinateData;
+        const lastIndex = coordData.length - 1;
+
+        const payload = { index: 0, coordinateIndex: lastIndex, distanceKm: 3.0, elevation: 220 };
+        wrapper.vm.handleChartPointHover(payload);
+        await nextTick();
+
+        expect(wrapper.vm.markerLatLng).toBeTruthy();
+        expect(wrapper.vm.markerLatLng.latlng).toEqual(coordData[lastIndex]);
+    });
+
     it('should fall back to proportional mapping using track.latlngs when coordinateData lengths differ', async () => {
         wrapper = createWrapper();
         await waitFor(() => wrapper.vm.track);

@@ -205,18 +205,39 @@ function buildPayloadForIndex(index, isFixed = false) {
     }
   });
 
-  // Latlng and time from props
+  // Map chart index to underlying coordinate/time arrays proportionally when lengths differ
+  const totalDistanceKm = props.totalDistance || 0;
+  const mapToDataIndex = (length) => {
+    if (!length || length <= 0) return null;
+    if (labels.length <= 1) return 0;
+
+    const ratio = pointIndex / (labels.length - 1);
+    const distanceRatio = totalDistanceKm > 0 ? Math.min(1, Math.max(0, distanceKm / totalDistanceKm)) : null;
+
+    // Snap aggressively to the final coordinate when hovering near the right edge
+    if (ratio >= 0.97 || (distanceRatio !== null && distanceRatio >= 0.97)) {
+      return length - 1;
+    }
+
+    const baseRatio = distanceRatio !== null ? Math.max(ratio, distanceRatio) : ratio;
+    return Math.min(length - 1, Math.max(0, Math.round(baseRatio * (length - 1))));
+  };
+
+  const coordinateIndex = mapToDataIndex(props.coordinateData?.length || 0);
+  const timeIndex = mapToDataIndex(props.timeData?.length || 0);
+
   let latlng = null;
   let time = null;
-  if (props.coordinateData && props.coordinateData[pointIndex]) {
-    latlng = props.coordinateData[pointIndex];
+  if (coordinateIndex !== null && props.coordinateData && props.coordinateData[coordinateIndex]) {
+    latlng = props.coordinateData[coordinateIndex];
   }
-  if (props.timeData && props.timeData[pointIndex]) {
-    time = props.timeData[pointIndex];
+  if (timeIndex !== null && props.timeData && props.timeData[timeIndex]) {
+    time = props.timeData[timeIndex];
   }
 
   const payload = {
     index: pointIndex,
+    coordinateIndex,
     distanceKm,
     elevation,
     latlng,
@@ -930,59 +951,15 @@ watch([
         const xValue = dataPoints[0].label;
         innerHtml += `<div class="tooltip-distance">📍 ${xValue}</div>`;
         
-        // Extract data for hover event
         const pointIndex = dataPoints[0].dataIndex;
-        const xLabel = dataPoints[0].label;
-        
-        // Parse distance from label (e.g., "3.47 km" -> 3.47)
-        const distanceMatch = xLabel.match(/([\d.]+)\s*(km|mi)/);
-        const distanceKm = distanceMatch ? parseFloat(distanceMatch[1]) : 0;
-        
-        // Get elevation from first elevation dataset
-        let elevation = null;
-        let slope = null;
-        dataPoints.forEach(dp => {
-          if (dp.dataset.yAxisID === 'y-elevation') {
-            elevation = dp.parsed.y;
-            // Extract slope if available
-            if (dp.raw && typeof dp.raw === 'object' && dp.raw.slope !== undefined) {
-              slope = dp.raw.slope;
-            }
-          }
-        });
-        
-        // Get latlng from coordinateData if available
-        let latlng = null;
-        if (props.coordinateData && props.coordinateData[pointIndex]) {
-          latlng = props.coordinateData[pointIndex];
-        }
-        
-        // Get time from timeData if available
-        let time = null;
-        if (props.timeData && props.timeData[pointIndex]) {
-          time = props.timeData[pointIndex];
-        }
-        
-        // Build payload
-        hoverPayload = {
-          index: pointIndex,
-          distanceKm,
-          elevation,
-          latlng,
-          isFixed: isChartPointFixed.value
-        };
-        
-        // Add optional fields
-        if (slope !== null) hoverPayload.slope = slope;
-        if (time !== null) hoverPayload.time = time;
+        hoverPayload = buildPayloadForIndex(pointIndex, isChartPointFixed.value);
         
         // Emit hover event with RAF throttling
         emitChartPointHover(hoverPayload);
         
-        // Add time information if available
-        if (props.timeData && props.timeData[pointIndex]) {
-          const timeValue = props.timeData[pointIndex];
-          const timeFormatted = formatTime(timeValue);
+        // Add time information if available (prefer mapped time from payload)
+        if (hoverPayload && hoverPayload.time !== undefined && hoverPayload.time !== null) {
+          const timeFormatted = formatTime(hoverPayload.time);
           innerHtml += `<div class="tooltip-time">⏱️ ${timeFormatted}</div>`;
         }
       }
@@ -1080,56 +1057,13 @@ watch([
       if (elements.length > 0) {
         const element = elements[0];
         const pointIndex = element.index;
-        const datasetIndex = element.datasetIndex;
-        const dataset = chart.data.datasets[datasetIndex];
+        const willBeFixed = !isChartPointFixed.value;
+        isChartPointFixed.value = willBeFixed;
         
-        // Parse distance from label
-        const xLabel = chart.data.labels[pointIndex];
-        const distanceMatch = xLabel.match(/([\d.]+)\s*(km|mi)/);
-        const distanceKm = distanceMatch ? parseFloat(distanceMatch[1]) : 0;
-        
-        // Get elevation
-        let elevation = null;
-        let slope = null;
-        if (dataset.yAxisID === 'y-elevation') {
-          elevation = dataset.data[pointIndex];
-          // Check if raw data has slope
-          const rawData = dataset.data[pointIndex];
-          if (rawData && typeof rawData === 'object' && rawData.slope !== undefined) {
-            slope = rawData.slope;
-          }
+        const clickPayload = buildPayloadForIndex(pointIndex, willBeFixed);
+        if (clickPayload) {
+          emit('chart-point-click', clickPayload);
         }
-        
-        // Get latlng from coordinateData if available
-        let latlng = null;
-        if (props.coordinateData && props.coordinateData[pointIndex]) {
-          latlng = props.coordinateData[pointIndex];
-        }
-        
-        // Get time from timeData if available
-        let time = null;
-        if (props.timeData && props.timeData[pointIndex]) {
-          time = props.timeData[pointIndex];
-        }
-        
-        // Toggle fixed state
-        isChartPointFixed.value = !isChartPointFixed.value;
-        
-        // Build payload
-        const clickPayload = {
-          index: pointIndex,
-          distanceKm,
-          elevation,
-          latlng,
-          isFixed: isChartPointFixed.value
-        };
-        
-        // Add optional fields
-        if (slope !== null) clickPayload.slope = slope;
-        if (time !== null) clickPayload.time = time;
-        
-        // Emit click event
-        emit('chart-point-click', clickPayload);
       }
     },
     onHover: (event, elements) => {
@@ -1341,6 +1275,15 @@ onUnmounted(() => {
     hoverRafId = null;
   }
 });
+
+// Expose debug helper for deterministic unit testing (non-production only)
+if (import.meta.env.MODE !== 'production') {
+  try {
+    defineExpose({ __debugBuildPayloadForIndex: buildPayloadForIndex });
+  } catch (e) {
+    // no-op if defineExpose is unavailable in the test environment
+  }
+}
 </script>
 
 <style scoped>
