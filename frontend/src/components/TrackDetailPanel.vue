@@ -208,51 +208,26 @@
         </div>
 
         <div v-else class="categories-edit" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
-          <div class="existing-tags">
-            <span v-for="(cat, idx) in editedCategories" :key="cat" class="category-tag editable">
-              {{ formatCategory(cat) }}
-              <button 
-                class="remove-tag" 
-                @click="removeEditedCategory(idx)" 
-                @mousedown.stop 
-                @mouseup.stop
-                title="Remove category"
-                aria-label="Remove category"
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-            </span>
-          </div>
-          <div class="add-category-wrapper">
-            <input 
-              v-model="newCategoryInput" 
-              @keydown.enter.prevent="addEditedCategory" 
-              @mousedown.stop
-              @mouseup.stop
-              @click.stop
-              @dblclick.stop
-              @selectstart.stop
-              @dragstart.prevent
-              placeholder="Type category and press Enter..."
-              class="add-category-input"
-              maxlength="100" 
-            />
-            <button 
-              @click="addEditedCategory" 
-              @mousedown.stop
-              @mouseup.stop
-              class="add-category-btn"
-              title="Add category"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              Add
-            </button>
-          </div>
+          <Multiselect
+            v-model="editedCategories"
+            mode="tags"
+            :close-on-select="false"
+            :searchable="true"
+            :create-option="false"
+            :options="categoriesList"
+            :object="true"
+            placeholder="Select categories"
+            class="track-category-select"
+            :append-to-body="true"
+            position="auto"
+            :max-height="220"
+            @mousedown.stop
+            @mouseup.stop
+            @click.stop
+            @dblclick.stop
+            @selectstart.stop
+            @dragstart.prevent
+          />
           <div class="edit-actions" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
             <button 
               @click="saveCategories" 
@@ -570,6 +545,8 @@
 <script setup>
 import { ref, computed, nextTick, watch, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
+import Multiselect from '@vueform/multiselect';
+import '@vueform/multiselect/themes/default.css';
 import ElevationChart from './ElevationChart.vue';
 import { 
   formatDuration as utilFormatDuration,
@@ -705,53 +682,38 @@ const descriptionError = ref('');
 
 // --- Categories editing state ---
 const isEditingCategories = ref(false);
-const editedCategories = ref(props.track && props.track.categories ? [...props.track.categories] : []);
-const newCategoryInput = ref('');
+const editedCategories = ref([]);
 const savingCategories = ref(false);
 const categoriesError = ref('');
 
+const categoriesList = [
+  { value: 'hiking', label: 'Hiking' },
+  { value: 'running', label: 'Running' },
+  { value: 'walking', label: 'Walking' },
+  { value: 'cycling', label: 'Cycling' },
+  { value: 'skiing', label: 'Skiing' },
+  { value: 'other', label: 'Other' },
+];
+
 const MAX_CATEGORIES = 50;
-const MAX_CATEGORY_LENGTH = 100;
 
 const { updateTrackCategories } = useTracks();
 
 function startEditCategories() {
   isEditingCategories.value = true;
-  editedCategories.value = props.track && props.track.categories ? [...props.track.categories] : [];
-  newCategoryInput.value = '';
+  // Convert string categories to objects for Multiselect
+  const currentCategories = props.track && props.track.categories ? props.track.categories : [];
+  editedCategories.value = currentCategories.map(cat => {
+    const found = categoriesList.find(c => c.value === cat.toLowerCase());
+    return found || { value: cat.toLowerCase(), label: cat };
+  });
   categoriesError.value = '';
 }
 
 function cancelEditCategories() {
   isEditingCategories.value = false;
-  editedCategories.value = props.track && props.track.categories ? [...props.track.categories] : [];
-  newCategoryInput.value = '';
+  editedCategories.value = [];
   categoriesError.value = '';
-}
-
-function addEditedCategory() {
-  const v = (newCategoryInput.value || '').trim();
-  if (!v) return;
-  if (v.length > MAX_CATEGORY_LENGTH) {
-    categoriesError.value = `Category must be at most ${MAX_CATEGORY_LENGTH} characters.`;
-    return;
-  }
-  if (editedCategories.value.includes(v)) {
-    categoriesError.value = 'Category already added.';
-    newCategoryInput.value = '';
-    return;
-  }
-  if (editedCategories.value.length >= MAX_CATEGORIES) {
-    categoriesError.value = `Maximum ${MAX_CATEGORIES} categories allowed.`;
-    return;
-  }
-  editedCategories.value.push(v);
-  newCategoryInput.value = '';
-  categoriesError.value = '';
-}
-
-function removeEditedCategory(idx) {
-  editedCategories.value.splice(idx, 1);
 }
 
 async function saveCategories() {
@@ -760,19 +722,15 @@ async function saveCategories() {
     categoriesError.value = 'At least one category is required.';
     return;
   }
-  // Validate lengths
-  for (const c of editedCategories.value) {
-    if (c.length > MAX_CATEGORY_LENGTH) {
-      categoriesError.value = `Category must be at most ${MAX_CATEGORY_LENGTH} characters.`;
-      return;
-    }
-  }
+  
+  // Convert objects to strings
+  const categoryValues = editedCategories.value.map(c => c.value);
 
   savingCategories.value = true;
   try {
-    await updateTrackCategories(props.track.id, editedCategories.value);
+    await updateTrackCategories(props.track.id, categoryValues);
     isEditingCategories.value = false;
-    emit('categories-updated', editedCategories.value);
+    emit('categories-updated', categoryValues);
     showToast('Categories updated', 'success');
   } catch (err) {
     console.error('Failed to update categories', err);
@@ -3165,68 +3123,19 @@ defineExpose({
   border: 1px solid #e0e0e0;
 }
 
-.existing-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 32px;
-}
-
-.add-category-wrapper {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.add-category-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 0.95em;
-  font-family: inherit;
-  transition: all 0.2s ease;
-  background: white;
-}
-
-.add-category-input:focus {
-  outline: none;
-  border-color: #1565c0;
-  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.1);
-}
-
-.add-category-input::placeholder {
-  color: #999;
-}
-
-.add-category-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: #1565c0;
-  color: white;
+.categories-edit .track-category-select {
+  width: 100%;
+  --ms-tag-bg: #10B981;
+  --ms-tag-color: #fff;
+  --ms-tag-radius: 4px;
+  --ms-tag-font-size: 0.87rem;
+  --ms-tag-font-weight: 600;
+  font-size: 0.87rem;
+  padding: 0;
   border: none;
-  border-radius: 6px;
-  font-size: 0.95em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.add-category-btn:hover {
-  background: #0d47a1;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(21, 101, 192, 0.3);
-}
-
-.add-category-btn:active {
-  transform: translateY(0);
-}
-
-.add-category-btn svg {
-  flex-shrink: 0;
+  border-radius: 4px;
+  background: white;
+  min-height: 44px;
 }
 
 .categories-edit .edit-actions {
