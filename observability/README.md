@@ -232,6 +232,8 @@ docker run -d \
 - `track_upload_failures_total` - upload failures
 - `tracks_deleted_total` - deleted tracks
 - `track_categories_total` - track categories
+- `track_category_edits_total` - category edit operations (labels: action = set|add|remove)
+- `track_category_edits_by_category_total` - per-category edit counts (labels: action, category)
 - `track_length_km_bucket` - distribution of track lengths
 - `track_parse_duration_seconds` - parsing time
 - `track_pipeline_latency_seconds` - end-to-end pipeline latency

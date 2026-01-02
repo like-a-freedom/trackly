@@ -989,6 +989,9 @@ pub async fn update_track_categories(
     categories: &[String],
 ) -> Result<(), sqlx::Error> {
     let start = Instant::now();
+    // Convert to slice of &str for binding
+    let cat_refs: Vec<&str> = categories.iter().map(|s| s.as_str()).collect();
+
     sqlx::query(
         r#"
         UPDATE tracks
@@ -997,10 +1000,11 @@ pub async fn update_track_categories(
         WHERE id = $2
         "#,
     )
-    .bind(categories)
+    .bind(cat_refs)
     .bind(track_id)
     .execute(&**pool)
     .await?;
+
     metrics::observe_db_query("update_track_categories", start.elapsed().as_secs_f64());
     Ok(())
 }
@@ -1524,6 +1528,279 @@ mod tests {
         // This test would verify that update_track_elevation correctly
         // updates all elevation fields in the database
         // Requires test database setup and transaction rollback
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_update_track_categories_db() {
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&db_url)
+                .await
+                .unwrap(),
+        );
+
+        let id = Uuid::new_v4();
+        let hash = format!("testhash-cat-{id}");
+        let name = "Test Track Categories";
+        let cats = ["initial"];
+        let geom_geojson = serde_json::json!({
+            "type": "LineString",
+            "coordinates": [[0.0, 0.0], [1.0, 1.0]]
+        });
+
+        insert_track(InsertTrackParams {
+            pool: &pool,
+            id,
+            name,
+            description: Some("desc".to_string()),
+            categories: &cats[..],
+            auto_classifications: &["run".to_string()],
+            geom_geojson: &geom_geojson,
+            length_km: 1.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: None,
+            elevation_gain: None,
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
+            avg_speed: None,
+            avg_hr: None,
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: Some(3600),
+            hash: &hash,
+            recorded_at: None,
+            session_id: None,
+            speed_data_json: None,
+            pace_data_json: None,
+        })
+        .await
+        .unwrap();
+
+        // Update categories
+        let new_cats = vec!["running".to_string(), "mtb".to_string()];
+        update_track_categories(&pool, id, &new_cats).await.unwrap();
+
+        let detail = get_track_detail(&pool, id)
+            .await
+            .unwrap()
+            .expect("track not found");
+        assert_eq!(detail.categories, new_cats);
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_update_track_categories_handler_owner_check() {
+        use crate::models::UpdateTrackCategoriesRequest as Req;
+        use axum::extract::{Path, State};
+        use axum::http::StatusCode;
+        use axum::Json;
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&db_url)
+                .await
+                .unwrap(),
+        );
+
+        let owner = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let id = Uuid::new_v4();
+        let hash = format!("testhash-handler-{id}");
+        let cats = ["initial"];
+        let geom_geojson =
+            serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
+
+        insert_track(InsertTrackParams {
+            pool: &pool,
+            id,
+            name: "Owner Track",
+            description: Some("desc".to_string()),
+            categories: &cats[..],
+            auto_classifications: &["run".to_string()],
+            geom_geojson: &geom_geojson,
+            length_km: 1.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: None,
+            elevation_gain: None,
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
+            avg_speed: None,
+            avg_hr: None,
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: Some(3600),
+            hash: &hash,
+            recorded_at: None,
+            session_id: Some(owner),
+            speed_data_json: None,
+            pace_data_json: None,
+        })
+        .await
+        .unwrap();
+
+        // Attempt update with wrong session
+        let payload = Req {
+            session_id: other,
+            categories: vec!["x".to_string()],
+        };
+        let res =
+            crate::handlers::update_track_categories(State(pool.clone()), Path(id), Json(payload))
+                .await;
+        assert!(matches!(res, Err(StatusCode::FORBIDDEN)));
+
+        // Update with owner session
+        let payload_ok = Req {
+            session_id: owner,
+            categories: vec!["new".to_string()],
+        };
+        let res_ok = crate::handlers::update_track_categories(
+            State(pool.clone()),
+            Path(id),
+            Json(payload_ok),
+        )
+        .await;
+        assert!(res_ok.is_ok());
+        let detail = get_track_detail(&pool, id)
+            .await
+            .unwrap()
+            .expect("not found");
+        assert_eq!(detail.categories, vec!["new".to_string()]);
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_update_track_categories_empty_rejected() {
+        use crate::models::UpdateTrackCategoriesRequest as Req;
+        use axum::extract::{Path, State};
+        use axum::http::StatusCode;
+        use axum::Json;
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&db_url)
+                .await
+                .unwrap(),
+        );
+
+        let owner = Uuid::new_v4();
+        let id = Uuid::new_v4();
+        let hash = format!("testhash-emptycat-{id}");
+        let cats = ["initial"];
+        let geom_geojson =
+            serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
+
+        insert_track(InsertTrackParams {
+            pool: &pool,
+            id,
+            name: "Owner Track Empty",
+            description: Some("desc".to_string()),
+            categories: &cats[..],
+            auto_classifications: &["run".to_string()],
+            geom_geojson: &geom_geojson,
+            length_km: 1.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: None,
+            elevation_gain: None,
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
+            avg_speed: None,
+            avg_hr: None,
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: Some(3600),
+            hash: &hash,
+            recorded_at: None,
+            session_id: Some(owner),
+            speed_data_json: None,
+            pace_data_json: None,
+        })
+        .await
+        .unwrap();
+
+        // Attempt update with owner session but empty categories
+        let payload = Req {
+            session_id: owner,
+            categories: vec![],
+        };
+        let res =
+            crate::handlers::update_track_categories(State(pool.clone()), Path(id), Json(payload))
+                .await;
+        assert!(matches!(res, Err(StatusCode::BAD_REQUEST)));
+
+        // Attempt update with only whitespace categories
+        let payload2 = Req {
+            session_id: owner,
+            categories: vec![" ".to_string(), "".to_string()],
+        };
+        let res2 =
+            crate::handlers::update_track_categories(State(pool.clone()), Path(id), Json(payload2))
+                .await;
+        assert!(matches!(res2, Err(StatusCode::BAD_REQUEST)));
     }
 
     #[tokio::test]

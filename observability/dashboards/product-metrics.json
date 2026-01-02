@@ -734,6 +734,60 @@
             "type": "piechart"
         },
         {
+            "datasource": {
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 1,
+                "w": 6,
+                "x": 18,
+                "y": 16
+            },
+            "id": 310,
+            "options": {
+                "wideLayout": true
+            },
+            "pluginVersion": "12.3.1",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_category_edits_total{job=\"trackly_backend\"}[24h]))",
+                    "refId": "A"
+                }
+            ],
+            "title": "Category Edits (24h)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "uid": "victoriametrics"
+            },
+            "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 1,
+                "w": 6,
+                "x": 12,
+                "y": 16
+            },
+            "id": 311,
+            "pluginVersion": "12.3.1",
+            "targets": [
+                {
+                    "expr": "sum(increase(track_category_edits_by_category_total{job=\"trackly_backend\"}[7d])) by (category)",
+                    "legendFormat": "{{category}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Category Edits by Category (7d)",
+            "type": "piechart"
+        },
+        {
             "collapsed": false,
             "gridPos": {
                 "h": 1,

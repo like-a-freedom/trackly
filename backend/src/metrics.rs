@@ -125,6 +125,32 @@ static TRACK_CATEGORIES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
     counter
 });
 
+// Count of category edit operations (set/add/remove)
+static TRACK_CATEGORY_EDITS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new(
+        "track_category_edits_total",
+        "Track category edit operations (by action)",
+    );
+    let counter = IntCounterVec::new(opts, &["action"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register track_category_edits_total");
+    counter
+});
+
+// Category edit counts broken down by action and category (e.g., add, remove)
+static TRACK_CATEGORY_EDITS_BY_CATEGORY: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new(
+        "track_category_edits_by_category_total",
+        "Track category edits by category and action",
+    );
+    let counter = IntCounterVec::new(opts, &["action", "category"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register track_category_edits_by_category_total");
+    counter
+});
+
 static TRACK_LENGTH_KM_BUCKET: Lazy<HistogramVec> = Lazy::new(|| {
     let opts = HistogramOpts::new(
         "track_length_km_bucket",
@@ -519,6 +545,13 @@ pub fn initialize_metrics_baseline() {
     let _ = TRACK_LENGTH_KM_BUCKET.with_label_values(&["anonymous"]);
     let _ = TRACK_CATEGORIES_TOTAL.with_label_values(&["unknown"]);
 
+    // Category edit baselines
+    let _ = TRACK_CATEGORY_EDITS_TOTAL.with_label_values(&["set"]);
+    let _ = TRACK_CATEGORY_EDITS_TOTAL.with_label_values(&["add"]);
+    let _ = TRACK_CATEGORY_EDITS_TOTAL.with_label_values(&["remove"]);
+    let _ = TRACK_CATEGORY_EDITS_BY_CATEGORY.with_label_values(&["add", "unknown"]);
+    let _ = TRACK_CATEGORY_EDITS_BY_CATEGORY.with_label_values(&["remove", "unknown"]);
+
     // Enrichment
     let _ = TRACK_ENRICH_REQUESTS_TOTAL.with_label_values(&["success"]);
     let _ = TRACK_ENRICH_REQUESTS_TOTAL.with_label_values(&["failed_remote"]);
@@ -817,6 +850,20 @@ pub fn record_track_category(category: &str) {
     TRACK_CATEGORIES_TOTAL.with_label_values(&[category]).inc();
 }
 
+/// Record an overall category-edit operation (action: set/add/remove)
+pub fn record_track_category_edit(action: &str) {
+    TRACK_CATEGORY_EDITS_TOTAL
+        .with_label_values(&[action])
+        .inc();
+}
+
+/// Record a category edit scoped to a specific category and action (add/remove)
+pub fn record_track_category_edit_by_category(action: &str, category: &str) {
+    TRACK_CATEGORY_EDITS_BY_CATEGORY
+        .with_label_values(&[action, category])
+        .inc();
+}
+
 pub fn record_track_view(ownership: &str, referrer: &str) {
     let ownership_label = match ownership {
         "own" => "own",
@@ -1043,6 +1090,69 @@ mod tests {
             .expect("body to bytes");
         let body_str = String::from_utf8(body.to_vec()).expect("utf8 body");
         assert!(body_str.contains("http_requests_total"));
+    }
+
+    fn parse_metric_value_from_scrape(body: &str, metric: &str, label_fragment: &str) -> f64 {
+        // Look for a metric line that starts with the metric name and contains the label fragment
+        for line in body.lines() {
+            if line.starts_with(metric) && line.contains(label_fragment) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    return parts[1].parse().unwrap_or(0.0);
+                }
+            }
+        }
+        0.0
+    }
+
+    #[tokio::test]
+    async fn track_category_edit_metrics_increment() {
+        // Scrape metrics before mutation
+        let response_before = serve_metrics().await.into_response();
+        let body_before = to_bytes(response_before.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let body_before_str = String::from_utf8(body_before.to_vec()).expect("utf8");
+
+        let before = parse_metric_value_from_scrape(
+            &body_before_str,
+            "track_category_edits_total",
+            "action=\"set\"",
+        );
+        record_track_category_edit("set");
+
+        let response_after = serve_metrics().await.into_response();
+        let body_after = to_bytes(response_after.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let body_after_str = String::from_utf8(body_after.to_vec()).expect("utf8");
+        let after = parse_metric_value_from_scrape(
+            &body_after_str,
+            "track_category_edits_total",
+            "action=\"set\"",
+        );
+
+        assert_eq!(after, before + 1.0);
+
+        // Per-category metric
+        let before_cat = parse_metric_value_from_scrape(
+            &body_before_str,
+            "track_category_edits_by_category_total",
+            "action=\"add\",category=\"unknown\"",
+        );
+        record_track_category_edit_by_category("add", "unknown");
+
+        let response_after2 = serve_metrics().await.into_response();
+        let body_after2 = to_bytes(response_after2.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let body_after2_str = String::from_utf8(body_after2.to_vec()).expect("utf8");
+        let after_cat = parse_metric_value_from_scrape(
+            &body_after2_str,
+            "track_category_edits_by_category_total",
+            "action=\"add\",category=\"unknown\"",
+        );
+        assert_eq!(after_cat, before_cat + 1.0);
     }
 
     #[tokio::test]
