@@ -207,20 +207,78 @@
           </span>
         </div>
 
-        <div v-else class="categories-edit">
+        <div v-else class="categories-edit" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
           <div class="existing-tags">
             <span v-for="(cat, idx) in editedCategories" :key="cat" class="category-tag editable">
               {{ formatCategory(cat) }}
-              <button class="remove-tag" @click="removeEditedCategory(idx)" aria-label="Remove category">✕</button>
+              <button 
+                class="remove-tag" 
+                @click="removeEditedCategory(idx)" 
+                @mousedown.stop 
+                @mouseup.stop
+                title="Remove category"
+                aria-label="Remove category"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
             </span>
           </div>
-          <div class="add-category">
-            <input v-model="newCategoryInput" @keydown.enter.prevent="addEditedCategory" placeholder="Add category and press Enter" maxlength="100" />
-            <button @click="addEditedCategory">Add</button>
+          <div class="add-category-wrapper">
+            <input 
+              v-model="newCategoryInput" 
+              @keydown.enter.prevent="addEditedCategory" 
+              @mousedown.stop
+              @mouseup.stop
+              @click.stop
+              @dblclick.stop
+              @selectstart.stop
+              @dragstart.prevent
+              placeholder="Type category and press Enter..."
+              class="add-category-input"
+              maxlength="100" 
+            />
+            <button 
+              @click="addEditedCategory" 
+              @mousedown.stop
+              @mouseup.stop
+              class="add-category-btn"
+              title="Add category"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add
+            </button>
           </div>
-          <div class="edit-actions">
-            <button @click="saveCategories" :disabled="savingCategories" class="save-btn">{{ savingCategories ? 'Saving...' : 'Save' }}</button>
-            <button @click="cancelEditCategories" :disabled="savingCategories" class="cancel-btn">Cancel</button>
+          <div class="edit-actions" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
+            <button 
+              @click="saveCategories" 
+              :disabled="savingCategories"
+              class="save-btn"
+              @mousedown.stop
+              @mouseup.stop
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20,6 9,17 4,12"></polyline>
+              </svg>
+              {{ savingCategories ? 'Saving...' : 'Save' }}
+            </button>
+            <button 
+              @click="cancelEditCategories" 
+              :disabled="savingCategories"
+              class="cancel-btn"
+              @mousedown.stop
+              @mouseup.stop
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              Cancel
+            </button>
           </div>
           <div v-if="categoriesError" class="edit-error">{{ categoriesError }}</div>
         </div>
@@ -3051,6 +3109,159 @@ defineExpose({
   border-radius: 6px;
   font-size: 0.85em;
   font-weight: 500;
+}
+
+.category-tag.editable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
+  background: #e3f2fd;
+  border: 1px solid #bbdefb;
+  transition: all 0.2s ease;
+}
+
+.category-tag.editable:hover {
+  background: #bbdefb;
+  border-color: #90caf9;
+}
+
+.remove-tag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #1565c0;
+}
+
+.remove-tag:hover {
+  background: rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
+}
+
+.remove-tag:active {
+  transform: scale(0.95);
+}
+
+.remove-tag svg {
+  display: block;
+}
+
+/* Categories Edit Mode */
+.categories-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.existing-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.add-category-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.add-category-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.95em;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.add-category-input:focus {
+  outline: none;
+  border-color: #1565c0;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.1);
+}
+
+.add-category-input::placeholder {
+  color: #999;
+}
+
+.add-category-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #1565c0;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.add-category-btn:hover {
+  background: #0d47a1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(21, 101, 192, 0.3);
+}
+
+.add-category-btn:active {
+  transform: translateY(0);
+}
+
+.add-category-btn svg {
+  flex-shrink: 0;
+}
+
+.categories-edit .edit-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.categories-edit .save-btn,
+.categories-edit .cancel-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.categories-edit .save-btn svg,
+.categories-edit .cancel-btn svg {
+  flex-shrink: 0;
+}
+
+.categories-edit .edit-error {
+  padding: 8px 12px;
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  border-radius: 6px;
+  color: #c62828;
+  font-size: 0.9em;
+  margin-top: 4px;
 }
 
 .auto-classifications {

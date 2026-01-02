@@ -448,11 +448,12 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       expect(wrapper.vm.isEditingCategories).toBe(true);
+      expect(wrapper.find('.categories-edit').exists()).toBe(true);
 
       // Add a new category
-      const input = wrapper.find('.add-category input');
+      const input = wrapper.find('.add-category-input');
       await input.setValue('Trail');
-      await wrapper.find('.add-category button').trigger('click');
+      await wrapper.find('.add-category-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
       expect(wrapper.text()).toContain('Trail');
@@ -464,7 +465,7 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       // Save categories
-      await wrapper.find('.save-btn').trigger('click');
+      await wrapper.find('.categories-edit .save-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
       // Ensure composable was called with updated categories
@@ -485,10 +486,111 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       // Try to save
-      await wrapper.find('.save-btn').trigger('click');
+      await wrapper.find('.categories-edit .save-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
       expect(wrapper.find('.edit-error').text()).toBe('At least one category is required.');
+    });
+
+    it('shows icons on save and cancel buttons', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const saveBtn = wrapper.find('.categories-edit .save-btn');
+      const cancelBtn = wrapper.find('.categories-edit .cancel-btn');
+
+      expect(saveBtn.find('svg').exists()).toBe(true);
+      expect(cancelBtn.find('svg').exists()).toBe(true);
+    });
+
+    it('shows remove icon on category tags in edit mode', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const editableTags = wrapper.findAll('.category-tag.editable');
+      expect(editableTags.length).toBeGreaterThan(0);
+      
+      editableTags.forEach(tag => {
+        expect(tag.find('.remove-tag svg').exists()).toBe(true);
+      });
+    });
+
+    it('shows add icon on add category button', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const addBtn = wrapper.find('.add-category-btn');
+      expect(addBtn.find('svg').exists()).toBe(true);
+      expect(addBtn.text()).toContain('Add');
+    });
+
+    it('validates category length', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const input = wrapper.find('.add-category-input');
+      const longCategory = 'a'.repeat(101);
+      await input.setValue(longCategory);
+      await wrapper.find('.add-category-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('.edit-error').text()).toContain('must be at most');
+    });
+
+    it('prevents duplicate categories', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      const input = wrapper.find('.add-category-input');
+      await input.setValue('Running');
+      await wrapper.find('.add-category-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('.edit-error').text()).toBe('Category already added.');
+    });
+
+    it('cancels edit mode and restores original categories', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+
+      const originalCategories = [...mockTrackComplete.categories];
+      
+      await wrapper.find('.edit-categories-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      // Add a new category
+      const input = wrapper.find('.add-category-input');
+      await input.setValue('NewCategory');
+      await wrapper.find('.add-category-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      // Cancel
+      await wrapper.find('.categories-edit .cancel-btn').trigger('click');
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isEditingCategories).toBe(false);
+      expect(wrapper.vm.editedCategories).toEqual(originalCategories);
     });
   });
 
