@@ -419,71 +419,63 @@ describe('TrackDetailPanel', () => {
       expect(wrapper.text()).toContain('Marathon');
     });
 
-    it('hides categories section when no categories available', () => {
+    it('hides categories section when no categories available and not owner', () => {
       const trackNoCategories = { ...mockTrackMinimal };
       wrapper = mount(TrackDetailPanel, {
-        props: { track: trackNoCategories }
+        props: { track: trackNoCategories, isOwner: false }
       });
 
       expect(wrapper.text()).not.toContain('Categories');
     });
 
-    it('shows edit categories button when owner', () => {
+    it('shows inline Multiselect when owner', () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }
       });
 
-      expect(wrapper.find('.edit-categories-btn').exists()).toBe(true);
+      expect(wrapper.find('.categories-inline-edit').exists()).toBe(true);
+      expect(wrapper.find('.track-category-select-inline').exists()).toBe(true);
+    });
+
+    it('shows read-only tags when not owner', () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: false }
+      });
+
+      expect(wrapper.find('.categories').exists()).toBe(true);
+      expect(wrapper.find('.categories-inline-edit').exists()).toBe(false);
     });
   });
 
-  describe('Categories Editing', () => {
-    it('enters edit mode and shows Multiselect', async () => {
+  describe('Categories Inline Editing', () => {
+    it('initializes selectedCategories from track data', async () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }
       });
 
-      // Enter edit mode
-      await wrapper.find('.edit-categories-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.vm.isEditingCategories).toBe(true);
-      expect(wrapper.find('.categories-edit').exists()).toBe(true);
-      expect(wrapper.find('.track-category-select').exists()).toBe(true);
+      // Check that selectedCategories is array of objects
+      expect(Array.isArray(wrapper.vm.selectedCategories)).toBe(true);
+      expect(wrapper.vm.selectedCategories.length).toBeGreaterThan(0);
+      expect(wrapper.vm.selectedCategories[0]).toHaveProperty('value');
+      expect(wrapper.vm.selectedCategories[0]).toHaveProperty('label');
     });
 
-    it('converts categories to Multiselect format on edit', async () => {
+    it('auto-saves categories on change', async () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }
       });
 
-      await wrapper.find('.edit-categories-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
-      // Check that editedCategories is array of objects
-      expect(Array.isArray(wrapper.vm.editedCategories)).toBe(true);
-      expect(wrapper.vm.editedCategories.length).toBeGreaterThan(0);
-      expect(wrapper.vm.editedCategories[0]).toHaveProperty('value');
-      expect(wrapper.vm.editedCategories[0]).toHaveProperty('label');
-    });
-
-    it('saves categories successfully', async () => {
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackComplete, isOwner: true }
-      });
-
-      await wrapper.find('.edit-categories-btn').trigger('click');
-      await wrapper.vm.$nextTick();
-
-      // Set some categories
-      wrapper.vm.editedCategories = [
+      // Simulate category change
+      const newCategories = [
         { value: 'hiking', label: 'Hiking' },
         { value: 'running', label: 'Running' }
       ];
-      await wrapper.vm.$nextTick();
 
-      // Save categories
-      await wrapper.find('.categories-edit .save-btn').trigger('click');
+      await wrapper.vm.onCategoriesChange(newCategories);
       await wrapper.vm.$nextTick();
 
       // Ensure composable was called with string array
@@ -494,41 +486,51 @@ describe('TrackDetailPanel', () => {
       expect(wrapper.emitted('categories-updated')).toBeTruthy();
     });
 
-    it('validates empty categories on save', async () => {
+    it('validates empty categories on change', async () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: { ...mockTrackComplete, categories: ['hiking'] }, isOwner: true }
       });
 
-      await wrapper.find('.edit-categories-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
-      // Set empty categories
-      wrapper.vm.editedCategories = [];
+      // Try to set empty categories
+      await wrapper.vm.onCategoriesChange([]);
       await wrapper.vm.$nextTick();
 
-      // Try to save
-      await wrapper.find('.categories-edit .save-btn').trigger('click');
-      await wrapper.vm.$nextTick();
-
-      expect(wrapper.find('.edit-error').text()).toBe('At least one category is required.');
+      expect(wrapper.vm.categoriesError).toBe('At least one category is required.');
     });
 
-    it('shows icons on save and cancel buttons', async () => {
+    it('shows saving indicator during save', async () => {
+      let resolveSave;
+      mockUpdateTrackCategories.mockImplementation(() => {
+        return new Promise(resolve => {
+          resolveSave = resolve;
+        });
+      });
+
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }
       });
 
-      await wrapper.find('.edit-categories-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
-      const saveBtn = wrapper.find('.categories-edit .save-btn');
-      const cancelBtn = wrapper.find('.categories-edit .cancel-btn');
+      // Start saving (don't await yet)
+      const savePromise = wrapper.vm.onCategoriesChange([
+        { value: 'hiking', label: 'Hiking' }
+      ]);
 
-      expect(saveBtn.find('svg').exists()).toBe(true);
-      expect(cancelBtn.find('svg').exists()).toBe(true);
+      // Wait for the saving state to update
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Should show saving indicator
+      expect(wrapper.vm.savingCategories).toBe(true);
+
+      // Clean up
+      resolveSave();
+      await savePromise.catch(() => {});
     });
 
-    it('has predefined categories list', async () => {
+    it('has predefined categories list', () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }
       });
@@ -545,41 +547,36 @@ describe('TrackDetailPanel', () => {
       expect(categoryValues).toContain('cycling');
     });
 
-    it('does not allow custom category creation', async () => {
+    it('does not allow custom category creation', () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }
       });
-
-      await wrapper.find('.edit-categories-btn').trigger('click');
-      await wrapper.vm.$nextTick();
 
       // Multiselect component should have createOption set to false
       const multiselect = wrapper.findComponent({ name: 'Multiselect' });
       expect(multiselect.props('createOption')).toBe(false);
     });
 
-    it('cancels edit mode and clears edited categories', async () => {
+    it('reverts to previous categories on error', async () => {
+      mockUpdateTrackCategories.mockRejectedValue(new Error('Network error'));
+
       wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackComplete, isOwner: true }
+        props: { track: { ...mockTrackComplete, categories: ['hiking', 'running'] }, isOwner: true }
       });
 
-      await wrapper.find('.edit-categories-btn').trigger('click');
       await wrapper.vm.$nextTick();
 
-      // Set some categories
-      wrapper.vm.editedCategories = [
-        { value: 'hiking', label: 'Hiking' },
-        { value: 'running', label: 'Running' }
-      ];
+      const initialCategories = [...wrapper.vm.selectedCategories];
+
+      // Try to change categories (should fail)
+      await wrapper.vm.onCategoriesChange([
+        { value: 'walking', label: 'Walking' }
+      ]);
       await wrapper.vm.$nextTick();
 
-      // Cancel
-      await wrapper.find('.categories-edit .cancel-btn').trigger('click');
-      await wrapper.vm.$nextTick();
-
-      // Should exit edit mode and clear edited categories
-      expect(wrapper.vm.isEditingCategories).toBe(false);
-      expect(wrapper.vm.editedCategories).toEqual([]);
+      // Should revert to initial categories
+      expect(wrapper.vm.selectedCategories).toHaveLength(2);
+      expect(wrapper.vm.categoriesError).toContain('Network error');
     });
   });
 

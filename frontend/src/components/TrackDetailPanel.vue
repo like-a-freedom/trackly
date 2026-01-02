@@ -186,7 +186,7 @@
       </div>
 
       <!-- Categories -->
-      <div class="stats-section" v-if="track.categories && track.categories.length > 0">
+      <div class="stats-section" v-if="isOwner || (track.categories && track.categories.length > 0)">
         <div class="section-header-with-tooltip">
           <h3>Categories</h3>
           <span class="info-icon" tabindex="0" data-tooltip="Categories that were added by the user during track upload" aria-label="Categories that were added by the user during track upload">
@@ -196,20 +196,12 @@
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
           </span>
-          <button v-if="isOwner && !isEditingCategories" class="edit-categories-btn" @click="startEditCategories" title="Edit categories" aria-label="Edit categories">
-            Edit categories
-          </button>
         </div>
 
-        <div v-if="!isEditingCategories" class="categories">
-          <span v-for="category in track.categories" :key="category" class="category-tag">
-            {{ formatCategory(category) }}
-          </span>
-        </div>
-
-        <div v-else class="categories-edit" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
+        <!-- Owner: inline editable Multiselect -->
+        <div v-if="isOwner" class="categories-inline-edit" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
           <Multiselect
-            v-model="editedCategories"
+            v-model="selectedCategories"
             mode="tags"
             :close-on-select="false"
             :searchable="true"
@@ -217,10 +209,12 @@
             :options="categoriesList"
             :object="true"
             placeholder="Select categories"
-            class="track-category-select"
+            class="track-category-select-inline"
             :append-to-body="true"
             position="auto"
             :max-height="220"
+            :disabled="savingCategories"
+            @change="onCategoriesChange"
             @mousedown.stop
             @mouseup.stop
             @click.stop
@@ -228,34 +222,25 @@
             @selectstart.stop
             @dragstart.prevent
           />
-          <div class="edit-actions" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop @dragstart.prevent>
-            <button 
-              @click="saveCategories" 
-              :disabled="savingCategories"
-              class="save-btn"
-              @mousedown.stop
-              @mouseup.stop
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20,6 9,17 4,12"></polyline>
+          <transition name="fade-slide">
+            <div v-if="savingCategories" class="saving-indicator">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
+                <circle cx="12" cy="12" r="10" opacity="0.25"/>
+                <path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round"/>
               </svg>
-              {{ savingCategories ? 'Saving...' : 'Save' }}
-            </button>
-            <button 
-              @click="cancelEditCategories" 
-              :disabled="savingCategories"
-              class="cancel-btn"
-              @mousedown.stop
-              @mouseup.stop
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-              Cancel
-            </button>
-          </div>
-          <div v-if="categoriesError" class="edit-error">{{ categoriesError }}</div>
+              Saving...
+            </div>
+          </transition>
+          <transition name="fade-slide">
+            <div v-if="categoriesError" class="edit-error">{{ categoriesError }}</div>
+          </transition>
+        </div>
+
+        <!-- Non-owner: read-only tags -->
+        <div v-else class="categories">
+          <span v-for="category in track.categories" :key="category" class="category-tag">
+            {{ formatCategory(category) }}
+          </span>
         </div>
       </div>
 
@@ -681,8 +666,7 @@ const savingDescription = ref(false);
 const descriptionError = ref('');
 
 // --- Categories editing state ---
-const isEditingCategories = ref(false);
-const editedCategories = ref([]);
+const selectedCategories = ref([]);
 const savingCategories = ref(false);
 const categoriesError = ref('');
 
@@ -695,41 +679,47 @@ const categoriesList = [
   { value: 'other', label: 'Other' },
 ];
 
-const MAX_CATEGORIES = 50;
+const { updateTrackCategories, updateTrackInPolylines } = useTracks();
 
-const { updateTrackCategories } = useTracks();
+// Initialize selectedCategories from track.categories
+watch(() => props.track?.categories, (newCategories) => {
+  if (newCategories) {
+    selectedCategories.value = newCategories.map(cat => {
+      const found = categoriesList.find(c => c.value === cat.toLowerCase());
+      return found || { value: cat.toLowerCase(), label: cat };
+    });
+  } else {
+    selectedCategories.value = [];
+  }
+}, { immediate: true });
 
-function startEditCategories() {
-  isEditingCategories.value = true;
-  // Convert string categories to objects for Multiselect
-  const currentCategories = props.track && props.track.categories ? props.track.categories : [];
-  editedCategories.value = currentCategories.map(cat => {
-    const found = categoriesList.find(c => c.value === cat.toLowerCase());
-    return found || { value: cat.toLowerCase(), label: cat };
-  });
+// Auto-save on change
+async function onCategoriesChange(newValue) {
   categoriesError.value = '';
-}
-
-function cancelEditCategories() {
-  isEditingCategories.value = false;
-  editedCategories.value = [];
-  categoriesError.value = '';
-}
-
-async function saveCategories() {
-  categoriesError.value = '';
-  if (!editedCategories.value || editedCategories.value.length === 0) {
+  
+  if (!newValue || newValue.length === 0) {
     categoriesError.value = 'At least one category is required.';
+    // Revert to previous value
+    selectedCategories.value = props.track.categories.map(cat => {
+      const found = categoriesList.find(c => c.value === cat.toLowerCase());
+      return found || { value: cat.toLowerCase(), label: cat };
+    });
     return;
   }
   
   // Convert objects to strings
-  const categoryValues = editedCategories.value.map(c => c.value);
+  const categoryValues = newValue.map(c => c.value);
 
   savingCategories.value = true;
   try {
     await updateTrackCategories(props.track.id, categoryValues);
-    isEditingCategories.value = false;
+    
+    // Update local track data to reflect changes immediately
+    props.track.categories = categoryValues;
+    
+    // Update the track in polylines list if it exists
+    updateTrackInPolylines(props.track.id, { categories: categoryValues });
+    
     emit('categories-updated', categoryValues);
     showToast('Categories updated', 'success');
   } catch (err) {
@@ -739,6 +729,12 @@ async function saveCategories() {
     } else {
       categoriesError.value = err.message || 'Failed to update categories.';
     }
+    
+    // Revert to previous value on error
+    selectedCategories.value = props.track.categories.map(cat => {
+      const found = categoriesList.find(c => c.value === cat.toLowerCase());
+      return found || { value: cat.toLowerCase(), label: cat };
+    });
   } finally {
     savingCategories.value = false;
   }
@@ -3112,18 +3108,14 @@ defineExpose({
   display: block;
 }
 
-/* Categories Edit Mode */
-.categories-edit {
+/* Categories Inline Edit Mode */
+.categories-inline-edit {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  gap: 8px;
 }
 
-.categories-edit .track-category-select {
+.categories-inline-edit .track-category-select-inline {
   width: 100%;
   --ms-tag-bg: #10B981;
   --ms-tag-color: #fff;
@@ -3138,39 +3130,35 @@ defineExpose({
   min-height: 44px;
 }
 
-.categories-edit .edit-actions {
-  display: flex;
-  gap: 8px;
-  padding-top: 4px;
-}
-
-.categories-edit .save-btn,
-.categories-edit .cancel-btn {
+.saving-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.95em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  font-size: 0.85em;
+  color: #666;
+  padding: 4px 0;
 }
 
-.categories-edit .save-btn svg,
-.categories-edit .cancel-btn svg {
-  flex-shrink: 0;
+.spinner {
+  animation: spin 1s linear infinite;
 }
 
-.categories-edit .edit-error {
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.edit-error {
   padding: 8px 12px;
   background: #ffebee;
   border: 1px solid #ef5350;
   border-radius: 6px;
   color: #c62828;
   font-size: 0.9em;
-  margin-top: 4px;
 }
 
 .auto-classifications {
