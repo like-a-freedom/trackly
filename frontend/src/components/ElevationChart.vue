@@ -1279,9 +1279,7 @@ onUnmounted(() => {
 // Expose debug helper for deterministic unit testing (non-production only)
 if (import.meta.env.MODE !== 'production') {
   try {
-    if (typeof defineExpose === 'function') {
-      defineExpose({ __debugBuildPayloadForIndex: buildPayloadForIndex });
-    }
+    defineExpose({ __debugBuildPayloadForIndex: buildPayloadForIndex });
   } catch (e) {
     // no-op if defineExpose is unavailable in the test environment
   }
