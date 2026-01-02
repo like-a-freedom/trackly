@@ -1,0 +1,22 @@
+{
+    "id": "test-track-e2e",
+    "name": "E2E Test Track",
+    "geom_geojson": {
+        "type": "LineString",
+        "coordinates": [
+            [
+                -122.4194,
+                37.7749
+            ],
+            [
+                -122.4180,
+                37.7750
+            ],
+            [
+                -122.4170,
+                37.7755
+            ]
+        ]
+    },
+    "length_km": 0.5
+}
