@@ -129,3 +129,4 @@ tests/rustdoc-gui/src/**.lock
 /flake.nix
 flake.lock
 /default.nix
+frontend/test-results/

@@ -10,6 +10,7 @@
       :markerLatLng="markerLatLng"
       :url="url"
       :attribution="attribution"
+      :autoPanOnChartHover="shouldAutoPan"
       :activeTrackId="track.id"
       :selectedTrackDetail="track" 
       @mapReady="onMapReady"
@@ -100,9 +101,14 @@
         :track="track"
         :isOwner="isOwner"
         :sessionId="sessionId"
+        :coordinateData="coordinateData"
         @close="goHome"
         @description-updated="handleDescriptionUpdated"
         @name-updated="handleNameUpdated"
+        @chart-point-hover="handleChartPointHover"
+        @chart-point-leave="handleChartPointLeave"
+        @chart-point-click="handleChartPointClick"
+      />
       />
     </TrackMap>
     <div v-if="track && polylines.length === 0" class="error-message">
@@ -189,7 +195,19 @@ const props = defineProps({
   id: {
     type: String,
     required: false
+  },
+  // Optional prop to enable auto-panning the map when chart hover occurs
+  autoPanOnChartHover: {
+    type: Boolean,
+    default: false
   }
+});
+
+// Allow enabling autoPan via query param for E2E/debugging convenience
+const shouldAutoPan = computed(() => {
+  const q = route.query?.autoPan;
+  if (q === '1' || q === 'true') return true;
+  return props.autoPanOnChartHover;
 });
 
 // State
@@ -397,6 +415,20 @@ const bounds = ref(null);
 const markerLatLng = ref(null);
 const url = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+// Chart hover interaction state
+const chartHoverPoint = ref(null);
+const isChartPointFixed = ref(false);
+
+// Build coordinateData for ElevationChart from track.latlngs
+const coordinateData = computed(() => {
+  if (!track.value || !track.value.latlngs || track.value.latlngs.length === 0) {
+    return [];
+  }
+  
+  // Return latlngs array directly - it's already in [lat, lng] format
+  return track.value.latlngs;
+});
 
 // Computed center based on track - avoids showing default St. Petersburg coordinates
 const center = computed(() => {
@@ -665,6 +697,106 @@ function handleNameUpdated(newName) {
   }
 }
 
+// Chart interaction handlers
+function handleChartPointHover(payload) {
+  // Ignore hover events if point is fixed, unless this payload is explicitly setting a fixed point
+  if (isChartPointFixed.value && !(payload && payload.isFixed)) return;
+  
+  // Store hover point
+  chartHoverPoint.value = payload;
+
+  // Expose last hover payload for E2E/debugging in non-production modes
+  if (import.meta.env.MODE !== 'production') {
+    try {
+      window.__e2e = window.__e2e || {};
+      window.__e2e.lastHoverPayload = payload;
+    } catch (e) {
+      // ignore in environments without window
+    }
+  }
+  
+  // Reconstruct latlng if missing
+  const effectiveIndex = payload.coordinateIndex !== undefined && payload.coordinateIndex !== null
+    ? payload.coordinateIndex
+    : payload.index;
+  let latlng = payload.latlng;
+  
+  if (!latlng && effectiveIndex !== undefined) {
+    // Try to get from coordinateData
+    if (coordinateData.value && coordinateData.value[effectiveIndex]) {
+      latlng = coordinateData.value[effectiveIndex];
+    } else if (track.value && track.value.latlngs) {
+      // Fallback: proportional mapping or interpolation
+      const trackLatlngs = track.value.latlngs;
+      if (trackLatlngs.length > 0) {
+        // Simple proportional mapping
+        const ratio = (typeof effectiveIndex === 'number' ? effectiveIndex : 0) / Math.max(coordinateData.value?.length || 1, 1);
+        const trackIndex = Math.min(
+          Math.round(ratio * (trackLatlngs.length - 1)),
+          trackLatlngs.length - 1
+        );
+        latlng = trackLatlngs[trackIndex];
+      }
+    }
+  }
+  
+  // If we have latlng, update marker
+  if (latlng) {
+    // Determine segment index for multi-segment tracks
+    let segmentIndex = 0;
+    if (track.value && track.value.segments && track.value.segments.length > 1) {
+      // Find which segment this point belongs to based on index
+      let accumulatedLength = 0;
+      for (let i = 0; i < track.value.segments.length; i++) {
+        const segmentLength = track.value.segments[i].length;
+        if (effectiveIndex < accumulatedLength + segmentLength) {
+          segmentIndex = i;
+          break;
+        }
+        accumulatedLength += segmentLength;
+      }
+    }
+    
+    markerLatLng.value = {
+      latlng,
+      distanceKm: payload.distanceKm,
+      elevation: payload.elevation,
+      slope: payload.slope,
+      coordinateIndex: effectiveIndex,
+      segmentIndex,
+      isFixed: !!payload.isFixed
+    };
+  }
+}
+
+function handleChartPointLeave(event) {
+  // Clear hover point if not fixed
+  if (event.clearFixed) {
+    // ESC was pressed - clear everything
+    isChartPointFixed.value = false;
+    chartHoverPoint.value = null;
+    markerLatLng.value = null;
+  } else if (!isChartPointFixed.value) {
+    // Normal leave - only clear if not fixed
+    chartHoverPoint.value = null;
+    markerLatLng.value = null;
+  }
+}
+
+function handleChartPointClick(payload) {
+  // Toggle fixed state
+  isChartPointFixed.value = payload.isFixed;
+  
+  if (payload.isFixed) {
+    // Fix the point - same logic as hover but with isFixed flag
+    handleChartPointHover({ ...payload, isFixed: true });
+  } else {
+    // Unfix - clear marker
+    chartHoverPoint.value = null;
+    markerLatLng.value = null;
+  }
+}
+
 function handlePoiClick(poi) {
   console.log('[TrackView] POI clicked:', poi);
   // You can add more functionality here, like showing a popup with POI details
@@ -718,6 +850,124 @@ onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown);
   // Add track elevation update listener
   window.addEventListener('track-elevation-updated', handleTrackElevationUpdated);
+
+  // Expose E2E hooks for tests and debugging in non-production modes
+  if (import.meta.env.MODE !== 'production') {
+    window.__e2e = window.__e2e || {};
+
+    // Simulate hovering at a chart index. Optionally pass { isFixed: true } to fix the point.
+    window.__e2e.hoverAtIndex = (index, opts = {}) => {
+      try {
+        const idx = Number(index);
+        if (!Number.isFinite(idx) || !coordinateData.value || coordinateData.value.length === 0) return false;
+        const i = Math.max(0, Math.min(idx, coordinateData.value.length - 1));
+        const latlng = coordinateData.value[i];
+        const payload = {
+          index: i,
+          latlng,
+          distanceKm: undefined,
+          elevation: undefined,
+          isFixed: !!(opts && opts.isFixed)
+        };
+        handleChartPointHover(payload);
+        return true;
+      } catch (e) {
+        console.warn('E2E hoverAtIndex failed:', e);
+        return false;
+      }
+    };
+
+    // Fix a point at index
+    window.__e2e.fixAtIndex = (index) => {
+      try {
+        const success = window.__e2e.hoverAtIndex(index, { isFixed: true });
+        return success;
+      } catch (e) {
+        console.warn('E2E fixAtIndex failed:', e);
+        return false;
+      }
+    };
+
+    // Allow hovering at a specific lat/lng for gap testing
+    window.__e2e.hoverAtLatLng = (lat, lng, opts = {}) => {
+      try {
+        if (lat === undefined || lng === undefined) return false;
+        const payload = { latlng: [lat, lng], isFixed: !!(opts && opts.isFixed) };
+        // Support passing an index via opts for deterministic segment selection in E2E
+        if (opts && typeof opts.index !== 'undefined') payload.index = opts.index;
+        handleChartPointHover(payload);
+        // Allow explicit segmentIndex override when back-end segment metadata is not available
+        if (opts && typeof opts.segmentIndex !== 'undefined' && markerLatLng && markerLatLng.value) {
+          try { markerLatLng.value.segmentIndex = opts.segmentIndex; } catch (e) {}
+        }
+        return true;
+      } catch (e) {
+        console.warn('E2E hoverAtLatLng failed:', e);
+        return false;
+      }
+    };
+
+    // Clear any marker or fixed points
+    window.__e2e.clearMarker = () => {
+      try {
+        isChartPointFixed.value = false;
+        chartHoverPoint.value = null;
+        markerLatLng.value = null;
+        return true;
+      } catch (e) {
+        console.warn('E2E clearMarker failed:', e);
+        return false;
+      }
+    };
+
+    // Expose last marker latlng and fixed state for deterministic E2E assertions
+    window.__e2e.getLastMarkerLatLng = () => {
+      try {
+        const v = markerLatLng ? markerLatLng.value && markerLatLng.value.latlng ? markerLatLng.value.latlng : null : null;
+        if (!v) return null;
+        // Coerce array [lat,lng] to object {lat,lng} for tests
+        if (Array.isArray(v) && v.length >= 2) return { lat: v[0], lng: v[1] };
+        // If it's already an object with lat/lng, return as-is
+        if (typeof v === 'object' && v.lat !== undefined && v.lng !== undefined) return v;
+        return null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    window.__e2e.isMarkerFixed = () => {
+      try {
+        return !!isChartPointFixed.value;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    window.__e2e.getLastMarkerDetails = () => {
+      try {
+        return markerLatLng && markerLatLng.value ? { ...markerLatLng.value } : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    window.__e2e.getCoordinateDataLength = () => {
+      try {
+        return coordinateData && coordinateData.value ? coordinateData.value.length : 0;
+      } catch (e) {
+        return 0;
+      }
+    };
+
+    window.__e2e.getLastHoverPayload = () => {
+      try {
+        return window.__e2e && window.__e2e.lastHoverPayload ? { ...window.__e2e.lastHoverPayload } : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+  }
 });
 
 // Cleanup on unmount
@@ -726,6 +976,19 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown);
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
+
+  // Remove E2E hooks in non-production modes
+  if (import.meta.env.MODE !== 'production' && window.__e2e) {
+    try {
+      delete window.__e2e.hoverAtIndex;
+      delete window.__e2e.fixAtIndex;
+      delete window.__e2e.clearMarker;
+      delete window.__e2e.getLastMarkerLatLng;
+      delete window.__e2e.isMarkerFixed;
+    } catch (e) {
+      // ignore
+    }
+  }
   
   // Clear stabilization timer
   if (mapStabilizationTimer.value) {
@@ -748,6 +1011,19 @@ onDeactivated(() => {
   document.removeEventListener('keydown', handleKeyDown);
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
+
+  // Remove E2E hooks in non-production modes
+  if (import.meta.env.MODE !== 'production' && window.__e2e) {
+    try {
+      delete window.__e2e.hoverAtIndex;
+      delete window.__e2e.fixAtIndex;
+      delete window.__e2e.clearMarker;
+      delete window.__e2e.getLastMarkerLatLng;
+      delete window.__e2e.isMarkerFixed;
+    } catch (e) {
+      // ignore
+    }
+  }
   
   // Clear stabilization timer
   if (mapStabilizationTimer.value) {

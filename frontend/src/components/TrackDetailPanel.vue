@@ -389,7 +389,7 @@
             :slopeData="track.slope_segments"
             :speedData="track.speed_data"
             :paceData="track.pace_data"
-            :coordinateData="track.geom_geojson?.coordinates"
+            :coordinateData="props.coordinateData"
             :timeData="parsedTimeData"
             :avgSpeed="track.avg_speed"
             :movingAvgSpeed="track.moving_avg_speed"
@@ -405,6 +405,9 @@
               enriched: track.elevation_enriched,
               dataset: track.elevation_dataset
             }"
+            @chart-point-hover="(payload) => emit('chart-point-hover', payload)"
+            @chart-point-leave="(payload) => emit('chart-point-leave', payload)"
+            @chart-point-click="(payload) => emit('chart-point-click', payload)"
           />
         </div>
         
@@ -514,10 +517,14 @@ const props = defineProps({
   sessionId: {
     type: String,
     default: ''
+  },
+  coordinateData: {
+    type: Array,
+    default: () => []
   }
 });
 
-const emit = defineEmits(['close', 'description-updated', 'name-updated', 'deleted']);
+const emit = defineEmits(['close', 'description-updated', 'name-updated', 'deleted', 'chart-point-hover', 'chart-point-leave', 'chart-point-click']);
 const route = useRoute();
 const isClosing = ref(false);
 const isCollapsed = ref(false);
