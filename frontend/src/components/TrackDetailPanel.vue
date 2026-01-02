@@ -3115,8 +3115,13 @@ defineExpose({
   gap: 8px;
 }
 
+/* Size the multiselect trigger to fit its tag contents instead of stretching to container */
 .categories-inline-edit .track-category-select-inline {
-  width: 100%;
+  width: max-content; /* shrink to content width */
+  min-width: 140px; /* sensible minimum for empty state */
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
   --ms-tag-bg: #10B981;
   --ms-tag-color: #fff;
   --ms-tag-radius: 4px;
@@ -3128,6 +3133,14 @@ defineExpose({
   border-radius: 4px;
   background: white;
   min-height: 44px;
+}
+
+/* Mobile: fall back to full width for narrow screens */
+@media (max-width: 700px) {
+  .categories-inline-edit .track-category-select-inline {
+    width: 100% !important;
+    display: block;
+  }
 }
 
 .saving-indicator {
