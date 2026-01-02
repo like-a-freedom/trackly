@@ -14,7 +14,13 @@ const routes = [
     component: TrackView,
     props: true
   }
-]
+];
+
+// Dev/test-only route for E2E harness
+if (import.meta.env.MODE !== 'production') {
+  const E2ETrackTest = () => import('../views/E2ETrackTest.vue');
+  routes.push({ path: '/e2e-test', name: 'E2ETrackTest', component: E2ETrackTest });
+}
 
 const router = createRouter({
   history: createWebHistory(),
