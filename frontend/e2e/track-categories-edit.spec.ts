@@ -220,6 +220,15 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
     const multiselect = page.locator('.track-category-select-inline');
     await expect(multiselect).toBeVisible();
     await expect(multiselect).not.toBeDisabled();
+
+    // The trigger width should match its content width (tags) — check that width ~= scrollWidth
+    const dims = await multiselect.evaluate((el) => ({
+      width: el.getBoundingClientRect().width,
+      scrollWidth: el.scrollWidth
+    }));
+    // Allow small rounding differences
+    const diff = Math.abs(dims.width - dims.scrollWidth);
+    expect(diff).toBeLessThan(3);
   });
 
   test('should show saving indicator during update', async ({ page, context }) => {
@@ -242,8 +251,15 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
 
     // Note: Testing the saving indicator is complex with Multiselect
     // as it requires actual interaction with the dropdown
-    // For now, we just verify the structure exists
+    // For now, we just verify the structure exists and that it sizes to its content
     const multiselect = page.locator('.track-category-select-inline');
     await expect(multiselect).toBeVisible();
+
+    const dims = await multiselect.evaluate((el) => ({
+      width: el.getBoundingClientRect().width,
+      scrollWidth: el.scrollWidth
+    }));
+    const diff = Math.abs(dims.width - dims.scrollWidth);
+    expect(diff).toBeLessThan(3);
   });
 });
