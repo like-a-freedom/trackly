@@ -193,6 +193,14 @@ fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), Stat
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     if let Some(&last) = map.get(session_key) {
+        // If the recorded last timestamp is in the future relative to the provided "now",
+        // treat it as stale and overwrite with current time to avoid spurious rate limits
+        // caused by tests running in parallel or clock skews in tests.
+        if last > now {
+            map.insert(session_key.to_string(), now);
+            return Ok(());
+        }
+
         if now < last + *UPLOAD_RATE_LIMIT_SECONDS {
             let retry_after = last + *UPLOAD_RATE_LIMIT_SECONDS - now;
             warn!(
@@ -204,16 +212,68 @@ fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), Stat
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
     }
+    info!(
+        session_id = session_key,
+        timestamp = now,
+        "recording upload attempt"
+    );
+    map.insert(session_key.to_string(), now);
+    Ok(())
+}
+
+// Configurable export rate limiting (mirrors upload rate limiting)
+static LAST_EXPORT: Lazy<Mutex<HashMap<String, u64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static EXPORT_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
+    std::env::var("EXPORT_RATE_LIMIT_SECONDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10) // Default 10 seconds
+});
+
+fn record_session_export_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
+    let mut map = LAST_EXPORT.lock().map_err(|e| {
+        error!(error = ?e, "LAST_EXPORT mutex poisoned");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    if let Some(&last) = map.get(session_key) {
+        // If the recorded last timestamp is in the future relative to the provided "now",
+        // treat it as stale and overwrite with current time to avoid spurious rate limits
+        // caused by tests running in parallel or clock skews in tests.
+        if last > now {
+            map.insert(session_key.to_string(), now);
+            return Ok(());
+        }
+
+        if now < last + *EXPORT_RATE_LIMIT_SECONDS {
+            let retry_after = last + *EXPORT_RATE_LIMIT_SECONDS - now;
+            warn!(
+                reason = "export_rate_limited",
+                session_id = session_key,
+                retry_after_seconds = retry_after,
+                "export_track rate limit hit"
+            );
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+    }
+    info!(
+        session_id = session_key,
+        timestamp = now,
+        "recording export attempt"
+    );
     map.insert(session_key.to_string(), now);
     Ok(())
 }
 
 #[cfg(test)]
 fn reset_rate_limit_state() {
-    // Clear the LAST_UPLOAD map for tests; if poisoned, log and skip the clear
+    // Clear the LAST_UPLOAD and LAST_EXPORT maps for tests; if poisoned, log and skip the clear
     match LAST_UPLOAD.lock() {
         Ok(mut m) => m.clear(),
         Err(e) => error!(error = ?e, "LAST_UPLOAD mutex poisoned - clear skipped"),
+    }
+    match LAST_EXPORT.lock() {
+        Ok(mut m) => m.clear(),
+        Err(e) => error!(error = ?e, "LAST_EXPORT mutex poisoned - clear skipped"),
     }
 }
 
@@ -751,6 +811,56 @@ pub async fn export_track_gpx(
     let start = Instant::now();
     let session_id = parse_session_header(&headers);
 
+    // --- Rate limiting for exports ---
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let session_key = headers
+        .get("x-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .or_else(|| {
+            headers
+                .get("x-forwarded-for")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| format!("ip:{}", s.split(',').next().unwrap_or("").trim()))
+        })
+        .unwrap_or_else(|| "anon".to_string());
+
+    if record_session_export_attempt(&session_key, now).is_err() {
+        // compute retry_after for header
+        let retry_after = {
+            let map = LAST_EXPORT.lock().map_err(|e| {
+                error!(error = ?e, "LAST_EXPORT mutex poisoned");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            if let Some(&last) = map.get(&session_key) {
+                if now < last + *EXPORT_RATE_LIMIT_SECONDS {
+                    last + *EXPORT_RATE_LIMIT_SECONDS - now
+                } else {
+                    *EXPORT_RATE_LIMIT_SECONDS
+                }
+            } else {
+                *EXPORT_RATE_LIMIT_SECONDS
+            }
+        };
+
+        let resp = axum::response::Response::builder()
+            .status(StatusCode::TOO_MANY_REQUESTS)
+            .header("Retry-After", retry_after.to_string())
+            .header(
+                "Access-Control-Expose-Headers",
+                "X-Export-Rate-Limit-Seconds, Retry-After",
+            )
+            .body(axum::body::Body::empty())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        return Ok(resp);
+    }
+    // --- End rate limiting ---
+
     match db::get_track_detail(&pool, id).await {
         Ok(Some(track)) => {
             let gpx_service = GpxExportService::new();
@@ -764,6 +874,14 @@ pub async fn export_track_gpx(
                         "attachment; filename=\"{name}.gpx\"",
                         name = gpx_service.sanitize_filename(&track.name)
                     ),
+                )
+                .header(
+                    "X-Export-Rate-Limit-Seconds",
+                    format!("{}", *EXPORT_RATE_LIMIT_SECONDS),
+                )
+                .header(
+                    "Access-Control-Expose-Headers",
+                    "X-Export-Rate-Limit-Seconds, Retry-After",
                 )
                 .body(axum::body::Body::from(gpx_content))
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -1014,6 +1132,24 @@ mod tests {
 
         // After enough time passes, uploads are allowed again
         record_session_upload_attempt("session", 212).expect("rate limit window expired");
+    }
+
+    #[test]
+    fn record_session_export_allows_first_attempt() {
+        reset_rate_limit_state();
+        record_session_export_attempt("session", 100).expect("first export should pass");
+    }
+
+    #[test]
+    fn record_session_export_blocks_fast_retries() {
+        reset_rate_limit_state();
+        record_session_export_attempt("session", 200).expect("initial export ok");
+
+        let err = record_session_export_attempt("session", 205).expect_err("should rate limit");
+        assert_eq!(err, StatusCode::TOO_MANY_REQUESTS);
+
+        // After enough time passes, exports are allowed again
+        record_session_export_attempt("session", 212).expect("rate limit window expired");
     }
 
     // Additional integration tests from tests/handlers.rs

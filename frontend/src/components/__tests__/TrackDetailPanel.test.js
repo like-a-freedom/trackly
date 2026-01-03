@@ -1201,6 +1201,58 @@ describe('TrackDetailPanel', () => {
       expect(exportButton.attributes('title')).toBe('Exporting...');
     });
 
+    it('should set export cooldown after successful export header', async () => {
+      // Mock fetch for export with cooldown header
+      global.fetch.mockResolvedValue({
+        ok: true,
+        headers: new Map([
+          ['content-disposition', 'attachment; filename="test-track.gpx"'],
+          ['x-export-rate-limit-seconds', '7']
+        ]),
+        blob: () => Promise.resolve(new Blob(['<gpx>mock gpx content</gpx>'], { type: 'application/gpx+xml' }))
+      });
+
+      const track = { ...mockTrackComplete };
+      const wrapper = mount(TrackDetailPanel, {
+        props: { track, isVisible: true }
+      });
+
+      const exportButton = wrapper.find('.export-gpx-btn');
+      await exportButton.trigger('click');
+
+      // Wait for async operations
+      await wrapper.vm.$nextTick();
+      await flushPromises();
+
+      // After success, cooldown should be active and button disabled
+      expect(exportButton.attributes('disabled')).toBe('');
+      expect(exportButton.attributes('title')).toBe('Export disabled: wait 7s');
+    });
+
+    it('should handle 429 by setting cooldown and showing toast', async () => {
+      global.fetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        headers: new Map([['retry-after', '5']])
+      });
+
+      const track = { ...mockTrackComplete };
+      const wrapper = mount(TrackDetailPanel, {
+        props: { track, isVisible: true }
+      });
+
+      const exportButton = wrapper.find('.export-gpx-btn');
+      await exportButton.trigger('click');
+
+      // Wait for async operations
+      await wrapper.vm.$nextTick();
+      await flushPromises();
+
+      expect(mockShowToast).toHaveBeenCalledWith('Please wait 5 seconds before exporting again.', 'error');
+      expect(exportButton.attributes('disabled')).toBe('');
+      expect(exportButton.attributes('title')).toBe('Export disabled: wait 5s');
+    });
+
     it('should handle export error gracefully', async () => {
       global.fetch.mockRejectedValue(new Error('Network error'));
 
