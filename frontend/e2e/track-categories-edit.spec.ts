@@ -60,8 +60,8 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
           let json = null;
           try { json = JSON.parse(text); } catch (e) { /* not json */ }
           return { ok: res.ok, status: res.status, json, text };
-        } catch (e) {
-          return { ok: false, status: 0, error: e.message || String(e) };
+        } catch (e: any) {
+          return { ok: false, status: 0, error: (e && e.message) ? e.message : String(e) };
         }
       }, { gpx: gpxContent, backendUrl: BACKEND_URL, sessionId: TEST_SESSION_ID, sessionUuid });
 
@@ -282,6 +282,36 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
 
     // Close dropdown if opened
     await page.keyboard.press('Escape');
+  });
+
+  test('should open description editor when clicking description block', async ({ page, context }) => {
+    test.skip(!trackId, 'Backend unavailable or track upload failed');
+
+    await context.addCookies([
+      {
+        name: 'session_id',
+        value: TEST_SESSION_ID,
+        domain: 'localhost',
+        path: '/',
+      },
+    ]);
+    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${TEST_SESSION_ID}'); } catch(e){} })()`);
+
+    await page.goto(`${FRONTEND_URL}/track/${trackId}`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('.track-detail-flyout', { timeout: 10000 });
+
+    const descBlock = page.locator('.track-description-block');
+    await expect(descBlock).toBeVisible();
+    await descBlock.click();
+
+    // Expect edit textarea to appear
+    const editBlock = page.locator('.description-edit-block');
+    await expect(editBlock).toBeVisible({ timeout: 2000 });
+    await expect(page.locator('.edit-description-input')).toBeVisible();
+
+    // Close editor
+    await page.locator('.cancel-btn').click();
   });
 
   test('should show saving indicator during update', async ({ page, context }) => {
