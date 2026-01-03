@@ -214,6 +214,7 @@
             position="bottom-start"
             :max-height="220"
             :disabled="savingCategories"
+            :style="{ margin: '0', marginLeft: '0', marginRight: '0' }"
             @change="onCategoriesChange"
             @mousedown.stop
             @mouseup.stop
@@ -3113,6 +3114,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
+  align-items: flex-start !important; /* Align multiselect to the left, not center or stretch */
+  justify-content: flex-start !important;
 }
 
 /* Size the multiselect trigger to fit its tag contents instead of stretching to container */
@@ -3122,6 +3125,9 @@ defineExpose({
   max-width: 100%;
   display: inline-flex;
   align-items: center;
+  align-self: flex-start !important; /* Force self-alignment to left */
+  margin-left: 0 !important; /* No left margin */
+  margin-right: auto !important; /* Push to left */
   --ms-tag-bg: #10B981;
   --ms-tag-color: #fff;
   --ms-tag-radius: 4px;
@@ -3143,27 +3149,24 @@ defineExpose({
   }
 }
 
-/* Ensure dropdown menu (popper/content) aligns to the LEFT edge of the multiselect trigger/container */
-/* Target common classnames used by @vueform/multiselect and provide a robust fallback */
-.track-category-select-inline .multiselect__content,
-.track-category-select-inline .multiselect__menu,
-.track-category-select-inline .multiselect__popper,
-.track-category-select-inline .multiselect__options,
-.track-category-select-inline .ms-content,
-.track-category-select-inline .ms-panel,
-.track-category-select-inline .ms-dropdown {
-  left: 0 !important;
-  right: auto !important;
-  transform-origin: left top !important;
-  transform: translateX(0) !important; /* remove centering transform from popper */
+/* Mark the multiselect with a unique class for dropdown alignment */
+.track-category-select-inline {
+  position: relative;
 }
 
-/* If the multiselect uses an inline absolute positioned wrapper, also ensure it aligns */
-.track-category-select-inline [style*="position: absolute"] {
-  left: 0 !important;
-  right: auto !important;
-  transform-origin: left top !important;
-  transform: translateX(0) !important;
+/* Override multiselect wrapper centering - force left alignment */
+/* Use :deep() to penetrate into the Multiselect component */
+.categories-inline-edit .track-category-select-inline :deep(.multiselect-wrapper) {
+  margin: 0 !important; /* Remove auto-centering margin */
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Also target the multiselect root element itself */
+.categories-inline-edit :deep(.multiselect) {
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 .saving-indicator {
@@ -3358,5 +3361,50 @@ defineExpose({
       -webkit-backface-visibility: hidden;
     }
   }
+}
+</style>
+
+<style>
+/* Global styles for multiselect dropdown (rendered via teleport to body) */
+/* Force left alignment for category multiselect dropdown */
+/* Note: These styles target the dropdown that is rendered via teleport to body */
+
+/* Target multiselect dropdown containers specifically */
+/* Do NOT override inline transform set by Popper.js — that breaks horizontal positioning */
+div.multiselect-dropdown[data-popper-placement^="bottom"],
+.multiselect-dropdown[data-popper-placement],
+.multiselect-options[data-popper-placement] {
+  /* Keep popper inline transforms intact. If a small vertical offset is desired, adjust popper offset via component props instead. */
+}
+
+/* CRITICAL: Force left alignment for multiselect component and ALL its children */
+/* Use very specific selectors to override library defaults */
+.categories-inline-edit .track-category-select-inline,
+.categories-inline-edit .track-category-select-inline.multiselect,
+.categories-inline-edit > .multiselect,
+.categories-inline-edit > .track-category-select-inline {
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
+  align-self: flex-start !important;
+}
+
+/* Target the internal wrapper that has margin: 0 auto by default */
+.categories-inline-edit .multiselect-wrapper,
+.categories-inline-edit .track-category-select-inline .multiselect-wrapper,
+.categories-inline-edit .multiselect .multiselect-wrapper,
+.track-category-select-inline .multiselect-wrapper {
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
+  justify-content: flex-start !important;
+}
+
+/* Also override the .multiselect root styles */
+.categories-inline-edit .multiselect,
+.track-category-select-inline.multiselect {
+  margin: 0 !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
 }
 </style>
