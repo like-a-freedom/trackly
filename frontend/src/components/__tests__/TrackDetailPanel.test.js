@@ -2164,6 +2164,63 @@ describe('TrackDetailPanel', () => {
     });
   });
 
+  describe('Description Editing', () => {
+    it('starts editing when clicking description block', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+      await wrapper.vm.$nextTick();
+      const block = wrapper.find('.track-description-block');
+      expect(block.exists()).toBe(true);
+      await block.trigger('click');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
+      expect(wrapper.find('.edit-description-input').exists()).toBe(true);
+    });
+
+    it('starts editing when pressing Enter on focused description block', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+      await wrapper.vm.$nextTick();
+      const block = wrapper.find('.track-description-block');
+      await block.trigger('keydown.enter');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
+    });
+
+    it('starts editing when pressing Space on focused description block', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+      await wrapper.vm.$nextTick();
+      const block = wrapper.find('.track-description-block');
+      await block.trigger('keydown.space');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
+    });
+
+    it('clicking edit button opens editor and repeated clicks are idempotent', async () => {
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: mockTrackComplete, isOwner: true }
+      });
+      await wrapper.vm.$nextTick();
+
+      const btn = wrapper.find('.edit-description-btn');
+      expect(btn.exists()).toBe(true);
+
+      // First click should open editor
+      await btn.trigger('click');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
+
+      // Second click should not break (still open)
+      await btn.trigger('click');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
+    });
+  });
+
   describe('Touch Event Handling for Mobile Devices', () => {
     beforeEach(() => {
       wrapper = mount(TrackDetailPanel, {

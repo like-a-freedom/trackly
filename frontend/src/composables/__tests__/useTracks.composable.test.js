@@ -492,7 +492,8 @@ describe('useTracks composable', () => {
             const result = await fetchTrackDetail('track-123');
 
             expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining('/tracks/track-123')
+                expect.stringContaining('/tracks/track-123'),
+                expect.any(Object)
             );
             expect(result).toMatchObject(mockTrack);
         });
@@ -507,10 +508,12 @@ describe('useTracks composable', () => {
             await fetchTrackDetail('track-123', 15, 'detail');
 
             expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining('zoom=15')
+                expect.stringContaining('zoom=15'),
+                expect.any(Object)
             );
             expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining('mode=detail')
+                expect.stringContaining('mode=detail'),
+                expect.any(Object)
             );
         });
 

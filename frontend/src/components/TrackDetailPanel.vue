@@ -170,12 +170,12 @@
         </div>
         
         <!-- Description Display Mode -->
-        <div v-else-if="track.description || isOwner" class="track-description-block" :class="{ 'editable': isOwner, 'empty': !track.description && isOwner }">
+        <div v-else-if="track.description || isOwner" class="track-description-block" :class="{ 'editable': isOwner, 'empty': !track.description && isOwner }" @click="isOwner && startEditDescription()" @keydown.enter.prevent="isOwner && startEditDescription()" @keydown.space.prevent="isOwner && startEditDescription()" :tabindex="isOwner ? 0 : -1" role="button">
           <div class="description-content">
             <p v-if="track.description" class="track-description-text" v-html="processedDescription"></p>
             <p v-else-if="isOwner" class="track-description-placeholder">No description added yet</p>
           </div>
-          <button v-if="isOwner" class="edit-description-btn" @click="startEditDescription" :title="track.description ? 'Edit description' : 'Add description'">
+          <button v-if="isOwner" class="edit-description-btn" @click.stop="startEditDescription" :title="track.description ? 'Edit description' : 'Add description'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="m18.5 2.5 a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -3369,13 +3369,6 @@ defineExpose({
 /* Force left alignment for category multiselect dropdown */
 /* Note: These styles target the dropdown that is rendered via teleport to body */
 
-/* Target multiselect dropdown containers specifically */
-/* Do NOT override inline transform set by Popper.js — that breaks horizontal positioning */
-div.multiselect-dropdown[data-popper-placement^="bottom"],
-.multiselect-dropdown[data-popper-placement],
-.multiselect-options[data-popper-placement] {
-  /* Keep popper inline transforms intact. If a small vertical offset is desired, adjust popper offset via component props instead. */
-}
 
 /* CRITICAL: Force left alignment for multiselect component and ALL its children */
 /* Use very specific selectors to override library defaults */
