@@ -131,3 +131,5 @@ flake.lock
 /default.nix
 frontend/test-results/
 frontend/test-results/.last-run.json
+.github/skills
+.github/agents
