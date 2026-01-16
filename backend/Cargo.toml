@@ -34,12 +34,9 @@ sqlx = { version = "0.8.6", features = [
 uuid = { version = "1.19.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.43", features = ["serde"] }
 # HTTP client
-reqwest = { version = "0.13.1", default-features = false, features = [
+reqwest = { version = "0.12.28", default-features = false, features = [
     "json",
-    "rustls",
-    "query",
-    "native-tls"
-    # Not using aws-lc as it's broke musl builds
+    "rustls-tls",
 ] }
 ammonia = "4.1.2"
 # File parsing
