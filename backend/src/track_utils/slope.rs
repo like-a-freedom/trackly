@@ -37,8 +37,7 @@ impl SlopeConfig {
         // Log configuration for debugging
         info!(
             "Slope calculation config: elevation_smoothing_window={:.1}m, slope_calculation_window={:.1}m",
-            config.elevation_smoothing_window,
-            config.slope_calculation_window
+            config.elevation_smoothing_window, config.slope_calculation_window
         );
 
         config

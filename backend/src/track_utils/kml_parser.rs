@@ -140,17 +140,16 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                 "coord" | "gx:coord" => {
                     if let Some(content) = &child.content {
                         let parts: Vec<&str> = content.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            if let (Ok(lon), Ok(lat)) =
+                        if parts.len() >= 2
+                            && let (Ok(lon), Ok(lat)) =
                                 (parts[0].parse::<f64>(), parts[1].parse::<f64>())
-                            {
-                                let elevation = if parts.len() >= 3 {
-                                    parts[2].parse::<f64>().ok()
-                                } else {
-                                    None
-                                };
-                                coords.push((lat, lon, elevation));
-                            }
+                        {
+                            let elevation = if parts.len() >= 3 {
+                                parts[2].parse::<f64>().ok()
+                            } else {
+                                None
+                            };
+                            coords.push((lat, lon, elevation));
                         }
                     }
                 }
@@ -337,7 +336,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     };
 
     // Perform automatic track classification
-    use crate::track_classifier::{classify_track, TrackMetrics};
+    use crate::track_classifier::{TrackMetrics, classify_track};
     let metrics = TrackMetrics {
         length_km,
         avg_speed: None,

@@ -1,8 +1,8 @@
 use crate::{
     db, metrics,
     track_utils::{
-        elevation_enrichment::EnrichmentResult, slope::recalculate_slope_metrics,
-        ElevationEnrichmentService,
+        ElevationEnrichmentService, elevation_enrichment::EnrichmentResult,
+        slope::recalculate_slope_metrics,
     },
 };
 use once_cell::sync::OnceCell;
@@ -13,7 +13,7 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -292,7 +292,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn queue_processes_jobs_in_order() {

@@ -112,13 +112,12 @@ pub fn filter_pace_data(
     let mut config = get_pace_filter_config(classifications);
 
     // If no specific classification matched, try cycling detection based on speed patterns
-    if classifications.is_empty()
-        || config.spike_multiplier == get_env_f64("PACE_SPIKE_MULTIPLIER_DEFAULT", 3.0)
+    if (classifications.is_empty()
+        || config.spike_multiplier == get_env_f64("PACE_SPIKE_MULTIPLIER_DEFAULT", 3.0))
+        && let Some(cycling_config) = detect_cycling_and_get_config(speed_data)
     {
-        if let Some(cycling_config) = detect_cycling_and_get_config(speed_data) {
-            config = cycling_config;
-            debug!("Detected cycling activity based on speed patterns");
-        }
+        config = cycling_config;
+        debug!("Detected cycling activity based on speed patterns");
     }
 
     debug!(
@@ -252,11 +251,7 @@ fn apply_spike_filter(pace_data: &[Option<f64>], config: &PaceFilterConfig) -> V
                 .enumerate()
                 .filter_map(|(idx, p)| {
                     // Exclude current point from local average
-                    if start + idx != i {
-                        *p
-                    } else {
-                        None
-                    }
+                    if start + idx != i { *p } else { None }
                 })
                 .collect();
 

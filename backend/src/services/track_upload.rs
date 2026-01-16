@@ -1,9 +1,9 @@
 use crate::{
     db,
     input_validation::{
-        sanitize_input, validate_file_extension, validate_file_size, validate_text_field,
         MAX_CATEGORIES, MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE,
-        MAX_NAME_LENGTH,
+        MAX_NAME_LENGTH, sanitize_input, validate_file_extension, validate_file_size,
+        validate_text_field,
     },
     metrics,
     models::{ParsedTrackData, ParsedWaypoint, TrackUploadResponse},

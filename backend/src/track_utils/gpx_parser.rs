@@ -9,8 +9,8 @@ use crate::track_utils::geometry::{
     geojson_from_segments, haversine_distance, length_km_for_segments, split_points_by_gap,
 };
 use crate::track_utils::time_utils::parse_gpx_time;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use sha2::{Digest, Sha256};
 use tracing::{debug, info};
 
@@ -597,7 +597,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let avg_speed = crate::track_utils::metrics::avg_speed_kmh(length_km, duration_seconds);
 
     // Perform automatic track classification
-    use crate::track_classifier::{classify_track, TrackMetrics};
+    use crate::track_classifier::{TrackMetrics, classify_track};
     let metrics = TrackMetrics {
         length_km,
         avg_speed,
@@ -710,18 +710,9 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
 mod tests {
     use super::parse_gpx;
 
-    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     fn with_env_var(key: &str, value: &str, f: impl FnOnce()) {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        let previous = std::env::var(key).ok();
-        std::env::set_var(key, value);
-        f();
-        if let Some(prev) = previous {
-            std::env::set_var(key, prev);
-        } else {
-            std::env::remove_var(key);
-        }
+        // Delegate to `temp-env` to safely set/unset for the closure
+        temp_env::with_var(key, Some(value), f)
     }
 
     #[test]
@@ -783,11 +774,9 @@ mod tests {
     #[test]
     fn splits_teleport_with_default_threshold() {
         // Ensure we rely on the hardcoded default (100km) for this test
-        let _guard = ENV_MUTEX.lock().unwrap();
-        let original = std::env::var("TRACK_MAX_GAP_METERS").ok();
-        std::env::remove_var("TRACK_MAX_GAP_METERS");
-
-        let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
+        // Ensure the env var is not set for this test using `temp-env`
+        temp_env::with_var_unset("TRACK_MAX_GAP_METERS", || {
+            let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test">
     <trk><name>Teleport</name><trkseg>
         <trkpt lat="0.0" lon="0.0"><ele>0.0</ele></trkpt>
@@ -795,20 +784,16 @@ mod tests {
     </trkseg></trk>
 </gpx>"#;
 
-        // Gap ~122km (> default 100km) should split into two segments
-        let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
-        assert_eq!(parsed.geom_geojson["type"], "MultiLineString");
-        let segments = parsed
-            .geom_geojson
-            .get("coordinates")
-            .and_then(|c| c.as_array())
-            .expect("coordinates array");
-        assert_eq!(segments.len(), 2, "expected split into two segments");
-
-        // Restore prior env if it existed
-        if let Some(prev) = original {
-            std::env::set_var("TRACK_MAX_GAP_METERS", prev);
-        }
+            // Gap ~122km (> default 100km) should split into two segments
+            let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
+            assert_eq!(parsed.geom_geojson["type"], "MultiLineString");
+            let segments = parsed
+                .geom_geojson
+                .get("coordinates")
+                .and_then(|c| c.as_array())
+                .expect("coordinates array");
+            assert_eq!(segments.len(), 2, "expected split into two segments");
+        });
     }
 
     #[test]

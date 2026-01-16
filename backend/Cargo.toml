@@ -37,6 +37,7 @@ chrono = { version = "0.4.43", features = ["serde"] }
 reqwest = { version = "0.13.1", default-features = false, features = [
     "json",
     "rustls",
+    "query",
 ] }
 ammonia = "4.1.2"
 # File parsing
@@ -53,6 +54,8 @@ tokio-util = "0.7.18"
 [dev-dependencies]
 assert_approx_eq = "1.1.0"
 mockito = "1.7.1"
+# For safe temporary environment variables in tests
+temp-env = { version = "0.3.6", features = ["async_closure"] }
 
 [profile.dev]
 opt-level = 0

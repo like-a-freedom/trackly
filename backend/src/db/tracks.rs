@@ -74,7 +74,9 @@ fn sanitize_description(text: Option<&str>) -> Option<String> {
 }
 
 fn build_list_tracks_query(params: &crate::models::TrackListQuery) -> QueryBuilder<'_, Postgres> {
-    let mut builder = QueryBuilder::<Postgres>::new("SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks");
+    let mut builder = QueryBuilder::<Postgres>::new(
+        "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks",
+    );
 
     // If owner_session_id provided, return tracks owned by that session (include private tracks).
     if let Some(owner) = params.owner_session_id {
@@ -417,33 +419,32 @@ pub async fn get_track_detail_adaptive(
         // Apply simplification for huge tracks or overview mode
         let params =
             get_simplification_params(track_mode, Some(zoom_level), original_points as usize);
-        if params.should_simplify(original_points as usize) {
-            if let Ok(segments) = extract_segments_from_geojson(&geom_geojson) {
-                if !segments.is_empty() {
-                    let simplify_start = Instant::now();
-                    let simplified_segments: Vec<Vec<(f64, f64)>> = segments
-                        .iter()
-                        .map(|segment| simplify_track_for_zoom(segment, zoom_level))
-                        .collect();
+        if params.should_simplify(original_points as usize)
+            && let Ok(segments) = extract_segments_from_geojson(&geom_geojson)
+            && !segments.is_empty()
+        {
+            let simplify_start = Instant::now();
+            let simplified_segments: Vec<Vec<(f64, f64)>> = segments
+                .iter()
+                .map(|segment| simplify_track_for_zoom(segment, zoom_level))
+                .collect();
 
-                    metrics::observe_track_simplify(
-                        if track_mode.is_detail() {
-                            "detail"
-                        } else {
-                            "overview"
-                        },
-                        simplify_start.elapsed().as_secs_f64(),
-                    );
+            metrics::observe_track_simplify(
+                if track_mode.is_detail() {
+                    "detail"
+                } else {
+                    "overview"
+                },
+                simplify_start.elapsed().as_secs_f64(),
+            );
 
-                    let changed = simplified_segments
-                        .iter()
-                        .zip(segments.iter())
-                        .any(|(new_seg, old_seg)| new_seg.len() < old_seg.len());
+            let changed = simplified_segments
+                .iter()
+                .zip(segments.iter())
+                .any(|(new_seg, old_seg)| new_seg.len() < old_seg.len());
 
-                    if changed {
-                        geom_geojson = geojson_from_segments(&simplified_segments);
-                    }
-                }
+            if changed {
+                geom_geojson = geojson_from_segments(&simplified_segments);
             }
         }
 
@@ -596,11 +597,11 @@ fn parse_time_points(time_data: &serde_json::Value) -> Vec<Option<DateTime<Utc>>
             continue;
         }
 
-        if let Some(s) = value.as_str() {
-            if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-                result.push(Some(dt.with_timezone(&Utc)));
-                continue;
-            }
+        if let Some(s) = value.as_str()
+            && let Ok(dt) = DateTime::parse_from_rfc3339(s)
+        {
+            result.push(Some(dt.with_timezone(&Utc)));
+            continue;
         }
 
         result.push(None);
@@ -644,34 +645,34 @@ fn compute_gap_metadata(
             }
         }
 
-        if segments.len() == 1 {
-            if let Some(time_json) = time_data_raw {
-                let times = parse_time_points(time_json);
-                let coords = &segments[0];
-                if coords.len() == times.len() && coords.len() > 1 {
-                    for i in 1..coords.len() {
-                        if let (Some(t1), Some(t2)) = (times[i - 1], times[i]) {
-                            let delta = (t2 - t1).num_seconds();
-                            if delta >= PAUSE_GAP_THRESHOLD_SECS {
-                                let distance_m = haversine_distance(coords[i - 1], coords[i]);
-                                pause_gaps.push(GapInfo {
-                                    kind: "pause".to_string(),
-                                    from: GapEndpoint {
-                                        lat: coords[i - 1].0,
-                                        lon: coords[i - 1].1,
-                                        segment_index: 0,
-                                        point_index: i - 1,
-                                    },
-                                    to: GapEndpoint {
-                                        lat: coords[i].0,
-                                        lon: coords[i].1,
-                                        segment_index: 0,
-                                        point_index: i,
-                                    },
-                                    distance_m,
-                                    duration_seconds: Some(delta),
-                                });
-                            }
+        if segments.len() == 1
+            && let Some(time_json) = time_data_raw
+        {
+            let times = parse_time_points(time_json);
+            let coords = &segments[0];
+            if coords.len() == times.len() && coords.len() > 1 {
+                for i in 1..coords.len() {
+                    if let (Some(t1), Some(t2)) = (times[i - 1], times[i]) {
+                        let delta = (t2 - t1).num_seconds();
+                        if delta >= PAUSE_GAP_THRESHOLD_SECS {
+                            let distance_m = haversine_distance(coords[i - 1], coords[i]);
+                            pause_gaps.push(GapInfo {
+                                kind: "pause".to_string(),
+                                from: GapEndpoint {
+                                    lat: coords[i - 1].0,
+                                    lon: coords[i - 1].1,
+                                    segment_index: 0,
+                                    point_index: i - 1,
+                                },
+                                to: GapEndpoint {
+                                    lat: coords[i].0,
+                                    lon: coords[i].1,
+                                    segment_index: 0,
+                                    point_index: i,
+                                },
+                                distance_m,
+                                duration_seconds: Some(delta),
+                            });
                         }
                     }
                 }
@@ -707,7 +708,9 @@ pub async fn list_tracks_geojson(
     // Build base SQL with zoom-based simplification using PostGIS ST_Simplify
     let use_postgis_simplification = track_mode.is_overview() && zoom_level <= 14.0;
 
-    let mut builder = QueryBuilder::<Postgres>::new("SELECT id, name, categories, length_km, elevation_gain, elevation_loss, slope_min, slope_max,");
+    let mut builder = QueryBuilder::<Postgres>::new(
+        "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, slope_min, slope_max,",
+    );
 
     if use_postgis_simplification {
         builder.push(
@@ -737,11 +740,11 @@ pub async fn list_tracks_geojson(
         builder.push(" WHERE is_public = TRUE");
     }
 
-    if let Some(categories) = &filter_params.categories {
-        if !categories.is_empty() {
-            builder.push(" AND categories && ");
-            builder.push_bind(categories);
-        }
+    if let Some(categories) = &filter_params.categories
+        && !categories.is_empty()
+    {
+        builder.push(" AND categories && ");
+        builder.push_bind(categories);
     }
 
     if let Some(min) = filter_params.min_length {
@@ -824,57 +827,54 @@ pub async fn list_tracks_geojson(
             let mut geom_json: serde_json::Value = row.get("geom_json");
 
             // Apply Rust-side simplification if not already done in PostGIS
-            if !use_postgis_simplification && track_mode.is_overview() {
-                if let Some(coordinates) = geom_json.get("coordinates").and_then(|c| c.as_array()) {
-                    if !coordinates.is_empty() {
-                        // Extract points for simplification
-                        let points: Vec<(f64, f64)> = coordinates
-                            .iter()
-                            .filter_map(|coord| {
-                                if let Some(coord_array) = coord.as_array() {
-                                    if coord_array.len() >= 2 {
-                                        let lng = coord_array[0].as_f64()?;
-                                        let lat = coord_array[1].as_f64()?;
-                                        Some((lat, lng))
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-
-                        if !points.is_empty() {
-                            let params = get_simplification_params(
-                                track_mode,
-                                Some(zoom_level),
-                                points.len(),
-                            );
-                            if params.should_simplify(points.len()) {
-                                let simplify_start = Instant::now();
-                                let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
-                                metrics::observe_track_simplify(
-                                    if track_mode.is_detail() {
-                                        "detail"
-                                    } else {
-                                        "overview"
-                                    },
-                                    simplify_start.elapsed().as_secs_f64(),
-                                );
-                                if simplified_geom.len() < points.len() {
-                                    // Convert back to GeoJSON format
-                                    let simplified_coords: Vec<serde_json::Value> = simplified_geom
-                                        .iter()
-                                        .map(|(lat, lng)| serde_json::json!([lng, lat]))
-                                        .collect();
-
-                                    geom_json = serde_json::json!({
-                                        "type": "LineString",
-                                        "coordinates": simplified_coords
-                                    });
-                                }
+            if !use_postgis_simplification
+                && track_mode.is_overview()
+                && let Some(coordinates) = geom_json.get("coordinates").and_then(|c| c.as_array())
+                && !coordinates.is_empty()
+            {
+                // Extract points for simplification
+                let points: Vec<(f64, f64)> = coordinates
+                    .iter()
+                    .filter_map(|coord| {
+                        if let Some(coord_array) = coord.as_array() {
+                            if coord_array.len() >= 2 {
+                                let lng = coord_array[0].as_f64()?;
+                                let lat = coord_array[1].as_f64()?;
+                                Some((lat, lng))
+                            } else {
+                                None
                             }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                if !points.is_empty() {
+                    let params =
+                        get_simplification_params(track_mode, Some(zoom_level), points.len());
+                    if params.should_simplify(points.len()) {
+                        let simplify_start = Instant::now();
+                        let simplified_geom = simplify_track_for_zoom(&points, zoom_level);
+                        metrics::observe_track_simplify(
+                            if track_mode.is_detail() {
+                                "detail"
+                            } else {
+                                "overview"
+                            },
+                            simplify_start.elapsed().as_secs_f64(),
+                        );
+                        if simplified_geom.len() < points.len() {
+                            // Convert back to GeoJSON format
+                            let simplified_coords: Vec<serde_json::Value> = simplified_geom
+                                .iter()
+                                .map(|(lat, lng)| serde_json::json!([lng, lat]))
+                                .collect();
+
+                            geom_json = serde_json::json!({
+                                "type": "LineString",
+                                "coordinates": simplified_coords
+                            });
                         }
                     }
                 }
@@ -1614,9 +1614,9 @@ mod tests {
     #[ignore] // Requires database setup
     async fn test_update_track_categories_handler_owner_check() {
         use crate::models::UpdateTrackCategoriesRequest as Req;
+        use axum::Json;
         use axum::extract::{Path, State};
         use axum::http::StatusCode;
-        use axum::Json;
         use sqlx::postgres::PgPoolOptions;
         use std::sync::Arc;
         use uuid::Uuid;
@@ -1715,9 +1715,9 @@ mod tests {
     #[ignore] // Requires database setup
     async fn test_update_track_categories_empty_rejected() {
         use crate::models::UpdateTrackCategoriesRequest as Req;
+        use axum::Json;
         use axum::extract::{Path, State};
         use axum::http::StatusCode;
-        use axum::Json;
         use sqlx::postgres::PgPoolOptions;
         use std::sync::Arc;
         use uuid::Uuid;

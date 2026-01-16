@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use axum::body::Body;
 use axum::extract::MatchedPath;
-use axum::http::header::{HeaderName, CONTENT_TYPE, USER_AGENT};
+use axum::http::header::{CONTENT_TYPE, HeaderName, USER_AGENT};
 use axum::http::{Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use once_cell::sync::{Lazy, OnceCell};

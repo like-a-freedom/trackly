@@ -1,7 +1,7 @@
 use axum::{
+    Router,
     extract::DefaultBodyLimit,
     routing::{get, post},
-    Router,
 };
 use backend::{handlers, logging, metrics, services};
 use mimalloc::MiMalloc;

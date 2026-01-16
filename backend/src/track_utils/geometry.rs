@@ -1,7 +1,7 @@
 // Geometry utilities for trackly
 // Contains functions for geospatial calculations and WKT parsing
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Maximum allowed gap between consecutive points before starting a new segment (meters)
 /// Keep generous to avoid over-splitting normal tracks; still cuts obvious teleports.
@@ -29,7 +29,8 @@ pub fn parse_linestring_wkt(wkt: &str) -> Option<Vec<(f64, f64)>> {
         return None;
     }
     let coords = &wkt[11..wkt.len() - 1];
-    let pts = coords
+
+    coords
         .split(',')
         .map(|pair| {
             let nums: Vec<_> = pair.split_whitespace().collect();
@@ -40,8 +41,7 @@ pub fn parse_linestring_wkt(wkt: &str) -> Option<Vec<(f64, f64)>> {
             let lat = nums[1].parse::<f64>().ok()?;
             Some((lat, lon))
         })
-        .collect::<Option<Vec<_>>>();
-    pts
+        .collect::<Option<Vec<_>>>()
 }
 
 /// Extract coordinates from GeoJSON LineString

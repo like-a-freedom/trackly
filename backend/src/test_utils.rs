@@ -1,35 +1,20 @@
 //! Test utilities shared across test modules
 #![allow(dead_code)]
 
-use once_cell::sync::Lazy;
-use std::sync::Mutex as StdMutex;
-use tokio::sync::Mutex as TokioMutex;
-
-static TEST_ENV_MUTEX_SYNC: Lazy<StdMutex<()>> = Lazy::new(|| StdMutex::new(()));
-static TEST_ENV_MUTEX_ASYNC: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
+// Utilities for safely managing environment variables in tests (delegates to `temp-env`)
 
 /// Temporarily set an env var for the duration of the closure. Restores previous value afterwards.
+/// Uses the `temp-env` crate to safely set/unset environment variables for tests without
+/// adding any `unsafe` code in our repo.
 pub fn with_temp_env<K, V, F>(key: K, value: Option<V>, f: F)
 where
     K: AsRef<str>,
     V: AsRef<str>,
     F: FnOnce(),
 {
-    // Use a blocking lock on the tokio mutex to serialize with async tests
-    let _guard = TEST_ENV_MUTEX_SYNC.lock().unwrap();
-    let key_ref = key.as_ref();
-    let previous = std::env::var(key_ref).ok();
-
     match value {
-        Some(v) => std::env::set_var(key_ref, v.as_ref()),
-        None => std::env::remove_var(key_ref),
-    }
-
-    f();
-
-    match previous {
-        Some(prev) => std::env::set_var(key_ref, prev),
-        None => std::env::remove_var(key_ref),
+        Some(v) => temp_env::with_var(key.as_ref(), Some(v.as_ref()), f),
+        None => temp_env::with_var_unset(key.as_ref(), f),
     }
 }
 
@@ -41,48 +26,19 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future,
 {
-    let _guard = TEST_ENV_MUTEX_ASYNC.lock().await;
-    let key_ref = key.as_ref();
-    let previous = std::env::var(key_ref).ok();
-
     match value {
-        Some(v) => std::env::set_var(key_ref, v.as_ref()),
-        None => std::env::remove_var(key_ref),
+        Some(v) => temp_env::async_with_vars(&[(key.as_ref(), Some(v.as_ref()))], f()).await,
+        None => temp_env::async_with_vars(&[(key.as_ref(), None::<&str>)], f()).await,
     }
-
-    let res = f().await;
-
-    match previous {
-        Some(prev) => std::env::set_var(key_ref, prev),
-        None => std::env::remove_var(key_ref),
-    }
-
-    res
 }
 
 /// Helper to set multiple env vars temporarily using a list of key->Option<value>
+/// Delegates to `temp-env` which handles restoration and synchronization.
 pub fn with_temp_envs<F>(vars: &[(&str, Option<&str>)], f: F)
 where
     F: FnOnce(),
 {
-    let _guard = TEST_ENV_MUTEX_SYNC.lock().unwrap();
-    let mut previous = Vec::new();
-    for (k, v) in vars.iter() {
-        previous.push((*k, std::env::var(k).ok()));
-        match v {
-            Some(val) => std::env::set_var(k, *val),
-            None => std::env::remove_var(k),
-        }
-    }
-
-    f();
-
-    for (k, v) in previous.into_iter() {
-        match v {
-            Some(val) => std::env::set_var(k, val),
-            None => std::env::remove_var(k),
-        }
-    }
+    temp_env::with_vars(vars, f)
 }
 
 /// Async version for multiple env vars
@@ -91,24 +47,5 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future,
 {
-    let _guard = TEST_ENV_MUTEX_ASYNC.lock().await;
-    let mut previous = Vec::new();
-    for (k, v) in vars.iter() {
-        previous.push((*k, std::env::var(k).ok()));
-        match v {
-            Some(val) => std::env::set_var(k, *val),
-            None => std::env::remove_var(k),
-        }
-    }
-
-    let res = f().await;
-
-    for (k, v) in previous.into_iter() {
-        match v {
-            Some(val) => std::env::set_var(k, val),
-            None => std::env::remove_var(k),
-        }
-    }
-
-    res
+    temp_env::async_with_vars(vars, f()).await
 }

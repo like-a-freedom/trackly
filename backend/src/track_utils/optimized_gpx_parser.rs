@@ -3,8 +3,8 @@
 
 use crate::models::ParsedTrackData;
 use crate::track_utils::time_utils::parse_gpx_time;
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use sha2::{Digest, Sha256};
 
 /// Fast minimal GPX data for duplicate checking
@@ -99,12 +99,13 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
             }
             Ok(Event::Text(e)) => {
                 if capture_text {
-                    if let Some(target) = &text_target {
-                        if target.as_str() == "metadata_time" && !found_metadata_time {
-                            let text = std::str::from_utf8(&e).unwrap_or_default();
-                            recorded_at = Some(text.to_string());
-                            found_metadata_time = true;
-                        }
+                    if let Some(target) = &text_target
+                        && target.as_str() == "metadata_time"
+                        && !found_metadata_time
+                    {
+                        let text = std::str::from_utf8(&e).unwrap_or_default();
+                        recorded_at = Some(text.to_string());
+                        found_metadata_time = true;
                     }
                     capture_text = false;
                     text_target = None;
