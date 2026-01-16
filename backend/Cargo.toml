@@ -38,6 +38,8 @@ reqwest = { version = "0.13.1", default-features = false, features = [
     "json",
     "rustls",
     "query",
+    "native-tls"
+    # Not using aws-lc as it's broke musl builds
 ] }
 ammonia = "4.1.2"
 # File parsing
