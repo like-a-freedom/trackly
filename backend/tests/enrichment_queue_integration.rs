@@ -1,7 +1,7 @@
-use backend::services::enrichment_queue::{start_queue_for_tests, EnqueueError, EnrichmentJob};
+use backend::services::enrichment_queue::{EnqueueError, EnrichmentJob, start_queue_for_tests};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use uuid::Uuid;
 
 #[tokio::test]

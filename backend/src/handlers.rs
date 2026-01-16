@@ -1,21 +1,21 @@
 use crate::db;
 use crate::input_validation::{
-    validate_file_size, validate_text_field, MAX_CATEGORIES, MAX_CATEGORY_LENGTH,
-    MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE, MAX_NAME_LENGTH,
+    MAX_CATEGORIES, MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE, MAX_NAME_LENGTH,
+    validate_file_size, validate_text_field,
 };
 use crate::metrics;
 use crate::models::*;
 use crate::services::gpx_export::GpxExportService;
 use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
 use crate::track_utils::{
-    calculate_file_hash, extract_coordinates_from_geojson, ElevationEnrichmentService,
+    ElevationEnrichmentService, calculate_file_hash, extract_coordinates_from_geojson,
 };
 use axum::http::header::REFERER;
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    Json,
 };
 use axum_extra::extract::multipart::Multipart as AxumMultipart;
 use once_cell::sync::Lazy;
@@ -77,7 +77,7 @@ pub async fn check_track_exist(
             return Ok(Json(TrackExistResponse {
                 is_exist: false,
                 id: None,
-            }))
+            }));
         }
     };
     let _file_name = match file_name {
@@ -86,7 +86,7 @@ pub async fn check_track_exist(
             return Ok(Json(TrackExistResponse {
                 is_exist: false,
                 id: None,
-            }))
+            }));
         }
     };
     // Fast hash calculation without full parsing
@@ -1941,11 +1941,11 @@ pub async fn delete_poi(
         return Err(StatusCode::CONFLICT); // 409: POI is in use
     }
 
-    if let Some(owner_session_id) = owner_id {
-        if Some(owner_session_id) != request.session_id {
-            error!("Cannot delete POI {}: not the owner", id);
-            return Err(StatusCode::FORBIDDEN); // 403: Not the owner
-        }
+    if let Some(owner_session_id) = owner_id
+        && Some(owner_session_id) != request.session_id
+    {
+        error!("Cannot delete POI {}: not the owner", id);
+        return Err(StatusCode::FORBIDDEN); // 403: Not the owner
     }
 
     sqlx::query("DELETE FROM pois WHERE id = $1")

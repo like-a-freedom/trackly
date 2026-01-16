@@ -16,8 +16,8 @@ pub mod time_utils;
 pub mod zoom_adaptation;
 
 pub use elevation::{
-    calculate_elevation_metrics, extract_elevations_from_track_points, has_elevation_data,
-    smooth_elevation_data, ElevationMetrics,
+    ElevationMetrics, calculate_elevation_metrics, extract_elevations_from_track_points,
+    has_elevation_data, smooth_elevation_data,
 };
 pub use elevation_enrichment::{ElevationEnrichmentService, EnrichmentResult};
 pub use geometry::{
@@ -29,7 +29,7 @@ pub use hash::calculate_file_hash;
 pub use kml_parser::parse_kml;
 pub use optimized_gpx_parser::{parse_gpx_full, parse_gpx_minimal};
 pub use pace_filter::{
-    detect_cycling_and_get_config, filter_pace_data, get_pace_filter_config, PaceFilterConfig,
+    PaceFilterConfig, detect_cycling_and_get_config, filter_pace_data, get_pace_filter_config,
 };
 pub use simplification::{
     get_simplification_stats, get_tolerance_for_zoom, simplify_json_array,
@@ -37,9 +37,9 @@ pub use simplification::{
     simplify_track_for_zoom,
 };
 pub use slope::{
-    calculate_slope_metrics, can_calculate_slopes, recalculate_slope_metrics, SlopeMetrics,
+    SlopeMetrics, calculate_slope_metrics, can_calculate_slopes, recalculate_slope_metrics,
 };
-pub use zoom_adaptation::{get_simplification_params, tolerance_for_zoom, SimplificationParams};
+pub use zoom_adaptation::{SimplificationParams, get_simplification_params, tolerance_for_zoom};
 
 #[cfg(test)]
 mod tests {

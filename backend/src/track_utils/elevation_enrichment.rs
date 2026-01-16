@@ -1,13 +1,13 @@
 use crate::db;
 use crate::metrics;
-use crate::track_utils::elevation::{calculate_elevation_metrics, ElevationMetrics};
-use anyhow::{anyhow, Result};
+use crate::track_utils::elevation::{ElevationMetrics, calculate_elevation_metrics};
+use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use reqwest;
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use tracing::{error, info};
 
 /// OpenTopoData API response structure
@@ -804,10 +804,12 @@ mod tests {
         let result = service.enrich_track_elevation(track_points).await;
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Track has no points to enrich"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Track has no points to enrich")
+        );
     }
 
     #[tokio::test]
@@ -820,10 +822,12 @@ mod tests {
             let result = service.enrich_track_elevation(track_points).await;
 
             assert!(result.is_err());
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("Elevation enrichment service is disabled"));
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Elevation enrichment service is disabled")
+            );
         })
         .await;
     }

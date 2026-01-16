@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 use tracing_subscriber::fmt::time::SystemTime;
-use tracing_subscriber::{fmt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, util::SubscriberInitExt};
 
 const DEFAULT_DIRECTIVES: &str = "info,backend=info,sqlx=warn,tower=info";
 
@@ -50,37 +50,37 @@ pub fn init() {
             // Truncate long db.statement content for readability (handles JSON and non-JSON logs)
             fn truncate_db_statement_line(s: &mut String, max_len: usize) {
                 // try JSON pattern: "db.statement":"..."
-                if let Some(pos) = s.find("\"db.statement\"") {
-                    if let Some(colon_pos) = s[pos..].find(':') {
-                        let start = pos + colon_pos + 1;
-                        // skip whitespace
-                        let mut i = start;
-                        while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() {
-                            i += 1;
-                        }
-                        if i < s.len() && &s[i..i + 1] == "\"" {
-                            // string value starts at i+1
-                            let mut j = i + 1;
-                            let mut escaped = false;
-                            while j < s.len() {
-                                let ch = s.as_bytes()[j] as char;
-                                if ch == '\\' && !escaped {
-                                    escaped = true;
-                                } else if ch == '"' && !escaped {
-                                    break;
-                                } else {
-                                    escaped = false;
-                                }
-                                j += 1;
+                if let Some(pos) = s.find("\"db.statement\"")
+                    && let Some(colon_pos) = s[pos..].find(':')
+                {
+                    let start = pos + colon_pos + 1;
+                    // skip whitespace
+                    let mut i = start;
+                    while i < s.len() && s.as_bytes()[i].is_ascii_whitespace() {
+                        i += 1;
+                    }
+                    if i < s.len() && &s[i..i + 1] == "\"" {
+                        // string value starts at i+1
+                        let mut j = i + 1;
+                        let mut escaped = false;
+                        while j < s.len() {
+                            let ch = s.as_bytes()[j] as char;
+                            if ch == '\\' && !escaped {
+                                escaped = true;
+                            } else if ch == '"' && !escaped {
+                                break;
+                            } else {
+                                escaped = false;
                             }
-                            if j < s.len() && j > i + 1 {
-                                let content_len = j - (i + 1);
-                                if content_len > max_len {
-                                    let end = i + 1 + max_len;
-                                    let info =
-                                        format!("... (truncated {} bytes)", content_len - max_len);
-                                    s.replace_range(end..j, &info);
-                                }
+                            j += 1;
+                        }
+                        if j < s.len() && j > i + 1 {
+                            let content_len = j - (i + 1);
+                            if content_len > max_len {
+                                let end = i + 1 + max_len;
+                                let info =
+                                    format!("... (truncated {} bytes)", content_len - max_len);
+                                s.replace_range(end..j, &info);
                             }
                         }
                     }

@@ -496,12 +496,15 @@ mod tests {
             })
             .collect();
 
-        // Set stricter min retention for test
-        std::env::set_var("TRACK_SIMPLIFY_MIN_RATIO", "0.012"); // 1.2%
-        std::env::set_var("TRACK_SIMPLIFY_MIN_POINTS", "800");
-        std::env::set_var("TRACK_SIMPLIFY_REFINE_ITERATIONS", "5");
-
-        let simplified = simplify_track_for_zoom(&points, 12.0);
+        // Set stricter min retention for test using `temp-env` to avoid global races
+        let simplified = temp_env::with_vars(
+            [
+                ("TRACK_SIMPLIFY_MIN_RATIO", Some("0.012")), // 1.2%
+                ("TRACK_SIMPLIFY_MIN_POINTS", Some("800")),
+                ("TRACK_SIMPLIFY_REFINE_ITERATIONS", Some("5")),
+            ],
+            || simplify_track_for_zoom(&points, 12.0),
+        );
         let min_required = 800usize.max(((points.len() as f64) * 0.012).round() as usize);
         assert!(
             simplified.len() >= min_required,

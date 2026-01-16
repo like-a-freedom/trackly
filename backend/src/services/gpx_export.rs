@@ -91,42 +91,36 @@ impl GpxExportService {
     }
 
     fn get_elevation_xml(&self, track: &TrackDetail, index: usize) -> String {
-        if let Some(elevation_profile) = &track.elevation_profile {
-            if let Some(elevation_array) = elevation_profile.as_array() {
-                if index < elevation_array.len() {
-                    if let Some(ele_val) = elevation_array[index].as_f64() {
-                        return format!("<ele>{ele_val:.1}</ele>");
-                    }
-                }
-            }
+        if let Some(elevation_profile) = &track.elevation_profile
+            && let Some(elevation_array) = elevation_profile.as_array()
+            && index < elevation_array.len()
+            && let Some(ele_val) = elevation_array[index].as_f64()
+        {
+            return format!("<ele>{ele_val:.1}</ele>");
         }
         String::new()
     }
 
     fn get_hr_xml(&self, track: &TrackDetail, index: usize) -> String {
-        if let Some(hr_data) = &track.hr_data {
-            if let Some(hr_array) = hr_data.as_array() {
-                if index < hr_array.len() {
-                    if let Some(hr_val) = hr_array[index].as_i64() {
-                        return format!(
-                            "<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>{hr_val}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>"
-                        );
-                    }
-                }
-            }
+        if let Some(hr_data) = &track.hr_data
+            && let Some(hr_array) = hr_data.as_array()
+            && index < hr_array.len()
+            && let Some(hr_val) = hr_array[index].as_i64()
+        {
+            return format!(
+                "<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>{hr_val}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>"
+            );
         }
         String::new()
     }
 
     fn get_time_xml(&self, track: &TrackDetail, index: usize) -> String {
-        if let Some(time_data) = &track.time_data {
-            if let Some(time_array) = time_data.as_array() {
-                if index < time_array.len() {
-                    if let Some(time_str) = time_array[index].as_str() {
-                        return format!("<time>{}</time>", xml_escape(time_str));
-                    }
-                }
-            }
+        if let Some(time_data) = &track.time_data
+            && let Some(time_array) = time_data.as_array()
+            && index < time_array.len()
+            && let Some(time_str) = time_array[index].as_str()
+        {
+            return format!("<time>{}</time>", xml_escape(time_str));
         }
         String::new()
     }
