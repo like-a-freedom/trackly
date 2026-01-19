@@ -1,29 +1,49 @@
 <template>
-  <button 
+  <button
     class="geolocation-button"
     @click="getCurrentLocation"
     :disabled="gettingLocation"
-    :title="gettingLocation ? 'Getting location...' : 'Center map on current location'"
+    :title="
+      gettingLocation ? 'Getting location...' : 'Center map on current location'
+    "
   >
-    <svg v-if="!gettingLocation" class="geolocation-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="m9.5 14.5-6.737-1.773c-.915-.241-1.015-1.5-.15-1.882l16.878-7.458c.71-.313 1.435.411 1.122 1.121l-7.458 16.879c-.383.865-1.641.765-1.882-.15L9.5 14.5z" />
+    <svg
+      v-if="!gettingLocation"
+      class="geolocation-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path
+        d="m9.5 14.5-6.737-1.773c-.915-.241-1.015-1.5-.15-1.882l16.878-7.458c.71-.313 1.435.411 1.122 1.121l-7.458 16.879c-.383.865-1.641.765-1.882-.15L9.5 14.5z"
+      />
     </svg>
-    <svg v-else class="geolocation-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg
+      v-else
+      class="geolocation-icon spinning"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <path d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
     </svg>
   </button>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref } from "vue";
 
-const emit = defineEmits(['location-found']);
+const emit = defineEmits(["location-found"]);
 
 const gettingLocation = ref(false);
 
 const getCurrentLocation = async () => {
   if (!navigator.geolocation) {
-    emit('location-found', { error: 'Geolocation is not supported by this browser' });
+    emit("location-found", {
+      error: "Geolocation is not supported by this browser",
+    });
     return;
   }
 
@@ -31,39 +51,34 @@ const getCurrentLocation = async () => {
 
   try {
     const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(
-        resolve,
-        reject,
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000 // Cache for 1 minute
-        }
-      );
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000, // Cache for 1 minute
+      });
     });
 
     const { latitude, longitude } = position.coords;
-    emit('location-found', { latitude, longitude });
-    
+    emit("location-found", { latitude, longitude });
   } catch (error) {
-    let errorMessage = 'Unable to get your location';
-    
+    let errorMessage = "Unable to get your location";
+
     switch (error.code) {
       case error.PERMISSION_DENIED:
-        errorMessage = 'Location access denied by user';
+        errorMessage = "Location access denied by user";
         break;
       case error.POSITION_UNAVAILABLE:
-        errorMessage = 'Location information is unavailable';
+        errorMessage = "Location information is unavailable";
         break;
       case error.TIMEOUT:
-        errorMessage = 'Location request timed out';
+        errorMessage = "Location request timed out";
         break;
       default:
-        errorMessage = 'An unknown error occurred while getting location';
+        errorMessage = "An unknown error occurred while getting location";
         break;
     }
-    
-    emit('location-found', { error: errorMessage });
+
+    emit("location-found", { error: errorMessage });
   } finally {
     gettingLocation.value = false;
   }
@@ -107,14 +122,15 @@ const getCurrentLocation = async () => {
   transform: none;
 }
 
-  .geolocation-icon {
-    width: 22px;
-    height: 22px;
-    color: #666 !important;
-  }
+.geolocation-icon {
+  width: 20px;
+  height: 20px;
+  stroke: #666;
+  transition: stroke 0.2s;
+}
 
 .geolocation-button:hover:not(:disabled) .geolocation-icon {
-  color: #333;
+  stroke: #333;
 }
 
 .spinning {
@@ -142,10 +158,11 @@ const getCurrentLocation = async () => {
     border: 1px solid rgba(0, 0, 0, 0.12);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
-  
+
   .geolocation-button svg {
     width: 22px;
     height: 22px;
+    stroke: #666 !important;
   }
 }
 

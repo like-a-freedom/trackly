@@ -1,10 +1,13 @@
 <template>
-  <button 
-    class="search-button"
-    @click="openSearch"
-    title="Search tracks"
-  >
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <button class="search-button" @click="openSearch" title="Search tracks">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <circle cx="11" cy="11" r="8"></circle>
       <path d="M21 21l-4.35-4.35"></path>
     </svg>
@@ -12,11 +15,11 @@
 </template>
 
 <script setup>
-const emit = defineEmits(['open-search'])
+const emit = defineEmits(["open-search"]);
 
 const openSearch = () => {
-  emit('open-search')
-}
+  emit("open-search");
+};
 </script>
 
 <style scoped>
@@ -39,10 +42,21 @@ const openSearch = () => {
   will-change: transform;
 }
 
+.search-button svg {
+  stroke: #666;
+  width: 20px;
+  height: 20px;
+  transition: stroke 0.2s;
+}
+
 .search-button:hover {
   background: rgba(255, 255, 255, 1);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
+}
+
+.search-button:hover svg {
+  stroke: #333;
 }
 
 .search-button:active {
@@ -62,10 +76,11 @@ const openSearch = () => {
     border: 1px solid rgba(0, 0, 0, 0.12);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
-  
+
   .search-button svg {
     width: 22px;
     height: 22px;
+    stroke: #666 !important;
   }
 }
 

@@ -10,7 +10,7 @@
       :url="url"
       :attribution="attribution"
       :activeTrackId="activeTrackId"
-      :selectedTrackDetail="null" 
+      :selectedTrackDetail="null"
       @mapReady="onMapReady"
       @update:center="handleCenterUpdate"
       @update:zoom="handleZoomUpdate"
@@ -29,10 +29,13 @@
         :data="tooltip.data"
       />
       <div class="upload-form-container">
-        <div class="collapsible-upload" :class="{ 'expanded': uploadFormExpanded }">
+        <div
+          class="collapsible-upload"
+          :class="{ expanded: uploadFormExpanded }"
+        >
           <!-- Collapsed state: compact upload button -->
-          <div 
-            v-if="!uploadFormExpanded" 
+          <div
+            v-if="!uploadFormExpanded"
             class="upload-button-compact"
             @click="toggleUploadForm"
             @dragover.prevent="handleDragOver"
@@ -42,43 +45,53 @@
             title="Upload track file"
           >
             <svg class="upload-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+              <path
+                d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
+              />
               <path d="M12,11L16,15H13V19H11V15H8L12,11Z" />
             </svg>
           </div>
-          
+
           <!-- Expanded state: full upload form -->
           <div v-if="uploadFormExpanded" class="upload-form-expanded">
             <div class="upload-form-header">
               <span class="upload-form-title">Upload Track</span>
-              <button 
+              <button
                 class="collapse-button"
                 @click="toggleUploadForm"
                 title="Collapse upload form"
                 type="button"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
+                  <path
+                    d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"
+                  />
                 </svg>
               </button>
             </div>
-            <UploadForm 
-              @upload="handleUpload" 
-              @uploaded="handleUploadCompleted" 
-              :dragActive="dragActive" 
-              @update:dragActive="dragActive = $event" 
+            <UploadForm
+              @upload="handleUpload"
+              @uploaded="handleUploadCompleted"
+              :dragActive="dragActive"
+              @update:dragActive="dragActive = $event"
             />
           </div>
         </div>
       </div>
-      
+
       <Toast
         :message="(toast.value && toast.value.message) || ''"
         :type="(toast.value && toast.value.type) || 'info'"
         :duration="(toast.value && toast.value.duration) || 3000"
       />
-
     </TrackMap>
+
+    <!-- Map controls overlay - positioned outside TrackMap for proper z-index -->
+    <div class="map-controls-overlay">
+      <SearchButton @open-search="openSearch" />
+      <GeolocationButton @location-found="onLocationFound" />
+    </div>
+
     <TrackSearch
       :isVisible="searchVisible"
       @close="closeSearch"
@@ -89,29 +102,47 @@
 
 <script setup>
 // Import the logic from App.vue
-import { ref, reactive, watch, shallowRef, computed, provide, onActivated, onDeactivated, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
-import TrackMap from '../components/TrackMap.vue';
-import TrackTooltip from '../components/TrackTooltip.vue';
-import UploadForm from '../components/UploadForm.vue';
-import Toast from '../components/Toast.vue';
-import TrackSearch from '../components/TrackSearch.vue';
-import { useTracks } from '../composables/useTracks';
-import { useToast } from '../composables/useToast';
-import { useSearchState } from '../composables/useSearchState';
-import { useMapUrlState } from '../composables/useMapUrlState';
-import { getSessionId } from '../utils/session';
-import { useAdvancedDebounce, useThrottle } from '../composables/useAdvancedDebounce';
+import {
+  ref,
+  reactive,
+  watch,
+  shallowRef,
+  computed,
+  provide,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onBeforeUnmount,
+  nextTick,
+} from "vue";
+import { useRouter } from "vue-router";
+import TrackMap from "../components/TrackMap.vue";
+import TrackTooltip from "../components/TrackTooltip.vue";
+import UploadForm from "../components/UploadForm.vue";
+import Toast from "../components/Toast.vue";
+import TrackSearch from "../components/TrackSearch.vue";
+import SearchButton from "../components/SearchButton.vue";
+import GeolocationButton from "../components/GeolocationButton.vue";
+import { useTracks } from "../composables/useTracks";
+import { useToast } from "../composables/useToast";
+import { useSearchState } from "../composables/useSearchState";
+import { useMapUrlState } from "../composables/useMapUrlState";
+import { getSessionId } from "../utils/session";
+import {
+  useAdvancedDebounce,
+  useThrottle,
+} from "../composables/useAdvancedDebounce";
 
 // Define component name for keep-alive
 defineOptions({
-  name: 'HomeView'
+  name: "HomeView",
 });
 
 const router = useRouter();
 
-const url = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const attribution = '&copy; <a target="_blank" href="http://osm.org/copyright">OpenStreetMap</a> contributors';
+const url = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const attribution =
+  '&copy; <a target="_blank" href="http://osm.org/copyright">OpenStreetMap</a> contributors';
 
 // Load saved map position or use defaults
 const savedPosition = loadMapPosition();
@@ -122,7 +153,7 @@ const defaultCenter = savedPosition?.center || [56.04028, 37.83185];
 const mapUrlState = useMapUrlState({
   initialZoom: defaultZoom,
   initialCenter: defaultCenter,
-  debounceMs: 300
+  debounceMs: 300,
 });
 
 // Initialize from URL parameters or fallback to saved/default values
@@ -142,12 +173,19 @@ const bounds = ref(null);
 const mapInstance = ref(null); // Store map instance for invalidateSize on activation
 const dragActive = ref(false);
 const uploadFormExpanded = ref(false); // По умолчанию свернута
-const { polylines, fetchTracksInBounds, uploadTrack, error, updateTrackInPolylines } = useTracks();
+const {
+  polylines,
+  fetchTracksInBounds,
+  uploadTrack,
+  error,
+  updateTrackInPolylines,
+} = useTracks();
 // Keep track of the latest filter state coming from TrackMap/TrackFilterControl
 const currentFilterState = ref(null);
 const tooltip = reactive({ visible: false, x: 0, y: 0, data: null });
 const { showToast, toast } = useToast();
-const { clearSearchState, searchResults, searchQuery, hasSearchState } = useSearchState();
+const { clearSearchState, searchResults, searchQuery, hasSearchState } =
+  useSearchState();
 const activeTrackId = ref(null);
 const sessionId = getSessionId();
 
@@ -155,18 +193,18 @@ const sessionId = getSessionId();
 const searchVisible = ref(false);
 
 // Map position persistence
-const MAP_POSITION_STORAGE_KEY = 'trackly_map_position';
+const MAP_POSITION_STORAGE_KEY = "trackly_map_position";
 
 function saveMapPosition(centerValue, zoomValue) {
   try {
     const position = {
       center: centerValue,
       zoom: zoomValue,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
     localStorage.setItem(MAP_POSITION_STORAGE_KEY, JSON.stringify(position));
   } catch (error) {
-    console.warn('[HomeView] Failed to save map position:', error);
+    console.warn("[HomeView] Failed to save map position:", error);
   }
 }
 
@@ -174,89 +212,104 @@ function loadMapPosition() {
   try {
     const stored = localStorage.getItem(MAP_POSITION_STORAGE_KEY);
     if (!stored) return null;
-    
+
     const position = JSON.parse(stored);
-    
+
     // Validate stored position
-    if (!position || 
-        !Array.isArray(position.center) || 
-        position.center.length !== 2 ||
-        typeof position.zoom !== 'number' ||
-        typeof position.center[0] !== 'number' ||
-        typeof position.center[1] !== 'number' ||
-        isNaN(position.center[0]) || 
-        isNaN(position.center[1]) ||
-        isNaN(position.zoom) ||
-        position.center[0] === null ||
-        position.center[1] === null ||
-        position.zoom === null) {
+    if (
+      !position ||
+      !Array.isArray(position.center) ||
+      position.center.length !== 2 ||
+      typeof position.zoom !== "number" ||
+      typeof position.center[0] !== "number" ||
+      typeof position.center[1] !== "number" ||
+      isNaN(position.center[0]) ||
+      isNaN(position.center[1]) ||
+      isNaN(position.zoom) ||
+      position.center[0] === null ||
+      position.center[1] === null ||
+      position.zoom === null
+    ) {
       return null;
     }
-    
+
     return position;
   } catch (error) {
-    console.warn('[HomeView] Failed to load map position:', error);
+    console.warn("[HomeView] Failed to load map position:", error);
     return null;
   }
 }
 
 // Debounced and throttled functions for performance
 // Increased debounce to 500ms to reduce multiple requests as recommended in optimization spec
-const debouncedFetchTracks = useAdvancedDebounce((bounds) => {
-  hideTooltip();
-  // Pass current zoom level for backend optimization
-  const options = { 
-    zoom: zoom.value, 
-    mode: 'overview' // Use overview mode for track lists
-  };
-  fetchTracksInBounds(bounds, options);
-}, 500, { leading: false, trailing: true, maxWait: 1000 });
+const debouncedFetchTracks = useAdvancedDebounce(
+  (bounds) => {
+    hideTooltip();
+    // Pass current zoom level for backend optimization
+    const options = {
+      zoom: zoom.value,
+      mode: "overview", // Use overview mode for track lists
+    };
+    fetchTracksInBounds(bounds, options);
+  },
+  500,
+  { leading: false, trailing: true, maxWait: 1000 }
+);
 
 const throttledTooltipUpdate = useThrottle((event) => {
   updateTooltipPosition(event);
 }, 16); // ~60fps
 
 // Debounced function to save map position
-const debouncedSavePosition = useAdvancedDebounce(() => {
-  saveMapPosition(center.value, zoom.value);
-}, 1000, { leading: false, trailing: true }); // Save after 1 second of inactivity
-
-
+const debouncedSavePosition = useAdvancedDebounce(
+  () => {
+    saveMapPosition(center.value, zoom.value);
+  },
+  1000,
+  { leading: false, trailing: true }
+); // Save after 1 second of inactivity
 
 // --- Map gating logic ---
 function isValidLatLng(val) {
-  return Array.isArray(val) && val.length === 2 &&
-    typeof val[0] === 'number' && typeof val[1] === 'number' &&
-    !isNaN(val[0]) && !isNaN(val[1]);
+  return (
+    Array.isArray(val) &&
+    val.length === 2 &&
+    typeof val[0] === "number" &&
+    typeof val[1] === "number" &&
+    !isNaN(val[0]) &&
+    !isNaN(val[1])
+  );
 }
 function isValidZoom(val) {
-  return typeof val === 'number' && !isNaN(val);
+  return typeof val === "number" && !isNaN(val);
 }
 // Stable map render check - prevents excessive re-renders
 const mapReadyToShow = computed(() => {
-  return isValidLatLng(center.value) && 
-         isValidZoom(zoom.value) && 
-         center.value.length === 2 && 
-         typeof center.value[0] === 'number' && 
-         typeof center.value[1] === 'number';
+  return (
+    isValidLatLng(center.value) &&
+    isValidZoom(zoom.value) &&
+    center.value.length === 2 &&
+    typeof center.value[0] === "number" &&
+    typeof center.value[1] === "number"
+  );
 });
 // --- End gating logic ---
 
 // Provide toast for child components
-provide('toast', toast);
+provide("toast", toast);
 
 // Clear tooltip state when component is activated (returning from keep-alive)
 onActivated(() => {
   // Clear any lingering tooltip state
   hideTooltip();
-  
+
   // Invalidate map size to fix rendering issues after navigation
   if (mapInstance.value) {
     nextTick(() => {
       mapInstance.value.invalidateSize({ animate: false });
     });
   }
-  
+
   // Check if we need to restore search state (returning from track details)
   if (hasSearchState()) {
     openSearch();
@@ -272,46 +325,55 @@ onDeactivated(() => {
 });
 
 watch(error, (val) => {
-  if (val) showToast('Error: ' + val, 'error');
+  if (val) showToast("Error: " + val, "error");
 });
 
 // Clear tooltip when navigating away from this route
-watch(() => router.currentRoute.value.path, (newPath) => {
-  if (newPath !== '/') {
-    // Clear tooltip when leaving home page
-    hideTooltip();
-    // Save current map position when leaving home page (debounced)
-    debouncedSavePosition();
-  }
-});
-
-// Watch for URL parameter changes to update map state without causing flicker
-watch(() => router.currentRoute.value.query, (newQuery, oldQuery) => {
-  // Only process URL changes if they're different and not from our own updates
-  if (!isUpdatingProgrammatically.value && !isUpdatingFromUrl.value) {
-    const urlState = mapUrlState.parseUrlParams();
-    
-    // Only update if there are meaningful changes to prevent oscillation
-    const zoomChanged = urlState.zoom && Math.abs(urlState.zoom - zoom.value) > 0.1;
-    const centerChanged = urlState.center && 
-      (Math.abs(urlState.center[0] - center.value[0]) > 0.0001 || 
-       Math.abs(urlState.center[1] - center.value[1]) > 0.0001);
-    
-    if (urlState.hasValidParams && (zoomChanged || centerChanged)) {
-      updateMapStateProgrammatically(urlState.zoom, urlState.center);
+watch(
+  () => router.currentRoute.value.path,
+  (newPath) => {
+    if (newPath !== "/") {
+      // Clear tooltip when leaving home page
+      hideTooltip();
+      // Save current map position when leaving home page (debounced)
+      debouncedSavePosition();
     }
   }
-}, { deep: true });
+);
+
+// Watch for URL parameter changes to update map state without causing flicker
+watch(
+  () => router.currentRoute.value.query,
+  (newQuery, oldQuery) => {
+    // Only process URL changes if they're different and not from our own updates
+    if (!isUpdatingProgrammatically.value && !isUpdatingFromUrl.value) {
+      const urlState = mapUrlState.parseUrlParams();
+
+      // Only update if there are meaningful changes to prevent oscillation
+      const zoomChanged =
+        urlState.zoom && Math.abs(urlState.zoom - zoom.value) > 0.1;
+      const centerChanged =
+        urlState.center &&
+        (Math.abs(urlState.center[0] - center.value[0]) > 0.0001 ||
+          Math.abs(urlState.center[1] - center.value[1]) > 0.0001);
+
+      if (urlState.hasValidParams && (zoomChanged || centerChanged)) {
+        updateMapStateProgrammatically(urlState.zoom, urlState.center);
+      }
+    }
+  },
+  { deep: true }
+);
 
 function onMapReady(e) {
   const map = e.target || e;
   mapInstance.value = map; // Save map instance for later use
   bounds.value = map.getBounds();
-  const options = { 
-    zoom: zoom.value, 
-    mode: 'overview',
+  const options = {
+    zoom: zoom.value,
+    mode: "overview",
     // Include owner_session_id if "My tracks" filter is active
-    ownerSessionId: currentFilterState.value?.myTracks ? sessionId : undefined
+    ownerSessionId: currentFilterState.value?.myTracks ? sessionId : undefined,
   };
   fetchTracksInBounds(bounds.value, options);
 }
@@ -321,10 +383,10 @@ function onBoundsUpdate(newBounds) {
   if (isUpdatingProgrammatically.value) {
     return;
   }
-  
+
   // Update bounds immediately for visual responsiveness
   bounds.value = newBounds;
-  
+
   // Use debounced function for API calls
   debouncedFetchTracks(newBounds);
 }
@@ -336,9 +398,9 @@ function onFilterChanged(newFilterState) {
   if (bounds.value) {
     const options = {
       zoom: zoom.value,
-      mode: 'overview',
+      mode: "overview",
       forceRefresh: true,
-      ownerSessionId: newFilterState?.myTracks ? sessionId : undefined
+      ownerSessionId: newFilterState?.myTracks ? sessionId : undefined,
     };
     fetchTracksInBounds(bounds.value, options);
   }
@@ -347,7 +409,7 @@ function onFilterChanged(newFilterState) {
 async function onTrackClick(poly, event) {
   // Clear search state when clicking track on map (not from search)
   clearSearchState();
-  
+
   // Navigate to track detail route instead of opening details here
   const id = poly.properties && poly.properties.id;
   if (id) {
@@ -362,14 +424,16 @@ function onTrackMouseOver(poly, event) {
   activeTrackId.value = poly.properties && poly.properties.id;
 }
 
-function onTrackMouseMove(event) { 
+function onTrackMouseMove(event) {
   throttledTooltipUpdate(event);
 }
 
 function onTrackMouseOut(event) {
   // Check if the mouse is moving to another interactive layer or outside the map
-  const relatedTarget = event.originalEvent ? event.originalEvent.relatedTarget : event.relatedTarget;
-  if (!relatedTarget || !relatedTarget.closest('.leaflet-interactive')) {
+  const relatedTarget = event.originalEvent
+    ? event.originalEvent.relatedTarget
+    : event.relatedTarget;
+  if (!relatedTarget || !relatedTarget.closest(".leaflet-interactive")) {
     hideTooltip();
   }
 }
@@ -380,7 +444,7 @@ function hideTooltip() {
   if (debouncedFetchTracks.pending()) {
     // Don't cancel track fetching, just clean tooltip
   }
-  
+
   tooltip.visible = false;
   tooltip.data = null;
   tooltip.x = 0;
@@ -389,7 +453,8 @@ function hideTooltip() {
 }
 
 function updateTooltipPosition(event) {
-  const offsetX = 18, offsetY = 12;
+  const offsetX = 18,
+    offsetY = 12;
   let x = event.originalEvent ? event.originalEvent.clientX : event.clientX;
   let y = event.originalEvent ? event.originalEvent.clientY : event.clientY;
   tooltip.x = x + offsetX;
@@ -398,10 +463,10 @@ function updateTooltipPosition(event) {
 
 function refreshTracks() {
   if (bounds.value) {
-    const options = { 
-      zoom: zoom.value, 
-      mode: 'overview',
-      forceRefresh: true // Force refresh to bypass cache
+    const options = {
+      zoom: zoom.value,
+      mode: "overview",
+      forceRefresh: true, // Force refresh to bypass cache
     };
     fetchTracksInBounds(bounds.value, options);
   }
@@ -410,10 +475,10 @@ function refreshTracks() {
 async function handleUpload({ file, name, categories }) {
   try {
     await uploadTrack({ file, name, categories });
-    showToast('Track uploaded successfully!', 'success');
+    showToast("Track uploaded successfully!", "success");
     refreshTracks();
   } catch (e) {
-    showToast('Upload error: ' + e.message, 'error');
+    showToast("Upload error: " + e.message, "error");
   }
 }
 
@@ -446,22 +511,33 @@ function handleDrop(event) {
 }
 
 // Debounced state update to prevent excessive URL updates and map flicker
-const debouncedStateUpdate = useAdvancedDebounce((newZoom, newCenter) => {
-  if (!isUpdatingProgrammatically.value) {
-    mapUrlState.updateMapState(newZoom, newCenter);
-    // Save position only once after state is updated
-    debouncedSavePosition();
-  }
-}, 300, { leading: false, trailing: true });
+const debouncedStateUpdate = useAdvancedDebounce(
+  (newZoom, newCenter) => {
+    if (!isUpdatingProgrammatically.value) {
+      mapUrlState.updateMapState(newZoom, newCenter);
+      // Save position only once after state is updated
+      debouncedSavePosition();
+    }
+  },
+  300,
+  { leading: false, trailing: true }
+);
 
 function handleZoomUpdate(val) {
   // Only update if valid and not already updating programmatically
-  if (isValidZoom(val) && !isUpdatingProgrammatically.value && !isUpdatingFromUrl.value) {
+  if (
+    isValidZoom(val) &&
+    !isUpdatingProgrammatically.value &&
+    !isUpdatingFromUrl.value
+  ) {
     // Prevent oscillation by checking if this is a meaningful change
-    if (lastUserZoom.value !== null && Math.abs(val - lastUserZoom.value) < 0.1) {
+    if (
+      lastUserZoom.value !== null &&
+      Math.abs(val - lastUserZoom.value) < 0.1
+    ) {
       return; // Too small change, likely from oscillation
     }
-    
+
     lastUserZoom.value = val;
     zoom.value = val;
     // Use debounced update to prevent flicker
@@ -470,15 +546,21 @@ function handleZoomUpdate(val) {
 }
 
 function handleCenterUpdate(val) {
-  // Only update if valid and not already updating programmatically  
-  if (isValidLatLng(val) && !isUpdatingProgrammatically.value && !isUpdatingFromUrl.value) {
+  // Only update if valid and not already updating programmatically
+  if (
+    isValidLatLng(val) &&
+    !isUpdatingProgrammatically.value &&
+    !isUpdatingFromUrl.value
+  ) {
     // Prevent oscillation by checking if this is a meaningful change
-    if (lastUserCenter.value !== null && 
-        Math.abs(val[0] - lastUserCenter.value[0]) < 0.0001 &&
-        Math.abs(val[1] - lastUserCenter.value[1]) < 0.0001) {
+    if (
+      lastUserCenter.value !== null &&
+      Math.abs(val[0] - lastUserCenter.value[0]) < 0.0001 &&
+      Math.abs(val[1] - lastUserCenter.value[1]) < 0.0001
+    ) {
       return; // Too small change, likely from oscillation
     }
-    
+
     lastUserCenter.value = [...val];
     center.value = val;
     // Use debounced update to prevent flicker
@@ -491,19 +573,21 @@ function handleCenterUpdate(val) {
 function updateMapStateProgrammatically(newZoom, newCenter) {
   isUpdatingProgrammatically.value = true;
   isUpdatingFromUrl.value = true;
-  
+
   if (isValidZoom(newZoom) && Math.abs(newZoom - zoom.value) > 0.1) {
     lastUserZoom.value = newZoom;
     zoom.value = newZoom;
   }
-  
-  if (isValidLatLng(newCenter) && 
-      (Math.abs(newCenter[0] - center.value[0]) > 0.0001 || 
-       Math.abs(newCenter[1] - center.value[1]) > 0.0001)) {
+
+  if (
+    isValidLatLng(newCenter) &&
+    (Math.abs(newCenter[0] - center.value[0]) > 0.0001 ||
+      Math.abs(newCenter[1] - center.value[1]) > 0.0001)
+  ) {
     lastUserCenter.value = [...newCenter];
-    center.value = [...newCenter];  // Create new array to trigger reactivity
+    center.value = [...newCenter]; // Create new array to trigger reactivity
   }
-  
+
   // Reset flags after a delay to allow all updates to complete
   setTimeout(() => {
     isUpdatingProgrammatically.value = false;
@@ -511,7 +595,19 @@ function updateMapStateProgrammatically(newZoom, newCenter) {
   }, 100);
 }
 
+// Geolocation handling
+function onLocationFound({ latitude, longitude, error }) {
+  if (error) {
+    showToast(error, "error");
+    return;
+  }
 
+  if (latitude && longitude) {
+    // Center map on user location
+    updateMapStateProgrammatically(15, [latitude, longitude]);
+    showToast("Location found", "success", 2000);
+  }
+}
 
 // Search functions
 function openSearch() {
@@ -526,7 +622,7 @@ function closeSearch() {
 async function onTrackSelected(track) {
   // Don't need to save search state here - it's already managed by TrackSearch component
   // The search state is already saved when search is performed
-  
+
   // Navigate to track detail route
   router.push(`/track/${track.id}`);
   closeSearch();
@@ -536,7 +632,7 @@ async function onTrackSelected(track) {
 function removeTrackLocally(id) {
   if (!id) return;
   // Remove matching polylines
-  polylines.value = polylines.value.filter(p => p.properties?.id !== id);
+  polylines.value = polylines.value.filter((p) => p.properties?.id !== id);
 }
 
 // Track update handling
@@ -574,50 +670,61 @@ function handleBeforeUnload() {
 // Handle URL state changes from browser navigation or direct URL changes
 function handleUrlStateChange(event) {
   const { zoom: newZoom, center: newCenter, source } = event.detail;
-  
-  if (source === 'url' && !mapUrlState.isUpdatingFromUrl.value) {
+
+  if (source === "url" && !mapUrlState.isUpdatingFromUrl.value) {
     // Update local state from URL change (browser back/forward, direct navigation)
     if (mapUrlState.isValidZoom(newZoom) && newZoom !== zoom.value) {
       zoom.value = newZoom;
     }
-    
-    if (mapUrlState.isValidLatLng(newCenter) && 
-        (newCenter[0] !== center.value[0] || newCenter[1] !== center.value[1])) {
+
+    if (
+      mapUrlState.isValidLatLng(newCenter) &&
+      (newCenter[0] !== center.value[0] || newCenter[1] !== center.value[1])
+    ) {
       center.value = [...newCenter];
     }
-    
+
     // Also save to localStorage for consistency (debounced)
     debouncedSavePosition();
   }
 }
 
 onMounted(() => {
-  window.addEventListener('track-deleted', handleTrackDeleted);
-  window.addEventListener('track-name-updated', handleTrackNameUpdated);
-  window.addEventListener('track-description-updated', handleTrackDescriptionUpdated);
-  window.addEventListener('beforeunload', handleBeforeUnload);
-  
+  window.addEventListener("track-deleted", handleTrackDeleted);
+  window.addEventListener("track-name-updated", handleTrackNameUpdated);
+  window.addEventListener(
+    "track-description-updated",
+    handleTrackDescriptionUpdated
+  );
+  window.addEventListener("beforeunload", handleBeforeUnload);
+
   // Listen for URL state changes (browser back/forward, direct URL changes)
-  window.addEventListener('mapUrlStateChanged', handleUrlStateChange);
+  window.addEventListener("mapUrlStateChanged", handleUrlStateChange);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('track-deleted', handleTrackDeleted);
-  window.removeEventListener('track-name-updated', handleTrackNameUpdated);
-  window.removeEventListener('track-description-updated', handleTrackDescriptionUpdated);
-  window.removeEventListener('beforeunload', handleBeforeUnload);
-  window.removeEventListener('mapUrlStateChanged', handleUrlStateChange);
-  // Save final position before unmounting (immediate, no debouncing needed)  
+  window.removeEventListener("track-deleted", handleTrackDeleted);
+  window.removeEventListener("track-name-updated", handleTrackNameUpdated);
+  window.removeEventListener(
+    "track-description-updated",
+    handleTrackDescriptionUpdated
+  );
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+  window.removeEventListener("mapUrlStateChanged", handleUrlStateChange);
+  // Save final position before unmounting (immediate, no debouncing needed)
   saveMapPosition(center.value, zoom.value);
 });
 </script>
 
 <style>
-html, body, #app {
+html,
+body,
+#app {
   height: 100%;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 /* Hide Leaflet Ukraine flag */
@@ -644,6 +751,35 @@ html, body, #app {
   /* Optimize font rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Map controls overlay - positioned absolutely to appear above map */
+.map-controls-overlay {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1200; /* Above map layers (tile: 200, overlay: 400, popup: 700) */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none; /* Allow click-through for container */
+}
+
+.map-controls-overlay > * {
+  pointer-events: auto; /* Re-enable pointer events for buttons */
+}
+
+/* Mobile adjustments for map controls overlay */
+@media (max-width: 640px) {
+  .map-controls-overlay {
+    top: 12px;
+    left: 12px;
+    /* Safe area support */
+    top: calc(12px + constant(safe-area-inset-top));
+    top: calc(12px + env(safe-area-inset-top));
+    left: calc(12px + constant(safe-area-inset-left));
+    left: calc(12px + env(safe-area-inset-left));
+  }
 }
 
 .upload-form-container {
@@ -738,7 +874,7 @@ html, body, #app {
   padding: 16px;
   background: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   animation: expandForm 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
   font-size: 0.87rem;
@@ -798,13 +934,13 @@ html, body, #app {
 /* Responsive design for smaller screens - matching other components */
 @media (max-width: 640px) {
   .upload-form-container {
-  /* Safe-area aware offsets on small screens */
-  right: calc(12px + constant(safe-area-inset-right));
-  right: calc(12px + env(safe-area-inset-right));
-  bottom: calc(12px + constant(safe-area-inset-bottom));
-  bottom: calc(12px + env(safe-area-inset-bottom));
+    /* Safe-area aware offsets on small screens */
+    right: calc(12px + constant(safe-area-inset-right));
+    right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(12px + constant(safe-area-inset-bottom));
+    bottom: calc(12px + env(safe-area-inset-bottom));
   }
-  
+
   .upload-button-compact {
     width: 44px; /* Same as other buttons */
     height: 44px;
@@ -815,13 +951,13 @@ html, body, #app {
     border: 1px solid rgba(0, 0, 0, 0.12);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
-  
+
   .upload-icon {
     width: 22px; /* Match other icons */
     height: 22px;
     color: #1976d2 !important;
   }
-  
+
   .upload-form-expanded {
     min-width: 260px;
     max-width: calc(100vw - 32px);
@@ -844,7 +980,7 @@ html, body, #app {
       /* Ensure proper layer composition */
       isolation: isolate;
     }
-    
+
     .upload-button-compact .upload-icon {
       /* Make icon more prominent in Safari */
       color: #1976d2 !important;
