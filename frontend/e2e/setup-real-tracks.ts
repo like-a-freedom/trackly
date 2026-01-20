@@ -4,6 +4,7 @@
  */
 
 import { readFileSync, writeFileSync } from 'fs';
+import path from 'path';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
 
@@ -19,7 +20,7 @@ async function uploadGpxFile(filePath: string, trackName: string): Promise<Track
   // Need to use node-fetch FormData for Node.js environment
   const FormData = (await import('form-data')).default;
   const gpxContent = readFileSync(filePath);
-  
+
   const form = new FormData();
   form.append('file', gpxContent, {
     filename: `${trackName}.gpx`,
@@ -52,6 +53,15 @@ async function uploadGpxFile(filePath: string, trackName: string): Promise<Track
  * Create test tracks from fixture data
  * Returns mapping of fixture name to real track ID
  */
+const FIXTURE_MAP: Array<{ key: string; name: string; path: string }> = [
+  { key: 'test-track-e2e', name: 'E2E Base Track', path: './e2e/fixtures/gpx/e2e-base.gpx' },
+  { key: 'test-track-multi', name: 'E2E Multi Track', path: './e2e/fixtures/gpx/e2e-multi.gpx' },
+  { key: 'test-track-single', name: 'E2E Single Track', path: './e2e/fixtures/gpx/e2e-single.gpx' }
+];
+
+// Keep track of uploads we created so we can clean them up later
+const uploadedByTest: string[] = [];
+
 export async function setupTestTracks(): Promise<Record<string, string>> {
   // Query backend for existing tracks and pick representative ones
   const tracks: Record<string, string> = {};
@@ -98,6 +108,52 @@ export async function setupTestTracks(): Promise<Record<string, string>> {
     tracks['test-track-single'] = singleId as string;
 
     console.log('✓ Selected existing tracks for E2E:', tracks);
+
+    // If any of the core fixtures are missing or equal to undefined, try uploading our fixtures
+    for (const fixture of FIXTURE_MAP) {
+      if (!tracks[fixture.key]) {
+        try {
+          console.log(`Attempting upload of fixture ${fixture.name}`);
+          // Resolve fixture path relative to project frontend folder
+          const p = path.resolve(process.cwd(), 'frontend', fixture.path.replace(/^\.\//, ''));
+          const uploaded = await uploadGpxFile(p, fixture.name);
+          if (uploaded && uploaded.id) {
+            tracks[fixture.key] = uploaded.id;
+            uploadedByTest.push(uploaded.id);
+            console.log(`Uploaded fixture ${fixture.name}: ${uploaded.id}`);
+            continue;
+          }
+        } catch (err) {
+          console.warn(`Upload of fixture ${fixture.name} failed:`, err);
+        }
+      }
+    }
+
+    // If still missing some keys, attempt to search by name as a last resort
+    for (const fixture of FIXTURE_MAP) {
+      if (!tracks[fixture.key]) {
+        try {
+          const searchRes = await fetch(`${BACKEND_URL}/tracks/search?query=${encodeURIComponent(fixture.name)}`);
+          if (searchRes.ok) {
+            const results = await searchRes.json();
+            if (Array.isArray(results) && results.length > 0 && results[0].id) {
+              tracks[fixture.key] = results[0].id;
+              console.log(`Found existing fixture by search ${fixture.name}: ${results[0].id}`);
+            }
+          }
+        } catch (err) {
+          console.warn('Search for fixture failed:', err);
+        }
+      }
+    }
+
+    // Final assertion: ensure we have ids for all keys
+    for (const fixture of FIXTURE_MAP) {
+      if (!tracks[fixture.key]) {
+        console.warn(`Warning: could not resolve track for fixture ${fixture.name}. Some tests may skip.`);
+      }
+    }
+
     return tracks;
   } catch (error) {
     console.error('Failed to setup test tracks (list/search):', error);
@@ -105,10 +161,31 @@ export async function setupTestTracks(): Promise<Record<string, string>> {
   }
 }
 
+export async function cleanupTestTracks(trackIds: string[]): Promise<void> {
+  // Delete only tracks we uploaded during setup
+  try {
+    for (const id of uploadedByTest) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/tracks/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'delete', session_id: 'e2e-test-session' })
+        });
+        if (res.ok) {
+          console.log('Deleted uploaded test track:', id);
+        } else {
+          console.warn('Failed to delete uploaded test track:', id, res.status);
+        }
+      } catch (err) {
+        console.warn('Failed to delete uploaded test track:', id, err);
+      }
+    }
+  } catch (err) {
+    console.warn('cleanupTestTracks error:', err);
+  }
+}
+
 /**
  * Cleanup test tracks after tests complete
  */
-export async function cleanupTestTracks(_trackIds: string[]): Promise<void> {
-  // We are using existing local backend tracks; do NOT delete them in tests.
-  console.log('Skipping deletion of real tracks (using local backend)');
-}
+

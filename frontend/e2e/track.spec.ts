@@ -202,11 +202,11 @@ test('gap-line, slope tooltip & multi-segment color checks (production interacti
   const debugCreate = await page.evaluate(() => {
     try {
       const map: any = (window.__e2e?._lastMapInstance ?? null);
-      const marker = (window.__e2e?.getLastMarkerLatLng?.() ?? null) as {lat:number,lng:number}|null;
+      const marker = (window.__e2e?.getLastMarkerLatLng?.() ?? null) as { lat: number, lng: number } | null;
       if (!map || !marker) return { ok: false, reason: 'no-map-or-marker' };
       let foundLayer: any = null;
       map.eachLayer((layer: any) => {
-        try { if (!foundLayer && layer && layer.feature && layer.feature.properties && layer.feature.properties.id === 'test-track-multi') foundLayer = layer; } catch (err) {}
+        try { if (!foundLayer && layer && layer.feature && layer.feature.properties && layer.feature.properties.id === 'test-track-multi') foundLayer = layer; } catch (err) { }
       });
       if (!foundLayer) return { ok: false, reason: 'no-foundLayer' };
       const latlngs = foundLayer.getLatLngs ? foundLayer.getLatLngs() : [];
@@ -245,7 +245,7 @@ test('gap-line, slope tooltip & multi-segment color checks (production interacti
               coords: layer.getLatLngs ? layer.getLatLngs() : null
             });
           }
-        } catch (err) {}
+        } catch (err) { }
       });
       return res;
     } catch (err) {
@@ -258,7 +258,7 @@ test('gap-line, slope tooltip & multi-segment color checks (production interacti
     try {
       const map: any = (window.__e2e?._lastMapInstance ?? null);
       if (!map) return null;
-      const marker = (window.__e2e?.getLastMarkerLatLng?.() ?? null) as {lat:number,lng:number}|null;
+      const marker = (window.__e2e?.getLastMarkerLatLng?.() ?? null) as { lat: number, lng: number } | null;
       if (!marker) return null;
       const results: any[] = [];
       map.eachLayer((layer: any) => {
@@ -281,7 +281,7 @@ test('gap-line, slope tooltip & multi-segment color checks (production interacti
               results.push({ layerId: layer.feature.properties.id, best });
             }
           }
-        } catch (err) {}
+        } catch (err) { }
       });
       return { marker, results };
     } catch (err) {

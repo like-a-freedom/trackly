@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Trackly E2E">
+  <trk>
+    <name>E2E Single Track</name>
+    <trkseg>
+      <trkpt lat="37.7770" lon="-122.4204"><ele>20</ele></trkpt>
+      <trkpt lat="37.7771" lon="-122.4205"><ele>21</ele></trkpt>
+      <trkpt lat="37.7772" lon="-122.4206"><ele>22</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
