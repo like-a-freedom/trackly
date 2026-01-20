@@ -16,7 +16,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@kangc/v-md-editor": "^2.3.18",
+    "@kangc/v-md-editor": "^1.7.12",
     "@types/leaflet.markercluster": "^1.5.6",
     "@vue-leaflet/vue-leaflet": "^0.10.1",
     "@vueform/multiselect": "^2.6.11",
@@ -30,6 +30,7 @@
     "leaflet-polylinedecorator": "^1.6.0",
     "leaflet.markercluster": "^1.5.3",
     "lucide-vue-next": "^0.562.0",
+    "vue": "^3.5.27",
     "vue-chartjs": "^5.3.3",
     "vue-router": "^4.6.4",
     "vue-sonner": "^2.0.9",
@@ -37,17 +38,17 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
-    "@types/node": "^25.0.3",
+    "@types/node": "^25.0.9",
     "@vitejs/plugin-vue": "^6.0.3",
-    "@vitest/coverage-v8": "^4.0.16",
-    "@vitest/ui": "^4.0.16",
+    "@vitest/coverage-v8": "^4.0.17",
+    "@vitest/ui": "^4.0.17",
     "@vue/test-utils": "^2.4.6",
     "form-data": "^4.0.5",
     "jsdom": "^27.4.0",
     "playwright": "^1.57.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.0",
-    "vitest": "^4.0.16",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.17",
     "vitest-canvas-mock": "^1.1.3"
   }
 }
