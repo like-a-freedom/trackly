@@ -174,6 +174,12 @@ Start the development environment with hot-reload:
 docker-compose -f docker-compose.dev.yaml up --build
 ```
 
+**Frontend local developer tools (preferred):**
+- Use **Bun** for frontend package management, scripts and tests.
+  - Install frontend deps: `cd frontend && bun install`
+  - Run E2E tests: `cd frontend && bun run test:e2e`
+  - Run unit tests: `cd frontend && bun run test`
+
 **Access the application:**
 - 🌐 Frontend: http://localhost:81
 - 🔧 Backend API: http://localhost:8080

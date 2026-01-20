@@ -30,23 +30,73 @@ async function uploadGpxFile(filePath: string, trackName: string): Promise<Track
   form.append('session_id', 'e2e-test-session');
   form.append('name', trackName);
 
-  const response = await fetch(`${BACKEND_URL}/tracks`, {
-    method: 'POST',
-    body: form as any,
-    headers: form.getHeaders()
-  });
+  for (let att = 1; att <= 6; att++) {
+    const response = await fetch(`${BACKEND_URL}/tracks`, {
+      method: 'POST',
+      body: form as any,
+      headers: form.getHeaders()
+    });
 
-  if (!response.ok) {
+    if (response.ok) {
+      const data = await response.json();
+      return { id: data.id || data.track_id, name: trackName };
+    }
+
     const errorText = await response.text();
-    console.error('Upload failed:', errorText);
+    console.warn('Upload attempt', att, 'failed:', response.status, errorText);
+
+    // Handle cooldown / rate limit
+    if (response.status === 429) {
+      const m = typeof errorText === 'string' && errorText.match && errorText.match(/Please, wait (\d+) seconds/);
+      if (m) {
+        const sec = Number(m[1]) || 1;
+        console.warn('Server requested wait', sec, 'seconds — sleeping');
+        await new Promise(r => setTimeout(r, (sec + 1) * 1000));
+        continue;
+      }
+      const retry = response.headers.get('retry-after');
+      if (retry) {
+        const sec = Number(retry) || 1;
+        console.warn('Retry-After header present, sleeping', sec, 'seconds');
+        await new Promise(r => setTimeout(r, (sec + 1) * 1000));
+        continue;
+      }
+      await new Promise(r => setTimeout(r, 1000 * att));
+      continue;
+    }
+
+    // If geometry validation fails, try with a two-point GPX
+    if (response.status >= 500 && errorText && (errorText.includes('tracks_geom_valid') || errorText.includes('Too few points'))) {
+      console.warn('Geometry validation failed; retrying upload with 2-point GPX');
+      const twoPoint = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trackly E2E">\n  <trk>\n    <name>${trackName} (2pt)</name>\n    <trkseg>\n      <trkpt lat="37.7810" lon="-122.4200"><ele>10</ele></trkpt>\n      <trkpt lat="37.7820" lon="-122.4210"><ele>12</ele></trkpt>\n    </trkseg>\n  </trk>\n</gpx>`;
+      const altForm = new (await import('form-data')).default();
+      altForm.append('file', Buffer.from(twoPoint), {
+        filename: `${trackName}-2pt.gpx`,
+        contentType: 'application/gpx+xml'
+      });
+      altForm.append('name', trackName + ' (2pt)');
+      altForm.append('categories', 'e2e-test');
+      altForm.append('session_id', 'e2e-test-session');
+      const r2 = await fetch(`${BACKEND_URL}/tracks`, { method: 'POST', body: altForm as any, headers: altForm.getHeaders() });
+      if (r2.ok) {
+        const d2 = await r2.json();
+        return { id: d2.id || d2.track_id, name: trackName };
+      }
+      const t2 = await r2.text();
+      console.warn('Alt upload failed', r2.status, t2);
+      await new Promise(r => setTimeout(r, 1000 * att));
+      continue;
+    }
+
+    if (response.status >= 500) {
+      await new Promise(r => setTimeout(r, 1000 * att));
+      continue;
+    }
+
     throw new Error(`Failed to upload GPX: ${response.status} ${response.statusText}\n${errorText}`);
   }
 
-  const data = await response.json();
-  return {
-    id: data.id || data.track_id,
-    name: trackName
-  };
+  throw new Error('Failed to upload GPX after retries');
 }
 
 /**

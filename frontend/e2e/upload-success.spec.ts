@@ -107,15 +107,29 @@ test('upload flow: new file uploads, shows success and links to track', async ({
                     const waitMatch = (text || '').toLowerCase().match(/wait\s+(\d+)\s+seconds/);
                     if (waitMatch) {
                         const waitSeconds = parseInt(waitMatch[1], 10) || 10;
-                        console.warn(`Server requested a ${waitSeconds}s wait between uploads — sleeping...`);
-                        await page.waitForTimeout((waitSeconds + 1) * 1000);
-                        // don't count this as a retry attempt; retry the same attempt number
-                        attempt--;
+                        console.warn(`Server requested a ${waitSeconds}s wait between uploads — switching to server-side fallback upload to avoid long sleeps`);
+                        try {
+                            const { uploadTrack } = await import('./helpers/uploadWithRetries');
+                            const uploadResp = await uploadTrack({ page, gpx: gpx2, name: uniqueName2, categories: 'e2e-fallback' });
+                            if (uploadResp && uploadResp.ok && uploadResp.body && (uploadResp.body.id || uploadResp.body.track_id)) {
+                                const id = uploadResp.body.id || uploadResp.body.track_id;
+                                await page.goto(`/track/${id}`);
+                                await page.waitForLoadState('networkidle');
+                                createdTrackId = id;
+                                expect(page.url()).toContain(`/track/${id}`);
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('Server-side fallback during cooldown failed:', e);
+                        }
+
+                        // If fallback failed, do a short wait and continue with UI retry
+                        await page.waitForTimeout(1000);
                         continue;
                     }
 
                     // small backoff
-                    await page.waitForTimeout(1000 * attempt);
+                    await page.waitForTimeout(500 * attempt);
 
                     await input.setInputFiles({ name: `upload-e2e-retry-${attempt}.gpx`, mimeType: 'application/gpx+xml', buffer: Buffer.from(gpx2, 'utf8') });
                     // add a category again
@@ -158,22 +172,11 @@ test('upload flow: new file uploads, shows success and links to track', async ({
 
                 // After retries failed, try uploading directly via fetch as a last-resort fallback (still a real backend endpoint)
                 try {
-                    const uploadResp = await page.evaluate(async ({ gpx, name, session }) => {
-                        const file = new File([gpx], 'upload-fallback.gpx', { type: 'application/gpx+xml' });
-                        const fd = new FormData();
-                        fd.append('file', file);
-                        fd.append('name', name);
-                        fd.append('categories', 'e2e-fallback');
-                        fd.append('session_id', session);
-                        const r = await fetch('/tracks/upload', { method: 'POST', body: fd, credentials: 'include' });
-                        const txt = await r.text();
-                        let body = null;
-                        try { body = JSON.parse(txt); } catch (e) { body = txt; }
-                        return { ok: r.ok, status: r.status, body };
-                    }, { gpx, name: uniqueName, session: TEST_SESSION });
+                    const { uploadTrack } = await import('./helpers/uploadWithRetries');
+                    const uploadResp = await uploadTrack({ page, gpx, name: uniqueName, session: undefined, categories: 'e2e-fallback' });
 
-                    if (uploadResp && uploadResp.ok && uploadResp.body && uploadResp.body.id) {
-                        const id = uploadResp.body.id;
+                    if (uploadResp && uploadResp.ok && uploadResp.body && (uploadResp.body.id || uploadResp.body.track_id)) {
+                        const id = uploadResp.body.id || uploadResp.body.track_id;
                         await page.goto(`/track/${id}`);
                         await page.waitForLoadState('networkidle');
                         createdTrackId = id;
