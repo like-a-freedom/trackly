@@ -353,7 +353,7 @@ Contributions are what make open source amazing! Any contributions you make are 
 
 - Follow SOLID principles and DRY practices
 - Use Test-Driven Development (TDD) where applicable
-- Run tests before submitting PR: `cargo test` (backend), `npm test` (frontend)
+- Run tests before submitting PR: `cargo test` (backend), `bun run test` (frontend)
 - Update documentation for new features
 - Keep PRs focused and small
 

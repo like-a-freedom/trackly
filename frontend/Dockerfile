@@ -1,9 +1,9 @@
-FROM node:25-alpine AS builder
+FROM oven/bun:alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm install
+COPY package.json ./
+RUN bun install
 COPY . .
-RUN npm run build
+RUN bun run build
 
 FROM caddy:2.10-alpine
 COPY --from=builder /app/dist /usr/share/caddy

@@ -1117,7 +1117,14 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
       await flushPromises();
 
-      expect(fetch).toHaveBeenCalledWith(`/tracks/${track.id}/export`);
+      expect(fetch).toHaveBeenCalledWith(
+        `/tracks/${track.id}/export`,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'x-session-id': expect.any(String)
+          })
+        })
+      );
       // Ensure at least one anchor element was created for download
       const anchorCalls = document.createElement.mock.calls.filter(c => c[0] === 'a');
       expect(anchorCalls.length).toBeGreaterThan(0);
