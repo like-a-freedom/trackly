@@ -30,8 +30,38 @@ vi.mock('../composables/useSearchState', () => ({
     })
 }));
 
+vi.mock('../composables/useMapUrlState', () => ({
+    useMapUrlState: () => ({
+        zoom: ref(11),
+        center: ref([55.7558, 37.6176]),
+        bounds: ref(null),
+        trackId: ref(null),
+        poiId: ref(null),
+        updateZoom: vi.fn(),
+        updateCenter: vi.fn(),
+        updateBounds: vi.fn(),
+        setTrackId: vi.fn(),
+        setPoiId: vi.fn(),
+        clearTrackId: vi.fn(),
+        clearPoiId: vi.fn(),
+    })
+}));
+
 vi.mock('../utils/session', () => ({
     getSessionId: () => 'test-session-id'
+}));
+
+vi.mock('../composables/useAuth', () => ({
+    useAuth: () => ({
+        user: ref(null),
+        isAuthenticated: ref(false),
+        isLoading: ref(false),
+        error: ref(null),
+        login: vi.fn(),
+        logout: vi.fn(),
+        checkAuth: vi.fn(),
+        _resetForTesting: vi.fn()
+    })
 }));
 
 // Mock router
@@ -92,6 +122,17 @@ describe('HomeView', () => {
                         template: '<div class="track-search-mock"></div>',
                         props: ['isVisible'],
                         emits: ['close', 'track-selected']
+                    },
+                    LoginButton: {
+                        template: '<div class="login-button-mock"></div>'
+                    },
+                    SearchButton: {
+                        template: '<div class="search-button-mock"></div>',
+                        emits: ['open-search']
+                    },
+                    GeolocationButton: {
+                        template: '<div class="geolocation-button-mock"></div>',
+                        emits: ['location-found']
                     }
                 }
             }

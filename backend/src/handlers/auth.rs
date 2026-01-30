@@ -1,0 +1,675 @@
+//! Authentication API handlers.
+//!
+//! Implements the authentication REST API endpoints:
+//! - POST /auth/google/login - Get OAuth authorization URL
+//! - POST /auth/google/callback - Exchange auth code for tokens
+//! - POST /auth/refresh - Refresh access token
+//! - POST /auth/logout - Revoke refresh token
+//! - GET /auth/me - Get current user info
+//! - POST /auth/migrate-session-tracks - Migrate anonymous tracks
+//! - DELETE /api/account - Delete user account
+//! - GET /api/account/tracks - List user's tracks
+//! - PATCH /tracks/{id}/visibility - Update track visibility
+
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode, header::SET_COOKIE},
+    response::IntoResponse,
+};
+use cookie::{Cookie, SameSite};
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use std::sync::Arc;
+use tracing::info;
+
+use crate::auth::{
+    self, AuthError, AuthUser, OptionalAuthUser, TokenUser, check_suspicious_activity,
+    create_access_token, create_refresh_token, exchange_code_for_user, generate_authorization_url,
+    get_config, is_new_ip_for_user, is_rate_limited, record_login_attempt, revoke_all_user_tokens,
+    revoke_refresh_token, rotate_refresh_token, validate_refresh_token,
+};
+use crate::db::{self, User};
+use crate::metrics;
+
+/// Response for OAuth login initiation.
+#[derive(Debug, Serialize)]
+pub struct LoginResponse {
+    pub authorization_url: String,
+    pub state: String,
+    pub pkce_verifier: String,
+}
+
+/// Response for successful authentication.
+#[derive(Debug, Serialize)]
+pub struct AuthResponse {
+    pub user: UserResponse,
+    pub access_token: String,
+    pub expires_in: u64,
+    pub is_new_user: bool,
+}
+
+/// User information response.
+#[derive(Debug, Serialize)]
+pub struct UserResponse {
+    pub id: String,
+    pub email: String,
+    pub name: Option<String>,
+    pub nickname: Option<String>,
+    pub avatar_url: Option<String>,
+    pub roles: Vec<String>,
+}
+
+impl From<User> for UserResponse {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id.to_string(),
+            email: user.email,
+            name: user.name,
+            nickname: user.nickname,
+            avatar_url: user.avatar_url,
+            roles: user.roles,
+        }
+    }
+}
+
+/// Request for OAuth callback.
+#[derive(Debug, Deserialize)]
+pub struct CallbackRequest {
+    pub code: String,
+    pub state: String,
+    pub pkce_verifier: String,
+}
+
+/// Request for token refresh.
+#[derive(Debug, Deserialize)]
+pub struct RefreshRequest {
+    pub refresh_token: String,
+}
+
+/// Response for token refresh.
+#[derive(Debug, Serialize)]
+pub struct RefreshResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: u64,
+}
+
+/// Response for OAuth config (public, no secrets).
+#[derive(Debug, Serialize)]
+pub struct OAuthConfigResponse {
+    pub client_id: String,
+    pub redirect_uri: String,
+}
+
+/// Get OAuth configuration for frontend.
+///
+/// GET /auth/oauth-config
+///
+/// Returns public OAuth configuration (client_id, redirect_uri) for the frontend
+/// to construct the authorization URL.
+pub async fn oauth_config() -> Json<OAuthConfigResponse> {
+    let config = get_config();
+    Json(OAuthConfigResponse {
+        client_id: config.google_client_id.clone(),
+        redirect_uri: config.google_redirect_uri.clone(),
+    })
+}
+
+/// Initiate Google OAuth login.
+///
+/// GET /auth/google/login
+///
+/// Returns the OAuth authorization URL to redirect the user to.
+pub async fn google_login() -> Result<Json<LoginResponse>, AuthError> {
+    let auth_url = generate_authorization_url()?;
+
+    Ok(Json(LoginResponse {
+        authorization_url: auth_url.url,
+        state: auth_url.state,
+        pkce_verifier: auth_url.pkce_verifier,
+    }))
+}
+
+/// Handle Google OAuth callback.
+///
+/// POST /auth/google/callback
+///
+/// Exchanges authorization code for tokens, creates/updates user,
+/// and returns JWT access token and refresh token.
+pub async fn google_callback(
+    State(pool): State<Arc<PgPool>>,
+    headers: HeaderMap,
+    Json(request): Json<CallbackRequest>,
+) -> Result<impl IntoResponse, AuthError> {
+    let client_ip = extract_client_ip_from_headers(&headers);
+
+    // Check rate limiting
+    if is_rate_limited(&pool, &client_ip).await? {
+        record_login_attempt(&pool, &client_ip, None, false, Some("rate_limited")).await?;
+        metrics::record_auth_rate_limit("login");
+        metrics::record_auth_login_attempt("google", false);
+        return Err(AuthError::RateLimited);
+    }
+
+    // Exchange code for user info
+    let oauth_user = match exchange_code_for_user(
+        &request.code,
+        "", // nonce not used in simplified OAuth2 flow
+        &request.pkce_verifier,
+    )
+    .await
+    {
+        Ok(user) => user,
+        Err(e) => {
+            record_login_attempt(&pool, &client_ip, None, false, Some(&e.to_string())).await?;
+            metrics::record_auth_login_attempt("google", false);
+            // Check suspicious activity even for failed attempts
+            check_suspicious_activity(&pool, &client_ip, None, false).await?;
+            return Err(e);
+        }
+    };
+
+    // Upsert user in database
+    let (user, is_new_user) = db::upsert_user(&pool, &oauth_user).await?;
+
+    // Check if this is a new IP for the user
+    let is_new_ip = !is_new_user && is_new_ip_for_user(&pool, user.id, &client_ip).await?;
+
+    // Record successful login
+    record_login_attempt(&pool, &client_ip, Some(user.id), true, None).await?;
+    metrics::record_auth_login_attempt("google", true);
+    metrics::inc_auth_active_sessions();
+
+    // Check for suspicious activity patterns
+    check_suspicious_activity(&pool, &client_ip, Some(user.id), is_new_ip).await?;
+
+    // Track new user registration
+    if is_new_user {
+        metrics::record_auth_user_registration("google");
+    }
+
+    // Generate tokens
+    let token_user = TokenUser {
+        user_id: user.id,
+        email: user.email.clone(),
+        name: user.name.clone().unwrap_or_default(),
+        nickname: user.nickname.clone(),
+        avatar_url: user.avatar_url.clone(),
+    };
+
+    let access_token = create_access_token(&token_user)?;
+    let (refresh_token, _family_id) = create_refresh_token(&pool, user.id, None).await?;
+
+    let config = get_config();
+
+    // Build response with cookies
+    let mut headers = HeaderMap::new();
+
+    // Set refresh token as HttpOnly cookie
+    let refresh_cookie = Cookie::build(("refresh_token", refresh_token.clone()))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/auth")
+        .max_age(cookie::time::Duration::seconds(
+            config.refresh_token_expiry_secs as i64,
+        ))
+        .build();
+    headers.insert(SET_COOKIE, refresh_cookie.to_string().parse().unwrap());
+
+    // Optionally set access token as HttpOnly cookie too
+    let access_cookie = Cookie::build(("access_token", access_token.clone()))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/")
+        .max_age(cookie::time::Duration::seconds(
+            config.access_token_expiry_secs as i64,
+        ))
+        .build();
+    headers.append(SET_COOKIE, access_cookie.to_string().parse().unwrap());
+
+    info!(
+        user_id = %user.id,
+        is_new_user = is_new_user,
+        "User authenticated via Google OAuth"
+    );
+
+    let response = AuthResponse {
+        user: user.into(),
+        access_token,
+        expires_in: config.access_token_expiry_secs,
+        is_new_user,
+    };
+
+    Ok((headers, Json(response)))
+}
+
+/// Refresh access token.
+///
+/// POST /auth/refresh
+///
+/// Uses refresh token to get a new access token.
+/// Implements token rotation for security.
+pub async fn refresh_token(
+    State(pool): State<Arc<PgPool>>,
+    Json(request): Json<RefreshRequest>,
+) -> Result<impl IntoResponse, AuthError> {
+    let start = std::time::Instant::now();
+
+    // Validate refresh token
+    let token = match validate_refresh_token(&pool, &request.refresh_token).await {
+        Ok(t) => {
+            metrics::observe_auth_token_validation("success", start.elapsed().as_secs_f64());
+            t
+        }
+        Err(AuthError::TokenExpired) => {
+            metrics::observe_auth_token_validation("expired", start.elapsed().as_secs_f64());
+            metrics::record_auth_token_refresh("expired");
+            return Err(AuthError::TokenExpired);
+        }
+        Err(AuthError::RefreshTokenRevoked) | Err(AuthError::TokenFamilyRevoked) => {
+            metrics::observe_auth_token_validation("invalid", start.elapsed().as_secs_f64());
+            metrics::record_auth_token_refresh("revoked");
+            return Err(AuthError::RefreshTokenRevoked);
+        }
+        Err(e) => {
+            metrics::observe_auth_token_validation("invalid", start.elapsed().as_secs_f64());
+            metrics::record_auth_token_refresh("invalid");
+            return Err(e);
+        }
+    };
+
+    // Rotate the token
+    let new_refresh_token = rotate_refresh_token(&pool, &token).await?;
+    metrics::record_auth_token_refresh("success");
+
+    // Get user info for new access token
+    let user = db::get_user_by_id(&pool, token.user_id)
+        .await?
+        .ok_or(AuthError::UserNotFound)?;
+
+    let token_user = TokenUser {
+        user_id: user.id,
+        email: user.email,
+        name: user.name.unwrap_or_default(),
+        nickname: user.nickname,
+        avatar_url: user.avatar_url,
+    };
+
+    let access_token = create_access_token(&token_user)?;
+    let config = get_config();
+
+    // Set cookies
+    let mut headers = HeaderMap::new();
+
+    let refresh_cookie = Cookie::build(("refresh_token", new_refresh_token.clone()))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/auth")
+        .max_age(cookie::time::Duration::seconds(
+            config.refresh_token_expiry_secs as i64,
+        ))
+        .build();
+    headers.insert(SET_COOKIE, refresh_cookie.to_string().parse().unwrap());
+
+    let access_cookie = Cookie::build(("access_token", access_token.clone()))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/")
+        .max_age(cookie::time::Duration::seconds(
+            config.access_token_expiry_secs as i64,
+        ))
+        .build();
+    headers.append(SET_COOKIE, access_cookie.to_string().parse().unwrap());
+
+    let response = RefreshResponse {
+        access_token,
+        refresh_token: new_refresh_token,
+        expires_in: config.access_token_expiry_secs,
+    };
+
+    Ok((headers, Json(response)))
+}
+
+/// Logout - revoke refresh token.
+///
+/// POST /auth/logout
+pub async fn logout(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Json(request): Json<RefreshRequest>,
+) -> Result<impl IntoResponse, AuthError> {
+    // Revoke the specific refresh token
+    let token_hash = auth::hash_token(&request.refresh_token);
+    revoke_refresh_token(&pool, &token_hash).await?;
+    metrics::dec_auth_active_sessions();
+
+    if let Some(user) = auth_user.user() {
+        info!(user_id = %user.user_id, "User logged out");
+    }
+
+    // Clear cookies
+    let mut headers = HeaderMap::new();
+
+    let clear_refresh = Cookie::build(("refresh_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/auth")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().unwrap());
+
+    let clear_access = Cookie::build(("access_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.append(SET_COOKIE, clear_access.to_string().parse().unwrap());
+
+    Ok((headers, StatusCode::NO_CONTENT))
+}
+
+/// Logout from all devices - revoke all refresh tokens.
+///
+/// POST /auth/logout-all
+pub async fn logout_all(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+) -> Result<impl IntoResponse, AuthError> {
+    revoke_all_user_tokens(&pool, auth_user.user_id).await?;
+
+    info!(user_id = %auth_user.user_id, "User logged out from all devices");
+
+    // Clear cookies
+    let mut headers = HeaderMap::new();
+
+    let clear_refresh = Cookie::build(("refresh_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/auth")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().unwrap());
+
+    let clear_access = Cookie::build(("access_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.append(SET_COOKIE, clear_access.to_string().parse().unwrap());
+
+    Ok((headers, StatusCode::NO_CONTENT))
+}
+
+/// Get current user info.
+///
+/// GET /auth/me
+pub async fn get_current_user(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+) -> Result<Json<UserResponse>, AuthError> {
+    let user = db::get_user_by_id(&pool, auth_user.user_id)
+        .await?
+        .ok_or(AuthError::UserNotFound)?;
+
+    Ok(Json(user.into()))
+}
+
+/// Update current user's nickname.
+///
+/// PATCH /auth/me/nickname
+#[derive(Debug, Deserialize)]
+pub struct UpdateNicknameRequest {
+    pub nickname: Option<String>,
+}
+
+pub async fn update_nickname(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+    Json(request): Json<UpdateNicknameRequest>,
+) -> Result<Json<UserResponse>, AuthError> {
+    // Validate nickname
+    if let Some(ref nickname) = request.nickname {
+        if nickname.len() > 50 {
+            return Err(AuthError::InvalidInput(
+                "Nickname too long (max 50 chars)".into(),
+            ));
+        }
+        if nickname.trim().is_empty() {
+            return Err(AuthError::InvalidInput("Nickname cannot be empty".into()));
+        }
+    }
+
+    let user =
+        db::update_user_nickname(&pool, auth_user.user_id, request.nickname.as_deref()).await?;
+
+    Ok(Json(user.into()))
+}
+
+/// Request for session track migration.
+#[derive(Debug, Deserialize)]
+pub struct MigrateSessionRequest {
+    pub session_id: String,
+}
+
+/// Response for session track migration.
+#[derive(Debug, Serialize)]
+pub struct MigrateSessionResponse {
+    pub tracks_migrated: u64,
+    pub pois_migrated: u64,
+}
+
+/// Migrate anonymous session tracks to user account.
+///
+/// POST /auth/migrate-session-tracks
+///
+/// Implements FR-TRACK-001: Session track migration
+pub async fn migrate_session_tracks(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+    Json(request): Json<MigrateSessionRequest>,
+) -> Result<Json<MigrateSessionResponse>, AuthError> {
+    // Parse session_id
+    let session_id = uuid::Uuid::parse_str(&request.session_id).map_err(|_| {
+        metrics::record_auth_session_migration("failed");
+        AuthError::InvalidInput("Invalid session_id format (expected UUID)".into())
+    })?;
+
+    // Migrate tracks
+    let tracks_migrated = db::migrate_session_tracks(&pool, auth_user.user_id, session_id).await?;
+
+    // Migrate POIs
+    let pois_migrated = db::migrate_session_pois(&pool, auth_user.user_id, session_id).await?;
+
+    metrics::record_auth_session_migration("success");
+
+    info!(
+        user_id = %auth_user.user_id,
+        session_id = %session_id,
+        tracks_migrated = tracks_migrated,
+        pois_migrated = pois_migrated,
+        "Session data migrated to user account"
+    );
+
+    Ok(Json(MigrateSessionResponse {
+        tracks_migrated,
+        pois_migrated,
+    }))
+}
+
+/// Response for account deletion.
+#[derive(Debug, Serialize)]
+pub struct DeleteAccountResponse {
+    pub message: String,
+    pub tracks_deleted: u64,
+    pub pois_deleted: u64,
+}
+
+/// Delete user account.
+///
+/// DELETE /api/account
+///
+/// Implements FR-DELETE-001: Account Deletion Flow
+pub async fn delete_account(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+) -> Result<impl IntoResponse, AuthError> {
+    let result = match db::delete_user_account(&pool, auth_user.user_id).await {
+        Ok(r) => {
+            metrics::record_auth_account_deletion("success");
+            r
+        }
+        Err(e) => {
+            metrics::record_auth_account_deletion("failed");
+            return Err(e);
+        }
+    };
+
+    info!(
+        user_id = %auth_user.user_id,
+        tracks_deleted = result.tracks_deleted,
+        pois_deleted = result.pois_deleted,
+        "User account deleted"
+    );
+
+    // Clear cookies
+    let mut headers = HeaderMap::new();
+
+    let clear_refresh = Cookie::build(("refresh_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/auth")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().unwrap());
+
+    let clear_access = Cookie::build(("access_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.append(SET_COOKIE, clear_access.to_string().parse().unwrap());
+
+    let response = DeleteAccountResponse {
+        message: "Account deleted successfully".to_string(),
+        tracks_deleted: result.tracks_deleted,
+        pois_deleted: result.pois_deleted,
+    };
+
+    Ok((headers, Json(response)))
+}
+
+/// Query parameters for user's track list.
+#[derive(Debug, Deserialize)]
+pub struct UserTracksQuery {
+    pub sort: Option<String>,
+    pub order: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+/// Response for user's track list.
+#[derive(Debug, Serialize)]
+pub struct UserTracksResponse {
+    pub tracks: Vec<db::UserTrackSummary>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+/// List user's tracks.
+///
+/// GET /api/account/tracks
+///
+/// Implements FR-TRACK-005: Track Listing in Account Page
+pub async fn list_account_tracks(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+    Query(params): Query<UserTracksQuery>,
+) -> Result<Json<UserTracksResponse>, AuthError> {
+    let limit = params.limit.unwrap_or(20).min(100);
+    let offset = params.offset.unwrap_or(0);
+
+    let (tracks, total) = db::list_user_tracks(
+        &pool,
+        auth_user.user_id,
+        params.sort.as_deref(),
+        params.order.as_deref(),
+        limit,
+        offset,
+    )
+    .await?;
+
+    Ok(Json(UserTracksResponse {
+        tracks,
+        total,
+        limit,
+        offset,
+    }))
+}
+
+/// Request for track visibility update.
+#[derive(Debug, Deserialize)]
+pub struct UpdateVisibilityRequest {
+    pub is_public: bool,
+}
+
+/// Update track visibility.
+///
+/// PATCH /tracks/{id}/visibility
+///
+/// Implements FR-TRACK-003: Track Visibility Control
+pub async fn update_track_visibility(
+    State(pool): State<Arc<PgPool>>,
+    Path(track_id): Path<uuid::Uuid>,
+    auth_user: AuthUser,
+    Json(request): Json<UpdateVisibilityRequest>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    db::update_track_visibility(&pool, track_id, auth_user.user_id, request.is_public).await?;
+
+    info!(
+        user_id = %auth_user.user_id,
+        track_id = %track_id,
+        is_public = request.is_public,
+        "Track visibility updated"
+    );
+
+    Ok(Json(serde_json::json!({
+        "id": track_id.to_string(),
+        "is_public": request.is_public,
+        "message": if request.is_public { "Track is now public" } else { "Track is now private" }
+    })))
+}
+
+/// Helper to extract client IP from headers.
+fn extract_client_ip_from_headers(headers: &HeaderMap) -> String {
+    // Check X-Forwarded-For
+    if let Some(forwarded) = headers.get("X-Forwarded-For")
+        && let Ok(value) = forwarded.to_str()
+        && let Some(ip) = value.split(',').next()
+    {
+        return ip.trim().to_string();
+    }
+
+    // Check X-Real-IP
+    if let Some(real_ip) = headers.get("X-Real-IP")
+        && let Ok(value) = real_ip.to_str()
+    {
+        return value.trim().to_string();
+    }
+
+    "unknown".to_string()
+}

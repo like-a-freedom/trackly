@@ -78,10 +78,32 @@ fn build_list_tracks_query(params: &crate::models::TrackListQuery) -> QueryBuild
         "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks",
     );
 
-    // If owner_session_id provided, return tracks owned by that session (include private tracks).
-    if let Some(owner) = params.owner_session_id {
-        builder.push(" WHERE session_id = ");
-        builder.push_bind(owner);
+    // Determine ownership filter based on parameters
+    // Priority: owner_user_id > owner_session_id
+    let mine = params.mine.unwrap_or(false);
+
+    if mine {
+        // Filter by authenticated user or session
+        if let Some(user_id) = params.owner_user_id {
+            builder.push(" WHERE user_id = ");
+            builder.push_bind(user_id);
+        } else if let Some(session_id) = params.owner_session_id {
+            builder.push(" WHERE session_id = ");
+            builder.push_bind(session_id);
+        } else {
+            // No ownership context, show public only
+            builder.push(" WHERE is_public = TRUE");
+        }
+    } else if let Some(user_id) = params.owner_user_id {
+        // Show user's tracks (private + public) + other public tracks
+        builder.push(" WHERE (user_id = ");
+        builder.push_bind(user_id);
+        builder.push(" OR is_public = TRUE)");
+    } else if let Some(session_id) = params.owner_session_id {
+        // Show session's tracks (private + public) + other public tracks
+        builder.push(" WHERE (session_id = ");
+        builder.push_bind(session_id);
+        builder.push(" OR is_public = TRUE)");
     } else {
         // Default: only public tracks
         builder.push(" WHERE is_public = TRUE");
@@ -289,7 +311,7 @@ pub async fn get_track_detail(
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, speed_data, pace_data
+        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -355,6 +377,7 @@ pub async fn get_track_detail(
             updated_at: row.try_get("updated_at").ok(),
             recorded_at: row.try_get("recorded_at").ok(),
             session_id: row.try_get("session_id").ok(),
+            user_id: row.try_get("user_id").ok(),
             speed_data: row.try_get("speed_data").ok(),
             pace_data: row.try_get("pace_data").ok(),
         }))
@@ -375,7 +398,7 @@ pub async fn get_track_detail_adaptive(
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, speed_data, pace_data, ST_NPoints(geom) as original_points
+        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -535,6 +558,7 @@ pub async fn get_track_detail_adaptive(
             updated_at: row.try_get("updated_at").ok(),
             recorded_at: row.try_get("recorded_at").ok(),
             session_id: row.try_get("session_id").ok(),
+            user_id: row.try_get("user_id").ok(),
             speed_data: row.try_get("speed_data").ok(),
             pace_data: row.try_get("pace_data").ok(),
         }));
@@ -731,12 +755,34 @@ pub async fn list_tracks_geojson(
 
     builder.push(" FROM tracks");
 
-    // If owner_session_id provided, return tracks owned by that session (include private tracks);
-    // otherwise, only public tracks are returned
-    if let Some(owner) = filter_params.owner_session_id {
-        builder.push(" WHERE session_id = ");
-        builder.push_bind(owner);
+    // Determine ownership filter based on parameters
+    // Priority: owner_user_id > owner_session_id
+    let mine = filter_params.mine.unwrap_or(false);
+
+    if mine {
+        // Filter by authenticated user or session
+        if let Some(user_id) = filter_params.owner_user_id {
+            builder.push(" WHERE user_id = ");
+            builder.push_bind(user_id);
+        } else if let Some(session_id) = filter_params.owner_session_id {
+            builder.push(" WHERE session_id = ");
+            builder.push_bind(session_id);
+        } else {
+            // No ownership context, show public only
+            builder.push(" WHERE is_public = TRUE");
+        }
+    } else if let Some(user_id) = filter_params.owner_user_id {
+        // Show user's tracks (private + public) + other public tracks
+        builder.push(" WHERE (user_id = ");
+        builder.push_bind(user_id);
+        builder.push(" OR is_public = TRUE)");
+    } else if let Some(session_id) = filter_params.owner_session_id {
+        // Show session's tracks (private + public) + other public tracks
+        builder.push(" WHERE (session_id = ");
+        builder.push_bind(session_id);
+        builder.push(" OR is_public = TRUE)");
     } else {
+        // Default: only public tracks
         builder.push(" WHERE is_public = TRUE");
     }
 
@@ -1090,7 +1136,7 @@ pub async fn get_track_by_id(
     let start = Instant::now();
     let row = sqlx::query(
         r#"
-        SELECT id, session_id, elevation_enriched, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched_at, elevation_dataset, ST_AsGeoJSON(geom)::jsonb as geom_geojson
+        SELECT id, session_id, user_id, elevation_enriched, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched_at, elevation_dataset, ST_AsGeoJSON(geom)::jsonb as geom_geojson
         FROM tracks
         WHERE id = $1
         "#
@@ -1105,6 +1151,7 @@ pub async fn get_track_by_id(
         Ok(Some(TrackForElevationEnrichment {
             id: row.try_get("id")?,
             session_id: row.try_get("session_id")?,
+            user_id: row.try_get("user_id")?,
             elevation_enriched: row.try_get("elevation_enriched")?,
             elevation_gain: row.try_get("elevation_gain")?,
             elevation_loss: row.try_get("elevation_loss")?,
@@ -1236,6 +1283,8 @@ mod tests {
             slope_min: Some(1.5),
             slope_max: Some(12.0),
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let builder = build_list_tracks_query(&params);
@@ -1350,6 +1399,8 @@ mod tests {
             slope_max: None,
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         // In a real implementation, we would extract the query building logic
@@ -1386,6 +1437,8 @@ mod tests {
             slope_max: None,
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let filter_conditions = build_elevation_filter_conditions(&params);
@@ -1405,6 +1458,8 @@ mod tests {
             slope_max: None,
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let filter_conditions = build_elevation_filter_conditions(&params_negative);
@@ -1427,6 +1482,8 @@ mod tests {
             slope_max: None,
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let filter_conditions = build_elevation_filter_conditions(&params);
@@ -1451,6 +1508,8 @@ mod tests {
             slope_max: None,
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let filter_conditions = build_slope_filter_conditions(&params_min);
@@ -1469,6 +1528,8 @@ mod tests {
             slope_max: Some(15.0),
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let filter_conditions = build_slope_filter_conditions(&params_max);
@@ -1487,6 +1548,8 @@ mod tests {
             slope_max: Some(12.0),
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let filter_conditions = build_slope_filter_conditions(&params_range);
@@ -1509,6 +1572,8 @@ mod tests {
             slope_max: Some(20.0),
             categories: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         let elevation_conditions = build_elevation_filter_conditions(&params);
@@ -1687,9 +1752,13 @@ mod tests {
             session_id: other,
             categories: vec!["x".to_string()],
         };
-        let res =
-            crate::handlers::update_track_categories(State(pool.clone()), Path(id), Json(payload))
-                .await;
+        let res = crate::handlers::update_track_categories(
+            State(pool.clone()),
+            Path(id),
+            crate::auth::OptionalAuthUser(None),
+            Json(payload),
+        )
+        .await;
         assert!(matches!(res, Err(StatusCode::FORBIDDEN)));
 
         // Update with owner session
@@ -1700,6 +1769,7 @@ mod tests {
         let res_ok = crate::handlers::update_track_categories(
             State(pool.clone()),
             Path(id),
+            crate::auth::OptionalAuthUser(None),
             Json(payload_ok),
         )
         .await;
@@ -1787,9 +1857,13 @@ mod tests {
             session_id: owner,
             categories: vec![],
         };
-        let res =
-            crate::handlers::update_track_categories(State(pool.clone()), Path(id), Json(payload))
-                .await;
+        let res = crate::handlers::update_track_categories(
+            State(pool.clone()),
+            Path(id),
+            crate::auth::OptionalAuthUser(None),
+            Json(payload),
+        )
+        .await;
         assert!(matches!(res, Err(StatusCode::BAD_REQUEST)));
 
         // Attempt update with only whitespace categories
@@ -1797,9 +1871,13 @@ mod tests {
             session_id: owner,
             categories: vec![" ".to_string(), "".to_string()],
         };
-        let res2 =
-            crate::handlers::update_track_categories(State(pool.clone()), Path(id), Json(payload2))
-                .await;
+        let res2 = crate::handlers::update_track_categories(
+            State(pool.clone()),
+            Path(id),
+            crate::auth::OptionalAuthUser(None),
+            Json(payload2),
+        )
+        .await;
         assert!(matches!(res2, Err(StatusCode::BAD_REQUEST)));
     }
 

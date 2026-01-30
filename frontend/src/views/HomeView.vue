@@ -92,6 +92,11 @@
       <GeolocationButton @location-found="onLocationFound" />
     </div>
 
+    <!-- Auth button - positioned in bottom left -->
+    <div class="auth-button-overlay">
+      <LoginButton />
+    </div>
+
     <TrackSearch
       :isVisible="searchVisible"
       @close="closeSearch"
@@ -123,6 +128,7 @@ import Toast from "../components/Toast.vue";
 import TrackSearch from "../components/TrackSearch.vue";
 import SearchButton from "../components/SearchButton.vue";
 import GeolocationButton from "../components/GeolocationButton.vue";
+import LoginButton from "../components/LoginButton.vue";
 import { useTracks } from "../composables/useTracks";
 import { useToast } from "../composables/useToast";
 import { useSearchState } from "../composables/useSearchState";
@@ -767,6 +773,28 @@ body,
 
 .map-controls-overlay > * {
   pointer-events: auto; /* Re-enable pointer events for buttons */
+}
+
+/* Auth button overlay - positioned in bottom left */
+.auth-button-overlay {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 1200;
+  pointer-events: auto;
+}
+
+/* Mobile adjustments for auth button */
+@media (max-width: 640px) {
+  .auth-button-overlay {
+    bottom: 12px;
+    left: 12px;
+    /* Safe area support */
+    bottom: calc(12px + constant(safe-area-inset-bottom));
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: calc(12px + constant(safe-area-inset-left));
+    left: calc(12px + env(safe-area-inset-left));
+  }
 }
 
 /* Mobile adjustments for map controls overlay */

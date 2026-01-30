@@ -7,14 +7,23 @@
         </keep-alive>
       </transition>
     </router-view>
-    
+
     <!-- Global dialog provider -->
     <ConfirmDialogProvider />
   </div>
 </template>
 
 <script setup>
-import ConfirmDialogProvider from './components/ConfirmDialogProvider.vue';
+import { onMounted } from "vue";
+import ConfirmDialogProvider from "./components/ConfirmDialogProvider.vue";
+import { useAuth } from "./composables/useAuth";
+
+// Initialize auth on app mount
+const { initialize } = useAuth();
+
+onMounted(() => {
+  initialize();
+});
 
 // Generate component key that ignores URL query params to prevent unnecessary rerenders
 // This prevents map flicker when URL parameters like zoom, lat, lng change
@@ -22,28 +31,31 @@ function getComponentKey(route) {
   if (route.meta.keepAliveKey) {
     return route.meta.keepAliveKey;
   }
-  
+
   // For HomeView, ignore query params to prevent rerender on map state changes
-  if (route.name === 'Home') {
-    return 'home-view';
+  if (route.name === "Home") {
+    return "home-view";
   }
-  
+
   // For TrackView, use path with ID but ignore query params
-  if (route.name === 'Track') {
+  if (route.name === "Track") {
     return `track-view-${route.params.id}`;
   }
-  
+
   // Fallback to route path
   return route.path;
 }
 </script>
 
 <style>
-html, body, #app {
+html,
+body,
+#app {
   height: 100%;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Helvetica Neue", Arial, sans-serif;
   overflow: hidden;
 }
 
@@ -58,7 +70,8 @@ html, body, #app {
 }
 
 /* Page transition styles for smooth route changes */
-.page-enter-active, .page-leave-active {
+.page-enter-active,
+.page-leave-active {
   transition: opacity 0.15s ease-out;
 }
 
@@ -70,7 +83,8 @@ html, body, #app {
   opacity: 0;
 }
 
-.page-enter-to, .page-leave-from {
+.page-enter-to,
+.page-leave-from {
   opacity: 1;
 }
 

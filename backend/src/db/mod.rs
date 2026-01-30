@@ -3,6 +3,7 @@
 
 mod api_usage;
 mod tracks;
+mod users;
 
 // Re-export API usage functions
 pub use api_usage::{
@@ -15,4 +16,12 @@ pub use tracks::{
     get_track_detail, get_track_detail_adaptive, insert_track, list_public_tracks_for_sitemap,
     list_tracks, list_tracks_geojson, search_tracks, track_exists, update_track_categories,
     update_track_description, update_track_elevation, update_track_name, update_track_slope,
+};
+
+// Re-export user-related functions and types
+pub use users::{
+    DeleteAccountResult, User, UserTrackSummary, count_users, delete_user_account,
+    get_user_by_email, get_user_by_google_sub, get_user_by_id, get_user_poi_count,
+    get_user_track_count, list_user_tracks, migrate_session_pois, migrate_session_tracks,
+    update_track_visibility, update_user_nickname, update_user_roles, upsert_user,
 };

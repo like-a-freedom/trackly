@@ -202,6 +202,7 @@ mod tests {
             updated_at: Some(Utc::now()),
             recorded_at: None,
             session_id: None,
+            user_id: None,
             speed_data: None,
             pace_data: None,
         };

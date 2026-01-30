@@ -1,3 +1,4 @@
+use crate::auth::OptionalAuthUser;
 use crate::db;
 use crate::input_validation::{
     MAX_CATEGORIES, MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE, MAX_NAME_LENGTH,
@@ -37,6 +38,38 @@ fn handle_db_error(err: sqlx::Error) -> StatusCode {
         sqlx::Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
+}
+
+/// Check if the request has ownership of a track.
+///
+/// Ownership check priority:
+/// 1. If user is authenticated (JWT), check user_id matches track.user_id
+/// 2. Otherwise, check session_id matches track.session_id (anonymous ownership)
+///
+/// Returns Ok(()) if ownership is confirmed, Err(FORBIDDEN) otherwise.
+fn check_track_ownership(
+    track_user_id: Option<Uuid>,
+    track_session_id: Option<Uuid>,
+    auth_user: &OptionalAuthUser,
+    request_session_id: Option<Uuid>,
+) -> Result<(), StatusCode> {
+    // Authenticated user check - takes priority
+    if let Some(user) = auth_user.user() {
+        if track_user_id == Some(user.user_id) {
+            return Ok(());
+        }
+        // User is authenticated but doesn't own the track
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Anonymous session check
+    if let Some(req_session) = request_session_id
+        && track_session_id == Some(req_session)
+    {
+        return Ok(());
+    }
+
+    Err(StatusCode::FORBIDDEN)
 }
 
 pub async fn check_track_exist(
@@ -443,8 +476,14 @@ pub async fn upload_track(
 
 pub async fn list_tracks_geojson(
     State(pool): State<Arc<PgPool>>,
-    Query(params): Query<TrackGeoJsonQuery>,
+    auth_user: OptionalAuthUser,
+    Query(mut params): Query<TrackGeoJsonQuery>,
 ) -> Result<Json<TrackGeoJsonCollection>, StatusCode> {
+    // Inject user_id from auth context if authenticated
+    if let Some(user) = auth_user.user() {
+        params.owner_user_id = Some(user.user_id);
+    }
+
     let geojson = db::list_tracks_geojson(
         &pool,
         params.bbox.as_deref(),
@@ -577,9 +616,10 @@ pub async fn get_track_simplified(
 pub async fn update_track_description(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
+    auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackDescriptionRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    // Check that track exists and session_id matches owner
+    // Check that track exists
     let track = db::get_track_detail(&pool, id)
         .await
         .map_err(handle_db_error)?;
@@ -587,9 +627,15 @@ pub async fn update_track_description(
         Some(t) => t,
         None => return Err(StatusCode::NOT_FOUND),
     };
-    if track.session_id != Some(payload.session_id) {
-        return Err(StatusCode::FORBIDDEN);
-    }
+
+    // Check ownership (user_id for authenticated users, session_id for anonymous)
+    check_track_ownership(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        Some(payload.session_id),
+    )?;
+
     db::update_track_description(&pool, id, &payload.description)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -601,6 +647,7 @@ pub async fn update_track_description(
 pub async fn update_track_name(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
+    auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackNameRequest>,
 ) -> Result<StatusCode, StatusCode> {
     // Validate name length (1-255 characters)
@@ -608,7 +655,7 @@ pub async fn update_track_name(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Check that track exists and session_id matches owner
+    // Check that track exists
     let track = db::get_track_detail(&pool, id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -616,9 +663,14 @@ pub async fn update_track_name(
         Some(t) => t,
         None => return Err(StatusCode::NOT_FOUND),
     };
-    if track.session_id != Some(payload.session_id) {
-        return Err(StatusCode::FORBIDDEN);
-    }
+
+    // Check ownership (user_id for authenticated users, session_id for anonymous)
+    check_track_ownership(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        Some(payload.session_id),
+    )?;
 
     db::update_track_name(&pool, id, payload.name.trim())
         .await
@@ -631,9 +683,10 @@ pub async fn update_track_name(
 pub async fn update_track_categories(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
+    auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackCategoriesRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    // Check that track exists and session_id matches owner
+    // Check that track exists
     let track = db::get_track_detail(&pool, id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -641,9 +694,14 @@ pub async fn update_track_categories(
         Some(t) => t,
         None => return Err(StatusCode::NOT_FOUND),
     };
-    if track.session_id != Some(payload.session_id) {
-        return Err(StatusCode::FORBIDDEN);
-    }
+
+    // Check ownership (user_id for authenticated users, session_id for anonymous)
+    check_track_ownership(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        Some(payload.session_id),
+    )?;
 
     // Build sanitized new categories list
     let categories: Vec<String> = payload
@@ -906,6 +964,7 @@ pub async fn export_track_gpx(
 pub async fn delete_track(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
+    auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackNameRequest>, // reuse session_id field pattern
 ) -> Result<StatusCode, StatusCode> {
     // Fetch track
@@ -915,10 +974,15 @@ pub async fn delete_track(
     let Some(track) = track else {
         return Err(StatusCode::NOT_FOUND);
     };
-    // Ownership check
-    if track.session_id != Some(payload.session_id) {
-        return Err(StatusCode::FORBIDDEN);
-    }
+
+    // Check ownership (user_id for authenticated users, session_id for anonymous)
+    check_track_ownership(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        Some(payload.session_id),
+    )?;
+
     // Delete
     let affected = db::delete_track(&pool, id)
         .await
@@ -934,6 +998,7 @@ pub async fn delete_track(
 pub async fn enrich_elevation(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
+    auth_user: OptionalAuthUser,
     Json(payload): Json<EnrichElevationRequest>,
 ) -> Result<Json<EnrichElevationResponse>, StatusCode> {
     // Get track by id
@@ -948,11 +1013,13 @@ pub async fn enrich_elevation(
             StatusCode::NOT_FOUND
         })?;
 
-    // Check ownership
-    if track.session_id != Some(payload.session_id) {
-        warn!(track_id = %id, endpoint = "enrich_elevation", "permission denied: session mismatch");
-        return Err(StatusCode::FORBIDDEN);
-    }
+    // Check ownership (user_id for authenticated users, session_id for anonymous)
+    check_track_ownership(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        Some(payload.session_id),
+    )?;
 
     // Check if enrichment is needed
     let enrichment_service = ElevationEnrichmentService::new();
@@ -1230,6 +1297,7 @@ mod tests {
             created_at: None,
             updated_at: None,
             session_id: None,
+            user_id: None,
             speed_data: Some(json!([8.0, 9.0, 10.0, 11.0])),
             pace_data: Some(json!([7.5, 6.7, 6.0, 5.5])),
         };

@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { getColorForId } from '../utils/trackColors';
 import { getSessionId } from '../utils/session';
+import { useAuth } from './useAuth';
 
 
 
@@ -155,9 +156,9 @@ export function useTracks() {
         const ne = bounds.getNorthEast();
         const bboxString = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
 
-        // Check cache first
+        // Check cache first (skip cache if mine filter is active to ensure fresh auth data)
         const cachedData = getCachedTracks(bboxString);
-        if (cachedData && !options.forceRefresh) {
+        if (cachedData && !options.forceRefresh && !options.mine) {
             updatePolylines(cachedData);
             return;
         }
@@ -166,15 +167,38 @@ export function useTracks() {
         const zoom = options.zoom || 12; // Default zoom
         const mode = options.mode || 'overview'; // Default mode for track lists
         let url = `/tracks?bbox=${bboxString}&zoom=${zoom}&mode=${mode}`;
+
         // If owner_session_id is provided ("My tracks" filter), append it so backend can return owner-only results
         if (options && options.ownerSessionId) {
             url += `&owner_session_id=${encodeURIComponent(options.ownerSessionId)}`;
         }
 
+        // If mine filter is active, add mine=true parameter
+        if (options.mine) {
+            url += '&mine=true';
+        }
+
         try {
             currentController = new AbortController();
+
+            // Build headers - include auth token if authenticated for mine filter
+            const headers = {};
+            if (options.mine) {
+                const { accessToken, ensureValidToken } = useAuth();
+                if (accessToken.value) {
+                    try {
+                        await ensureValidToken();
+                        headers['Authorization'] = `Bearer ${accessToken.value}`;
+                    } catch (e) {
+                        // Auth expired, fall back to session-based
+                        console.debug('Auth token expired for mine filter');
+                    }
+                }
+            }
+
             const response = await fetch(url, {
-                signal: currentController.signal
+                signal: currentController.signal,
+                headers
             });
 
             if (!response.ok) throw new Error("Failed to fetch tracks");
@@ -229,16 +253,38 @@ export function useTracks() {
         polylines.value = newPolylines;
         tracksCollection.value = data;
     }
-    async function uploadTrack({ file, name, categories }) {
+    async function uploadTrack({ file, name, categories, isPublic }) {
         error.value = null;
         const formData = new FormData();
         formData.append('file', file);
         if (name) formData.append('name', name);
         if (categories && categories.length > 0) formData.append('categories', categories.join(','));
-        // Always attach session_id
+        // Always attach session_id for anonymous fallback
         formData.append('session_id', getSessionId());
+        // Set visibility if provided
+        if (isPublic !== undefined) {
+            formData.append('is_public', isPublic.toString());
+        }
+
         try {
-            const response = await fetch('/tracks/upload', { method: 'POST', body: formData });
+            // Build headers with auth token if authenticated
+            const headers = {};
+            const { accessToken, ensureValidToken, isAuthenticated } = useAuth();
+            if (isAuthenticated.value && accessToken.value) {
+                try {
+                    await ensureValidToken();
+                    headers['Authorization'] = `Bearer ${accessToken.value}`;
+                } catch (e) {
+                    // Auth expired, continue with session-based upload
+                    console.debug('Auth token expired, using session-based upload');
+                }
+            }
+
+            const response = await fetch('/tracks/upload', {
+                method: 'POST',
+                body: formData,
+                headers
+            });
             if (!response.ok) {
                 const text = await response.text();
                 if (response.status === 429) {
@@ -359,6 +405,13 @@ export function useTracks() {
             // Include session id header so backend can classify ownership
             const sessionId = getSessionId();
             const headers = sessionId ? { 'x-session-id': sessionId } : {};
+
+            // Include auth token if authenticated for private track access
+            const { accessToken, isAuthenticated } = useAuth();
+            if (isAuthenticated.value && accessToken.value) {
+                headers['Authorization'] = `Bearer ${accessToken.value}`;
+            }
+
             const response = await fetch(endpoint, { headers });
             if (!response.ok) {
                 throw new Error(`Failed to fetch track detail: ${response.status} ${response.statusText}`);
@@ -421,9 +474,17 @@ export function useTracks() {
                 session_id: getSessionId(),
                 categories
             };
+
+            // Build headers with auth token if authenticated
+            const headers = { 'Content-Type': 'application/json' };
+            const { accessToken, isAuthenticated } = useAuth();
+            if (isAuthenticated.value && accessToken.value) {
+                headers['Authorization'] = `Bearer ${accessToken.value}`;
+            }
+
             const response = await fetch(`/tracks/${id}/categories`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(body)
             });
             if (!response.ok) {
@@ -439,6 +500,45 @@ export function useTracks() {
         }
     }
 
+    /**
+     * Update track visibility (public/private)
+     * @param {string} id - track ID
+     * @param {boolean} isPublic - visibility state
+     */
+    async function updateTrackVisibility(id, isPublic) {
+        error.value = null;
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            const { accessToken, ensureValidToken, isAuthenticated } = useAuth();
+
+            if (isAuthenticated.value && accessToken.value) {
+                await ensureValidToken();
+                headers['Authorization'] = `Bearer ${accessToken.value}`;
+            }
+
+            const response = await fetch(`/tracks/${id}/visibility`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    is_public: isPublic,
+                    session_id: getSessionId()
+                })
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || 'Failed to update visibility');
+            }
+
+            // Update cached track data
+            updateTrackInPolylines(id, { is_public: isPublic });
+            return await response.json();
+        } catch (e) {
+            error.value = e.message || 'Unknown error updating visibility';
+            throw e;
+        }
+    }
+
     return {
         polylines,
         tracksCollection,
@@ -450,6 +550,7 @@ export function useTracks() {
         processTrackData,
         updateTrackInPolylines,
         updateTrackCategories,
+        updateTrackVisibility,
         // Export utility functions
         validateSpeedData,
         formatSpeed,

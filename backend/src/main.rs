@@ -1,6 +1,7 @@
 use axum::{
     Router,
     extract::DefaultBodyLimit,
+    http::{HeaderValue, Method, header},
     routing::{get, post},
 };
 use backend::{handlers, logging, metrics, services};
@@ -8,6 +9,7 @@ use mimalloc::MiMalloc;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
 use tracing::info;
 
 #[global_allocator]
@@ -74,6 +76,33 @@ async fn main() {
         "database migrations finished"
     );
 
+    // CORS configuration
+    let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:5173,http://localhost:81".to_string());
+
+    let allowed_origins: Vec<HeaderValue> = cors_allowed_origins
+        .split(',')
+        .filter_map(|origin| origin.trim().parse().ok())
+        .collect();
+
+    let cors = CorsLayer::new()
+        .allow_origin(allowed_origins)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
+        .allow_credentials(true)
+        .max_age(std::time::Duration::from_secs(3600));
+
+    info!(
+        cors_origins = %cors_allowed_origins,
+        "CORS configured"
+    );
+
     let app = Router::new()
         .route("/health", get(handlers::health))
         .route("/metrics", get(metrics::serve_metrics))
@@ -130,7 +159,35 @@ async fn main() {
         .route(
             "/tracks/{track_id}/pois/{poi_id}",
             axum::routing::delete(handlers::unlink_track_poi),
-        ) // Debug endpoints (disabled by default)
+        )
+        // Auth routes
+        .route("/auth/oauth-config", get(handlers::oauth_config))
+        .route("/auth/google/login", get(handlers::google_login))
+        .route("/auth/google/callback", post(handlers::google_callback))
+        .route("/auth/refresh", post(handlers::refresh_token))
+        .route("/auth/logout", post(handlers::logout))
+        .route("/auth/logout-all", post(handlers::logout_all))
+        .route("/auth/me", get(handlers::get_current_user))
+        .route(
+            "/auth/me/nickname",
+            axum::routing::patch(handlers::update_nickname),
+        )
+        .route(
+            "/auth/migrate-session-tracks",
+            post(handlers::migrate_session_tracks),
+        )
+        // Account routes
+        .route(
+            "/api/account",
+            axum::routing::delete(handlers::delete_account),
+        )
+        .route("/api/account/tracks", get(handlers::list_account_tracks))
+        // Track visibility route
+        .route(
+            "/tracks/{id}/visibility",
+            axum::routing::patch(handlers::update_track_visibility),
+        )
+        // Debug endpoints (disabled by default)
         .route(
             "/debug/background_task",
             get(handlers::debug_background_task),
@@ -138,6 +195,7 @@ async fn main() {
         .route("/sitemap.xml", get(handlers::sitemap))
         .layer(DefaultBodyLimit::max(max_body_size))
         .layer(metrics::HttpMetricsLayer::new())
+        .layer(cors)
         .with_state(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     info!(address = %addr, "listening");

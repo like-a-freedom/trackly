@@ -1,0 +1,231 @@
+<template>
+  <div class="auth-callback-container">
+    <div class="auth-callback-card">
+      <!-- Loading state -->
+      <div v-if="isLoading" class="callback-loading">
+        <div class="spinner"></div>
+        <p>Completing sign in...</p>
+      </div>
+
+      <!-- Error state -->
+      <div v-else-if="error" class="callback-error">
+        <div class="error-icon">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+        </div>
+        <h2>Sign in failed</h2>
+        <p class="error-message">{{ error }}</p>
+        <button class="btn-primary" @click="goHome">Return to Home</button>
+      </div>
+
+      <!-- Success state (brief, before redirect) -->
+      <div v-else class="callback-success">
+        <div class="success-icon">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="9,12 12,15 16,10"></polyline>
+          </svg>
+        </div>
+        <p>Signed in successfully!</p>
+        <p class="redirect-message">Redirecting...</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { useAuth } from "../composables/useAuth";
+
+defineOptions({
+  name: "AuthCallbackView",
+});
+
+const router = useRouter();
+const route = useRoute();
+const { handleCallback } = useAuth();
+
+const isLoading = ref(true);
+const error = ref(null);
+
+async function processCallback() {
+  const code = route.query.code;
+  const state = route.query.state;
+  const errorParam = route.query.error;
+
+  // Check for OAuth error response
+  if (errorParam) {
+    error.value =
+      route.query.error_description || "Authentication was cancelled or failed";
+    isLoading.value = false;
+    return;
+  }
+
+  // Validate required params
+  if (!code || !state) {
+    error.value = "Invalid callback - missing required parameters";
+    isLoading.value = false;
+    return;
+  }
+
+  try {
+    await handleCallback(code, state);
+    isLoading.value = false;
+
+    // Brief pause to show success, then redirect
+    setTimeout(() => {
+      // Redirect to intended destination or home
+      const returnTo = sessionStorage.getItem("auth_return_to") || "/";
+      sessionStorage.removeItem("auth_return_to");
+      router.replace(returnTo);
+    }, 1000);
+  } catch (e) {
+    error.value = e.message || "Failed to complete sign in";
+    isLoading.value = false;
+  }
+}
+
+function goHome() {
+  router.replace("/");
+}
+
+onMounted(() => {
+  processCallback();
+});
+</script>
+
+<style scoped>
+.auth-callback-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  padding: 20px;
+}
+
+.auth-callback-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  padding: 48px;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+}
+
+.callback-loading,
+.callback-error,
+.callback-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error-icon {
+  color: #dc2626;
+}
+
+.success-icon {
+  color: #10b981;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1.4em;
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+  color: #666;
+  font-size: 1em;
+  line-height: 1.5;
+}
+
+.error-message {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #b91c1c;
+  font-size: 0.9em;
+}
+
+.redirect-message {
+  color: #9ca3af;
+  font-size: 0.9em;
+}
+
+.btn-primary {
+  margin-top: 8px;
+  background: #3498db;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 500px) {
+  .auth-callback-card {
+    padding: 32px 24px;
+  }
+}
+</style>

@@ -8,6 +8,9 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/tracks': 'http://localhost:8080',
+      '/auth': 'http://localhost:8080',
+      '/api': 'http://localhost:8080',
+      '/pois': 'http://localhost:8080',
     },
   },
 })

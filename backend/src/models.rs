@@ -24,6 +24,10 @@ pub struct TrackListQuery {
     pub slope_max: Option<f32>,
     /// When set, restrict results to tracks owned by this session (show private and public tracks)
     pub owner_session_id: Option<Uuid>,
+    /// When set, restrict results to tracks owned by this user (show private and public tracks)
+    pub owner_user_id: Option<Uuid>,
+    /// When true, show only user's own tracks (requires owner_session_id or owner_user_id)
+    pub mine: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -99,6 +103,7 @@ pub struct TrackDetail {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     pub session_id: Option<Uuid>, // Add session_id for owner check
+    pub user_id: Option<Uuid>,    // User ID for authenticated ownership
     pub auto_classifications: Vec<String>, // Automatically determined track classifications
     pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
     pub pace_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
@@ -182,6 +187,10 @@ pub struct TrackGeoJsonQuery {
     pub slope_max: Option<f32>,
     /// When set, restrict results to tracks owned by this session (show private and public tracks)
     pub owner_session_id: Option<Uuid>,
+    /// When set, restrict results to tracks owned by this user (show private and public tracks)
+    pub owner_user_id: Option<Uuid>,
+    /// When true, show only user's own tracks (requires owner_session_id or owner_user_id)
+    pub mine: Option<bool>,
 }
 
 // Custom deserializer to handle both comma-separated string and array formats
@@ -339,6 +348,7 @@ pub struct EnrichElevationResponse {
 pub struct TrackForElevationEnrichment {
     pub id: Uuid,
     pub session_id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
     pub elevation_enriched: Option<bool>,
     pub elevation_gain: Option<f32>,
     pub elevation_loss: Option<f32>,
@@ -391,6 +401,8 @@ mod tests {
             slope_min: None,
             slope_max: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         assert_eq!(query_overview.zoom, Some(10.0));
@@ -408,6 +420,8 @@ mod tests {
             slope_min: None,
             slope_max: None,
             owner_session_id: None,
+            owner_user_id: None,
+            mine: None,
         };
 
         assert_eq!(query_detail.zoom, Some(15.0));

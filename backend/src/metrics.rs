@@ -460,6 +460,95 @@ static BULK_OPERATIONS_ITEMS: Lazy<HistogramVec> = Lazy::new(|| {
     hist
 });
 
+// ============================================================================
+// Auth Metrics (NFR-MAINT-003)
+// ============================================================================
+
+static AUTH_LOGIN_ATTEMPTS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new(
+        "auth_login_attempts_total",
+        "Login attempts by method and success",
+    );
+    let counter = IntCounterVec::new(opts, &["method", "success"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register auth_login_attempts_total");
+    counter
+});
+
+static AUTH_TOKEN_REFRESHES_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new(
+        "auth_token_refreshes_total",
+        "Token refresh attempts by result",
+    );
+    let counter = IntCounterVec::new(opts, &["result"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register auth_token_refreshes_total");
+    counter
+});
+
+static AUTH_TOKEN_VALIDATION_DURATION_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
+    let opts = HistogramOpts::new(
+        "auth_token_validation_duration_seconds",
+        "JWT token validation duration",
+    )
+    .buckets(vec![0.0001, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05]);
+    let hist = HistogramVec::new(opts, &["result"]).expect("hist vec");
+    REGISTRY
+        .register(Box::new(hist.clone()))
+        .expect("register auth_token_validation_duration_seconds");
+    hist
+});
+
+static AUTH_ACTIVE_SESSIONS_TOTAL: Lazy<IntGauge> = Lazy::new(|| {
+    let gauge = IntGauge::with_opts(Opts::new(
+        "auth_active_sessions_total",
+        "Active user sessions (refresh tokens)",
+    ))
+    .expect("gauge");
+    REGISTRY
+        .register(Box::new(gauge.clone()))
+        .expect("register auth_active_sessions_total");
+    gauge
+});
+
+static AUTH_USER_REGISTRATIONS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("auth_user_registrations_total", "New user registrations");
+    let counter = IntCounterVec::new(opts, &["method"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register auth_user_registrations_total");
+    counter
+});
+
+static AUTH_ACCOUNT_DELETIONS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("auth_account_deletions_total", "Account deletions");
+    let counter = IntCounterVec::new(opts, &["result"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register auth_account_deletions_total");
+    counter
+});
+
+static AUTH_SESSION_MIGRATIONS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("auth_session_migrations_total", "Session track migrations");
+    let counter = IntCounterVec::new(opts, &["result"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register auth_session_migrations_total");
+    counter
+});
+
+static AUTH_RATE_LIMITS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new("auth_rate_limits_total", "Rate limit hits by endpoint");
+    let counter = IntCounterVec::new(opts, &["endpoint"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register auth_rate_limits_total");
+    counter
+});
+
 static DB_POOL: OnceCell<Arc<PgPool>> = OnceCell::new();
 
 #[derive(Clone)]
@@ -613,6 +702,28 @@ pub fn initialize_metrics_baseline() {
 
     // Background workers gauge
     BACKGROUND_TASKS_IN_FLIGHT.set(0);
+
+    // Auth metrics (NFR-MAINT-003)
+    let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["google", "success"]);
+    let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["google", "failed"]);
+    let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["github", "success"]);
+    let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["github", "failed"]);
+    let _ = AUTH_TOKEN_REFRESHES_TOTAL.with_label_values(&["success"]);
+    let _ = AUTH_TOKEN_REFRESHES_TOTAL.with_label_values(&["expired"]);
+    let _ = AUTH_TOKEN_REFRESHES_TOTAL.with_label_values(&["invalid"]);
+    let _ = AUTH_TOKEN_REFRESHES_TOTAL.with_label_values(&["revoked"]);
+    let _ = AUTH_TOKEN_VALIDATION_DURATION_SECONDS.with_label_values(&["success"]);
+    let _ = AUTH_TOKEN_VALIDATION_DURATION_SECONDS.with_label_values(&["expired"]);
+    let _ = AUTH_TOKEN_VALIDATION_DURATION_SECONDS.with_label_values(&["invalid"]);
+    AUTH_ACTIVE_SESSIONS_TOTAL.set(0);
+    let _ = AUTH_USER_REGISTRATIONS_TOTAL.with_label_values(&["google"]);
+    let _ = AUTH_USER_REGISTRATIONS_TOTAL.with_label_values(&["github"]);
+    let _ = AUTH_ACCOUNT_DELETIONS_TOTAL.with_label_values(&["success"]);
+    let _ = AUTH_ACCOUNT_DELETIONS_TOTAL.with_label_values(&["failed"]);
+    let _ = AUTH_SESSION_MIGRATIONS_TOTAL.with_label_values(&["success"]);
+    let _ = AUTH_SESSION_MIGRATIONS_TOTAL.with_label_values(&["failed"]);
+    let _ = AUTH_RATE_LIMITS_TOTAL.with_label_values(&["login"]);
+    let _ = AUTH_RATE_LIMITS_TOTAL.with_label_values(&["refresh"]);
 }
 
 impl<S> Layer<S> for HttpMetricsLayer {
@@ -1072,6 +1183,114 @@ pub fn observe_track_pipeline_latency(outcome: &str, seconds: f64) {
     TRACK_PIPELINE_LATENCY_SECONDS
         .with_label_values(&[outcome])
         .observe(seconds);
+}
+
+// ============================================================================
+// Auth Metrics Recording Functions (NFR-MAINT-003)
+// ============================================================================
+
+/// Record a login attempt (successful or failed)
+pub fn record_auth_login_attempt(method: &str, success: bool) {
+    let method_label = match method {
+        "google" => "google",
+        "github" => "github",
+        _ => "unknown",
+    };
+    let success_label = if success { "success" } else { "failed" };
+    AUTH_LOGIN_ATTEMPTS_TOTAL
+        .with_label_values(&[method_label, success_label])
+        .inc();
+}
+
+/// Record a token refresh attempt
+pub fn record_auth_token_refresh(result: &str) {
+    let result_label = match result {
+        "success" => "success",
+        "expired" => "expired",
+        "invalid" => "invalid",
+        "revoked" => "revoked",
+        _ => "failed",
+    };
+    AUTH_TOKEN_REFRESHES_TOTAL
+        .with_label_values(&[result_label])
+        .inc();
+}
+
+/// Observe JWT token validation duration
+pub fn observe_auth_token_validation(result: &str, duration_seconds: f64) {
+    let result_label = match result {
+        "success" => "success",
+        "expired" => "expired",
+        "invalid" => "invalid",
+        _ => "failed",
+    };
+    AUTH_TOKEN_VALIDATION_DURATION_SECONDS
+        .with_label_values(&[result_label])
+        .observe(duration_seconds);
+}
+
+/// Set the active sessions gauge
+pub fn set_auth_active_sessions(count: i64) {
+    AUTH_ACTIVE_SESSIONS_TOTAL.set(count);
+}
+
+/// Increment the active sessions gauge
+pub fn inc_auth_active_sessions() {
+    AUTH_ACTIVE_SESSIONS_TOTAL.inc();
+}
+
+/// Decrement the active sessions gauge
+pub fn dec_auth_active_sessions() {
+    AUTH_ACTIVE_SESSIONS_TOTAL.dec();
+}
+
+/// Record a new user registration
+pub fn record_auth_user_registration(method: &str) {
+    let method_label = match method {
+        "google" => "google",
+        "github" => "github",
+        _ => "unknown",
+    };
+    AUTH_USER_REGISTRATIONS_TOTAL
+        .with_label_values(&[method_label])
+        .inc();
+}
+
+/// Record account deletion
+pub fn record_auth_account_deletion(result: &str) {
+    let result_label = if result == "success" {
+        "success"
+    } else {
+        "failed"
+    };
+    AUTH_ACCOUNT_DELETIONS_TOTAL
+        .with_label_values(&[result_label])
+        .inc();
+}
+
+/// Record session track migration
+pub fn record_auth_session_migration(result: &str) {
+    let result_label = if result == "success" {
+        "success"
+    } else {
+        "failed"
+    };
+    AUTH_SESSION_MIGRATIONS_TOTAL
+        .with_label_values(&[result_label])
+        .inc();
+}
+
+/// Record rate limit hit on auth endpoint
+pub fn record_auth_rate_limit(endpoint: &str) {
+    let endpoint_label = match endpoint {
+        "login" => "login",
+        "refresh" => "refresh",
+        "callback" => "callback",
+        _ => "other",
+    };
+    AUTH_RATE_LIMITS_TOTAL
+        .with_label_values(&[endpoint_label])
+        .inc();
 }
 
 #[cfg(test)]
