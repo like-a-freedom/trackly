@@ -247,6 +247,11 @@ export function useAuth() {
                 credentials: 'include' // Include HttpOnly cookie
             });
 
+            // 204 No Content -> no session (no cookie) - not an error
+            if (response.status === 204) {
+                return false;
+            }
+
             if (!response.ok) {
                 // Clear tokens on refresh failure
                 accessToken.value = null;

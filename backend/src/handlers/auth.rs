@@ -17,6 +17,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header::SET_COOKIE},
     response::IntoResponse,
 };
+
 use cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -26,8 +27,8 @@ use tracing::info;
 use crate::auth::{
     self, AuthError, AuthUser, OptionalAuthUser, TokenUser, check_suspicious_activity,
     create_access_token, create_refresh_token, exchange_code_for_user, generate_authorization_url,
-    get_config, is_new_ip_for_user, is_rate_limited, record_login_attempt, revoke_all_user_tokens,
-    revoke_refresh_token, rotate_refresh_token, validate_refresh_token,
+    get_config, is_auth_configured, is_new_ip_for_user, is_rate_limited, record_login_attempt,
+    revoke_all_user_tokens, revoke_refresh_token, rotate_refresh_token, validate_refresh_token,
 };
 use crate::db::{self, User};
 use crate::metrics;
@@ -81,12 +82,6 @@ pub struct CallbackRequest {
     pub pkce_verifier: String,
 }
 
-/// Request for token refresh.
-#[derive(Debug, Deserialize)]
-pub struct RefreshRequest {
-    pub refresh_token: String,
-}
-
 /// Response for token refresh.
 #[derive(Debug, Serialize)]
 pub struct RefreshResponse {
@@ -108,12 +103,16 @@ pub struct OAuthConfigResponse {
 ///
 /// Returns public OAuth configuration (client_id, redirect_uri) for the frontend
 /// to construct the authorization URL.
-pub async fn oauth_config() -> Json<OAuthConfigResponse> {
+/// Returns 503 Service Unavailable if auth is not configured.
+pub async fn oauth_config() -> Result<Json<OAuthConfigResponse>, AuthError> {
+    if !is_auth_configured() {
+        return Err(AuthError::AuthNotConfigured);
+    }
     let config = get_config();
-    Json(OAuthConfigResponse {
+    Ok(Json(OAuthConfigResponse {
         client_id: config.google_client_id.clone(),
         redirect_uri: config.google_redirect_uri.clone(),
-    })
+    }))
 }
 
 /// Initiate Google OAuth login.
@@ -122,6 +121,9 @@ pub async fn oauth_config() -> Json<OAuthConfigResponse> {
 ///
 /// Returns the OAuth authorization URL to redirect the user to.
 pub async fn google_login() -> Result<Json<LoginResponse>, AuthError> {
+    if !is_auth_configured() {
+        return Err(AuthError::AuthNotConfigured);
+    }
     let auth_url = generate_authorization_url()?;
 
     Ok(Json(LoginResponse {
@@ -142,6 +144,9 @@ pub async fn google_callback(
     headers: HeaderMap,
     Json(request): Json<CallbackRequest>,
 ) -> Result<impl IntoResponse, AuthError> {
+    if !is_auth_configured() {
+        return Err(AuthError::AuthNotConfigured);
+    }
     let client_ip = extract_client_ip_from_headers(&headers);
 
     // Check rate limiting
@@ -250,16 +255,32 @@ pub async fn google_callback(
 ///
 /// POST /auth/refresh
 ///
-/// Uses refresh token to get a new access token.
+/// Uses refresh token from HttpOnly cookie to get a new access token.
 /// Implements token rotation for security.
 pub async fn refresh_token(
     State(pool): State<Arc<PgPool>>,
-    Json(request): Json<RefreshRequest>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, AuthError> {
+    if !is_auth_configured() {
+        return Err(AuthError::AuthNotConfigured);
+    }
     let start = std::time::Instant::now();
 
+    // Extract refresh token from cookie
+    let refresh_token = match extract_refresh_token_from_cookie(&headers) {
+        Some(t) => t,
+        // No refresh token cookie means user is not authenticated yet - return 204 No Content
+        None => {
+            let resp = axum::http::Response::builder()
+                .status(axum::http::StatusCode::NO_CONTENT)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            return Ok(resp);
+        },
+    };
+
     // Validate refresh token
-    let token = match validate_refresh_token(&pool, &request.refresh_token).await {
+    let token = match validate_refresh_token(&pool, &refresh_token).await {
         Ok(t) => {
             metrics::observe_auth_token_validation("success", start.elapsed().as_secs_f64());
             t
@@ -332,7 +353,16 @@ pub async fn refresh_token(
         expires_in: config.access_token_expiry_secs,
     };
 
-    Ok((headers, Json(response)))
+    let mut builder = axum::http::Response::builder().status(axum::http::StatusCode::OK);
+    // Copy over headers
+    for (name, value) in headers.iter() {
+        if let Ok(s) = value.to_str() {
+            builder = builder.header(name.as_str(), s);
+        }
+    }
+    let body = serde_json::to_string(&response).unwrap();
+    let resp = builder.body(axum::body::Body::from(body)).unwrap();
+    Ok(resp)
 }
 
 /// Logout - revoke refresh token.
@@ -341,12 +371,15 @@ pub async fn refresh_token(
 pub async fn logout(
     State(pool): State<Arc<PgPool>>,
     auth_user: OptionalAuthUser,
-    Json(request): Json<RefreshRequest>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, AuthError> {
-    // Revoke the specific refresh token
-    let token_hash = auth::hash_token(&request.refresh_token);
-    revoke_refresh_token(&pool, &token_hash).await?;
-    metrics::dec_auth_active_sessions();
+    // Extract refresh token from cookie (optional, user might not have one)
+    if let Some(refresh_token) = extract_refresh_token_from_cookie(&headers) {
+        // Revoke the specific refresh token
+        let token_hash = auth::hash_token(&refresh_token);
+        revoke_refresh_token(&pool, &token_hash).await?;
+        metrics::dec_auth_active_sessions();
+    }
 
     if let Some(user) = auth_user.user() {
         info!(user_id = %user.user_id, "User logged out");
@@ -652,6 +685,24 @@ pub async fn update_track_visibility(
         "is_public": request.is_public,
         "message": if request.is_public { "Track is now public" } else { "Track is now private" }
     })))
+}
+
+/// Helper to extract refresh token from HttpOnly cookie.
+fn extract_refresh_token_from_cookie(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|cookies| {
+            cookies.split(';')
+                .find_map(|cookie| {
+                    let cookie = cookie.trim();
+                    if cookie.starts_with("refresh_token=") {
+                        Some(cookie.trim_start_matches("refresh_token=").to_string())
+                    } else {
+                        None
+                    }
+                })
+        })
 }
 
 /// Helper to extract client IP from headers.

@@ -14,7 +14,7 @@ pub mod oauth;
 pub mod refresh;
 
 // Re-export commonly used types
-pub use config::{AuthConfig, get_config};
+pub use config::{AuthConfig, get_config, is_auth_configured};
 pub use errors::AuthError;
 pub use jwt::{Claims, TokenUser, create_access_token, validate_access_token};
 pub use middleware::{

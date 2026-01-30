@@ -71,6 +71,9 @@ pub enum AuthError {
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
 
+    #[error("Authentication not configured")]
+    AuthNotConfigured,
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
@@ -118,6 +121,10 @@ impl IntoResponse for AuthError {
                 tracing::error!(error = %self, "Auth configuration error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
             }
+            AuthError::AuthNotConfigured => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Authentication service not configured",
+            ),
             AuthError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
             AuthError::DatabaseError(_) | AuthError::InternalError(_) => {
                 tracing::error!(error = %self, "Internal auth error");
