@@ -55,7 +55,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
           fd.append('session_id', sessionUuid);
 
           // POST to relative path so dev server proxy forwards to backend
-          const res = await fetch(`/tracks/upload`, { method: 'POST', body: fd, credentials: 'include' });
+          const res = await fetch(`/api/tracks/upload`, { method: 'POST', body: fd, credentials: 'include' });
           const text = await res.text();
           let json = null;
           try { json = JSON.parse(text); } catch (e) { /* not json */ }
@@ -71,7 +71,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
         if (result.status === 409) {
           try {
             const search = await page.evaluate(async (query) => {
-              const res = await fetch(`/tracks/search?query=${encodeURIComponent(query)}`, { credentials: 'include' });
+              const res = await fetch(`/api/tracks/search?query=${encodeURIComponent(query)}`, { credentials: 'include' });
               const json = await res.json();
               return json;
             }, 'E2E Categories Test Track');
@@ -80,7 +80,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
               console.log('Found existing track via search:', trackId);
               try {
                 const details = await page.evaluate(async (id) => {
-                  const res = await fetch(`/tracks/${id}`, { credentials: 'include' });
+                  const res = await fetch(`/api/tracks/${id}`, { credentials: 'include' });
                   return await res.json();
                 }, trackId);
                 if (details && details.session_id) {
@@ -125,7 +125,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
   test.afterAll(async ({ request }) => {
     // Cleanup: delete the test track using Playwright request fixture
     if (trackId) {
-      const response = await request.delete(`${BACKEND_URL}/tracks/${trackId}`, {
+      const response = await request.delete(`${BACKEND_URL}/api/tracks/${trackId}`, {
         data: { name: 'delete', session_id: TEST_SESSION_ID },
         headers: {
           'Content-Type': 'application/json',
@@ -141,7 +141,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
 
   test('should display inline Multiselect for track owner', async ({ page, context }) => {
     test.skip(!trackId, 'Backend unavailable or track upload failed');
-    
+
     // Set session cookie to be track owner
     const ownerSessionToSet = trackOwnerSession || TEST_SESSION_ID;
     await context.addCookies([
@@ -172,14 +172,14 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
       console.warn('Categories section HTML:', catsHtml);
     }
     await expect(inlineEdit).toBeVisible();
-    
+
     const multiselect = page.locator('.track-category-select-inline');
     await expect(multiselect).toBeVisible();
   });
 
   test('should show read-only tags for non-owner', async ({ page }) => {
     test.skip(!trackId, 'Backend unavailable or track upload failed');
-    
+
     // Do NOT set session cookie (non-owner)
     await page.goto(`${FRONTEND_URL}/track/${trackId}`);
     await page.waitForLoadState('networkidle');
@@ -192,7 +192,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
     // Check that inline edit is not visible
     const inlineEdit = page.locator('.categories-inline-edit');
     await expect(inlineEdit).not.toBeVisible();
-    
+
     // Check that read-only tags are visible
     const categoryTags = page.locator('.category-tag');
     await expect(categoryTags.first()).toBeVisible();
@@ -200,7 +200,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
 
   test('should allow editing categories inline', async ({ page, context }) => {
     test.skip(!trackId, 'Backend unavailable or track upload failed');
-    
+
     await context.addCookies([
       {
         name: 'session_id',
@@ -234,7 +234,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
     // Note: Full dropdown alignment testing is complex with Multiselect tags mode
     // We'll just verify that clicking/interacting doesn't break the component
     await multiselect.scrollIntoViewIfNeeded();
-    
+
     const input = multiselect.locator('input').first();
     if (await input.count() > 0) {
       // Try opening dropdown via typing in search
@@ -242,23 +242,23 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
       await input.focus();
       await input.type('w', { delay: 50 });
       await page.waitForTimeout(300);
-      
+
       // Check if dropdown is visible (options should render)
       const hasOptions = await page.evaluate(() => {
-        const opts = Array.from(document.querySelectorAll('*')).filter(n => 
-          n.textContent && n.textContent.trim() === 'Walking' && 
+        const opts = Array.from(document.querySelectorAll('*')).filter(n =>
+          n.textContent && n.textContent.trim() === 'Walking' &&
           window.getComputedStyle(n).display !== 'none'
         );
         return opts.length > 0;
       });
-      
+
       if (hasOptions) {
         const containerRect = await multiselect.evaluate((el) => el.getBoundingClientRect());
-        
+
 
         // Find the menu option in dropdown
         const menuLeft = await page.evaluate((containerBottom) => {
-          const matching = Array.from(document.querySelectorAll('*')).filter(n => 
+          const matching = Array.from(document.querySelectorAll('*')).filter(n =>
             n.textContent && n.textContent.trim() === 'Walking'
           );
           for (const n of matching) {
@@ -316,7 +316,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
 
   test('should show saving indicator during update', async ({ page, context }) => {
     test.skip(!trackId, 'Backend unavailable or track upload failed');
-    
+
     await context.addCookies([
       {
         name: 'session_id',

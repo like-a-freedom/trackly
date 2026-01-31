@@ -51,7 +51,7 @@ export async function uploadTrack(options: {
         form.append('session_id', session);
 
         for (let att = 1; att <= 5; att++) {
-            const res = await fetch(`${BACKEND}/tracks`, { method: 'POST', body: form as any, headers: form.getHeaders() });
+            const res = await fetch(`${BACKEND}/api/tracks`, { method: 'POST', body: form as any, headers: form.getHeaders() });
             const txt = await res.text();
             if (res.ok) {
                 try { return { ok: true, status: res.status, body: JSON.parse(txt) }; } catch (e) { return { ok: true, status: res.status, body: txt }; }

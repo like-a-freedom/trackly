@@ -9,7 +9,7 @@ let createdId: string | null = null;
 
 test.afterEach(async ({ request }) => {
     if (createdId) {
-        await request.delete(`${BACKEND}/tracks/${createdId}`, { data: { name: 'delete', session_id: OWNER_SESSION }, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
+        await request.delete(`${BACKEND}/api/tracks/${createdId}`, { data: { name: 'delete', session_id: OWNER_SESSION }, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
         createdId = null;
     }
 });
@@ -41,7 +41,7 @@ test('non-owner cannot see owner controls (delete/edit)', async ({ page }) => {
             const gpxTwoPoints = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trackly E2E">\n  <trk>\n    <name>Ownership Visibility Test (2pt)</name>\n    <trkseg>\n      <trkpt lat="37.7810" lon="-122.4200"><ele>10</ele></trkpt>\n      <trkpt lat="37.7820" lon="-122.4210"><ele>12</ele></trkpt>\n    </trkseg>\n  </trk>\n</gpx>`;
 
             for (let att = 1; att <= 5; att++) {
-                const res = await fetch(`${BACKEND}/tracks`, { method: 'POST', body: form as any, headers: form.getHeaders() });
+                const res = await fetch(`${BACKEND}/api/tracks`, { method: 'POST', body: form as any, headers: form.getHeaders() });
                 const txt = await res.text();
                 if (!res.ok) {
                     console.warn('server-side upload attempt', att, 'failed', res.status, txt);
@@ -66,7 +66,7 @@ test('non-owner cannot see owner controls (delete/edit)', async ({ page }) => {
                         altForm.append('categories', 'vis');
                         altForm.append('session_id', OWNER_SESSION);
                         // attempt alt upload
-                        const res2 = await fetch(`${BACKEND}/tracks`, { method: 'POST', body: altForm as any, headers: altForm.getHeaders() });
+                        const res2 = await fetch(`${BACKEND}/api/tracks`, { method: 'POST', body: altForm as any, headers: altForm.getHeaders() });
                         const txt2 = await res2.text();
                         if (res2.ok) {
                             created = JSON.parse(txt2);

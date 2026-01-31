@@ -13,7 +13,7 @@ let created: string | null = null;
 
 test.afterEach(async ({ request }) => {
     if (created) {
-        await request.delete(`${BACKEND_BASE}/tracks/${created}`, { data: { name: 'delete', session_id: TEST_SESSION }, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
+        await request.delete(`${BACKEND_BASE}/api/tracks/${created}`, { data: { name: 'delete', session_id: TEST_SESSION }, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
         created = null;
     }
 });

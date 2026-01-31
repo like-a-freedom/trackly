@@ -52,7 +52,7 @@ test('upload invalid GPX shows user error', async ({ page }) => {
 
     // If no obvious warning text, ensure the invalid GPX did not create a track (search by name)
     const results = await page.evaluate(async (name) => {
-        const res = await fetch(`/tracks/search?query=${encodeURIComponent(name)}`);
+        const res = await fetch(`/api/tracks/search?query=${encodeURIComponent(name)}`);
         if (!res.ok) return [];
         return await res.json();
     }, 'Invalid GPX Test');

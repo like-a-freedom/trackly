@@ -31,7 +31,7 @@ async function uploadGpxFile(filePath: string, trackName: string): Promise<Track
   form.append('name', trackName);
 
   for (let att = 1; att <= 6; att++) {
-    const response = await fetch(`${BACKEND_URL}/tracks`, {
+    const response = await fetch(`${BACKEND_URL}/api/tracks`, {
       method: 'POST',
       body: form as any,
       headers: form.getHeaders()
@@ -77,7 +77,7 @@ async function uploadGpxFile(filePath: string, trackName: string): Promise<Track
       altForm.append('name', trackName + ' (2pt)');
       altForm.append('categories', 'e2e-test');
       altForm.append('session_id', 'e2e-test-session');
-      const r2 = await fetch(`${BACKEND_URL}/tracks`, { method: 'POST', body: altForm as any, headers: altForm.getHeaders() });
+      const r2 = await fetch(`${BACKEND_URL}/api/tracks`, { method: 'POST', body: altForm as any, headers: altForm.getHeaders() });
       if (r2.ok) {
         const d2 = await r2.json();
         return { id: d2.id || d2.track_id, name: trackName };
@@ -116,7 +116,7 @@ export async function setupTestTracks(): Promise<Record<string, string>> {
   // Query backend for existing tracks and pick representative ones
   const tracks: Record<string, string> = {};
   try {
-    const res = await fetch(`${BACKEND_URL}/tracks?mode=detail&zoom=12`);
+    const res = await fetch(`${BACKEND_URL}/api/tracks?mode=detail&zoom=12`);
     if (!res.ok) throw new Error(`Failed to list tracks: ${res.status}`);
     const geo = await res.json();
     const features = geo.features || [];
@@ -132,7 +132,7 @@ export async function setupTestTracks(): Promise<Record<string, string>> {
       if (!baseId) baseId = id;
 
       // Fetch detailed track to inspect segment_gaps
-      const detailRes = await fetch(`${BACKEND_URL}/tracks/${id}`);
+      const detailRes = await fetch(`${BACKEND_URL}/api/tracks/${id}`);
       if (!detailRes.ok) continue;
       const detail = await detailRes.json();
 
@@ -183,7 +183,7 @@ export async function setupTestTracks(): Promise<Record<string, string>> {
     for (const fixture of FIXTURE_MAP) {
       if (!tracks[fixture.key]) {
         try {
-          const searchRes = await fetch(`${BACKEND_URL}/tracks/search?query=${encodeURIComponent(fixture.name)}`);
+          const searchRes = await fetch(`${BACKEND_URL}/api/tracks/search?query=${encodeURIComponent(fixture.name)}`);
           if (searchRes.ok) {
             const results = await searchRes.json();
             if (Array.isArray(results) && results.length > 0 && results[0].id) {
@@ -216,7 +216,7 @@ export async function cleanupTestTracks(trackIds: string[]): Promise<void> {
   try {
     for (const id of uploadedByTest) {
       try {
-        const res = await fetch(`${BACKEND_URL}/tracks/${id}`, {
+        const res = await fetch(`${BACKEND_URL}/api/tracks/${id}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: 'delete', session_id: 'e2e-test-session' })

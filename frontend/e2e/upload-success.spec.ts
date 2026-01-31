@@ -22,7 +22,7 @@ let createdTrackId: string | null = null;
 
 test.afterEach(async ({ request }) => {
     if (createdTrackId) {
-        const res = await request.delete(`http://localhost:8080/tracks/${createdTrackId}`, {
+        const res = await request.delete(`http://localhost:8080/api/tracks/${createdTrackId}`, {
             data: { name: 'delete', session_id: TEST_SESSION },
             headers: { 'Content-Type': 'application/json' }
         });
@@ -189,7 +189,7 @@ test('upload flow: new file uploads, shows success and links to track', async ({
 
                 // After direct upload attempt, try to find the uploaded track by searching the backend in case it succeeded silently
                 const searchResults = await page.evaluate(async (name) => {
-                    const res = await fetch(`/tracks/search?query=${encodeURIComponent(name)}`);
+                    const res = await fetch(`/api/tracks/search?query=${encodeURIComponent(name)}`);
                     if (!res.ok) return [];
                     return await res.json();
                 }, uniqueName);
@@ -205,7 +205,7 @@ test('upload flow: new file uploads, shows success and links to track', async ({
 
                 // Fallback: search more broadly for any E2E Upload results
                 const broad = await page.evaluate(async () => {
-                    const res = await fetch(`/tracks/search?query=${encodeURIComponent('E2E Upload')}`);
+                    const res = await fetch(`/api/tracks/search?query=${encodeURIComponent('E2E Upload')}`);
                     if (!res.ok) return [];
                     return await res.json();
                 });
