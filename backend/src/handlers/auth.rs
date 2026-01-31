@@ -147,11 +147,18 @@ pub async fn google_callback(
     if !is_auth_configured() {
         return Err(AuthError::AuthNotConfigured);
     }
-    let client_ip = extract_client_ip_from_headers(&headers);
+    let client_ip = extract_client_ip_from_headers(&headers); // Option<String>
 
     // Check rate limiting
-    if is_rate_limited(&pool, &client_ip).await? {
-        record_login_attempt(&pool, &client_ip, None, false, Some("rate_limited")).await?;
+    if is_rate_limited(&pool, client_ip.as_deref()).await? {
+        record_login_attempt(
+            &pool,
+            client_ip.as_deref(),
+            None,
+            false,
+            Some("rate_limited"),
+        )
+        .await?;
         metrics::record_auth_rate_limit("login");
         metrics::record_auth_login_attempt("google", false);
         return Err(AuthError::RateLimited);
@@ -167,10 +174,17 @@ pub async fn google_callback(
     {
         Ok(user) => user,
         Err(e) => {
-            record_login_attempt(&pool, &client_ip, None, false, Some(&e.to_string())).await?;
+            record_login_attempt(
+                &pool,
+                client_ip.as_deref(),
+                None,
+                false,
+                Some(&e.to_string()),
+            )
+            .await?;
             metrics::record_auth_login_attempt("google", false);
             // Check suspicious activity even for failed attempts
-            check_suspicious_activity(&pool, &client_ip, None, false).await?;
+            check_suspicious_activity(&pool, client_ip.as_deref(), None, false).await?;
             return Err(e);
         }
     };
@@ -179,15 +193,16 @@ pub async fn google_callback(
     let (user, is_new_user) = db::upsert_user(&pool, &oauth_user).await?;
 
     // Check if this is a new IP for the user
-    let is_new_ip = !is_new_user && is_new_ip_for_user(&pool, user.id, &client_ip).await?;
+    let is_new_ip =
+        !is_new_user && is_new_ip_for_user(&pool, user.id, client_ip.as_deref()).await?;
 
     // Record successful login
-    record_login_attempt(&pool, &client_ip, Some(user.id), true, None).await?;
+    record_login_attempt(&pool, client_ip.as_deref(), Some(user.id), true, None).await?;
     metrics::record_auth_login_attempt("google", true);
     metrics::inc_auth_active_sessions();
 
     // Check for suspicious activity patterns
-    check_suspicious_activity(&pool, &client_ip, Some(user.id), is_new_ip).await?;
+    check_suspicious_activity(&pool, client_ip.as_deref(), Some(user.id), is_new_ip).await?;
 
     // Track new user registration
     if is_new_user {
@@ -276,7 +291,7 @@ pub async fn refresh_token(
                 .body(axum::body::Body::empty())
                 .unwrap();
             return Ok(resp);
-        },
+        }
     };
 
     // Validate refresh token
@@ -693,34 +708,41 @@ fn extract_refresh_token_from_cookie(headers: &HeaderMap) -> Option<String> {
         .get(axum::http::header::COOKIE)
         .and_then(|value| value.to_str().ok())
         .and_then(|cookies| {
-            cookies.split(';')
-                .find_map(|cookie| {
-                    let cookie = cookie.trim();
-                    if cookie.starts_with("refresh_token=") {
-                        Some(cookie.trim_start_matches("refresh_token=").to_string())
-                    } else {
-                        None
-                    }
-                })
+            cookies.split(';').find_map(|cookie| {
+                let cookie = cookie.trim();
+                if cookie.starts_with("refresh_token=") {
+                    Some(cookie.trim_start_matches("refresh_token=").to_string())
+                } else {
+                    None
+                }
+            })
         })
 }
 
 /// Helper to extract client IP from headers.
-fn extract_client_ip_from_headers(headers: &HeaderMap) -> String {
+fn extract_client_ip_from_headers(headers: &HeaderMap) -> Option<String> {
     // Check X-Forwarded-For
     if let Some(forwarded) = headers.get("X-Forwarded-For")
         && let Ok(value) = forwarded.to_str()
         && let Some(ip) = value.split(',').next()
     {
-        return ip.trim().to_string();
+        let ip = ip.trim();
+        if ip.is_empty() || ip.eq_ignore_ascii_case("unknown") {
+            // Unknown placeholder — treat as absent
+        } else {
+            return Some(ip.to_string());
+        }
     }
 
     // Check X-Real-IP
     if let Some(real_ip) = headers.get("X-Real-IP")
         && let Ok(value) = real_ip.to_str()
     {
-        return value.trim().to_string();
+        let ip = value.trim();
+        if !ip.is_empty() && !ip.eq_ignore_ascii_case("unknown") {
+            return Some(ip.to_string());
+        }
     }
 
-    "unknown".to_string()
+    None
 }

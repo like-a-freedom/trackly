@@ -188,7 +188,7 @@ export function useAuth() {
                 body: JSON.stringify({
                     code,
                     state,
-                    code_verifier: codeVerifier
+                    pkce_verifier: codeVerifier
                 })
             });
 

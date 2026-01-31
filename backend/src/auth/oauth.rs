@@ -182,7 +182,7 @@ pub async fn exchange_code_for_user(
 /// Track login attempt for rate limiting.
 pub async fn record_login_attempt(
     pool: &Arc<PgPool>,
-    ip_address: &str,
+    ip_address: Option<&str>,
     user_id: Option<uuid::Uuid>,
     success: bool,
     failure_reason: Option<&str>,
@@ -190,7 +190,7 @@ pub async fn record_login_attempt(
     sqlx::query(
         r#"
         INSERT INTO login_attempts (ip_address, user_id, success, failure_reason)
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1::inet, $2, $3, $4)
         "#,
     )
     .bind(ip_address)
@@ -206,20 +206,29 @@ pub async fn record_login_attempt(
 /// Check if an IP address is rate limited.
 ///
 /// Returns true if the IP has exceeded the rate limit (too many failed attempts).
-pub async fn is_rate_limited(pool: &Arc<PgPool>, ip_address: &str) -> Result<bool, AuthError> {
+pub async fn is_rate_limited(
+    pool: &Arc<PgPool>,
+    ip_address: Option<&str>,
+) -> Result<bool, AuthError> {
     let config = get_config();
+
+    // If IP not available, cannot be rate limited by IP
+    let ip = match ip_address {
+        Some(v) => v,
+        None => return Ok(false),
+    };
 
     // Count failed attempts in the last 15 minutes
     let count: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*)::bigint
         FROM login_attempts
-        WHERE ip_address = $1
+        WHERE ip_address = $1::inet
           AND success = false
-          AND attempted_at > NOW() - INTERVAL '15 minutes'
+          AND timestamp > NOW() - INTERVAL '15 minutes'
         "#,
     )
-    .bind(ip_address)
+    .bind(ip)
     .fetch_one(&**pool)
     .await?;
 
@@ -227,7 +236,7 @@ pub async fn is_rate_limited(pool: &Arc<PgPool>, ip_address: &str) -> Result<boo
 
     if is_limited {
         tracing::warn!(
-            ip_address = %ip_address,
+            ip_address = %ip,
             failed_attempts = count,
             "IP address rate limited"
         );
@@ -240,7 +249,7 @@ pub async fn is_rate_limited(pool: &Arc<PgPool>, ip_address: &str) -> Result<boo
 /// This function should be called after each login attempt.
 pub async fn check_suspicious_activity(
     pool: &Arc<PgPool>,
-    ip_address: &str,
+    ip_address: Option<&str>,
     user_id: Option<uuid::Uuid>,
     is_new_ip_for_user: bool,
 ) -> Result<(), AuthError> {
@@ -257,28 +266,30 @@ pub async fn check_suspicious_activity(
         .unwrap_or(3);
 
     // Check failed attempts from IP in last 15 minutes
-    let ip_failed_count: i64 = sqlx::query_scalar(
-        r#"
-        SELECT COUNT(*)::bigint
-        FROM login_attempts
-        WHERE ip_address = $1
-          AND success = false
-          AND attempted_at > NOW() - INTERVAL '15 minutes'
-        "#,
-    )
-    .bind(ip_address)
-    .fetch_one(&**pool)
-    .await?;
+    if let Some(ip) = ip_address {
+        let ip_failed_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM login_attempts
+            WHERE ip_address = $1::inet
+              AND success = false
+              AND timestamp > NOW() - INTERVAL '15 minutes'
+            "#,
+        )
+        .bind(ip)
+        .fetch_one(&**pool)
+        .await?;
 
-    if ip_failed_count > ip_threshold {
-        tracing::warn!(
-            target: "security",
-            ip_address = %ip_address,
-            failed_attempts = ip_failed_count,
-            threshold = ip_threshold,
-            alert_type = "suspicious_ip_activity",
-            "SECURITY ALERT: High number of failed login attempts from IP"
-        );
+        if ip_failed_count > ip_threshold {
+            tracing::warn!(
+                target: "security",
+                ip_address = %ip,
+                failed_attempts = ip_failed_count,
+                threshold = ip_threshold,
+                alert_type = "suspicious_ip_activity",
+                "SECURITY ALERT: High number of failed login attempts from IP"
+            );
+        }
     }
 
     // Check failed attempts for user in last 15 minutes
@@ -289,7 +300,7 @@ pub async fn check_suspicious_activity(
             FROM login_attempts
             WHERE user_id = $1
               AND success = false
-              AND attempted_at > NOW() - INTERVAL '15 minutes'
+              AND timestamp > NOW() - INTERVAL '15 minutes'
             "#,
         )
         .bind(uid)
@@ -312,7 +323,7 @@ pub async fn check_suspicious_activity(
             tracing::info!(
                 target: "security",
                 user_id = %uid,
-                ip_address = %ip_address,
+                ip_address = %ip_address.unwrap_or("unknown"),
                 alert_type = "new_ip_login",
                 "User logged in from a new IP address"
             );
@@ -326,20 +337,25 @@ pub async fn check_suspicious_activity(
 pub async fn is_new_ip_for_user(
     pool: &Arc<PgPool>,
     user_id: uuid::Uuid,
-    ip_address: &str,
+    ip_address: Option<&str>,
 ) -> Result<bool, AuthError> {
+    // If no IP is available, we cannot consider it a new IP
+    let ip = match ip_address {
+        Some(v) => v,
+        None => return Ok(false),
+    };
     let exists: bool = sqlx::query_scalar(
         r#"
         SELECT EXISTS(
             SELECT 1 FROM login_attempts
             WHERE user_id = $1
-              AND ip_address = $2
+              AND ip_address = $2::inet
               AND success = true
         )
         "#,
     )
     .bind(user_id)
-    .bind(ip_address)
+    .bind(ip)
     .fetch_one(&**pool)
     .await?;
 

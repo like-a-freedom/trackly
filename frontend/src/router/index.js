@@ -28,6 +28,12 @@ const routes = [
     path: '/auth/callback',
     name: 'AuthCallback',
     component: AuthCallbackView
+  },
+  {
+    // Alias for Google OAuth redirect URI (matches GOOGLE_REDIRECT_URI in .env)
+    path: '/auth/google/callback',
+    name: 'AuthGoogleCallback',
+    component: AuthCallbackView
   }
 ];
 

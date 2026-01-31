@@ -189,7 +189,7 @@ describe('useAuth composable', () => {
                 body: JSON.stringify({
                     code: 'auth-code',
                     state: 'saved-state',
-                    code_verifier: 'test-verifier'
+                    pkce_verifier: 'test-verifier'
                 })
             });
         });
