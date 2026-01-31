@@ -460,6 +460,25 @@ export function useAuth() {
         authError.value = null;
     }
 
+    // Dev-only hook for E2E tests to simulate authenticated state
+    if (import.meta.env.MODE !== 'production' && typeof window !== 'undefined') {
+        window.__tracklyAuthE2E = {
+            setAuthenticated(testUser) {
+                accessToken.value = 'e2e-access-token';
+                tokenExpiresAt.value = Date.now() + 60 * 60 * 1000;
+                authUser.value = testUser || {
+                    name: 'E2E User',
+                    email: 'e2e@example.com',
+                    avatar_url: null
+                };
+                isInitialized.value = true;
+            },
+            clearAuth() {
+                _resetForTesting();
+            }
+        };
+    }
+
     return {
         // State
         isAuthenticated,

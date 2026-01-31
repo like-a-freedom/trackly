@@ -181,6 +181,7 @@ async fn main() {
             "/api/account",
             axum::routing::delete(handlers::delete_account),
         )
+        .route("/api/account/me", get(handlers::get_current_user))
         .route("/api/account/tracks", get(handlers::list_account_tracks))
         // Track visibility route
         .route(

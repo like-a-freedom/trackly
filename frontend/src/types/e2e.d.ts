@@ -1,5 +1,5 @@
 // E2E test-only window helpers (present only in non-production builds during tests)
-export {};
+export { };
 
 declare global {
   interface Window {
@@ -16,6 +16,14 @@ declare global {
       lastGapLineExists?: boolean | null;
       forceHighlightSegment?: (lat: number, lng: number, segmentIndex: number) => void;
       _lastMapInstance?: any;
+    };
+    __tracklyAuthE2E?: {
+      setAuthenticated?: (user?: {
+        name?: string;
+        email?: string;
+        avatar_url?: string | null;
+      }) => void;
+      clearAuth?: () => void;
     };
   }
 }

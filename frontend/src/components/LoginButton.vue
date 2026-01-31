@@ -1,10 +1,10 @@
 <template>
   <div class="auth-button-container">
-    <!-- Authenticated: show user avatar/menu -->
-    <div v-if="isAuthenticated" class="user-menu" ref="userMenuRef">
+    <!-- Authenticated: show user avatar button -->
+    <div v-if="isAuthenticated" class="user-menu">
       <button
         class="user-button"
-        @click="toggleMenu"
+        @click="goToAccount"
         :title="user?.name || 'Account'"
       >
         <img
@@ -22,50 +22,6 @@
           </svg>
         </div>
       </button>
-
-      <!-- Dropdown menu -->
-      <transition name="menu-fade">
-        <div v-if="menuOpen" class="user-dropdown">
-          <div class="dropdown-header">
-            <span class="user-name">{{ user?.name || "User" }}</span>
-            <span class="user-email">{{ user?.email }}</span>
-          </div>
-          <div class="dropdown-divider"></div>
-          <button class="dropdown-item" @click="goToAccount">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-            My Account
-          </button>
-          <div class="dropdown-divider"></div>
-          <button
-            class="dropdown-item dropdown-item-logout"
-            @click="handleLogout"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16,17 21,12 16,7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-            Sign Out
-          </button>
-        </div>
-      </transition>
     </div>
 
     <!-- Not authenticated: show login button -->
@@ -118,23 +74,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
-const { isAuthenticated, isLoading, user, login, logout } = useAuth();
-
-const menuOpen = ref(false);
-const userMenuRef = ref(null);
-
-function toggleMenu() {
-  menuOpen.value = !menuOpen.value;
-}
-
-function closeMenu() {
-  menuOpen.value = false;
-}
+const { isAuthenticated, isLoading, user, login } = useAuth();
 
 async function handleLogin() {
   try {
@@ -149,30 +93,9 @@ async function handleLogin() {
   }
 }
 
-async function handleLogout() {
-  closeMenu();
-  await logout();
-}
-
 function goToAccount() {
-  closeMenu();
   router.push("/account");
 }
-
-// Close menu when clicking outside
-function handleClickOutside(event) {
-  if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
-    closeMenu();
-  }
-}
-
-onMounted(() => {
-  document.addEventListener("click", handleClickOutside);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("click", handleClickOutside);
-});
 </script>
 
 <style scoped>
@@ -311,88 +234,5 @@ onUnmounted(() => {
   height: 100%;
   background: #e5e7eb;
   color: #9ca3af;
-}
-
-.user-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  min-width: 220px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  overflow: hidden;
-}
-
-.dropdown-header {
-  padding: 16px;
-  background: #f9fafb;
-}
-
-.user-name {
-  display: block;
-  font-weight: 600;
-  color: #1a1a1a;
-  font-size: 0.95em;
-}
-
-.user-email {
-  display: block;
-  font-size: 0.8em;
-  color: #6b7280;
-  margin-top: 2px;
-}
-
-.dropdown-divider {
-  height: 1px;
-  background: #e5e7eb;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px 16px;
-  background: none;
-  border: none;
-  font-size: 0.9em;
-  color: #374151;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  text-align: left;
-}
-
-.dropdown-item:hover {
-  background: #f3f4f6;
-}
-
-.dropdown-item svg {
-  color: #9ca3af;
-}
-
-.dropdown-item-logout {
-  color: #b91c1c;
-}
-
-.dropdown-item-logout svg {
-  color: #b91c1c;
-}
-
-.dropdown-item-logout:hover {
-  background: #fef2f2;
-}
-
-/* Menu animation */
-.menu-fade-enter-active,
-.menu-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.menu-fade-enter-from,
-.menu-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
 }
 </style>

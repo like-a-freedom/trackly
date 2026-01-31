@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { nextTick, ref, computed } from 'vue';
+import { ref, computed } from 'vue';
 import LoginButton from '../LoginButton.vue';
 
 // Mock useAuth composable
@@ -114,7 +114,7 @@ describe('LoginButton.vue', () => {
             };
         });
 
-        it('should render user menu when authenticated', () => {
+        it('should render user button when authenticated', () => {
             const wrapper = mount(LoginButton);
 
             expect(wrapper.find('.user-menu').exists()).toBe(true);
@@ -142,62 +142,12 @@ describe('LoginButton.vue', () => {
             expect(wrapper.find('.user-avatar').exists()).toBe(false);
         });
 
-        it('should toggle dropdown menu on click', async () => {
-            const wrapper = mount(LoginButton, {
-                attachTo: document.body  // Attach to DOM for proper event handling
-            });
-
-            // Initially dropdown should be hidden
-            expect(wrapper.find('.user-dropdown').exists()).toBe(false);
-
-            // Click to open
-            await wrapper.find('.user-button').trigger('click');
-            await nextTick();
-
-            expect(wrapper.find('.user-dropdown').exists()).toBe(true);
-
-            // Click again to close - need to manually toggle since click-outside listener
-            // intercepts document clicks
-            await wrapper.find('.user-button').trigger('click');
-            await nextTick();
-            await nextTick(); // Extra tick for state to settle
-
-            // Note: In actual implementation, the menu might stay open due to toggle logic
-            // vs click-outside interaction. Testing direct toggle behavior.
-            // The menu might be open or closed depending on event propagation
-            wrapper.unmount();
-        });
-
-        it('should display user name and email in dropdown', async () => {
+        it('should navigate to account page when avatar is clicked', async () => {
             const wrapper = mount(LoginButton);
 
             await wrapper.find('.user-button').trigger('click');
-            await nextTick();
-
-            expect(wrapper.find('.user-name').text()).toBe('Test User');
-            expect(wrapper.find('.user-email').text()).toBe('test@example.com');
-        });
-
-        it('should navigate to account page when "My Account" is clicked', async () => {
-            const wrapper = mount(LoginButton);
-
-            await wrapper.find('.user-button').trigger('click');
-            await nextTick();
-
-            const accountButton = wrapper.findAll('.dropdown-item')[0];
-            await accountButton.trigger('click');
 
             expect(mockPush).toHaveBeenCalledWith('/account');
-        });
-
-        it('should have logout button in dropdown', async () => {
-            const wrapper = mount(LoginButton);
-
-            await wrapper.find('.user-button').trigger('click');
-            await nextTick();
-
-            expect(wrapper.find('.dropdown-item-logout').exists()).toBe(true);
-            expect(wrapper.find('.dropdown-item-logout').text()).toContain('Sign Out');
         });
     });
 
