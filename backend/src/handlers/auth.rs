@@ -5,7 +5,7 @@
 //! - POST /auth/google/callback - Exchange auth code for tokens
 //! - POST /auth/refresh - Refresh access token
 //! - POST /auth/logout - Revoke refresh token
-//! - GET /auth/me - Get current user info
+//! - GET /api/account/me - Get current user info
 //! - POST /auth/migrate-session-tracks - Migrate anonymous tracks
 //! - DELETE /api/account - Delete user account
 //! - GET /api/account/tracks - List user's tracks
@@ -461,7 +461,7 @@ pub async fn logout_all(
 
 /// Get current user info.
 ///
-/// GET /auth/me
+/// GET /api/account/me
 pub async fn get_current_user(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,

@@ -167,7 +167,6 @@ async fn main() {
         .route("/auth/refresh", post(handlers::refresh_token))
         .route("/auth/logout", post(handlers::logout))
         .route("/auth/logout-all", post(handlers::logout_all))
-        .route("/auth/me", get(handlers::get_current_user))
         .route(
             "/auth/me/nickname",
             axum::routing::patch(handlers::update_nickname),
