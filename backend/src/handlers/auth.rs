@@ -746,3 +746,50 @@ fn extract_client_ip_from_headers(headers: &HeaderMap) -> Option<String> {
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_client_ip_from_forwarded_for() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "X-Forwarded-For",
+            "203.0.113.10, 70.41.3.18".parse().unwrap(),
+        );
+
+        let ip = extract_client_ip_from_headers(&headers);
+
+        assert_eq!(ip, Some("203.0.113.10".to_string()));
+    }
+
+    #[test]
+    fn extract_client_ip_from_real_ip() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Real-IP", "198.51.100.42".parse().unwrap());
+
+        let ip = extract_client_ip_from_headers(&headers);
+
+        assert_eq!(ip, Some("198.51.100.42".to_string()));
+    }
+
+    #[test]
+    fn extract_client_ip_ignores_unknown() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Forwarded-For", "unknown".parse().unwrap());
+
+        let ip = extract_client_ip_from_headers(&headers);
+
+        assert_eq!(ip, None);
+    }
+
+    #[test]
+    fn extract_client_ip_none_when_missing() {
+        let headers = HeaderMap::new();
+
+        let ip = extract_client_ip_from_headers(&headers);
+
+        assert_eq!(ip, None);
+    }
+}
