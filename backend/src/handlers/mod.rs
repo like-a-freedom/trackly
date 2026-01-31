@@ -10,10 +10,12 @@ mod tracks;
 
 // Re-export auth handlers
 pub use auth::{
-    AuthResponse, DeleteAccountResponse, LoginResponse, MigrateSessionResponse,
-    OAuthConfigResponse, RefreshResponse, UserResponse, UserTracksResponse, delete_account,
-    get_current_user, google_callback, google_login, list_account_tracks, logout, logout_all,
-    migrate_session_tracks, oauth_config, refresh_token, update_nickname, update_track_visibility,
+    AuthResponse, BulkDeleteResponse, BulkTrackRequest, BulkVisibilityResponse,
+    DeleteAccountResponse, LoginResponse, MigrateSessionResponse, OAuthConfigResponse,
+    RefreshResponse, UserResponse, UserTracksResponse, bulk_delete_tracks, bulk_toggle_visibility,
+    delete_account, get_current_user, google_callback, google_login, list_account_tracks, logout,
+    logout_all, migrate_session_tracks, oauth_config, refresh_token, update_nickname,
+    update_track_visibility,
 };
 
 // Re-export all existing track/poi handlers

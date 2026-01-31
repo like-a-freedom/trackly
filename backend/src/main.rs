@@ -106,43 +106,43 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(handlers::health))
         .route("/metrics", get(metrics::serve_metrics))
-        .route("/tracks/upload", post(handlers::upload_track))
-        .route("/tracks", get(handlers::list_tracks_geojson))
-        .route("/tracks", post(handlers::upload_track))
-        .route("/tracks/exist", post(handlers::check_track_exist))
-        .route("/tracks/search", get(handlers::search_tracks))
-        .route("/tracks/{id}", get(handlers::get_track))
+        .route("/api/tracks/upload", post(handlers::upload_track))
+        .route("/api/tracks", get(handlers::list_tracks_geojson))
+        .route("/api/tracks", post(handlers::upload_track))
+        .route("/api/tracks/exist", post(handlers::check_track_exist))
+        .route("/api/tracks/search", get(handlers::search_tracks))
+        .route("/api/tracks/{id}", get(handlers::get_track))
         .route(
-            "/tracks/{id}/simplified",
+            "/api/tracks/{id}/simplified",
             get(handlers::get_track_simplified),
         )
         .route(
-            "/tracks/{id}/description",
+            "/api/tracks/{id}/description",
             axum::routing::patch(handlers::update_track_description),
         )
         .route(
-            "/tracks/{id}/name",
+            "/api/tracks/{id}/name",
             axum::routing::patch(handlers::update_track_name),
         )
         .route(
-            "/tracks/{id}/categories",
+            "/api/tracks/{id}/categories",
             axum::routing::patch(handlers::update_track_categories),
         )
-        .route("/tracks/{id}/export", get(handlers::export_track_gpx))
+        .route("/api/tracks/{id}/export", get(handlers::export_track_gpx))
         .route(
-            "/tracks/{id}/enrich-elevation",
+            "/api/tracks/{id}/enrich-elevation",
             post(handlers::enrich_elevation),
         )
         .route(
-            "/tracks/{id}/slope-profile",
+            "/api/tracks/{id}/slope-profile",
             get(handlers::get_track_slope_profile),
         )
         .route(
-            "/tracks/{id}/recalculate-slopes",
+            "/api/tracks/{id}/recalculate-slopes",
             post(handlers::recalculate_track_slopes),
         )
         .route(
-            "/tracks/{id}",
+            "/api/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
         )
         .route(
@@ -150,29 +150,32 @@ async fn main() {
             post(handlers::record_map_interaction),
         )
         // POI routes
-        .route("/pois", get(handlers::get_pois).post(handlers::create_poi))
         .route(
-            "/pois/{id}",
+            "/api/pois",
+            get(handlers::get_pois).post(handlers::create_poi),
+        )
+        .route(
+            "/api/pois/{id}",
             get(handlers::get_poi).delete(handlers::delete_poi),
         )
-        .route("/tracks/{track_id}/pois", get(handlers::get_track_pois))
+        .route("/api/tracks/{track_id}/pois", get(handlers::get_track_pois))
         .route(
-            "/tracks/{track_id}/pois/{poi_id}",
+            "/api/tracks/{track_id}/pois/{poi_id}",
             axum::routing::delete(handlers::unlink_track_poi),
         )
         // Auth routes
-        .route("/auth/oauth-config", get(handlers::oauth_config))
-        .route("/auth/google/login", get(handlers::google_login))
-        .route("/auth/google/callback", post(handlers::google_callback))
-        .route("/auth/refresh", post(handlers::refresh_token))
-        .route("/auth/logout", post(handlers::logout))
-        .route("/auth/logout-all", post(handlers::logout_all))
+        .route("/api/auth/oauth-config", get(handlers::oauth_config))
+        .route("/api/auth/google/login", get(handlers::google_login))
+        .route("/api/auth/google/callback", post(handlers::google_callback))
+        .route("/api/auth/refresh", post(handlers::refresh_token))
+        .route("/api/auth/logout", post(handlers::logout))
+        .route("/api/auth/logout-all", post(handlers::logout_all))
         .route(
-            "/auth/me/nickname",
+            "/api/auth/me/nickname",
             axum::routing::patch(handlers::update_nickname),
         )
         .route(
-            "/auth/migrate-session-tracks",
+            "/api/auth/migrate-session-tracks",
             post(handlers::migrate_session_tracks),
         )
         // Account routes
@@ -182,9 +185,17 @@ async fn main() {
         )
         .route("/api/account/me", get(handlers::get_current_user))
         .route("/api/account/tracks", get(handlers::list_account_tracks))
+        .route(
+            "/api/account/tracks/bulk",
+            axum::routing::delete(handlers::bulk_delete_tracks),
+        )
+        .route(
+            "/api/account/tracks/bulk/visibility",
+            axum::routing::patch(handlers::bulk_toggle_visibility),
+        )
         // Track visibility route
         .route(
-            "/tracks/{id}/visibility",
+            "/api/tracks/{id}/visibility",
             axum::routing::patch(handlers::update_track_visibility),
         )
         // Debug endpoints (disabled by default)

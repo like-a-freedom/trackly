@@ -1442,7 +1442,7 @@ async function pollForElevationData(trackId) {
       return;
     }
 
-    const response = await fetch(`/tracks/${effectiveTrackId}`);
+    const response = await fetch(`/api/tracks/${effectiveTrackId}`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -2049,7 +2049,7 @@ const elevationGain = useMemoizedComputed(
 // Debounced API functions to prevent excessive requests
 const debouncedSaveName = useAdvancedDebounce(
   async (trackId, name, sessionId) => {
-    const response = await fetch(`/tracks/${trackId}/name`, {
+    const response = await fetch(`/api/tracks/${trackId}/name`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -2071,7 +2071,7 @@ const debouncedSaveName = useAdvancedDebounce(
 
 const debouncedSaveDescription = useAdvancedDebounce(
   async (trackId, description, sessionId) => {
-    const response = await fetch(`/tracks/${trackId}/description`, {
+    const response = await fetch(`/api/tracks/${trackId}/description`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -2118,7 +2118,7 @@ async function confirmDelete() {
   if (!proceed) return;
   try {
     deletingTrack.value = true;
-    const res = await fetch(`/tracks/${track.value.id}`, {
+    const res = await fetch(`/api/tracks/${track.value.id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2298,7 +2298,7 @@ async function exportTrack() {
     const sessionHeader = props.sessionId || getSessionId();
     const headers = sessionHeader ? { "x-session-id": sessionHeader } : {};
 
-    const response = await fetch(`/tracks/${track.value.id}/export`, {
+    const response = await fetch(`/api/tracks/${track.value.id}/export`, {
       headers,
     });
 
@@ -2518,16 +2518,19 @@ async function forceEnrichElevation() {
   }
   enrichingElevation.value = true;
   try {
-    const response = await fetch(`/tracks/${track.value.id}/enrich-elevation`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        session_id: props.sessionId,
-        force: true,
-      }),
-    });
+    const response = await fetch(
+      `/api/tracks/${track.value.id}/enrich-elevation`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: props.sessionId,
+          force: true,
+        }),
+      }
+    );
 
     if (!response.ok) {
       if (response.status === 403) {
@@ -2563,7 +2566,7 @@ async function forceEnrichElevation() {
       `[TrackDetailPanel] Fetching updated track data after elevation enrichment`
     );
     try {
-      const trackResponse = await fetch(`/tracks/${track.value.id}`);
+      const trackResponse = await fetch(`/api/tracks/${track.value.id}`);
       if (trackResponse.ok) {
         const updatedTrack = await trackResponse.json();
 

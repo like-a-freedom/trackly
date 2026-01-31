@@ -20,8 +20,9 @@ pub use tracks::{
 
 // Re-export user-related functions and types
 pub use users::{
-    DeleteAccountResult, User, UserTrackSummary, count_users, delete_user_account,
-    get_user_by_email, get_user_by_google_sub, get_user_by_id, get_user_poi_count,
-    get_user_track_count, list_user_tracks, migrate_session_pois, migrate_session_tracks,
-    update_track_visibility, update_user_nickname, update_user_roles, upsert_user,
+    BulkVisibilityResult, DeleteAccountResult, User, UserTrackSummary, bulk_delete_tracks,
+    bulk_toggle_track_visibility, count_users, delete_user_account, get_user_by_email,
+    get_user_by_google_sub, get_user_by_id, get_user_poi_count, get_user_track_count,
+    list_user_tracks, migrate_session_pois, migrate_session_tracks, update_track_visibility,
+    update_user_nickname, update_user_roles, upsert_user,
 };

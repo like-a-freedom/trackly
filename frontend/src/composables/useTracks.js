@@ -166,7 +166,7 @@ export function useTracks() {
         // Build URL with zoom and mode parameters for optimization
         const zoom = options.zoom || 12; // Default zoom
         const mode = options.mode || 'overview'; // Default mode for track lists
-        let url = `/tracks?bbox=${bboxString}&zoom=${zoom}&mode=${mode}`;
+        let url = `/api/tracks?bbox=${bboxString}&zoom=${zoom}&mode=${mode}`;
 
         // If owner_session_id is provided ("My tracks" filter), append it so backend can return owner-only results
         if (options && options.ownerSessionId) {
@@ -280,7 +280,7 @@ export function useTracks() {
                 }
             }
 
-            const response = await fetch('/tracks/upload', {
+            const response = await fetch('/api/tracks/upload', {
                 method: 'POST',
                 body: formData,
                 headers
@@ -307,7 +307,7 @@ export function useTracks() {
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const response = await fetch('/tracks/exist', { method: 'POST', body: formData });
+            const response = await fetch('/api/tracks/exist', { method: 'POST', body: formData });
             let json = null;
             try {
                 json = await response.json();
@@ -386,7 +386,7 @@ export function useTracks() {
 
         try {
             // Use adaptive endpoint with zoom and mode for optimal performance
-            let endpoint = `/tracks/${id}`;
+            let endpoint = `/api/tracks/${id}`;
             const params = new URLSearchParams();
 
             if (zoom !== null) {
@@ -482,7 +482,7 @@ export function useTracks() {
                 headers['Authorization'] = `Bearer ${accessToken.value}`;
             }
 
-            const response = await fetch(`/tracks/${id}/categories`, {
+            const response = await fetch(`/api/tracks/${id}/categories`, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify(body)
@@ -516,7 +516,7 @@ export function useTracks() {
                 headers['Authorization'] = `Bearer ${accessToken.value}`;
             }
 
-            const response = await fetch(`/tracks/${id}/visibility`, {
+            const response = await fetch(`/api/tracks/${id}/visibility`, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({

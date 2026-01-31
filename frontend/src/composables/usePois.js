@@ -24,7 +24,7 @@ export function usePois() {
 
     try {
       console.log(`[usePois] Fetching POIs for track ${trackId}`);
-      const response = await fetch(`/tracks/${trackId}/pois`);
+      const response = await fetch(`/api/tracks/${trackId}/pois`);
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -62,7 +62,7 @@ export function usePois() {
     try {
       const params = new URLSearchParams({ bbox, limit });
       console.log(`[usePois] Fetching POIs in bbox: ${bbox}`);
-      const response = await fetch(`/pois?${params}`);
+      const response = await fetch(`/api/pois?${params}`);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch POIs: ${response.status}`);

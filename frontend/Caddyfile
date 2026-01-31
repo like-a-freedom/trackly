@@ -19,9 +19,8 @@
 		-Server
 	}
 
-	# API routes - proxy to backend
+	# API routes - proxy to backend (all endpoints now use /api prefix)
 	handle /api/* {
-		uri strip_prefix /api
 		reverse_proxy backend:8080 {
 			flush_interval -1
 			header_up X-Real-IP {http.request.header.X-Real-IP}
@@ -30,18 +29,13 @@
 		}
 	}
 
-	# Legacy direct API routes
-	handle /tracks* {
-		reverse_proxy backend:8080 {
-			flush_interval -1
-			header_up X-Real-IP {http.request.header.X-Real-IP}
-			header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
-			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
-		}
-	}
-
-	# Health check
+	# Health check (no /api prefix)
 	handle /health {
+		reverse_proxy backend:8080
+	}
+
+	# Metrics endpoint (no /api prefix)
+	handle /metrics {
 		reverse_proxy backend:8080
 	}
 

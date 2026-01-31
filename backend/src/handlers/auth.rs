@@ -747,6 +747,100 @@ fn extract_client_ip_from_headers(headers: &HeaderMap) -> Option<String> {
     None
 }
 
+/// Request for bulk track operations.
+#[derive(Debug, Deserialize)]
+pub struct BulkTrackRequest {
+    pub track_ids: Vec<uuid::Uuid>,
+}
+
+/// Response for bulk visibility toggle.
+#[derive(Debug, Serialize)]
+pub struct BulkVisibilityResponse {
+    pub updated: Vec<db::BulkVisibilityResult>,
+    pub count: usize,
+}
+
+/// Toggle visibility for multiple tracks at once.
+///
+/// PATCH /api/account/tracks/bulk/visibility
+pub async fn bulk_toggle_visibility(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+    Json(request): Json<BulkTrackRequest>,
+) -> Result<Json<BulkVisibilityResponse>, AuthError> {
+    if request.track_ids.is_empty() {
+        return Ok(Json(BulkVisibilityResponse {
+            updated: Vec::new(),
+            count: 0,
+        }));
+    }
+
+    if request.track_ids.len() > 100 {
+        return Err(AuthError::InvalidInput(
+            "Maximum 100 tracks per bulk operation".into(),
+        ));
+    }
+
+    let updated =
+        db::bulk_toggle_track_visibility(&pool, auth_user.user_id, &request.track_ids).await?;
+
+    info!(
+        user_id = %auth_user.user_id,
+        requested = request.track_ids.len(),
+        updated = updated.len(),
+        "Bulk visibility toggle"
+    );
+
+    Ok(Json(BulkVisibilityResponse {
+        count: updated.len(),
+        updated,
+    }))
+}
+
+/// Response for bulk delete.
+#[derive(Debug, Serialize)]
+pub struct BulkDeleteResponse {
+    pub deleted: Vec<String>,
+    pub count: usize,
+}
+
+/// Delete multiple tracks at once.
+///
+/// DELETE /api/account/tracks/bulk
+pub async fn bulk_delete_tracks(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+    Json(request): Json<BulkTrackRequest>,
+) -> Result<Json<BulkDeleteResponse>, AuthError> {
+    if request.track_ids.is_empty() {
+        return Ok(Json(BulkDeleteResponse {
+            deleted: Vec::new(),
+            count: 0,
+        }));
+    }
+
+    if request.track_ids.len() > 100 {
+        return Err(AuthError::InvalidInput(
+            "Maximum 100 tracks per bulk operation".into(),
+        ));
+    }
+
+    let deleted = db::bulk_delete_tracks(&pool, auth_user.user_id, &request.track_ids).await?;
+    let deleted_strings: Vec<String> = deleted.iter().map(|id| id.to_string()).collect();
+
+    info!(
+        user_id = %auth_user.user_id,
+        requested = request.track_ids.len(),
+        deleted = deleted.len(),
+        "Bulk tracks deleted"
+    );
+
+    Ok(Json(BulkDeleteResponse {
+        count: deleted_strings.len(),
+        deleted: deleted_strings,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

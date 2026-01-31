@@ -263,14 +263,14 @@ global.fetch = vi.fn(async (url, opts) => {
     // Trim out origin so both absolute and relative URLs match
     const trimmed = (path || '').replace(/^https?:\/\/[^/]+/, '');
     // POIs endpoint
-    if (trimmed.endsWith('/pois')) {
+    if (trimmed.startsWith('/api/pois') || trimmed.includes('/api/tracks/') && trimmed.includes('/pois')) {
         return {
             ok: true,
             json: async () => []
         };
     }
     // Track details endpoint
-    if (trimmed.includes('/tracks/') && !trimmed.includes('/pois')) {
+    if (trimmed.includes('/api/tracks/') && !trimmed.includes('/pois')) {
         // Extract id and return simplified track object for tests
         const idMatch = trimmed.match(/\/tracks\/(.*?)(\/|$|\?)/);
         const id = idMatch ? idMatch[1] : 'test-track-id';
@@ -293,7 +293,7 @@ global.fetch = vi.fn(async (url, opts) => {
     };
 });
 
-// Wrap the global Request constructor in tests so that relative URLs (e.g. '/tracks/1')
+// Wrap the global Request constructor in tests so that relative URLs (e.g. '/api/tracks/1')
 // don't throw when Request tries to create a URL object in Node's undici implementation.
 // This mirrors browser behavior by using http://localhost as base for relative URLs.
 if (typeof global.Request !== 'undefined') {

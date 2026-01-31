@@ -25,7 +25,7 @@ describe('Upload to track fetch flow (integration)', () => {
         const fetchMock = vi.fn()
             .mockResolvedValueOnce({
                 ok: true,
-                json: async () => ({ id: 'new-track-123', url: '/tracks/new-track-123' })
+                json: async () => ({ id: 'new-track-123', url: '/api/tracks/new-track-123' })
             })
             .mockResolvedValueOnce({
                 ok: true,
@@ -64,7 +64,7 @@ describe('Upload to track fetch flow (integration)', () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
 
         const [uploadUrl, uploadOptions] = fetchMock.mock.calls[0];
-        expect(uploadUrl).toBe('/tracks/upload');
+        expect(uploadUrl).toBe('/api/tracks/upload');
         expect(uploadOptions.method).toBe('POST');
         expect(uploadOptions.body).toBeInstanceOf(FormData);
         const uploadEntries = Object.fromEntries(uploadOptions.body.entries());
@@ -72,7 +72,7 @@ describe('Upload to track fetch flow (integration)', () => {
         expect(uploadEntries.file).toBeInstanceOf(File);
 
         const [detailUrl, detailOptions] = fetchMock.mock.calls[1];
-        expect(detailUrl).toContain('/tracks/new-track-123');
+        expect(detailUrl).toContain('/api/tracks/new-track-123');
         expect(detailUrl).toContain('mode=detail');
         expect(detailUrl).toContain('zoom=14');
         expect((detailOptions && detailOptions.method) || 'GET').toBe('GET');

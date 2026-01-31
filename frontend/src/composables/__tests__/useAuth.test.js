@@ -87,7 +87,7 @@ describe('useAuth composable', () => {
             await initialize();
 
             expect(isInitialized.value).toBe(true);
-            expect(mockFetch).toHaveBeenCalledWith('/auth/refresh', {
+            expect(mockFetch).toHaveBeenCalledWith('/api/auth/refresh', {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -182,7 +182,7 @@ describe('useAuth composable', () => {
             expect(result).toBe(true);
             expect(isAuthenticated.value).toBe(true);
             expect(user.value.email).toBe('test@example.com');
-            expect(mockFetch).toHaveBeenCalledWith('/auth/google/callback', {
+            expect(mockFetch).toHaveBeenCalledWith('/api/auth/google/callback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -225,7 +225,7 @@ describe('useAuth composable', () => {
             const { logout, isAuthenticated } = useAuth();
             await logout();
 
-            expect(mockFetch).toHaveBeenCalledWith('/auth/logout', {
+            expect(mockFetch).toHaveBeenCalledWith('/api/auth/logout', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {}
@@ -333,7 +333,7 @@ describe('useAuth composable', () => {
             const result = await migrateSessionTracks('session-123');
 
             expect(result.migrated_count).toBe(5);
-            expect(mockFetch).toHaveBeenLastCalledWith('/auth/migrate-session-tracks', {
+            expect(mockFetch).toHaveBeenLastCalledWith('/api/auth/migrate-session-tracks', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

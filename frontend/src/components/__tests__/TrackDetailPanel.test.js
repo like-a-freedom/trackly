@@ -919,7 +919,7 @@ describe('TrackDetailPanel', () => {
       await wrapper.find('.save-btn').trigger('click');
       await Promise.resolve();
       await wrapper.vm.$nextTick();
-      expect(global.fetch).toHaveBeenCalledWith('/tracks/1/name', expect.objectContaining({ method: 'PATCH' }));
+      expect(global.fetch).toHaveBeenCalledWith('/api/tracks/1/name', expect.objectContaining({ method: 'PATCH' }));
       expect(wrapper.emitted('name-updated')).toEqual([['Updated Track Name']]);
     });
 
@@ -1118,7 +1118,7 @@ describe('TrackDetailPanel', () => {
       await flushPromises();
 
       expect(fetch).toHaveBeenCalledWith(
-        `/tracks/${track.id}/export`,
+        `/api/tracks/${track.id}/export`,
         expect.objectContaining({
           headers: expect.objectContaining({
             'x-session-id': expect.any(String)
@@ -1648,7 +1648,7 @@ describe('TrackDetailPanel', () => {
       await waitFor(() => mockShowConfirm.mock.calls.length > 0);
 
       expect(mockShowConfirm).toHaveBeenCalled();
-      expect(global.fetch).toHaveBeenCalledWith('/tracks/1/enrich-elevation', {
+      expect(global.fetch).toHaveBeenCalledWith('/api/tracks/1/enrich-elevation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: 'test-session', force: true })

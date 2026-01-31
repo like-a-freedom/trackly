@@ -21,7 +21,7 @@ describe('useTracks.uploadTrack', () => {
         global.fetch = vi.fn(() =>
             Promise.resolve({
                 ok: true,
-                json: () => Promise.resolve({ id: 'track-id', url: '/tracks/track-id' })
+                json: () => Promise.resolve({ id: 'track-id', url: '/api/tracks/track-id' })
             })
         );
         vi.spyOn(sessionUtils, 'getSessionId').mockReturnValue(MOCK_SESSION_ID);
@@ -41,7 +41,7 @@ describe('useTracks.uploadTrack', () => {
         expect(global.fetch).toHaveBeenCalledTimes(1);
 
         const [url, options] = global.fetch.mock.calls[0];
-        expect(url).toBe('/tracks/upload');
+        expect(url).toBe('/api/tracks/upload');
         expect(options.method).toBe('POST');
         expect(options.body).toBeInstanceOf(FormData);
 

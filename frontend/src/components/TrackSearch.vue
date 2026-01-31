@@ -1,13 +1,16 @@
 <template>
-  <div 
-    v-if="isVisible" 
-    class="search-overlay"
-    @click.self="closeSearch"
-  >
+  <div v-if="isVisible" class="search-overlay" @click.self="closeSearch">
     <div class="search-modal">
       <div class="search-input-container">
         <div class="search-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <circle cx="11" cy="11" r="8"></circle>
             <path d="M21 21l-4.35-4.35"></path>
           </svg>
@@ -22,51 +25,78 @@
           @keydown.escape="closeSearch"
           @input="onInputChange"
         />
-        <button 
-          v-if="searchQuery"
-          @click="clearSearch"
-          class="clear-button"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button v-if="searchQuery" @click="clearSearch" class="clear-button">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </button>
       </div>
-      
+
       <div v-if="isLoading" class="search-loading">
         <div class="loading-spinner"></div>
         <span>Searching...</span>
       </div>
-      
-      <div v-else-if="searchResults.length > 0" class="search-results" @touchstart.stop @touchmove.stop @touchend.stop>
-        <div 
-          v-for="track in searchResults" 
+
+      <div
+        v-else-if="searchResults.length > 0"
+        class="search-results"
+        @touchstart.stop
+        @touchmove.stop
+        @touchend.stop
+      >
+        <div
+          v-for="track in searchResults"
           :key="track.id"
           class="search-result-item"
           @click="selectTrack(track)"
         >
           <div class="track-info">
             <h3 class="track-name">{{ track.name }}</h3>
-            <p v-if="track.description" class="track-description">{{ track.description }}</p>
+            <p v-if="track.description" class="track-description">
+              {{ track.description }}
+            </p>
             <div class="track-meta">
-              <span class="track-length">{{ formatDistance(track.length_km) }}</span>
+              <span class="track-length">{{
+                formatDistance(track.length_km)
+              }}</span>
               <span v-if="track.categories.length > 0" class="track-categories">
-                {{ track.categories.map(capitalize).join(', ') }}
+                {{ track.categories.map(capitalize).join(", ") }}
               </span>
             </div>
           </div>
           <div class="track-arrow">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <polyline points="9,18 15,12 9,6"></polyline>
             </svg>
           </div>
         </div>
       </div>
-      
+
       <div v-else-if="searchQuery && !isLoading" class="no-results">
         <div class="no-results-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1"
+          >
             <circle cx="11" cy="11" r="8"></circle>
             <path d="M21 21l-4.35-4.35"></path>
           </svg>
@@ -78,106 +108,112 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
-import { useSearchState } from '../composables/useSearchState'
-import { capitalize } from '../utils/string'
+import { ref, watch, nextTick } from "vue";
+import { useSearchState } from "../composables/useSearchState";
+import { capitalize } from "../utils/string";
 
 const props = defineProps({
   isVisible: {
     type: Boolean,
-    default: false
-  }
-})
+    default: false,
+  },
+});
 
-const emit = defineEmits(['close', 'track-selected'])
+const emit = defineEmits(["close", "track-selected"]);
 
-const searchInput = ref(null)
-const isLoading = ref(false)
-const searchTimeout = ref(null)
+const searchInput = ref(null);
+const isLoading = ref(false);
+const searchTimeout = ref(null);
 
 // Use global search state
-const { searchQuery, searchResults, saveSearchState, hasSearchState } = useSearchState()
+const { searchQuery, searchResults, saveSearchState, hasSearchState } =
+  useSearchState();
 
 // Watch for visibility to focus input and handle search restoration
-watch(() => props.isVisible, (visible) => {
-  if (visible) {
-    nextTick(() => {
-      searchInput.value?.focus()
-      // If we have saved search state, perform search to restore results
-      if (hasSearchState() && searchQuery.value.trim()) {
-        performSearch()
-      }
-    })
+watch(
+  () => props.isVisible,
+  (visible) => {
+    if (visible) {
+      nextTick(() => {
+        searchInput.value?.focus();
+        // If we have saved search state, perform search to restore results
+        if (hasSearchState() && searchQuery.value.trim()) {
+          performSearch();
+        }
+      });
+    }
+    // Don't clear search state when closing - preserve it for restoration
   }
-  // Don't clear search state when closing - preserve it for restoration
-})
+);
 
 const formatDistance = (km) => {
   if (km < 1) {
-    return `${Math.round(km * 1000)}m`
+    return `${Math.round(km * 1000)}m`;
   }
-  return `${km.toFixed(1)}km`
-}
+  return `${km.toFixed(1)}km`;
+};
 
 const onInputChange = () => {
   // Clear previous timeout
   if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
+    clearTimeout(searchTimeout.value);
   }
-  
+
   // Set new timeout for debounced search
   if (searchQuery.value.trim()) {
     searchTimeout.value = setTimeout(() => {
-      performSearch()
-    }, 300)
+      performSearch();
+    }, 300);
   } else {
-    searchResults.value = []
+    searchResults.value = [];
   }
-}
+};
 
 const performSearch = async () => {
   if (!searchQuery.value.trim()) {
-    searchResults.value = []
-    return
+    searchResults.value = [];
+    return;
   }
 
-  isLoading.value = true
-  
+  isLoading.value = true;
+
   try {
-    const response = await fetch(`/tracks/search?query=${encodeURIComponent(searchQuery.value)}`)
+    const response = await fetch(
+      `/api/tracks/search?query=${encodeURIComponent(searchQuery.value)}`
+    );
     if (response.ok) {
-      const results = await response.json()
-      searchResults.value = results
+      const results = await response.json();
+      searchResults.value = results;
       // Save search state for potential restoration
-      saveSearchState(searchQuery.value, results)
+      saveSearchState(searchQuery.value, results);
     } else {
-      console.error('Search failed:', response.status)
-      searchResults.value = []
+      console.error("Search failed:", response.status);
+      searchResults.value = [];
     }
   } catch (error) {
-    console.error('Search error:', error)
-    searchResults.value = []
+    console.error("Search error:", error);
+    searchResults.value = [];
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
-}
+};
 
 const selectTrack = (track) => {
-  emit('track-selected', track)
-}
+  emit("track-selected", track);
+};
 
 const clearSearch = () => {
-  searchQuery.value = ''
-  searchResults.value = []
+  searchQuery.value = "";
+  searchResults.value = [];
   if (searchTimeout.value) {
-    clearTimeout(searchTimeout.value)
+    clearTimeout(searchTimeout.value);
   }
   // Don't clear saved search state here - only clear current search
-}
+};
 
 const closeSearch = () => {
-  emit('close')
-}
+  emit("close");
+};
 </script>
 
 <style scoped>
@@ -273,8 +309,12 @@ const closeSearch = () => {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .search-results {

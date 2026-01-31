@@ -19,7 +19,7 @@ test('owner can see delete button and delete track', async ({ page }) => {
     // Create a track via direct upload using owner session
     const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trackly E2E">\n  <trk>\n    <name>Owner Delete Test</name>\n    <trkseg>\n      <trkpt lat="37.7810" lon="-122.4200"><ele>10</ele></trkpt>\n      <trkpt lat="37.7811" lon="-122.4201"><ele>11</ele></trkpt>\n    </trkseg>\n  </trk>\n</gpx>`;
 
-    // ensure page origin is set so fetch('/tracks/upload') resolves correctly
+    // ensure page origin is set so fetch('/api/tracks/upload') resolves correctly
     await page.goto(FRONTEND);
     await page.waitForLoadState('networkidle');
 

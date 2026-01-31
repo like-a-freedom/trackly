@@ -130,7 +130,7 @@ export function useAuth() {
             }
 
             // Fetch OAuth config from backend
-            const configResponse = await fetch(`${API_BASE}/auth/oauth-config`);
+            const configResponse = await fetch(`${API_BASE}/api/auth/oauth-config`);
             if (!configResponse.ok) {
                 throw new Error('Failed to get OAuth configuration');
             }
@@ -179,7 +179,7 @@ export function useAuth() {
             }
 
             // Exchange code for tokens
-            const response = await fetch(`${API_BASE}/auth/google/callback`, {
+            const response = await fetch(`${API_BASE}/api/auth/google/callback`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -242,7 +242,7 @@ export function useAuth() {
      */
     async function refresh() {
         try {
-            const response = await fetch(`${API_BASE}/auth/refresh`, {
+            const response = await fetch(`${API_BASE}/api/auth/refresh`, {
                 method: 'POST',
                 credentials: 'include' // Include HttpOnly cookie
             });
@@ -286,7 +286,7 @@ export function useAuth() {
         authError.value = null;
 
         try {
-            await fetch(`${API_BASE}/auth/logout`, {
+            await fetch(`${API_BASE}/api/auth/logout`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: accessToken.value
@@ -361,7 +361,7 @@ export function useAuth() {
         if (!accessToken.value || !sessionId) return { migrated_count: 0 };
 
         try {
-            const response = await fetch(`${API_BASE}/auth/migrate-session-tracks`, {
+            const response = await fetch(`${API_BASE}/api/auth/migrate-session-tracks`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

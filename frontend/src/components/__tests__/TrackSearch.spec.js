@@ -62,7 +62,7 @@ describe('TrackSearch', () => {
         description: 'A test track',
         categories: ['running'],
         length_km: 5.0,
-        url: '/tracks/123'
+        url: '/api/tracks/123'
       }
     ]
 
@@ -85,7 +85,7 @@ describe('TrackSearch', () => {
     await wrapper.vm.$nextTick()
     await flushPromises()
 
-    expect(fetch).toHaveBeenCalledWith('/tracks/search?query=test')
+    expect(fetch).toHaveBeenCalledWith('/api/tracks/search?query=test')
   })
 
   it('shows no results message when no tracks found', async () => {
@@ -120,7 +120,7 @@ describe('TrackSearch', () => {
         description: 'A test track',
         categories: ['running'],
         length_km: 5.0,
-        url: '/tracks/123'
+        url: '/api/tracks/123'
       }
     ]
 

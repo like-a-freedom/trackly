@@ -182,11 +182,13 @@ test.describe('Auth Button UI', () => {
     test('avatar button navigates to account when authenticated', async ({ page }) => {
         // Simulate authenticated state via dev-only hook
         await page.evaluate(() => {
-            window.__tracklyAuthE2E?.setAuthenticated({
-                name: 'Test User',
-                email: 'test@example.com',
-                avatar_url: null
-            });
+            if (window.__tracklyAuthE2E?.setAuthenticated) {
+                window.__tracklyAuthE2E.setAuthenticated({
+                    name: 'Test User',
+                    email: 'test@example.com',
+                    avatar_url: null
+                });
+            }
         });
 
         const userButton = page.locator('button.user-button');

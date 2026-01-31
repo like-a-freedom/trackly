@@ -5,7 +5,7 @@ import * as VueRouter from 'vue-router';
 
 // Create mock function for checkTrackDuplicate
 const mockCheckTrackDuplicate = vi.fn().mockResolvedValue({ alreadyExists: false, warning: '' });
-const mockUploadTrack = vi.fn().mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174000', url: '/tracks/123e4567-e89b-12d3-a456-426614174000' });
+const mockUploadTrack = vi.fn().mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174000', url: '/api/tracks/123e4567-e89b-12d3-a456-426614174000' });
 const mockPush = vi.fn();
 
 // Mock the useTracks composable
@@ -55,7 +55,7 @@ describe('UploadForm', () => {
         mockUploadTrack.mockClear();
         mockPush.mockClear();
         mockCheckTrackDuplicate.mockResolvedValue({ alreadyExists: false, warning: '' });
-        mockUploadTrack.mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174000', url: '/tracks/123e4567-e89b-12d3-a456-426614174000' });
+        mockUploadTrack.mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174000', url: '/api/tracks/123e4567-e89b-12d3-a456-426614174000' });
     });
 
     afterEach(() => {
@@ -1095,7 +1095,7 @@ describe('UploadForm', () => {
             wrapper = mount(UploadForm);
 
             // Set initial uploaded track data and copy states
-            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/api/tracks/123' };
             wrapper.vm.uploadSuccess = true;
             wrapper.vm.copyingLink = true;
             wrapper.vm.linkCopied = true;
@@ -1125,7 +1125,7 @@ describe('UploadForm', () => {
             wrapper = mount(UploadForm);
 
             // Set initial uploaded track data and copy states
-            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/api/tracks/123' };
             wrapper.vm.uploadSuccess = true;
             wrapper.vm.copyingLink = true;
             wrapper.vm.linkCopied = true;
@@ -1198,7 +1198,7 @@ describe('UploadForm', () => {
         it('stores upload response correctly after successful upload', async () => {
             const mockResponse = {
                 id: 'test-track-id-123',
-                url: '/tracks/test-track-id-123'
+                url: '/api/tracks/test-track-id-123'
             };
             mockUploadTrack.mockResolvedValue(mockResponse);
 
@@ -1219,7 +1219,7 @@ describe('UploadForm', () => {
             wrapper = mount(UploadForm);
 
             // Set up uploaded track data
-            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/api/tracks/123' };
             wrapper.vm.uploadSuccess = true;
             await wrapper.vm.$nextTick();
 
@@ -1246,7 +1246,7 @@ describe('UploadForm', () => {
             wrapper = mount(UploadForm);
 
             // Set up initial state with copy states active
-            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/api/tracks/123' };
             wrapper.vm.uploadSuccess = true;
             wrapper.vm.copyingLink = true;
             wrapper.vm.linkCopied = true;
@@ -1270,7 +1270,7 @@ describe('UploadForm', () => {
             wrapper = mount(UploadForm);
 
             // Set up uploaded track data
-            wrapper.vm.uploadedTrackData = { id: '123', url: '/tracks/123' };
+            wrapper.vm.uploadedTrackData = { id: '123', url: '/api/tracks/123' };
             wrapper.vm.uploadSuccess = true;
             await wrapper.vm.$nextTick();
 

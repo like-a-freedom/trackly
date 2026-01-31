@@ -58,7 +58,7 @@ describe('useTracks composable', () => {
             await fetchTracksInBounds(mockBounds);
 
             expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining('/tracks?bbox=10,50,11,51'),
+                expect.stringContaining('/api/tracks?bbox=10,50,11,51'),
                 expect.objectContaining({ signal: expect.any(Object) })
             );
             expect(polylines.value).toHaveLength(1);
@@ -319,7 +319,7 @@ describe('useTracks composable', () => {
             });
 
             expect(fetchMock).toHaveBeenCalledWith(
-                '/tracks/upload',
+                '/api/tracks/upload',
                 expect.objectContaining({
                     method: 'POST',
                     body: expect.any(FormData)
@@ -492,7 +492,7 @@ describe('useTracks composable', () => {
             const result = await fetchTrackDetail('track-123');
 
             expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining('/tracks/track-123'),
+                expect.stringContaining('/api/tracks/track-123'),
                 expect.any(Object)
             );
             expect(result).toMatchObject(mockTrack);

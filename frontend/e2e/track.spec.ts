@@ -136,7 +136,7 @@ test('gap-line, slope tooltip & multi-segment color checks (production interacti
   const lastColor = await page.evaluate(() => (window.__e2e?.lastHighlightedColor ?? null));
   expect(lastColor).not.toBeNull();
 
-  // Fetch track data to get segment gaps (use dev server proxy '/tracks')
+  // Fetch track data to get segment gaps (use dev server proxy '/api/tracks')
   const trackData = await page.evaluate(async (id) => {
     const response = await fetch(`/tracks/${id}`);
     if (!response.ok) return null;

@@ -25,7 +25,7 @@ test('large gpx upload either succeeds or returns explicit error', async ({ page
 
     const gpx = generateLargeGpx(1500);
 
-    // Ensure page origin is set so fetch('/tracks/upload') resolves relative to frontend
+    // Ensure page origin is set so fetch('/api/tracks/upload') resolves relative to frontend
     await page.goto('http://localhost:81');
     await page.waitForLoadState('networkidle');
 

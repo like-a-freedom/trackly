@@ -33,7 +33,7 @@ export async function uploadTrack(options: {
             fd.append('name', name);
             fd.append('categories', categories);
             fd.append('session_id', session);
-            const r = await fetch('/tracks/upload', { method: 'POST', body: fd, credentials: 'include' });
+            const r = await fetch('/api/tracks/upload', { method: 'POST', body: fd, credentials: 'include' });
             const retry = r.headers.get('retry-after');
             const txt = await r.text();
             try { return { ok: r.ok, status: r.status, retry_after: retry, body: JSON.parse(txt) }; } catch (e) { return { ok: r.ok, status: r.status, retry_after: retry, body: txt }; }
