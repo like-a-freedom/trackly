@@ -138,7 +138,7 @@ test('gap-line, slope tooltip & multi-segment color checks (production interacti
 
   // Fetch track data to get segment gaps (use dev server proxy '/api/tracks')
   const trackData = await page.evaluate(async (id) => {
-    const response = await fetch(`/tracks/${id}`);
+    const response = await fetch(`/api/tracks/${id}`);
     if (!response.ok) return null;
     return response.json();
   }, trackId);
@@ -335,7 +335,7 @@ test('slope mode hover aligns marker with track end', async ({ page }: { page: P
   await page.waitForTimeout(250);
 
   const trackEnd = await page.evaluate(async (id) => {
-    const res = await fetch(`/tracks/${id}`);
+    const res = await fetch(`/api/tracks/${id}`);
     if (!res.ok) return null;
     const data = await res.json();
     const geom = data.geom_geojson;

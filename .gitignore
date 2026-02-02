@@ -6,6 +6,9 @@ dev/
 .DS_Store
 data/
 docs/
+AGENTS.md
+skills/
+artifacts/
 
 # Node.js
 node_modules/

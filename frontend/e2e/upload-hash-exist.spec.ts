@@ -45,7 +45,7 @@ test('upload form shows duplicate and navigates to existing track', async ({ pag
         // If input did not attach, fallback: find the uploaded fixture by search and navigate to it
         console.warn('Upload input unavailable, falling back to backend search');
         const results = await page.evaluate(async (name) => {
-            const res = await fetch(`/tracks/search?query=${encodeURIComponent(name)}`);
+            const res = await fetch(`/api/tracks/search?query=${encodeURIComponent(name)}`);
             if (!res.ok) return [];
             return await res.json();
         }, 'E2E Base Track');
@@ -120,7 +120,7 @@ test('upload form shows duplicate and navigates to existing track', async ({ pag
 
     // Fallback: search backend and navigate to first matching track
     const results = await page.evaluate(async (name) => {
-        const res = await fetch(`/tracks/search?query=${encodeURIComponent(name)}`);
+        const res = await fetch(`/api/tracks/search?query=${encodeURIComponent(name)}`);
         if (!res.ok) return [];
         return await res.json();
     }, 'E2E Base Track');

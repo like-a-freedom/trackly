@@ -8,7 +8,7 @@ let createdId: string | null = null;
 
 test.afterEach(async ({ request }) => {
     if (createdId) {
-        await request.delete(`${BACKEND}/tracks/${createdId}`, { data: { name: 'delete', session_id: OWNER_SESSION }, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
+        await request.delete(`${BACKEND}/api/tracks/${createdId}`, { data: { name: 'delete', session_id: OWNER_SESSION }, headers: { 'Content-Type': 'application/json' } }).catch(() => { });
         createdId = null;
     }
 });
@@ -16,13 +16,14 @@ test.afterEach(async ({ request }) => {
 test('public track can be viewed via shareable link without session', async ({ page }) => {
     test.setTimeout(60_000);
 
-    const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trackly E2E">\n  <trk>\n    <name>Owner Share Test</name>\n    <trkseg>\n      <trkpt lat="37.7810" lon="-122.4200"><ele>10</ele></trkpt>\n      <trkpt lat="37.7820" lon="-122.4210"><ele>12</ele></trkpt>\n    </trkseg>\n  </trk>\n</gpx>`;
+    const uniqueName = `Owner Share Test ${Date.now()}`;
+    const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trackly E2E">\n  <trk>\n    <name>${uniqueName}</name>\n    <trkseg>\n      <trkpt lat="37.7810" lon="-122.4200"><ele>10</ele></trkpt>\n      <trkpt lat="37.7820" lon="-122.4210"><ele>12</ele></trkpt>\n    </trkseg>\n  </trk>\n</gpx>`;
 
     await page.goto(FRONTEND);
     await page.waitForLoadState('networkidle');
 
     const { uploadTrack } = await import('./helpers/uploadWithRetries');
-    const resp = await uploadTrack({ page, gpx, name: 'Owner Share Test', session: OWNER_SESSION, categories: 'share' });
+    const resp = await uploadTrack({ page, gpx, name: uniqueName, session: OWNER_SESSION, categories: 'share' });
 
     if (!resp.ok || !resp.body || !resp.body.id) throw new Error('Failed to create track for share test: ' + JSON.stringify(resp));
     createdId = resp.body.id;
@@ -35,7 +36,7 @@ test('public track can be viewed via shareable link without session', async ({ p
 
     // Track name should be visible
     await viewer.waitForSelector('.track-name-block h2', { timeout: 10000 });
-    await expect(viewer.locator('.track-name-block h2')).toContainText('Owner Share Test');
+    await expect(viewer.locator('.track-name-block h2')).toContainText(uniqueName);
 
     // Edit and delete should not be visible for non-owner
     await expect(viewer.locator('.edit-description-btn')).toHaveCount(0);
