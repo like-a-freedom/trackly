@@ -32,7 +32,7 @@ sqlx = { version = "0.8.6", features = [
     "macros",
     "migrate",
 ] }
-uuid = { version = "1.19.0", features = ["v4", "serde"] }
+uuid = { version = "1.20.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.43", features = ["serde"] }
 # HTTP client
 reqwest = { version = "0.12.28", default-features = false, features = [
@@ -66,7 +66,7 @@ cookie = { version = "0.18.1", features = ["secure"] }
 # For tests
 [dev-dependencies]
 assert_approx_eq = "1.1.0"
-mockito = "1.7.1"
+mockito = "1.7.2"
 # For safe temporary environment variables in tests
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 
