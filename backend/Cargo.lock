@@ -231,6 +231,7 @@ dependencies = [
  "bytes",
  "chrono",
  "cookie",
+ "dotenvy",
  "geo",
  "geo-types",
  "hex",

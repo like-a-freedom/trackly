@@ -1,6 +1,6 @@
 <template>
   <div class="account-page">
-    <!-- Header with back button -->
+    <!-- Header with profile and settings -->
     <header class="account-header">
       <button class="back-btn" @click="goBack" title="Back to map">
         <svg
@@ -16,9 +16,173 @@
         </svg>
         <span>Back</span>
       </button>
-      <h1>My Account</h1>
-      <div class="header-spacer"></div>
+
+      <div class="header-profile">
+        <div class="header-avatar">
+          <img
+            v-if="user?.avatar_url"
+            :src="user.avatar_url"
+            :alt="user.name || 'User avatar'"
+            referrerpolicy="no-referrer"
+          />
+          <svg
+            v-else
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path
+              d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+            />
+          </svg>
+        </div>
+        <span class="header-user-name">{{ user?.name || "User" }}</span>
+      </div>
+
+      <div class="header-actions">
+        <button
+          class="settings-btn"
+          @click="toggleSettingsMenu"
+          title="Settings"
+          ref="settingsButton"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M12 1v6m0 6v6m10-7h-6M8 12H2m16.65-6.65l-4.24 4.24m-4.82 4.82L4.35 19.07M19.07 19.07l-4.24-4.24m-4.82-4.82L4.77 4.77"
+            ></path>
+          </svg>
+        </button>
+
+        <!-- Settings dropdown menu -->
+        <div v-if="showSettingsMenu" class="settings-menu" ref="settingsMenu">
+          <button class="menu-item" @click="openNicknameModal">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+              ></path>
+              <path
+                d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+              ></path>
+            </svg>
+            Edit Nickname
+          </button>
+          <button
+            class="menu-item menu-item-danger"
+            @click="confirmDeleteAccount"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="3,6 5,6 21,6"></polyline>
+              <path
+                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+              ></path>
+            </svg>
+            Delete Account
+          </button>
+          <div class="menu-separator"></div>
+          <button class="menu-item" @click="handleLogout">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16,17 21,12 16,7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Sign Out
+          </button>
+        </div>
+      </div>
     </header>
+
+    <!-- Nickname Edit Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showNicknameModal"
+        class="modal-overlay"
+        @click="closeNicknameModal"
+      >
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>Edit Nickname</h3>
+            <button class="modal-close" @click="closeNicknameModal">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="nickname-input" class="form-label">Nickname</label>
+              <input
+                id="nickname-input"
+                v-model="editNickname"
+                type="text"
+                class="form-input"
+                placeholder="Enter a nickname..."
+                maxlength="50"
+                :disabled="savingNickname"
+                @keyup.enter="saveNickname"
+              />
+              <p v-if="nicknameError" class="form-error">{{ nicknameError }}</p>
+              <p class="form-hint">
+                1-50 characters, alphanumeric with underscores and hyphens
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              class="btn-cancel"
+              @click="closeNicknameModal"
+              :disabled="savingNickname"
+            >
+              Cancel
+            </button>
+            <button
+              class="btn-primary"
+              @click="saveNickname"
+              :disabled="!nicknameChanged || savingNickname"
+            >
+              {{ savingNickname ? "Saving..." : "Save" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Loading state -->
     <div v-if="isLoading" class="loading-container">
@@ -28,70 +192,6 @@
 
     <!-- Account content -->
     <div v-else class="account-content">
-      <!-- Profile Section -->
-      <section class="account-section profile-section">
-        <div class="section-header">
-          <h2>Profile</h2>
-        </div>
-        <div class="profile-card">
-          <div class="avatar-wrapper">
-            <img
-              v-if="user?.avatar_url"
-              :src="user.avatar_url"
-              :alt="user.name || 'User avatar'"
-              class="avatar"
-              referrerpolicy="no-referrer"
-            />
-            <div v-else class="avatar-placeholder">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                />
-              </svg>
-            </div>
-          </div>
-          <div class="profile-info">
-            <h3 class="user-name">{{ user?.name || "User" }}</h3>
-            <p class="user-email">{{ user?.email }}</p>
-            <p v-if="user?.nickname" class="user-nickname">
-              @{{ user.nickname }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Nickname editing -->
-        <div class="nickname-section">
-          <label for="nickname" class="input-label">Nickname</label>
-          <div class="nickname-edit">
-            <input
-              id="nickname"
-              v-model="editNickname"
-              type="text"
-              class="input-field"
-              placeholder="Enter a nickname..."
-              maxlength="50"
-              :disabled="savingNickname"
-            />
-            <button
-              class="btn-save"
-              @click="saveNickname"
-              :disabled="!nicknameChanged || savingNickname"
-            >
-              {{ savingNickname ? "Saving..." : "Save" }}
-            </button>
-          </div>
-          <p v-if="nicknameError" class="field-error">{{ nicknameError }}</p>
-          <p class="field-hint">
-            1-50 characters, alphanumeric with underscores and hyphens
-          </p>
-        </div>
-      </section>
-
       <!-- My Tracks Section -->
       <section class="account-section tracks-section">
         <div class="section-header">
@@ -331,50 +431,12 @@
           {{ loadingTracks ? "Loading..." : "Load more" }}
         </button>
       </section>
-
-      <!-- Danger Zone -->
-      <section class="account-section danger-section">
-        <div class="section-header">
-          <h2>Danger Zone</h2>
-        </div>
-        <div class="danger-card">
-          <div class="danger-info">
-            <h4>Delete Account</h4>
-            <p>
-              Permanently delete your account and all associated data. This
-              action cannot be undone.
-            </p>
-          </div>
-          <button class="btn-danger" @click="confirmDeleteAccount">
-            Delete Account
-          </button>
-        </div>
-      </section>
-
-      <!-- Logout Button -->
-      <div class="logout-section">
-        <button class="btn-logout" @click="handleLogout">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16,17 21,12 16,7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-          Sign Out
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useConfirm } from "../composables/useConfirm";
@@ -388,7 +450,13 @@ const { user, isLoading, logout, updateProfile, deleteAccount, authFetch } =
   useAuth();
 const { confirm } = useConfirm();
 
-// Profile editing
+// Settings dropdown
+const showSettingsMenu = ref(false);
+const settingsButton = ref(null);
+const settingsMenu = ref(null);
+
+// Profile editing (in modal)
+const showNicknameModal = ref(false);
 const editNickname = ref("");
 const savingNickname = ref(false);
 const nicknameError = ref(null);
@@ -436,6 +504,41 @@ const someSelected = computed(() => {
     )
   );
 });
+
+// Settings menu functions
+function toggleSettingsMenu() {
+  showSettingsMenu.value = !showSettingsMenu.value;
+}
+
+function closeSettingsMenu() {
+  showSettingsMenu.value = false;
+}
+
+function handleClickOutside(event) {
+  if (
+    showSettingsMenu.value &&
+    settingsButton.value &&
+    settingsMenu.value &&
+    !settingsButton.value.contains(event.target) &&
+    !settingsMenu.value.contains(event.target)
+  ) {
+    closeSettingsMenu();
+  }
+}
+
+// Nickname modal functions
+function openNicknameModal() {
+  editNickname.value = user.value?.nickname || "";
+  nicknameError.value = null;
+  showNicknameModal.value = true;
+  closeSettingsMenu();
+}
+
+function closeNicknameModal() {
+  showNicknameModal.value = false;
+  editNickname.value = user.value?.nickname || "";
+  nicknameError.value = null;
+}
 
 function formatDistance(km) {
   if (!km || isNaN(km)) return "N/A";
@@ -599,7 +702,7 @@ async function saveNickname() {
 
   try {
     await updateProfile({ nickname: nickname || null });
-    editNickname.value = user.value?.nickname || "";
+    closeNicknameModal();
   } catch (e) {
     nicknameError.value = e.message || "Failed to update nickname";
   } finally {
@@ -608,11 +711,14 @@ async function saveNickname() {
 }
 
 async function handleLogout() {
+  closeSettingsMenu();
   await logout();
   router.replace("/");
 }
 
 async function confirmDeleteAccount() {
+  closeSettingsMenu();
+
   const confirmed = await confirm({
     title: "Delete Account?",
     message:
@@ -648,6 +754,11 @@ onMounted(() => {
     editNickname.value = user.value.nickname || "";
   }
   loadTracks();
+  document.addEventListener("click", handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("click", handleClickOutside);
 });
 </script>
 
@@ -661,6 +772,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 16px 24px;
   background: #fff;
   border-bottom: 1px solid #e5e7eb;
@@ -682,6 +794,7 @@ onMounted(() => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .back-btn:hover {
@@ -689,15 +802,269 @@ onMounted(() => {
   border-color: #d1d5db;
 }
 
-.account-header h1 {
+.header-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.header-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.header-user-name {
+  font-size: 1em;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-actions {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.settings-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  z-index: 1000;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #374151;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.menu-item:hover {
+  background: #f3f4f6;
+}
+
+.menu-item-danger {
+  color: #dc2626;
+}
+
+.menu-item-danger:hover {
+  background: #fef2f2;
+}
+
+.menu-separator {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 6px 0;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
   margin: 0;
-  font-size: 1.25em;
+  font-size: 1.1em;
   font-weight: 600;
   color: #1a1a1a;
 }
 
-.header-spacer {
-  width: 80px;
+.modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95em;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-input:disabled {
+  background: #f9fafb;
+  cursor: not-allowed;
+}
+
+.form-error {
+  margin: 8px 0 0 0;
+  font-size: 0.85em;
+  color: #dc2626;
+}
+
+.form-hint {
+  margin: 8px 0 0 0;
+  font-size: 0.8em;
+  color: #9ca3af;
+}
+
+.btn-cancel {
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  background: #3498db;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.btn-primary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
 }
 
 .loading-container {
@@ -738,7 +1105,7 @@ onMounted(() => {
 }
 
 .account-content {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -747,7 +1114,6 @@ onMounted(() => {
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  margin-bottom: 24px;
   overflow: hidden;
 }
 
@@ -772,131 +1138,6 @@ onMounted(() => {
   background: #f3f4f6;
   padding: 4px 10px;
   border-radius: 12px;
-}
-
-/* Profile Section */
-.profile-card {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 24px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.avatar-wrapper {
-  flex-shrink: 0;
-}
-
-.avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid #e5e7eb;
-}
-
-.avatar-placeholder {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #9ca3af;
-}
-
-.profile-info {
-  flex: 1;
-}
-
-.user-name {
-  margin: 0 0 4px 0;
-  font-size: 1.2em;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.user-email {
-  margin: 0;
-  font-size: 0.9em;
-  color: #6b7280;
-}
-
-.user-nickname {
-  margin: 4px 0 0 0;
-  font-size: 0.85em;
-  color: #3498db;
-}
-
-.nickname-section {
-  padding: 20px 24px;
-}
-
-.input-label {
-  display: block;
-  font-size: 0.9em;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 8px;
-}
-
-.nickname-edit {
-  display: flex;
-  gap: 12px;
-}
-
-.input-field {
-  flex: 1;
-  padding: 10px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95em;
-  transition: all 0.2s ease;
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-}
-
-.input-field:disabled {
-  background: #f9fafb;
-  cursor: not-allowed;
-}
-
-.btn-save {
-  padding: 10px 20px;
-  background: #3498db;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-save:hover:not(:disabled) {
-  background: #2980b9;
-}
-
-.btn-save:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-}
-
-.field-error {
-  margin: 8px 0 0 0;
-  font-size: 0.85em;
-  color: #dc2626;
-}
-
-.field-hint {
-  margin: 8px 0 0 0;
-  font-size: 0.8em;
-  color: #9ca3af;
 }
 
 /* Tracks Section */
@@ -1044,7 +1285,7 @@ onMounted(() => {
 }
 
 .tracks-list-container {
-  max-height: 500px;
+  max-height: calc(100vh - 280px);
   overflow-y: auto;
 }
 
@@ -1190,97 +1431,41 @@ onMounted(() => {
   opacity: 0.6;
 }
 
-/* Danger Section */
-.danger-section {
-  border: 1px solid #fecaca;
-}
-
-.danger-section .section-header {
-  background: #fef2f2;
-}
-
-.danger-section h2 {
-  color: #b91c1c;
-}
-
-.danger-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  gap: 24px;
-}
-
-.danger-info h4 {
-  margin: 0 0 4px 0;
-  font-size: 0.95em;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.danger-info p {
-  margin: 0;
-  font-size: 0.85em;
-  color: #6b7280;
-}
-
-.btn-danger {
-  flex-shrink: 0;
-  padding: 10px 20px;
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-danger:hover {
-  background: #b91c1c;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
-}
-
-/* Logout Section */
-.logout-section {
-  text-align: center;
-  padding: 24px;
-}
-
-.btn-logout {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: transparent;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95em;
-  font-weight: 500;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-logout:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
 /* Mobile responsiveness */
 @media (max-width: 640px) {
   .account-header {
     padding: 12px 16px;
   }
 
-  .account-header h1 {
-    font-size: 1.1em;
+  .back-btn span {
+    display: none;
   }
 
-  .header-spacer {
-    width: 40px;
+  .back-btn {
+    padding: 8px;
+  }
+
+  .header-user-name {
+    font-size: 0.9em;
+  }
+
+  .header-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .settings-menu {
+    right: -8px;
+  }
+
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    border-radius: 12px 12px 0 0;
+    max-width: none;
   }
 
   .account-content {
@@ -1289,24 +1474,6 @@ onMounted(() => {
 
   .section-header {
     padding: 16px 20px;
-  }
-
-  .profile-card {
-    flex-direction: column;
-    text-align: center;
-    padding: 24px 20px;
-  }
-
-  .nickname-section {
-    padding: 16px 20px;
-  }
-
-  .nickname-edit {
-    flex-direction: column;
-  }
-
-  .btn-save {
-    width: 100%;
   }
 
   .tracks-toolbar {
@@ -1325,7 +1492,7 @@ onMounted(() => {
   }
 
   .tracks-list-container {
-    max-height: 400px;
+    max-height: calc(100vh - 240px);
   }
 
   .track-card {
@@ -1343,18 +1510,6 @@ onMounted(() => {
   .visibility-toggle {
     padding: 8px;
     border-radius: 50%;
-  }
-
-  .danger-card {
-    flex-direction: column;
-    align-items: flex-start;
-    text-align: left;
-    gap: 16px;
-    padding: 20px;
-  }
-
-  .btn-danger {
-    width: 100%;
   }
 
   .btn-load-more {

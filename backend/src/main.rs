@@ -33,7 +33,14 @@ async fn main() {
         }
     }
 
+    // Load environment variables from `.env` during local development
+    // dotenvy will silently ignore if no .env file exists.
+    dotenvy::dotenv().ok();
+
     logging::init();
+
+    // Log whether authentication is configured (helpful in local dev)
+    info!(auth_configured = %backend::auth::is_auth_configured(), "auth configuration status");
 
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
