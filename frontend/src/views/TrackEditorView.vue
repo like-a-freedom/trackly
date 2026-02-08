@@ -113,7 +113,7 @@ function handleAddWaypoint(lat, lng) {
     onRoutingNotAvailable: (msg) => showToast(msg, "warning", 5000),
   });
   if (!added && editor.totalPoints.value >= 100_000) {
-    showToast("Достигнут лимит точек (100 000)", "error");
+    showToast("Point limit reached (100,000)", "error");
   }
 }
 
@@ -123,7 +123,7 @@ function handleMoveWaypoint(segIndex, pointIndex, lat, lng) {
   });
   if (!ok) {
     showToast(
-      "Маршрут не найден. Добавьте промежуточные точки.",
+      "Route not found. Add intermediate points.",
       "warning",
       5000
     );
@@ -135,7 +135,7 @@ function handleDeleteWaypoint(segIndex, pointIndex) {
     onRoutingNotAvailable: (msg) => showToast(msg, "warning", 5000),
   });
   if (!ok) {
-    showToast("Невозможно удалить точку в этом сегменте.", "warning", 4000);
+    showToast("Unable to delete this point in the segment.", "warning", 4000);
   }
 }
 
@@ -145,7 +145,7 @@ function handleInsertWaypoint(segIndex, afterIndex, lat, lng) {
   });
   if (!ok) {
     showToast(
-      "Маршрут не найден. Добавьте промежуточные точки.",
+      "Route not found. Add intermediate points.",
       "warning",
       5000
     );
@@ -155,7 +155,7 @@ function handleInsertWaypoint(segIndex, afterIndex, lat, lng) {
 async function handleSave() {
   const id = await editor.saveTrack();
   if (id) {
-    showToast("Трек сохранён", "success");
+    showToast("Track saved", "success");
     router.push({ name: "Track", params: { id } });
   } else if (editor.error.value) {
     showToast(editor.error.value, "error", 5000);
@@ -166,23 +166,23 @@ function handleRestoreDraft() {
   const ok = editor.restoreDraft();
   if (ok) {
     showDraftBanner.value = false;
-    showToast("Черновик восстановлен", "success");
+    showToast("Draft restored", "success");
   } else {
-    showToast("Не удалось восстановить черновик", "error");
+    showToast("Failed to restore draft", "error");
   }
 }
 
 function handleDeleteDraft() {
   editor.deleteDraft();
   showDraftBanner.value = false;
-  showToast("Черновик удалён", "info");
+  showToast("Draft deleted", "info");
 }
 
 async function handleAddPoi(lat, lng) {
-  const name = window.prompt("Название POI (необязательно):");
+  const name = window.prompt("POI name (optional):");
   const result = await editor.addPoi(lat, lng, name || "");
   if (!result?.ok) return;
-  showToast("POI добавлен", "success");
+  showToast("POI added", "success");
   if (result.warning) {
     showToast(result.warning, "warning", 5000);
   }
@@ -192,21 +192,21 @@ function handleJoinSegments() {
   const idx = editor.activeSegmentIndex.value;
   const segCount = editor.segments.value.length;
   if (segCount < 2) {
-    showToast("Нужно минимум 2 сегмента для объединения", "warning");
+    showToast("You need at least 2 segments to merge", "warning");
     return;
   }
   // Join active segment with next, or last two if active is the last
   const a = idx < segCount - 1 ? idx : idx - 1;
   editor.joinSegments(a, a + 1);
-  showToast("Сегменты объединены", "success");
+  showToast("Segments merged", "success");
 }
 
 async function handleExport(format) {
   try {
     await editor.exportTrack(format);
-    showToast(`Экспорт ${format.toUpperCase()} запущен`, "success");
+    showToast(`Export ${format.toUpperCase()} started`, "success");
   } catch {
-    showToast("Ошибка экспорта", "error");
+    showToast("Export error", "error");
   }
 }
 
@@ -257,7 +257,7 @@ function onKeyDown(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === "s" && !e.shiftKey) {
     e.preventDefault();
     editor.addSegment();
-    showToast("Новый сегмент создан", "info");
+    showToast("New segment created", "info");
   }
 
   // Delete last point
@@ -282,7 +282,7 @@ function onKeyDown(e) {
   if (e.key === "Escape") {
     if (poiMode.value) {
       poiMode.value = false;
-      showToast("Режим POI отключён", "info");
+      showToast("POI mode disabled", "info");
     }
   }
 

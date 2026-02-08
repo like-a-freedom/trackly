@@ -487,7 +487,7 @@ const allCategories = computed(() => {
 
 // Use stable default range with reasonable bounds that don't change with viewport
 // This prevents the filter slider from jumping when user scrolls to different areas
-// min/max длины только по видимым трекам (props.polylines)
+// min/max lengths only for visible tracks (props.polylines)
 const minTrackLength = computed(() => {
   const polylines = props.polylines || [];
   const lengths = polylines
@@ -780,7 +780,7 @@ function geoJsonFilter(feature, layer) {
       // Debug logging for slope filtering
       if (
         feature.properties?.name &&
-        feature.properties.name.includes("алма")
+        feature.properties.name.toLowerCase().includes("alma")
       ) {
         console.log(
           `Track "${feature.properties.name}": slope[${slopeMin}, ${slopeMax}], filter[${slopeFilterMin}, ${slopeFilterMax}], match: ${slopeMatch}`

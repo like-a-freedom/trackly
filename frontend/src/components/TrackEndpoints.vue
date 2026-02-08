@@ -114,9 +114,9 @@ const iconAnchor = computed(() => {
   return [size, size];
 });
 
-// SVG Icons as data URLs - минималистичный дизайн
+// SVG icons as data URLs - minimalist design
 const startIconUrl = computed(() => {
-  // Зелёный круг с треугольником "play"
+  // Green circle with a play triangle
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
     <circle cx="16" cy="16" r="13" fill="#10B981" stroke="#fff" stroke-width="2"/>
     <polygon points="13,10 13,22 23,16" fill="#fff"/>
@@ -125,7 +125,7 @@ const startIconUrl = computed(() => {
 });
 
 const finishIconUrl = computed(() => {
-  // Красный круг с квадратом "stop"
+  // Red circle with a stop square
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
     <circle cx="16" cy="16" r="13" fill="#EF4444" stroke="#fff" stroke-width="2"/>
     <rect x="10" y="10" width="12" height="12" rx="2" fill="#fff"/>
@@ -134,7 +134,7 @@ const finishIconUrl = computed(() => {
 });
 
 const loopIconUrl = computed(() => {
-  // Бирюзовый круг с символом loop (стрелка по кругу)
+  // Teal circle with loop symbol (circular arrow)
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
     <circle cx="16" cy="16" r="13" fill="#14B8A6" stroke="#fff" stroke-width="2"/>
     <path d="M16 8 A8 8 0 1 1 8 16" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/>

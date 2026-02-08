@@ -13,7 +13,7 @@
     @selectstart.stop
     @dragstart.prevent
   >
-    <!-- Panel Controls "Tab" - только когда свернута -->
+    <!-- Panel Controls "Tab" - only when collapsed -->
     <div class="panel-controls-tab" v-show="isCollapsed">
       <button
         class="collapse-toggle-btn"

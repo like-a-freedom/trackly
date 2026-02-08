@@ -377,7 +377,7 @@ export function useTrackEditor({ trackId = null } = {}) {
                 };
             } catch (e) {
                 if (e.name !== 'AbortError') {
-                    elevationError.value = 'Не удалось получить профиль высот';
+                    elevationError.value = 'Unable to fetch elevation profile';
                 }
             } finally {
                 elevationLoading.value = false;
@@ -865,7 +865,7 @@ export function useTrackEditor({ trackId = null } = {}) {
         const coords = seg.points.map(([lat, lng]) => [lng, lat]);
         return {
             geometry: { type: 'MultiLineString', coordinates: [coords] },
-            name: `${trackName.value} — сегмент ${segIndex + 1}`,
+            name: `${trackName.value} — segment ${segIndex + 1}`,
         };
     }
 
@@ -980,7 +980,7 @@ export function useTrackEditor({ trackId = null } = {}) {
         return {
             ok: true,
             warning: poi.isFarFromTrack
-                ? 'POI находится более чем в 1 км от трека'
+                ? 'POI is more than 1 km from the track'
                 : null,
             poi,
         };
@@ -1036,7 +1036,7 @@ export function useTrackEditor({ trackId = null } = {}) {
     async function exportTrack(format = 'gpx') {
         const id = savedTrackId.value;
         if (!id) {
-            error.value = 'Сохраните трек перед экспортом';
+            error.value = 'Save the track before exporting';
             return false;
         }
 
@@ -1071,7 +1071,7 @@ export function useTrackEditor({ trackId = null } = {}) {
 
             return true;
         } catch (e) {
-            error.value = `Ошибка экспорта: ${e.message}`;
+            error.value = `Export error: ${e.message}`;
             return false;
         }
     }
@@ -1144,7 +1144,7 @@ export function useTrackEditor({ trackId = null } = {}) {
             await loadTrackPois(id);
             scheduleGeometryUpdates();
         } catch (e) {
-            error.value = `Ошибка загрузки трека: ${e.message}`;
+            error.value = `Failed to load track: ${e.message}`;
         } finally {
             loading.value = false;
         }
@@ -1159,7 +1159,7 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         const geojson = toGeoJSON();
         if (!geojson) {
-            error.value = 'Трек должен содержать минимум 2 точки';
+            error.value = 'Track must contain at least 2 points';
             saving.value = false;
             return null;
         }
@@ -1246,7 +1246,7 @@ export function useTrackEditor({ trackId = null } = {}) {
                 return result.id;
             }
         } catch (e) {
-            error.value = `Ошибка сохранения: ${e.message}`;
+            error.value = `Save error: ${e.message}`;
             saving.value = false;
             // Save as draft on failure
             autosave();

@@ -85,7 +85,7 @@ describe('useRouting', () => {
 
             expect(result).toBeNull();
             expect(callback).toHaveBeenCalledOnce();
-            expect(callback.mock.calls[0][0]).toContain('Автопрокладка');
+            expect(callback.mock.calls[0][0]).toContain('Auto-routing');
         });
 
         it('returns null without callback when onNotAvailable not provided', () => {

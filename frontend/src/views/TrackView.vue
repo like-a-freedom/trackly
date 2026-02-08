@@ -246,7 +246,7 @@ const headConfig = computed(() => {
   if (!track.value) {
     return {
       title: "Track — Trackly",
-      meta: [{ name: "description", content: "Просмотр трека на Trackly" }],
+      meta: [{ name: "description", content: "View a track on Trackly" }],
     };
   }
 
@@ -279,17 +279,17 @@ const headConfig = computed(() => {
         name: "description",
         content:
           track.value.description ||
-          "Просмотрите трек и его параметры на Trackly.",
+          "View a track and its details on Trackly.",
       },
       {
         property: "og:title",
-        content: track.value.name || "Trackly — треки и маршруты",
+        content: track.value.name || "Trackly — tracks and routes",
       },
       {
         property: "og:description",
         content:
           track.value.description ||
-          "Просмотрите трек и его параметры на Trackly.",
+          "View a track and its details on Trackly.",
       },
       { property: "og:type", content: "article" },
       { property: "og:url", content: trackUrl },

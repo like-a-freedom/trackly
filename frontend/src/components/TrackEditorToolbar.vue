@@ -24,7 +24,7 @@
       <button
         class="toolbar-btn"
         :disabled="!canUndo"
-        title="Отменить (Ctrl+Z)"
+        title="Undo (Ctrl+Z)"
         data-testid="undo-btn"
         @click="$emit('undo')"
       >
@@ -33,7 +33,7 @@
       <button
         class="toolbar-btn"
         :disabled="!canRedo"
-        title="Повторить (Ctrl+Y)"
+        title="Redo (Ctrl+Y)"
         data-testid="redo-btn"
         @click="$emit('redo')"
       >
@@ -45,18 +45,18 @@
 
     <!-- Routing toggle -->
     <div class="toolbar-group">
-      <label class="toolbar-toggle" title="Автопрокладка маршрута">
+      <label class="toolbar-toggle" title="Auto-routing">
         <input
           type="checkbox"
           :checked="routingMode === 'auto'"
           data-testid="routing-toggle"
           @change="$emit('toggleRouting')"
         />
-        <span class="toggle-label">Авто</span>
+        <span class="toggle-label">Auto</span>
       </label>
-      <span v-if="graphLoading" class="toolbar-status">Загрузка графа...</span>
+      <span v-if="graphLoading" class="toolbar-status">Loading graph...</span>
       <span v-else-if="graphError" class="toolbar-status error"
-        >Маршрут недоступен</span
+        >Route unavailable</span
       >
     </div>
 
@@ -67,7 +67,7 @@
       <button
         class="toolbar-btn"
         :class="{ active: poiMode }"
-        title="Режим добавления POI"
+        title="POI add mode"
         data-testid="poi-mode-btn"
         @click="$emit('togglePoiMode')"
       >
@@ -81,13 +81,13 @@
 
     <!-- Stats -->
     <div class="toolbar-stats" data-testid="toolbar-stats">
-      <span class="stat-item" title="Дистанция">
+      <span class="stat-item" title="Distance">
         📏 {{ distanceDisplay }}
       </span>
-      <span class="stat-item" title="Ориентировочное время">
+      <span class="stat-item" title="Estimated time">
         ⏱ {{ timeDisplay }}
       </span>
-      <span class="stat-item" title="Точки"> 📍 {{ totalPoints }} </span>
+      <span class="stat-item" title="Points"> 📍 {{ totalPoints }} </span>
     </div>
 
     <!-- Export dropdown -->
@@ -95,12 +95,12 @@
       <button
         class="toolbar-btn"
         :disabled="!savedTrackId"
-        title="Экспорт трека (Ctrl+E)"
+        title="Export track (Ctrl+E)"
         data-testid="export-btn"
         @click="showExportMenu = !showExportMenu"
       >
         <span class="toolbar-btn-icon">📥</span>
-        <span class="toolbar-btn-label">Экспорт</span>
+        <span class="toolbar-btn-label">Export</span>
       </button>
       <div
         v-if="showExportMenu"
@@ -120,11 +120,11 @@
       <button
         class="toolbar-btn save-btn"
         :disabled="!canSave || saving"
-        title="Сохранить (Ctrl+Shift+S)"
+        title="Save (Ctrl+Shift+S)"
         data-testid="save-btn"
         @click="$emit('save')"
       >
-        {{ saving ? "Сохранение..." : "Сохранить" }}
+        {{ saving ? "Saving..." : "Save" }}
       </button>
     </div>
   </div>
@@ -162,25 +162,25 @@ const emit = defineEmits([
 const showExportMenu = ref(false);
 
 const modes = [
-  { id: "view", label: "Просмотр", key: "F1", icon: "👁" },
-  { id: "edit", label: "Рисование", key: "F2", icon: "✏️" },
-  { id: "fragment", label: "Фрагменты", key: "F3", icon: "✂️" },
-  { id: "routing", label: "Маршрут", key: "F4", icon: "🗺️" },
+  { id: "view", label: "View", key: "F1", icon: "👁" },
+  { id: "edit", label: "Draw", key: "F2", icon: "✏️" },
+  { id: "fragment", label: "Fragments", key: "F3", icon: "✂️" },
+  { id: "routing", label: "Routing", key: "F4", icon: "🗺️" },
 ];
 
 const distanceDisplay = computed(() => {
   const km = props.totalDistanceKm;
-  if (km < 1) return `${Math.round(km * 1000)} м`;
-  return `${km.toFixed(2)} км`;
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(2)} km`;
 });
 
 const timeDisplay = computed(() => {
   const mins = props.estimatedTimeMinutes;
-  if (mins <= 0) return "0 мин";
-  if (mins < 60) return `${Math.round(mins)} мин`;
+  if (mins <= 0) return "0 min";
+  if (mins < 60) return `${Math.round(mins)} min`;
   const h = Math.floor(mins / 60);
   const m = Math.round(mins % 60);
-  return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+  return m > 0 ? `${h} h ${m} min` : `${h} h`;
 });
 
 function handleExport(format) {

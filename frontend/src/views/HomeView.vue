@@ -178,7 +178,7 @@ const markerLatLng = ref(center.value);
 const bounds = ref(null);
 const mapInstance = ref(null); // Store map instance for invalidateSize on activation
 const dragActive = ref(false);
-const uploadFormExpanded = ref(false); // По умолчанию свернута
+const uploadFormExpanded = ref(false); // Collapsed by default
 const {
   polylines,
   fetchTracksInBounds,
@@ -490,7 +490,7 @@ async function handleUpload({ file, name, categories }) {
 
 function handleUploadCompleted() {
   refreshTracks();
-  // Не сворачиваем автоматически - пользователь сам решает
+  // Do not collapse automatically - user decides
 }
 
 function toggleUploadForm() {
@@ -500,7 +500,7 @@ function toggleUploadForm() {
 function handleDragOver(event) {
   event.preventDefault();
   dragActive.value = true;
-  // Форма уже развернута по умолчанию
+  // The form is already expanded by default
 }
 
 function handleDragLeave(event) {
@@ -511,7 +511,7 @@ function handleDragLeave(event) {
 function handleDrop(event) {
   event.preventDefault();
   dragActive.value = false;
-  // Форма уже развернута по умолчанию
+  // The form is already expanded by default
   // Forward the drop event to the UploadForm component if expanded
   // The UploadForm will handle the file processing
 }
@@ -843,7 +843,7 @@ body,
 }
 
 .collapsible-upload.expanded {
-  /* Стили фона и теней теперь применяются к .upload-form-expanded */
+  /* Background and shadow styles are applied to .upload-form-expanded */
   border-radius: 8px;
 }
 

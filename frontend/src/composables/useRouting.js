@@ -119,7 +119,7 @@ async function loadGraphData(mode) {
     ]);
 
     if (!graphResp.ok || !nodesResp.ok) {
-        throw new Error('Не удалось загрузить данные графа маршрутизации');
+        throw new Error('Failed to load routing graph data');
     }
 
     const graphBytes = await graphResp.arrayBuffer();
@@ -198,7 +198,7 @@ export function useRouting({ autoLoad = true } = {}) {
         try {
             const wasm = await loadWasmModule();
             if (!wasm?.FastPathsRouter) {
-                throw new Error('WASM модуль маршрутизации недоступен');
+                throw new Error('Routing WASM module is unavailable');
             }
 
             const { graphBytes, nodeBytes, nodesFormat } = await loadGraphData(profile.value);
@@ -215,7 +215,7 @@ export function useRouting({ autoLoad = true } = {}) {
             graphReady.value = true;
         } catch (e) {
             graphReady.value = false;
-            graphError.value = e?.message || 'Ошибка загрузки графа маршрутизации';
+            graphError.value = e?.message || 'Failed to load routing graph';
         } finally {
             graphLoading.value = false;
         }
@@ -275,7 +275,7 @@ export function useRouting({ autoLoad = true } = {}) {
             if (typeof onNotAvailable === 'function') {
                 onNotAvailable(
                     graphError.value ||
-                        'Автопрокладка недоступна. Загрузите дорожный граф или переключитесь в ручной режим.'
+                        'Auto-routing is unavailable. Load the road graph or switch to manual mode.'
                 );
             }
             return null;
@@ -287,7 +287,7 @@ export function useRouting({ autoLoad = true } = {}) {
         if (!snappedFrom || !snappedTo) {
             if (typeof onNotAvailable === 'function') {
                 onNotAvailable(
-                    'Точки слишком далеко от дорожной сети. Добавьте промежуточные точки или переключитесь в ручной режим.'
+                    'Points are too far from the road network. Add intermediate points or switch to manual mode.'
                 );
             }
             return null;
@@ -297,7 +297,7 @@ export function useRouting({ autoLoad = true } = {}) {
         if (!nodeIds || nodeIds.length === 0) {
             if (typeof onNotAvailable === 'function') {
                 onNotAvailable(
-                    'Маршрут не найден между выбранными точками. Добавьте промежуточные точки или переключитесь в ручной режим.'
+                    'No route found between selected points. Add intermediate points or switch to manual mode.'
                 );
             }
             return null;
@@ -313,7 +313,7 @@ export function useRouting({ autoLoad = true } = {}) {
         if (routePoints.length < 2) {
             if (typeof onNotAvailable === 'function') {
                 onNotAvailable(
-                    'Маршрут не найден между выбранными точками. Добавьте промежуточные точки или переключитесь в ручной режим.'
+                    'No route found between selected points. Add intermediate points or switch to manual mode.'
                 );
             }
             return null;

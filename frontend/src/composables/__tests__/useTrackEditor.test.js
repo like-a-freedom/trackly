@@ -723,7 +723,7 @@ describe('useTrackEditor', () => {
             expect(result).not.toBeNull();
             expect(result.geometry.type).toBe('MultiLineString');
             expect(result.geometry.coordinates).toHaveLength(1);
-            expect(result.name).toContain('сегмент 1');
+            expect(result.name).toContain('segment 1');
         });
 
         it('returns null for segment with less than 2 points', () => {
@@ -817,7 +817,7 @@ describe('useTrackEditor', () => {
         it('returns false for unsaved track', async () => {
             const result = await editor.exportTrack('gpx');
             expect(result).toBe(false);
-            expect(editor.error.value).toContain('Сохраните');
+            expect(editor.error.value).toContain('Save the track');
         });
     });
 });

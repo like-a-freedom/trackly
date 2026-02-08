@@ -56,7 +56,7 @@
         :weight="3"
         :pane="'markerPane'"
       >
-        <l-tooltip :permanent="false">Старт</l-tooltip>
+        <l-tooltip :permanent="false">Start</l-tooltip>
       </l-circle-marker>
 
       <!-- End marker (red flag) -->
@@ -70,7 +70,7 @@
         :weight="3"
         :pane="'markerPane'"
       >
-        <l-tooltip :permanent="false">Финиш</l-tooltip>
+        <l-tooltip :permanent="false">Finish</l-tooltip>
       </l-circle-marker>
 
       <!-- POI markers -->
@@ -89,7 +89,7 @@
       >
         <l-tooltip :permanent="false">
           {{ poi.name || `POI ${poiIdx + 1}` }}
-          <span v-if="poi.isFarFromTrack"> · ⚠️ &gt;1 км от трека</span>
+          <span v-if="poi.isFarFromTrack"> · ⚠️ &gt;1 km from track</span>
         </l-tooltip>
       </l-circle-marker>
     </l-map>
@@ -107,7 +107,7 @@
         data-testid="ctx-split"
         @click="handleSplit"
       >
-        ✂️ Разделить сегмент
+        ✂️ Split segment
       </button>
       <button
         v-if="contextMenu.canDelete"
@@ -115,7 +115,7 @@
         data-testid="ctx-delete"
         @click="handleDeletePoint"
       >
-        🗑️ Удалить точку
+        🗑️ Delete point
       </button>
       <button
         v-if="contextMenu.canPromote"
@@ -123,7 +123,7 @@
         data-testid="ctx-promote"
         @click="handlePromote"
       >
-        📌 В контрольную точку
+        📌 Promote to waypoint
       </button>
       <button
         v-if="contextMenu.canDeletePoi"
@@ -131,10 +131,10 @@
         data-testid="ctx-delete-poi"
         @click="handleDeletePoi"
       >
-        🗑️ Удалить POI
+        🗑️ Delete POI
       </button>
       <button class="context-menu-item" @click="closeContextMenu">
-        ✕ Закрыть
+        ✕ Close
       </button>
     </div>
   </div>

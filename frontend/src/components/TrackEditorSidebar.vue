@@ -2,13 +2,13 @@
   <div class="track-editor-sidebar">
     <!-- Draft recovery banner -->
     <div v-if="showDraftBanner" class="draft-banner" data-testid="draft-banner">
-      <p>Обнаружен несохранённый черновик. Восстановить?</p>
+      <p>An unsaved draft was found. Restore it?</p>
       <div class="draft-actions">
         <button class="btn-primary btn-sm" @click="$emit('restoreDraft')">
-          Восстановить
+          Restore
         </button>
         <button class="btn-secondary btn-sm" @click="$emit('deleteDraft')">
-          Удалить
+          Delete
         </button>
       </div>
     </div>
@@ -20,10 +20,10 @@
 
     <!-- Metadata form -->
     <section class="sidebar-section">
-      <h3 class="section-title">Метаданные трека</h3>
+      <h3 class="section-title">Track metadata</h3>
       <div class="form-group">
         <label for="track-name" class="form-label">
-          Название <span class="required">*</span>
+          Name <span class="required">*</span>
         </label>
         <input
           id="track-name"
@@ -31,7 +31,7 @@
           class="form-input"
           :value="trackName"
           maxlength="255"
-          placeholder="Введите название трека"
+          placeholder="Enter track name"
           data-testid="track-name-input"
           @input="$emit('update:trackName', $event.target.value)"
         />
@@ -39,14 +39,14 @@
       </div>
 
       <div class="form-group">
-        <label for="track-desc" class="form-label">Описание</label>
+        <label for="track-desc" class="form-label">Description</label>
         <textarea
           id="track-desc"
           class="form-input form-textarea"
           :value="trackDescription"
           maxlength="5000"
           rows="3"
-          placeholder="Описание маршрута (опционально)"
+          placeholder="Route description (optional)"
           data-testid="track-desc-input"
           @input="$emit('update:trackDescription', $event.target.value)"
         />
@@ -54,7 +54,7 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">Категории</label>
+        <label class="form-label">Categories</label>
         <div class="category-chips">
           <label
             v-for="cat in availableCategories"
@@ -77,10 +77,10 @@
     <!-- Segments list -->
     <section class="sidebar-section">
       <div class="section-header">
-        <h3 class="section-title">Сегменты</h3>
+        <h3 class="section-title">Segments</h3>
         <button
           class="btn-icon"
-          title="Новый сегмент (Ctrl+S)"
+          title="New segment (Ctrl+S)"
           data-testid="add-segment-btn"
           @click="$emit('addSegment')"
         >
@@ -98,9 +98,9 @@
         >
           <span class="segment-color" :style="{ background: stat.color }" />
           <span class="segment-info">
-            Сегмент {{ i + 1 }}
+            Segment {{ i + 1 }}
             <small
-              >{{ stat.pointCount }} точек ·
+              >{{ stat.pointCount }} points ·
               {{ formatDistance(stat.distanceKm) }}</small
             >
           </span>
@@ -108,7 +108,7 @@
             <button
               v-if="i < segmentStats.length - 1"
               class="btn-icon-sm"
-              title="Объединить со следующим (Ctrl+J)"
+              title="Merge with next (Ctrl+J)"
               data-testid="join-segment-btn"
               @click.stop="$emit('joinSegments', i, i + 1)"
             >
@@ -116,14 +116,14 @@
             </button>
             <button
               class="btn-icon-sm"
-              title="Развернуть"
+              title="Reverse"
               @click.stop="$emit('reverseSegment', i)"
             >
               ↔
             </button>
             <button
               class="btn-icon-sm danger"
-              title="Удалить сегмент"
+              title="Delete segment"
               @click.stop="$emit('deleteSegment', i)"
             >
               ✕
@@ -154,15 +154,15 @@
             {{ poi.name || `POI ${i + 1}` }}
             <small v-if="poi.description">{{ poi.description }}</small>
             <small v-if="poi.distFromStart"
-              >📏 {{ formatDistanceM(poi.distFromStart) }} от старта</small
+              >📏 {{ formatDistanceM(poi.distFromStart) }} from start</small
             >
             <small v-if="poi.isFarFromTrack" class="poi-warning"
-              >⚠️ >1 км от трека</small
+              >⚠️ >1 km from track</small
             >
           </span>
           <button
             class="btn-icon-sm danger"
-            title="Удалить POI"
+            title="Delete POI"
             @click.stop="$emit('deletePoi', i)"
           >
             ✕
@@ -174,10 +174,10 @@
     <!-- Elevation profile -->
     <section class="sidebar-section" data-testid="elevation-section">
       <div class="section-header">
-        <h3 class="section-title">Профиль высот</h3>
+        <h3 class="section-title">Elevation profile</h3>
       </div>
       <div v-if="elevationLoading" class="elevation-status">
-        Загрузка профиля...
+        Loading profile...
       </div>
       <div v-else-if="elevationError" class="elevation-status error">
         {{ elevationError }}
@@ -198,19 +198,19 @@
       data-testid="track-summary"
     >
       <div class="summary-row">
-        <span>Дистанция</span>
+        <span>Distance</span>
         <strong>{{ formatDistance(totalDistanceKm) }}</strong>
       </div>
       <div class="summary-row">
-        <span>Время (оценка)</span>
+        <span>Time (estimate)</span>
         <strong>{{ timeDisplay }}</strong>
       </div>
       <div class="summary-row">
-        <span>Точки</span>
+        <span>Points</span>
         <strong>{{ totalPoints }}</strong>
       </div>
       <div class="summary-row">
-        <span>Сегменты</span>
+        <span>Segments</span>
         <strong>{{ segmentStats.length }}</strong>
       </div>
       <div v-if="pois.length > 0" class="summary-row">
@@ -256,10 +256,10 @@ const emit = defineEmits([
 ]);
 
 const availableCategories = [
-  { id: "hiking", label: "Пеший", icon: "🥾" },
-  { id: "walking", label: "Прогулка", icon: "🚶" },
-  { id: "running", label: "Бег", icon: "🏃" },
-  { id: "cycling", label: "Велосипед", icon: "🚴" },
+  { id: "hiking", label: "Hiking", icon: "🥾" },
+  { id: "walking", label: "Walking", icon: "🚶" },
+  { id: "running", label: "Running", icon: "🏃" },
+  { id: "cycling", label: "Cycling", icon: "🚴" },
 ];
 
 function handleCategoryToggle(catId) {
@@ -274,13 +274,13 @@ function handleCategoryToggle(catId) {
 }
 
 function formatDistance(km) {
-  if (km < 1) return `${Math.round(km * 1000)} м`;
-  return `${km.toFixed(2)} км`;
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(2)} km`;
 }
 
 function formatDistanceM(meters) {
-  if (meters < 1000) return `${Math.round(meters)} м`;
-  return `${(meters / 1000).toFixed(1)} км`;
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
 }
 
 import { computed } from "vue";
@@ -288,11 +288,11 @@ import ElevationChart from "./ElevationChart.vue";
 
 const timeDisplay = computed(() => {
   const mins = props.estimatedTimeMinutes;
-  if (mins <= 0) return "0 мин";
-  if (mins < 60) return `${Math.round(mins)} мин`;
+  if (mins <= 0) return "0 min";
+  if (mins < 60) return `${Math.round(mins)} min`;
   const h = Math.floor(mins / 60);
   const m = Math.round(mins % 60);
-  return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+  return m > 0 ? `${h} h ${m} min` : `${h} h`;
 });
 </script>
 
