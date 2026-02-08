@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Mock dependencies before importing the composable
 vi.mock('../useAuth', () => ({
     useAuth: () => ({
-        getAccessToken: vi.fn().mockResolvedValue('test-token'),
+        getAuthHeader: vi.fn().mockResolvedValue({ Authorization: 'Bearer test-token' }),
         user: { value: { id: 1, email: 'test@test.com' } },
     }),
 }));
@@ -523,6 +523,29 @@ describe('useTrackEditor', () => {
             expect(url).toBe('/api/tracks/existing-123/geometry');
             expect(options.method).toBe('PUT');
         });
+
+        it('includes session_id when updating metadata', async () => {
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({}),
+            }));
+
+            editor.savedTrackId.value = 'existing-456';
+            editor.trackName.value = 'Existing Track';
+            editor.trackDescription.value = 'Description';
+            editor.trackCategories.value = ['hiking'];
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(51.0, 31.0);
+
+            await editor.saveTrack();
+
+            const metadataCalls = fetch.mock.calls.slice(1, 4);
+            expect(metadataCalls).toHaveLength(3);
+            for (const [, options] of metadataCalls) {
+                const body = JSON.parse(options.body);
+                expect(body.session_id).toBe('test-session-id');
+            }
+        });
     });
 
     describe('loadTrack', () => {
@@ -540,6 +563,7 @@ describe('useTrackEditor', () => {
                         description: 'A description',
                         categories: ['hiking'],
                         waypoints: [],
+                        session_id: 'test-session-id',
                     },
                 }],
             };
@@ -557,6 +581,7 @@ describe('useTrackEditor', () => {
             expect(editor.segments.value).toHaveLength(1);
             expect(editor.segments.value[0].points).toHaveLength(2);
             expect(editor.savedTrackId.value).toBe('track-456');
+            expect(editor.isOwner.value).toBe(true);
         });
 
         it('sets error on network failure', async () => {

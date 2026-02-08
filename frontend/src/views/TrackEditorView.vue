@@ -302,6 +302,11 @@ onMounted(async () => {
   if (trackId.value) {
     // Editing existing track
     await editor.loadTrack(trackId.value);
+    if (!editor.isOwner.value) {
+      showToast("You do not have permission to edit this track.", "error");
+      router.replace({ name: "Track", params: { id: trackId.value } });
+      return;
+    }
     // Fit map after load
     setTimeout(() => editorMap.value?.fitBounds(), 300);
   } else {

@@ -116,7 +116,7 @@ function isValidCoord(lat, lng) {
  * @returns {Object} Editor API
  */
 export function useTrackEditor({ trackId = null } = {}) {
-    const { getAccessToken, user } = useAuth();
+    const { getAuthHeader, user } = useAuth();
     const routing = useRouting();
     const undoRedo = useUndoRedo(50);
     const draftSave = useDraftSave();
@@ -148,6 +148,8 @@ export function useTrackEditor({ trackId = null } = {}) {
     const loading = ref(false);
     const error = ref(null);
     const savedTrackId = ref(trackId);
+    const ownerSessionId = ref(null);
+    const ownerUserId = ref(null);
 
     // ── Elevation preview ────────────────────────────────────
     const elevationProfile = ref([]);
@@ -188,6 +190,20 @@ export function useTrackEditor({ trackId = null } = {}) {
     );
 
     const isNewTrack = computed(() => !savedTrackId.value);
+    const isOwner = computed(() => {
+        const sessionId = getSessionId();
+        const currentUserId = user.value?.user_id ?? user.value?.id ?? null;
+
+        if (currentUserId && ownerUserId.value) {
+            return String(currentUserId) === String(ownerUserId.value);
+        }
+
+        if (sessionId && ownerSessionId.value) {
+            return String(sessionId) === String(ownerSessionId.value);
+        }
+
+        return false;
+    });
 
     /** Average speed (km/h) per category for time estimation. */
     const CATEGORY_SPEEDS = {
@@ -1041,11 +1057,7 @@ export function useTrackEditor({ trackId = null } = {}) {
         }
 
         try {
-            const headers = {};
-            const token = await getAccessToken();
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
+            const headers = await getAuthHeader();
 
             const resp = await fetch(
                 `${API_BASE}/api/tracks/${id}/export?format=${format}`,
@@ -1104,12 +1116,21 @@ export function useTrackEditor({ trackId = null } = {}) {
         loading.value = true;
         error.value = null;
         try {
-            const response = await fetch(`${API_BASE}/api/tracks/${id}`);
+            const sessionId = getSessionId();
+            const headers = {
+                ...(sessionId ? { 'x-session-id': sessionId } : {}),
+                ...(await getAuthHeader()),
+            };
+
+            const response = await fetch(`${API_BASE}/api/tracks/${id}`, { headers });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const data = await response.json();
             const feature = data.features?.[0] ?? data;
+
+            ownerSessionId.value = feature.session_id ?? feature.properties?.session_id ?? null;
+            ownerUserId.value = feature.user_id ?? feature.properties?.user_id ?? null;
 
             trackName.value = feature.properties?.name ?? '';
             trackDescription.value = feature.properties?.description ?? '';
@@ -1179,11 +1200,10 @@ export function useTrackEditor({ trackId = null } = {}) {
         }
 
         try {
-            const headers = { 'Content-Type': 'application/json' };
-            const token = await getAccessToken();
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(await getAuthHeader()),
+            };
 
             if (savedTrackId.value) {
                 // Update existing track geometry
@@ -1258,22 +1278,32 @@ export function useTrackEditor({ trackId = null } = {}) {
     async function updateMetadata(headers) {
         const id = savedTrackId.value;
         if (!id) return;
+        const sessionId = getSessionId();
 
         const requests = [
             fetch(`${API_BASE}/api/tracks/${id}/name`, {
                 method: 'PATCH',
                 headers,
-                body: JSON.stringify({ name: trackName.value.trim() }),
+                body: JSON.stringify({
+                    name: trackName.value.trim(),
+                    session_id: sessionId,
+                }),
             }),
             fetch(`${API_BASE}/api/tracks/${id}/description`, {
                 method: 'PATCH',
                 headers,
-                body: JSON.stringify({ description: trackDescription.value.trim() }),
+                body: JSON.stringify({
+                    description: trackDescription.value.trim(),
+                    session_id: sessionId,
+                }),
             }),
             fetch(`${API_BASE}/api/tracks/${id}/categories`, {
                 method: 'PATCH',
                 headers,
-                body: JSON.stringify({ categories: trackCategories.value }),
+                body: JSON.stringify({
+                    categories: trackCategories.value,
+                    session_id: sessionId,
+                }),
             }),
         ];
 
@@ -1364,6 +1394,7 @@ export function useTrackEditor({ trackId = null } = {}) {
         error,
         canSave,
         isNewTrack,
+        isOwner,
 
         // Draft
         restoreDraft,

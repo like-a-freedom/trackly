@@ -43,8 +43,8 @@
             <polyline points="9,12 12,15 16,10"></polyline>
           </svg>
         </div>
-        <p>Signed in successfully!</p>
-        <p class="redirect-message">Redirecting...</p>
+        <p>{{ statusMessage }}</p>
+        <p class="redirect-message">{{ secondaryMessage }}</p>
       </div>
     </div>
   </div>
@@ -54,6 +54,7 @@
 import { ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
+import { useConfirm } from "../composables/useConfirm";
 
 defineOptions({
   name: "AuthCallbackView",
@@ -61,10 +62,53 @@ defineOptions({
 
 const router = useRouter();
 const route = useRoute();
-const { handleCallback } = useAuth();
+const { handleCallback, migrateSessionTracks } = useAuth();
+const { showConfirm } = useConfirm();
 
 const isLoading = ref(true);
 const error = ref(null);
+const statusMessage = ref("Signed in successfully!");
+const secondaryMessage = ref("Redirecting...");
+
+async function handleSessionMigration() {
+  const pendingSessionId = sessionStorage.getItem(
+    "pending_migration_session_id"
+  );
+
+  if (!pendingSessionId) {
+    return;
+  }
+
+  const confirmed = await showConfirm({
+    title: "Link your tracks?",
+    message:
+      "We found tracks created before you signed in. Link them to your account so you can manage them from any device.",
+    confirmText: "Link tracks",
+    cancelText: "Skip",
+  });
+
+  sessionStorage.removeItem("pending_migration_session_id");
+
+  if (!confirmed) {
+    statusMessage.value = "Track linking skipped.";
+    return;
+  }
+
+  secondaryMessage.value = "Linking your tracks...";
+  const result = await migrateSessionTracks(pendingSessionId);
+  const tracksMigrated = result?.tracks_migrated ?? 0;
+  const poisMigrated = result?.pois_migrated ?? 0;
+
+  if (tracksMigrated > 0 || poisMigrated > 0) {
+    statusMessage.value = `Linked ${tracksMigrated} track${
+      tracksMigrated === 1 ? "" : "s"
+    } and ${poisMigrated} POI${poisMigrated === 1 ? "" : "s"}.`;
+  } else {
+    statusMessage.value = "No tracks were found to link.";
+  }
+
+  secondaryMessage.value = "Redirecting...";
+}
 
 async function processCallback() {
   const code = route.query.code;
@@ -89,6 +133,8 @@ async function processCallback() {
   try {
     await handleCallback(code, state);
     isLoading.value = false;
+
+    await handleSessionMigration();
 
     // Brief pause to show success, then redirect
     setTimeout(() => {
