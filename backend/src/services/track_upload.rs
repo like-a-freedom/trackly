@@ -9,7 +9,7 @@ use crate::{
     models::{ParsedTrackData, ParsedWaypoint, TrackUploadResponse},
     poi_deduplication::PoiDeduplicationService,
     services::enrichment_queue,
-    track_utils::{self, extract_coordinates_from_geojson, parse_gpx_full, parse_gpx_minimal},
+    track_utils::{self, extract_coordinates_from_geojson, parse_gpx, parse_gpx_minimal},
 };
 use axum::http::StatusCode;
 use bytes::Bytes;
@@ -243,7 +243,7 @@ impl TrackUploadService {
                     );
                 }
                 let full_parse_start = Instant::now();
-                let parsed = parse_gpx_full(file_bytes.as_ref()).map_err(|e| {
+                let parsed = parse_gpx(file_bytes.as_ref()).map_err(|e| {
                     warn!(
                         error = ?e,
                         endpoint = "upload_track_service",

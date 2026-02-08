@@ -2029,3 +2029,655 @@ pub async fn delete_poi(
     metrics::record_poi_deleted("delete_poi");
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[cfg(test)]
+mod track_crud_tests {
+    use super::*;
+
+    #[test]
+    fn test_track_list_query_parsing() {
+        let query_json = r#"{
+            "categories": ["hiking"],
+            "min_length": 5.0,
+            "max_length": 20.0,
+            "mine": true
+        }"#;
+
+        let query: TrackListQuery = serde_json::from_str(query_json).unwrap();
+        assert_eq!(query.categories, Some(vec!["hiking".to_string()]));
+        assert_eq!(query.min_length, Some(5.0));
+        assert_eq!(query.max_length, Some(20.0));
+        assert_eq!(query.mine, Some(true));
+    }
+
+    #[test]
+    fn test_track_list_query_empty() {
+        let query: TrackListQuery = serde_json::from_str("{}").unwrap();
+        assert!(query.categories.is_none());
+        assert!(query.min_length.is_none());
+        assert!(query.max_length.is_none());
+        assert!(query.mine.is_none());
+    }
+
+    #[test]
+    fn test_track_list_query_with_owner_ids() {
+        let user_id = Uuid::new_v4();
+        let session_id = Uuid::new_v4();
+
+        let query_json = format!(
+            r#"{{
+                "owner_user_id": "{}",
+                "owner_session_id": "{}",
+                "mine": true
+            }}"#,
+            user_id, session_id
+        );
+
+        let query: TrackListQuery = serde_json::from_str(&query_json).unwrap();
+        assert_eq!(query.owner_user_id, Some(user_id));
+        assert_eq!(query.owner_session_id, Some(session_id));
+        assert_eq!(query.mine, Some(true));
+    }
+
+    #[test]
+    fn test_track_upload_request_validation() {
+        use bytes::Bytes;
+
+        // Valid request
+        let valid_request = TrackUploadRequest {
+            name: Some("Test".to_string()),
+            description: Some("Description".to_string()),
+            categories: vec!["running".to_string()],
+            session_id: Some(Uuid::new_v4()),
+            file_name: "test.gpx".to_string(),
+            file_bytes: Bytes::from_static(b"test data"),
+        };
+
+        assert_eq!(valid_request.name, Some("Test".to_string()));
+        assert_eq!(valid_request.file_name, "test.gpx");
+        assert_eq!(valid_request.categories, vec!["running".to_string()]);
+    }
+
+    #[test]
+    fn test_track_upload_request_empty() {
+        use bytes::Bytes;
+
+        // Request with minimal fields
+        let request = TrackUploadRequest {
+            name: None,
+            description: None,
+            categories: vec![],
+            session_id: None,
+            file_name: "unnamed.gpx".to_string(),
+            file_bytes: Bytes::from_static(b""),
+        };
+
+        assert!(request.name.is_none());
+        assert!(request.description.is_none());
+        assert!(request.categories.is_empty());
+    }
+
+    #[test]
+    fn test_track_update_requests() {
+        let session_id = Uuid::new_v4();
+
+        // Test name update
+        let name_update = UpdateTrackNameRequest {
+            name: "New Name".to_string(),
+            session_id,
+        };
+        assert_eq!(name_update.name, "New Name");
+
+        // Test description update
+        let desc_update = UpdateTrackDescriptionRequest {
+            description: "New Description".to_string(),
+            session_id,
+        };
+        assert_eq!(desc_update.description, "New Description");
+
+        // Test categories update
+        let cat_update = UpdateTrackCategoriesRequest {
+            categories: vec!["cycling".to_string()],
+            session_id,
+        };
+        assert_eq!(cat_update.categories, vec!["cycling".to_string()]);
+    }
+
+    #[test]
+    fn test_enrich_elevation_request_defaults() {
+        let session_id = Uuid::new_v4();
+        let request = EnrichElevationRequest {
+            force: None,
+            dataset: None,
+            session_id,
+        };
+
+        assert!(request.force.is_none());
+        assert!(request.dataset.is_none());
+    }
+
+    #[test]
+    fn test_enrich_elevation_request_with_values() {
+        let session_id = Uuid::new_v4();
+        let request = EnrichElevationRequest {
+            force: Some(true),
+            dataset: Some("aster".to_string()),
+            session_id,
+        };
+
+        assert_eq!(request.force, Some(true));
+        assert_eq!(request.dataset, Some("aster".to_string()));
+    }
+
+    #[test]
+    fn test_track_search_query() {
+        let query = TrackSearchQuery {
+            query: "mountain trail".to_string(),
+        };
+        assert_eq!(query.query, "mountain trail");
+    }
+
+    #[test]
+    fn test_track_search_query_empty() {
+        let query = TrackSearchQuery {
+            query: "".to_string(),
+        };
+        assert!(query.query.is_empty());
+    }
+
+    #[test]
+    fn test_track_simplification_query() {
+        let query = TrackSimplificationQuery {
+            zoom: Some(15.0),
+            mode: Some("detail".to_string()),
+        };
+        assert_eq!(query.zoom, Some(15.0));
+        assert_eq!(query.mode, Some("detail".to_string()));
+    }
+
+    #[test]
+    fn test_track_simplification_query_empty() {
+        let query: TrackSimplificationQuery = serde_json::from_str("{}").unwrap();
+        assert!(query.zoom.is_none());
+        assert!(query.mode.is_none());
+    }
+
+    #[test]
+    fn test_track_upload_response_serialization() {
+        let track_id = Uuid::new_v4();
+        let response = TrackUploadResponse {
+            id: track_id,
+            url: format!("/tracks/{}", track_id),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(&track_id.to_string()));
+        assert!(json.contains("/tracks/"));
+    }
+
+    #[test]
+    fn test_track_exist_response_serialization() {
+        let track_id = Uuid::new_v4();
+
+        // Test exists
+        let exists_response = TrackExistResponse {
+            is_exist: true,
+            id: Some(track_id),
+        };
+        let exists_json = serde_json::to_string(&exists_response).unwrap();
+        assert!(exists_json.contains("true"));
+        assert!(exists_json.contains(&track_id.to_string()));
+
+        // Test not exists
+        let not_exists_response = TrackExistResponse {
+            is_exist: false,
+            id: None,
+        };
+        let not_exists_json = serde_json::to_string(&not_exists_response).unwrap();
+        assert!(not_exists_json.contains("false"));
+    }
+
+    // Additional tests from tracks_tests.rs
+
+    #[test]
+    fn test_check_track_ownership_with_authenticated_user() {
+        let user_id = Uuid::new_v4();
+        let track_user_id = Some(user_id);
+        let track_session_id = Some(Uuid::new_v4());
+
+        // Create mock auth user
+        let auth_user = OptionalAuthUser(Some(crate::auth::AuthUser {
+            user_id,
+            email: "test@example.com".to_string(),
+            name: Some("Test".to_string()),
+            nickname: None,
+            avatar_url: None,
+            roles: vec!["user".to_string()],
+            claims: crate::auth::Claims {
+                sub: user_id.to_string(),
+                email: "test@example.com".to_string(),
+                name: "Test".to_string(),
+                nickname: None,
+                avatar_url: None,
+                roles: vec!["user".to_string()],
+                exp: 0,
+                iat: 0,
+                iss: "trackly-app".to_string(),
+                aud: "trackly-web".to_string(),
+            },
+        }));
+
+        let result = check_track_ownership(track_user_id, track_session_id, &auth_user, None);
+
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_check_track_ownership_wrong_user() {
+        let user_id = Uuid::new_v4();
+        let track_user_id = Some(Uuid::new_v4()); // Different user
+        let track_session_id = Some(Uuid::new_v4());
+
+        let auth_user = OptionalAuthUser(Some(crate::auth::AuthUser {
+            user_id,
+            email: "test@example.com".to_string(),
+            name: Some("Test".to_string()),
+            nickname: None,
+            avatar_url: None,
+            roles: vec!["user".to_string()],
+            claims: crate::auth::Claims {
+                sub: user_id.to_string(),
+                email: "test@example.com".to_string(),
+                name: "Test".to_string(),
+                nickname: None,
+                avatar_url: None,
+                roles: vec!["user".to_string()],
+                exp: 0,
+                iat: 0,
+                iss: "trackly-app".to_string(),
+                aud: "trackly-web".to_string(),
+            },
+        }));
+
+        let result = check_track_ownership(track_user_id, track_session_id, &auth_user, None);
+
+        assert_eq!(result, Err(StatusCode::FORBIDDEN));
+    }
+
+    #[test]
+    fn test_check_track_ownership_with_session() {
+        let session_id = Uuid::new_v4();
+        let track_session_id = Some(session_id);
+
+        let auth_user = OptionalAuthUser(None);
+
+        let result = check_track_ownership(None, track_session_id, &auth_user, Some(session_id));
+
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_check_track_ownership_wrong_session() {
+        let session_id = Uuid::new_v4();
+        let track_session_id = Some(Uuid::new_v4()); // Different session
+
+        let auth_user = OptionalAuthUser(None);
+
+        let result = check_track_ownership(None, track_session_id, &auth_user, Some(session_id));
+
+        assert_eq!(result, Err(StatusCode::FORBIDDEN));
+    }
+
+    #[test]
+    fn test_check_track_ownership_no_auth() {
+        let auth_user = OptionalAuthUser(None);
+
+        let result =
+            check_track_ownership(Some(Uuid::new_v4()), Some(Uuid::new_v4()), &auth_user, None);
+
+        assert_eq!(result, Err(StatusCode::FORBIDDEN));
+    }
+
+    #[test]
+    fn test_track_list_item_serialization() {
+        let track_id = Uuid::new_v4();
+        let item = TrackListItem {
+            id: track_id,
+            name: "Test Track".to_string(),
+            categories: vec!["running".to_string()],
+            length_km: 5.5,
+            elevation_gain: Some(100.0),
+            elevation_loss: Some(50.0),
+            elevation_enriched: Some(false),
+            slope_min: Some(-5.0),
+            slope_max: Some(10.0),
+            slope_avg: Some(2.5),
+            url: format!("/tracks/{}", track_id),
+        };
+
+        let json = serde_json::to_string(&item).unwrap();
+        let deserialized: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized["name"], "Test Track");
+        assert_eq!(deserialized["length_km"], 5.5);
+        assert_eq!(deserialized["url"], format!("/tracks/{}", track_id));
+    }
+
+    #[test]
+    fn test_track_list_query_deserialization_full() {
+        let json = r#"{
+            "categories": ["running", "cycling"],
+            "min_length": 1.0,
+            "max_length": 10.0,
+            "elevation_gain_min": 50.0,
+            "elevation_gain_max": 500.0,
+            "slope_min": -10.0,
+            "slope_max": 20.0,
+            "mine": true
+        }"#;
+
+        let query: TrackListQuery = serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            query.categories,
+            Some(vec!["running".to_string(), "cycling".to_string()])
+        );
+        assert_eq!(query.min_length, Some(1.0));
+        assert_eq!(query.max_length, Some(10.0));
+        assert_eq!(query.elevation_gain_min, Some(50.0));
+        assert_eq!(query.elevation_gain_max, Some(500.0));
+        assert_eq!(query.slope_min, Some(-10.0));
+        assert_eq!(query.slope_max, Some(20.0));
+        assert_eq!(query.mine, Some(true));
+    }
+
+    #[test]
+    fn test_enrich_elevation_response() {
+        let track_id = Uuid::new_v4();
+        let response = EnrichElevationResponse {
+            id: track_id,
+            message: "Elevation enriched successfully".to_string(),
+            elevation_gain: Some(100.0),
+            elevation_loss: Some(50.0),
+            elevation_min: Some(0.0),
+            elevation_max: Some(150.0),
+            elevation_dataset: Some("srtm".to_string()),
+            enriched_at: Some(
+                chrono::NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S")
+                    .unwrap(),
+            ),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("Elevation enriched successfully"));
+        assert!(json.contains(&track_id.to_string()));
+    }
+
+    #[test]
+    fn test_handle_db_error_not_found() {
+        let error = sqlx::Error::RowNotFound;
+        let status = handle_db_error(error);
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_track_search_result_serialization() {
+        let track_id = Uuid::new_v4();
+        let result = TrackSearchResult {
+            id: track_id,
+            name: "Mountain Hike".to_string(),
+            description: Some("Beautiful mountain trail".to_string()),
+            categories: vec!["hiking".to_string()],
+            length_km: 12.5,
+            url: format!("/tracks/{}", track_id),
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        let deserialized: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized["name"], "Mountain Hike");
+        assert_eq!(deserialized["length_km"], 12.5);
+        assert_eq!(deserialized["categories"], serde_json::json!(["hiking"]));
+    }
+
+    #[test]
+    fn test_parsed_track_data_hash_generation() {
+        use crate::track_utils::calculate_file_hash;
+
+        let data = b"test track data for hashing";
+        let hash = calculate_file_hash(data);
+
+        // Hash should be non-empty string
+        assert!(!hash.is_empty());
+        assert_eq!(hash.len(), 64); // SHA-256 hex string length
+    }
+
+    #[test]
+    fn test_track_list_query_with_mine_filter() {
+        let user_id = Uuid::new_v4();
+        let query = TrackListQuery {
+            categories: None,
+            min_length: None,
+            max_length: None,
+            elevation_gain_min: None,
+            elevation_gain_max: None,
+            slope_min: None,
+            slope_max: None,
+            owner_session_id: None,
+            owner_user_id: Some(user_id),
+            mine: Some(true),
+        };
+
+        assert_eq!(query.owner_user_id, Some(user_id));
+        assert_eq!(query.mine, Some(true));
+    }
+
+    #[test]
+    fn test_track_mode_conversion() {
+        use crate::models::TrackMode;
+
+        let overview = TrackMode::from_string("overview");
+        assert!(overview.is_overview());
+        assert!(!overview.is_detail());
+
+        let detail = TrackMode::from_string("detail");
+        assert!(detail.is_detail());
+        assert!(!detail.is_overview());
+
+        let default = TrackMode::from_string("invalid");
+        assert!(default.is_overview()); // Default to overview
+    }
+
+    #[test]
+    fn test_track_list_item_with_all_fields() {
+        let track_id = Uuid::new_v4();
+        let item = TrackListItem {
+            id: track_id,
+            name: "Complete Track".to_string(),
+            categories: vec!["running".to_string(), "trail".to_string()],
+            length_km: 15.5,
+            elevation_gain: Some(250.0),
+            elevation_loss: Some(200.0),
+            elevation_enriched: Some(true),
+            slope_min: Some(-10.0),
+            slope_max: Some(15.0),
+            slope_avg: Some(5.0),
+            url: format!("/tracks/{}", track_id),
+        };
+
+        let json = serde_json::to_string(&item).unwrap();
+        let deserialized: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized["name"], "Complete Track");
+        assert_eq!(deserialized["length_km"], 15.5);
+        assert_eq!(deserialized["categories"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_track_update_name_request_validation() {
+        let session_id = Uuid::new_v4();
+
+        // Valid name
+        let valid = UpdateTrackNameRequest {
+            name: "Valid Track Name".to_string(),
+            session_id,
+        };
+        assert!(!valid.name.is_empty());
+        assert!(valid.name.len() <= 100);
+
+        // Empty name
+        let empty = UpdateTrackNameRequest {
+            name: "".to_string(),
+            session_id,
+        };
+        assert!(empty.name.is_empty());
+    }
+
+    #[test]
+    fn test_track_update_categories_request_validation() {
+        let session_id = Uuid::new_v4();
+
+        // Valid categories
+        let valid = UpdateTrackCategoriesRequest {
+            categories: vec!["running".to_string(), "cycling".to_string()],
+            session_id,
+        };
+        assert_eq!(valid.categories.len(), 2);
+
+        // Empty categories
+        let empty = UpdateTrackCategoriesRequest {
+            categories: vec![],
+            session_id,
+        };
+        assert!(empty.categories.is_empty());
+
+        // Too many categories
+        let many = UpdateTrackCategoriesRequest {
+            categories: vec!["cat1".to_string(); 20],
+            session_id,
+        };
+        assert_eq!(many.categories.len(), 20);
+    }
+
+    #[test]
+    fn test_track_simplification_query_edge_cases() {
+        // Very high zoom
+        let high_zoom = TrackSimplificationQuery {
+            zoom: Some(20.0),
+            mode: Some("detail".to_string()),
+        };
+        assert_eq!(high_zoom.zoom, Some(20.0));
+
+        // Very low zoom
+        let low_zoom = TrackSimplificationQuery {
+            zoom: Some(1.0),
+            mode: Some("overview".to_string()),
+        };
+        assert_eq!(low_zoom.zoom, Some(1.0));
+
+        // No zoom specified
+        let no_zoom: TrackSimplificationQuery = serde_json::from_str("{}").unwrap();
+        assert!(no_zoom.zoom.is_none());
+    }
+
+    #[test]
+    fn test_enrich_elevation_request_datasets() {
+        let session_id = Uuid::new_v4();
+
+        // Test different dataset values
+        let datasets = vec!["srtm", "aster", "custom"];
+
+        for dataset in datasets {
+            let request = EnrichElevationRequest {
+                force: Some(false),
+                dataset: Some(dataset.to_string()),
+                session_id,
+            };
+            assert_eq!(request.dataset, Some(dataset.to_string()));
+            assert_eq!(request.force, Some(false));
+        }
+    }
+
+    #[test]
+    fn test_track_search_query_variations() {
+        // Simple query
+        let simple = TrackSearchQuery {
+            query: "mountain".to_string(),
+        };
+        assert_eq!(simple.query, "mountain");
+
+        // Complex query with spaces
+        let complex = TrackSearchQuery {
+            query: "mountain trail hiking".to_string(),
+        };
+        assert_eq!(complex.query, "mountain trail hiking");
+
+        // Query with special characters
+        let special = TrackSearchQuery {
+            query: "trail-2024_test".to_string(),
+        };
+        assert_eq!(special.query, "trail-2024_test");
+    }
+
+    #[test]
+    fn test_track_exist_response_variations() {
+        let track_id = Uuid::new_v4();
+
+        // Track exists
+        let exists = TrackExistResponse {
+            is_exist: true,
+            id: Some(track_id),
+        };
+        let exists_json = serde_json::to_string(&exists).unwrap();
+        assert!(exists_json.contains("true"));
+        assert!(exists_json.contains(&track_id.to_string()));
+
+        // Track does not exist
+        let not_exists = TrackExistResponse {
+            is_exist: false,
+            id: None,
+        };
+        let not_exists_json = serde_json::to_string(&not_exists).unwrap();
+        assert!(not_exists_json.contains("false"));
+        assert!(not_exists_json.contains("null"));
+    }
+
+    #[test]
+    fn test_check_track_ownership_priority() {
+        // Test that user auth takes priority over session
+        let user_id = Uuid::new_v4();
+        let track_user_id = Some(user_id);
+        let different_session = Some(Uuid::new_v4());
+        let request_session = Uuid::new_v4();
+
+        let auth_user = OptionalAuthUser(Some(crate::auth::AuthUser {
+            user_id,
+            email: "test@example.com".to_string(),
+            name: Some("Test".to_string()),
+            nickname: None,
+            avatar_url: None,
+            roles: vec!["user".to_string()],
+            claims: crate::auth::Claims {
+                sub: user_id.to_string(),
+                email: "test@example.com".to_string(),
+                name: "Test".to_string(),
+                nickname: None,
+                avatar_url: None,
+                roles: vec!["user".to_string()],
+                exp: 0,
+                iat: 0,
+                iss: "trackly-app".to_string(),
+                aud: "trackly-web".to_string(),
+            },
+        }));
+
+        // Should succeed because user_id matches, even though session doesn't
+        let result = check_track_ownership(
+            track_user_id,
+            different_session,
+            &auth_user,
+            Some(request_session),
+        );
+        assert_eq!(result, Ok(()));
+    }
+}

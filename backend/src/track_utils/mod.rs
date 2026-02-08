@@ -8,7 +8,7 @@ pub mod gpx_parser;
 pub mod hash;
 pub mod kml_parser;
 pub mod metrics;
-pub mod optimized_gpx_parser;
+
 pub mod pace_filter;
 pub mod simplification;
 pub mod slope;
@@ -24,10 +24,10 @@ pub use geometry::{
     extract_coordinates_from_geojson, extract_segments_from_geojson, geojson_from_segments,
     haversine_distance, length_km_for_segments, parse_linestring_wkt, split_points_by_gap,
 };
-pub use gpx_parser::parse_gpx;
+pub use gpx_parser::{MinimalGpxData, parse_gpx, parse_gpx_minimal};
 pub use hash::calculate_file_hash;
 pub use kml_parser::parse_kml;
-pub use optimized_gpx_parser::{parse_gpx_full, parse_gpx_minimal};
+
 pub use pace_filter::{
     PaceFilterConfig, detect_cycling_and_get_config, filter_pace_data, get_pace_filter_config,
 };

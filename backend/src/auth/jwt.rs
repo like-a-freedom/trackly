@@ -202,4 +202,98 @@ mod tests {
         // Token should not be expiring soon (it's valid for 1 hour in tests)
         assert!(!claims.is_expiring_soon());
     }
+
+    #[test]
+    fn test_claims_user_id_parsing() {
+        let uuid = Uuid::new_v4();
+        let claims = Claims {
+            sub: uuid.to_string(),
+            email: "test@example.com".to_string(),
+            name: "Test".to_string(),
+            nickname: None,
+            avatar_url: None,
+            roles: vec!["user".to_string()],
+            exp: Utc::now().timestamp() + 3600,
+            iat: Utc::now().timestamp(),
+            iss: "trackly-app".to_string(),
+            aud: "trackly-web".to_string(),
+        };
+
+        assert_eq!(claims.user_id().unwrap(), uuid);
+    }
+
+    #[test]
+    fn test_claims_user_id_invalid() {
+        let claims = Claims {
+            sub: "invalid-uuid".to_string(),
+            email: "test@example.com".to_string(),
+            name: "Test".to_string(),
+            nickname: None,
+            avatar_url: None,
+            roles: vec![],
+            exp: Utc::now().timestamp() + 3600,
+            iat: Utc::now().timestamp(),
+            iss: "trackly-app".to_string(),
+            aud: "trackly-web".to_string(),
+        };
+
+        assert!(claims.user_id().is_err());
+    }
+
+    #[test]
+    fn test_claims_default_values() {
+        let claims = Claims {
+            sub: Uuid::new_v4().to_string(),
+            email: "test@example.com".to_string(),
+            name: String::new(),
+            nickname: None,
+            avatar_url: None,
+            roles: vec![],
+            exp: Utc::now().timestamp() + 3600,
+            iat: Utc::now().timestamp(),
+            iss: "trackly-app".to_string(),
+            aud: "trackly-web".to_string(),
+        };
+
+        assert!(claims.name.is_empty());
+        assert!(claims.roles.is_empty());
+    }
+
+    #[test]
+    fn test_malformed_token() {
+        setup_test_env();
+
+        // Test various malformed tokens
+        let malformed_tokens = vec![
+            "",
+            "not-a-token",
+            "one-part",
+            "two.parts",
+            "too.many.parts.here",
+            "invalid-base64.data.here",
+        ];
+
+        for token in malformed_tokens {
+            let result = validate_access_token(token);
+            assert!(result.is_err(), "Token '{}' should be invalid", token);
+        }
+    }
+
+    #[test]
+    fn test_token_with_roles() {
+        setup_test_env();
+
+        let user = TokenUser {
+            user_id: Uuid::new_v4(),
+            email: "admin@example.com".to_string(),
+            name: "Admin User".to_string(),
+            nickname: Some("admin".to_string()),
+            avatar_url: None,
+        };
+
+        let token = create_access_token(&user).unwrap();
+        let claims = validate_access_token(&token).unwrap();
+
+        assert!(claims.roles.contains(&"user".to_string()));
+    }
 }

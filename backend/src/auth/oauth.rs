@@ -383,4 +383,110 @@ mod tests {
         assert!(user.email_verified);
         assert_eq!(user.name, Some("Test User".to_string()));
     }
+
+    #[test]
+    fn test_authorization_url_serialization() {
+        let auth_url = AuthorizationUrl {
+            url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=test".to_string(),
+            state: "random_state_123".to_string(),
+            pkce_verifier: "random_verifier_456".to_string(),
+        };
+
+        let json = serde_json::to_string(&auth_url).unwrap();
+        assert!(json.contains("accounts.google.com"));
+        assert!(json.contains("random_state_123"));
+        assert!(json.contains("random_verifier_456"));
+    }
+
+    #[test]
+    fn test_oauth_callback_request_deserialization() {
+        let json = r#"{
+            "code": "test_code_123",
+            "state": "test_state_456",
+            "pkce_verifier": "test_verifier_789"
+        }"#;
+
+        let request: OAuthCallbackRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.code, "test_code_123");
+        assert_eq!(request.state, "test_state_456");
+        assert_eq!(request.pkce_verifier, "test_verifier_789");
+    }
+
+    #[test]
+    fn test_google_user_info_deserialization() {
+        let json = r#"{
+            "sub": "123456",
+            "email": "test@example.com",
+            "email_verified": true,
+            "name": "Test User",
+            "given_name": "Test",
+            "family_name": "User",
+            "picture": "https://example.com/pic.jpg"
+        }"#;
+
+        let user_info: GoogleUserInfo = serde_json::from_str(json).unwrap();
+
+        assert_eq!(user_info.sub, "123456");
+        assert_eq!(user_info.email, "test@example.com");
+        assert_eq!(user_info.email_verified, Some(true));
+        assert_eq!(user_info.name, Some("Test User".to_string()));
+        assert_eq!(user_info.given_name, Some("Test".to_string()));
+        assert_eq!(user_info.family_name, Some("User".to_string()));
+        assert_eq!(
+            user_info.picture,
+            Some("https://example.com/pic.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_google_user_info_minimal() {
+        // Test with only required fields
+        let json = r#"{
+            "sub": "123456",
+            "email": "test@example.com"
+        }"#;
+
+        let user_info: GoogleUserInfo = serde_json::from_str(json).unwrap();
+
+        assert_eq!(user_info.sub, "123456");
+        assert_eq!(user_info.email, "test@example.com");
+        assert_eq!(user_info.email_verified, None);
+        assert_eq!(user_info.name, None);
+    }
+
+    #[test]
+    fn test_oauth_endpoints_constants() {
+        // Verify OAuth endpoint URLs are correct
+        assert_eq!(
+            GOOGLE_AUTH_URL,
+            "https://accounts.google.com/o/oauth2/v2/auth"
+        );
+        assert_eq!(GOOGLE_TOKEN_URL, "https://oauth2.googleapis.com/token");
+        assert_eq!(
+            GOOGLE_USERINFO_URL,
+            "https://www.googleapis.com/oauth2/v3/userinfo"
+        );
+    }
+
+    #[test]
+    fn test_oauth_user_with_empty_optional_fields() {
+        let user = OAuthUser {
+            google_sub: "123456".to_string(),
+            email: "test@example.com".to_string(),
+            email_verified: false,
+            name: None,
+            given_name: None,
+            family_name: None,
+            picture: None,
+        };
+
+        assert_eq!(user.google_sub, "123456");
+        assert_eq!(user.email, "test@example.com");
+        assert!(!user.email_verified);
+        assert!(user.name.is_none());
+        assert!(user.given_name.is_none());
+        assert!(user.family_name.is_none());
+        assert!(user.picture.is_none());
+    }
 }

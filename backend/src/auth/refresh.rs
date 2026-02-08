@@ -272,4 +272,52 @@ mod tests {
         let hash3 = hash_token("different-token");
         assert_ne!(hash1, hash3);
     }
+
+    #[test]
+    fn test_hash_token_deterministic() {
+        // Hashing should be deterministic
+        let token = "my-secret-refresh-token";
+        let hash1 = hash_token(token);
+        let hash2 = hash_token(token);
+        let hash3 = hash_token(token);
+
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash2, hash3);
+    }
+
+    #[test]
+    fn test_generate_token_hex_format() {
+        let token = generate_token();
+
+        // Token should only contain hex characters
+        assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
+
+        // Token should be lowercase
+        assert!(token.chars().all(|c| !c.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn test_hash_token_empty() {
+        // Empty string should produce valid hash
+        let hash = hash_token("");
+        assert_eq!(hash.len(), 64);
+        assert!(!hash.is_empty());
+    }
+
+    #[test]
+    fn test_hash_token_long_input() {
+        // Long input should still produce valid hash
+        let long_input = "a".repeat(1000);
+        let hash = hash_token(&long_input);
+        assert_eq!(hash.len(), 64);
+    }
+
+    #[test]
+    fn test_generate_token_randomness() {
+        // Generate multiple tokens and ensure they're all different
+        let tokens: std::collections::HashSet<String> = (0..10).map(|_| generate_token()).collect();
+
+        // All 10 tokens should be unique
+        assert_eq!(tokens.len(), 10);
+    }
 }

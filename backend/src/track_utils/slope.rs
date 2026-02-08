@@ -766,10 +766,7 @@ mod tests {
         let result = calculate_slope_metrics(&points, &elevations, "Extreme Slopes Test");
 
         // Should handle slopes gracefully
-        if result.slope_min.is_some() && result.slope_max.is_some() {
-            let slope_max = result.slope_max.unwrap();
-            let slope_min = result.slope_min.unwrap();
-
+        if let (Some(slope_min), Some(slope_max)) = (result.slope_min, result.slope_max) {
             // Should produce reasonable results, even if not extreme
             assert!(slope_max >= slope_min); // Basic sanity check
             assert!(slope_max.abs() <= 200.0); // Should be within expanded bounds for new algorithm
@@ -788,10 +785,7 @@ mod tests {
 
         let result = calculate_slope_metrics(&points, &elevations, "Downhill Test");
 
-        if result.slope_min.is_some() && result.slope_max.is_some() {
-            let slope_max = result.slope_max.unwrap();
-            let slope_min = result.slope_min.unwrap();
-
+        if let (Some(slope_min), Some(slope_max)) = (result.slope_min, result.slope_max) {
             // Should produce reasonable results for downhill
             assert!(slope_max >= slope_min); // Basic sanity check
             assert!(slope_max.abs() <= 200.0); // Within expanded bounds for new algorithm
@@ -913,12 +907,11 @@ mod tests {
 
         // The test should handle cases where segments might be filtered out
         // Let's make a more robust test
-        if result.slope_min.is_some() {
-            assert!(result.slope_max.is_some());
+        if let Some(slope_max) = result.slope_max {
+            assert!(result.slope_min.is_some());
             assert!(result.slope_avg.is_some());
 
             // Should preserve steep but realistic slopes
-            let slope_max = result.slope_max.unwrap();
             assert!(slope_max > 10.0); // Should be steeper than moderate slopes
             assert!(slope_max < 100.0); // But reasonable for mountain terrain
 
@@ -980,13 +973,13 @@ mod tests {
         let result = calculate_slope_metrics(&points, &elevations, "Contextual Filter Test");
 
         // Should handle slopes gracefully but results might be different due to windowing
-        if result.slope_max.is_some() {
-            let _slope_max = result.slope_max.unwrap();
+        if let Some(slope_max) = result.slope_max {
+            let _slope_max = slope_max;
 
             println!(
                 "Contextual filter slopes: min={:.1}%, max={:.1}%, avg={:.1}%",
                 result.slope_min.unwrap_or(0.0),
-                result.slope_max.unwrap(),
+                slope_max,
                 result.slope_avg.unwrap_or(0.0)
             );
         }
