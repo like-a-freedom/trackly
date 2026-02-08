@@ -4,23 +4,23 @@ import { formatDuration, formatDistance, convertUrlsToLinks } from '../format.js
 describe('format.js', () => {
     describe('formatDuration', () => {
         it('should format seconds to human readable format', () => {
-            expect(formatDuration(0)).toBe('0:00');
-            expect(formatDuration(59)).toBe('0:59');
-            expect(formatDuration(60)).toBe('1:00');
-            expect(formatDuration(3661)).toBe('1:01:01');
+            expect(formatDuration(0)).toBe('0s');
+            expect(formatDuration(59)).toBe('59s');
+            expect(formatDuration(60)).toBe('1m 0s');
+            expect(formatDuration(3661)).toBe('1h 1m 1s');
         });
 
         it('should handle null/undefined values', () => {
-            expect(formatDuration(null)).toBe('0:00');
-            expect(formatDuration(undefined)).toBe('0:00');
-            expect(formatDuration(-1)).toBe('0:00');
+            expect(formatDuration(null)).toBe('N/A');
+            expect(formatDuration(undefined)).toBe('N/A');
+            expect(formatDuration(-1)).toBe('N/A');
         });
     });
 
     describe('formatDistance', () => {
         it('should format distance in kilometers', () => {
-            expect(formatDistance(0)).toBe('0m');
-            expect(formatDistance(0.5)).toBe('500m');
+            expect(formatDistance(0)).toBe('0.00 km');
+            expect(formatDistance(0.5)).toBe('0.50 km');
             expect(formatDistance(1)).toBe('1.00 km');
             expect(formatDistance(10.5)).toBe('10.50 km');
         });
@@ -31,9 +31,9 @@ describe('format.js', () => {
         });
 
         it('should handle null/undefined values', () => {
-            expect(formatDistance(null)).toBe('0m');
-            expect(formatDistance(undefined)).toBe('0m');
-            expect(formatDistance(-1)).toBe('0m');
+            expect(formatDistance(null)).toBe('N/A');
+            expect(formatDistance(undefined)).toBe('N/A');
+            expect(formatDistance(-1)).toBe('N/A');
         });
     });
 

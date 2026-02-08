@@ -2,112 +2,29 @@ import { ref } from 'vue';
 import { getColorForId } from '../utils/trackColors';
 import { getSessionId } from '../utils/session';
 import { useAuth } from './useAuth';
+import {
+    formatDuration,
+    formatDistance,
+    formatPace,
+    formatSpeed,
+    calculatePaceFromSpeed,
+    speedToPace,
+    paceToSpeed,
+    validateSpeedData
+} from '../utils/format';
+import { geoJsonLineToLeaflet } from '../utils/coordinates';
 
-
-
-/**
- * Speed and pace utility functions
- */
-export function validateSpeedData(speed) {
-    if (typeof speed !== 'number' || isNaN(speed) || speed < 0 || speed > 200) {
-        return null;
-    }
-    return speed;
-}
-
-export function formatSpeed(speed, unit = 'kmh') {
-    const validSpeed = validateSpeedData(speed);
-    if (validSpeed === null) return 'N/A';
-
-    if (unit === 'mph') {
-        return `${(validSpeed * 0.621371).toFixed(2)} mph`;
-    }
-    return `${validSpeed.toFixed(2)} km/h`;
-}
-
-export function calculatePaceFromSpeed(speed, unit = 'min/km') {
-    const validSpeed = validateSpeedData(speed);
-    if (validSpeed === null || validSpeed === 0) return 'N/A';
-
-    let paceMinutes;
-    if (unit === 'min/mi') {
-        // Convert km/h to min/mi: 60 / (km/h * 0.621371)
-        paceMinutes = 60 / (validSpeed * 0.621371);
-    } else {
-        // Convert km/h to min/km: 60 / km/h
-        paceMinutes = 60 / validSpeed;
-    }
-
-    const minutes = Math.floor(paceMinutes);
-    const seconds = Math.round((paceMinutes - minutes) * 60);
-
-    return `${minutes}:${seconds.toString().padStart(2, '0')} ${unit}`;
-}
-
-export function speedToPace(speed, unit = 'min/km') {
-    return calculatePaceFromSpeed(speed, unit);
-}
-
-export function paceToSpeed(paceString, unit = 'min/km') {
-    if (!paceString || typeof paceString !== 'string') return null;
-
-    // Parse pace like "5:30" or "5:30 min/km" - ensure match starts at beginning
-    const match = paceString.match(/^(\d+):(\d+)/);
-    if (!match) return null;
-
-    const minutes = parseInt(match[1]);
-    const seconds = parseInt(match[2]);
-
-    if (minutes < 0 || seconds < 0 || seconds >= 60) return null;
-
-    const totalMinutes = minutes + (seconds / 60);
-
-    if (unit === 'min/mi') {
-        // Convert min/mi to km/h: (60 / min/mi) * 1.60934
-        return (60 / totalMinutes) * 1.60934;
-    } else {
-        // Convert min/km to km/h: 60 / min/km
-        return 60 / totalMinutes;
-    }
-}
-
-export function formatDuration(seconds) {
-    if (seconds === null || seconds === undefined || seconds < 0 || isNaN(seconds)) return 'N/A';
-
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-        return `${hours}h ${minutes}m ${remainingSeconds}s`;
-    } else if (minutes > 0) {
-        return `${minutes}m ${remainingSeconds}s`;
-    } else {
-        return `${remainingSeconds}s`;
-    }
-}
-
-export function formatDistance(distanceKm, unit = 'km') {
-    if (typeof distanceKm !== 'number' || isNaN(distanceKm) || distanceKm < 0) {
-        return 'N/A';
-    }
-
-    if (unit === 'mi') {
-        return `${(distanceKm * 0.621371).toFixed(2)} mi`;
-    }
-    return `${distanceKm.toFixed(2)} km`;
-}
-
-export function formatPace(paceMinutes, unit = 'min/km') {
-    if (typeof paceMinutes !== 'number' || isNaN(paceMinutes) || paceMinutes <= 0) {
-        return 'N/A';
-    }
-
-    const minutes = Math.floor(paceMinutes);
-    const seconds = Math.round((paceMinutes - minutes) * 60);
-
-    return `${minutes}:${seconds.toString().padStart(2, '0')} ${unit}`;
-}
+// Re-export format utilities for backward compatibility
+export {
+    formatDuration,
+    formatDistance,
+    formatPace,
+    formatSpeed,
+    calculatePaceFromSpeed,
+    speedToPace,
+    paceToSpeed,
+    validateSpeedData
+};
 
 export function useTracks() {
     const polylines = ref([]);
@@ -235,7 +152,7 @@ export function useTracks() {
             if (feature.geometry && feature.geometry.type === 'MultiLineString') {
                 feature.geometry.coordinates.forEach(coords => {
                     newPolylines.push({
-                        latlngs: coords.map(([lng, lat]) => [lat, lng]),
+                        latlngs: geoJsonLineToLeaflet(coords),
                         color,
                         properties: feature.properties,
                         showTooltip: false
@@ -243,7 +160,7 @@ export function useTracks() {
                 });
             } else if (feature.geometry && feature.geometry.type === 'LineString') {
                 newPolylines.push({
-                    latlngs: feature.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+                    latlngs: geoJsonLineToLeaflet(feature.geometry.coordinates),
                     color,
                     properties: feature.properties,
                     showTooltip: false

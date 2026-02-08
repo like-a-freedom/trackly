@@ -2,7 +2,27 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: 'remove-permissions-policy',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const originalWriteHead = res.writeHead;
+          res.writeHead = function(statusCode, headers) {
+            if (headers && headers['Permissions-Policy']) {
+              delete headers['Permissions-Policy'];
+            }
+            if (this.getHeader && this.getHeader('Permissions-Policy')) {
+              this.removeHeader('Permissions-Policy');
+            }
+            return originalWriteHead.call(this, statusCode, headers);
+          };
+          next();
+        });
+      }
+    }
+  ],
   server: {
     port: 81,
     host: '0.0.0.0',

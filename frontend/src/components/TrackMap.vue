@@ -169,10 +169,12 @@ import {
 } from "../utils/mapConstants.js";
 import TrackFilterControl from "./TrackFilterControl.vue";
 import { useTrackClustering } from "../composables/useTrackClustering.js";
+import { useTrackMapE2E } from "../composables/useTrackMapE2E.js";
 import {
   useAdvancedDebounce,
   useThrottle,
 } from "../composables/useAdvancedDebounce.js";
+import { formatPace, formatTime } from "../utils/format.js";
 // Import clustering styles
 import "../styles/track-clustering.css";
 
@@ -291,6 +293,14 @@ let filterUpdateTimeout = null;
 const isZoomAnimating = ref(false);
 const isUnmounting = ref(false);
 const isPanningOrZooming = ref(false);
+
+// E2E testing hooks (must be declared after dependencies)
+const e2eHooks = useTrackMapE2E({
+  isPanningOrZooming,
+  mapIsReady,
+  trackZoomAnimating,
+  props
+});
 
 function clearAnimationTimeout() {
   if (animationTimeout) {
@@ -1259,117 +1269,8 @@ async function onMapReady(e) {
 
     emit("mapReady", map);
 
-    // Expose E2E map hooks in non-production modes for tests/debugging
-    if (import.meta.env.MODE !== "production") {
-      try {
-        window.__e2e = window.__e2e || {};
-        window.__e2e.getMapCenter = () => {
-          try {
-            const c = map.getCenter();
-            return { lat: c ? c.lat : null, lng: c ? c.lng : null };
-          } catch (e) {
-            return { lat: null, lng: null };
-          }
-        };
-        // Provide direct access to the map instance for advanced debugging if needed
-        window.__e2e._lastMapInstance = map;
-        // Map idle indicator for E2E to detect when interactions are safe
-        window.__e2e.isMapIdle = () => {
-          try {
-            return (
-              !isPanningOrZooming.value &&
-              mapIsReady.value &&
-              !trackZoomAnimating.value
-            );
-          } catch (e) {
-            return false;
-          }
-        };
-        // Initialize observability flags
-        window.__e2e.lastGapLineExists = false;
-        window.__e2e.lastHighlightedColor = null;
-        // Test helper: force highlight calculation for a given marker lat/lng and segment index
-        window.__e2e.forceHighlightSegment = (lat, lng, segmentIndex = 0) => {
-          try {
-            if (typeof lat === "undefined" || typeof lng === "undefined")
-              return false;
-            const map =
-              window.__e2e && window.__e2e._lastMapInstance
-                ? window.__e2e._lastMapInstance
-                : null;
-            if (!map) return false;
-
-            // Search for geojson layer matching selected track id
-            let foundLayer = null;
-            map.eachLayer((layer) => {
-              try {
-                if (
-                  !foundLayer &&
-                  layer &&
-                  layer.feature &&
-                  layer.feature.properties &&
-                  layer.feature.properties.id === props.selectedTrackDetail?.id
-                ) {
-                  foundLayer = layer;
-                }
-              } catch (e) {}
-            });
-
-            if (!foundLayer || typeof foundLayer.getLatLngs !== "function")
-              return false;
-
-            const latlngs = foundLayer.getLatLngs();
-            const segments = Array.isArray(latlngs[0]) ? latlngs : [latlngs];
-            const seg = segments[segmentIndex] || segments[0];
-
-            // Compute nearest point on the target segment
-            let best = null;
-            let bestDist = Infinity;
-            for (let i = 0; i < seg.length; i++) {
-              const { lat: slat, lng: slng } = seg[i];
-              const d =
-                (slat - lat) * (slat - lat) + (slng - lng) * (slng - lng);
-              if (d < bestDist) {
-                bestDist = d;
-                best = [seg[i].lat, seg[i].lng];
-              }
-            }
-
-            if (!best) return false;
-
-            // Draw gap line (test-only) and set observability flag
-            try {
-              if (markerGapLine.value && map) {
-                map.removeLayer(markerGapLine.value);
-                markerGapLine.value = null;
-              }
-              markerGapLine.value = L.polyline([[lat, lng], best], {
-                color: "#000",
-                weight: 1.5,
-                opacity: 0.6,
-                interactive: false,
-                className: "chart-gap-line",
-              }).addTo(map);
-              if (import.meta.env.MODE !== "production" && window.__e2e) {
-                try {
-                  window.__e2e.lastGapLineExists = true;
-                } catch (e) {}
-              }
-            } catch (e) {
-              console.warn("E2E forceHighlightSegment draw failed:", e);
-              return false;
-            }
-
-            return true;
-          } catch (e) {
-            console.warn("E2E forceHighlightSegment failed:", e);
-            return false;
-          }
-        };
-      } catch (e) {
-        // ignore
-      }
-    }
+    // Initialize E2E hooks for testing
+    e2eHooks.initE2E(map);
 
     // Apply bounds if they were set before map was ready
     if (
@@ -1502,33 +1403,6 @@ function performAutoPan(latlng, map) {
       // ignore pan errors
     }
   }
-}
-
-function formatTime(timeValue) {
-  // Simple formatting - accept ISO string or unix timestamp
-  try {
-    if (!timeValue && timeValue !== 0) return "";
-    if (typeof timeValue === "number") {
-      // assume unix timestamp
-      return new Date(timeValue).toISOString();
-    }
-    return String(timeValue);
-  } catch (e) {
-    return String(timeValue);
-  }
-}
-
-function formatPace(paceValue) {
-  // paceValue in min/km (e.g., 4.5) -> "4:30 min/km"
-  if (
-    paceValue === null ||
-    paceValue === undefined ||
-    typeof paceValue !== "number"
-  )
-    return String(paceValue);
-  const minutes = Math.floor(paceValue);
-  const seconds = Math.round((paceValue - minutes) * 60);
-  return `${minutes}:${String(seconds).padStart(2, "0")} min/km`;
 }
 
 function showMarkerPolyline(track, map, marker) {
@@ -2445,15 +2319,8 @@ onUnmounted(() => {
 
   cleanup();
 
-  // Remove E2E hooks
-  if (import.meta.env.MODE !== "production" && window.__e2e) {
-    try {
-      delete window.__e2e.getMapCenter;
-      delete window.__e2e._lastMapInstance;
-    } catch (e) {
-      // ignore
-    }
-  }
+  // Cleanup E2E hooks
+  e2eHooks.cleanup();
 });
 
 defineExpose({ leafletMap });

@@ -96,7 +96,7 @@
         :type="(toast.value && toast.value.type) || 'info'"
         :duration="(toast.value && toast.value.duration) || 3000"
       />
-      <TrackDetailPanel 
+      <TrackDetailPanel
         v-if="track"
         :track="track"
         :isOwner="isOwner"
@@ -108,7 +108,6 @@
         @chart-point-hover="handleChartPointHover"
         @chart-point-leave="handleChartPointLeave"
         @chart-point-click="handleChartPointClick"
-      />
       />
     </TrackMap>
     <div v-if="track && polylines.length === 0" class="error-message">
@@ -141,9 +140,11 @@ import { useToast } from '../composables/useToast';
 import { useTracks } from '../composables/useTracks';
 import { usePois } from '../composables/usePois';
 import { useSearchState } from '../composables/useSearchState';
+import { useTrackViewE2E } from '../composables/useTrackViewE2E';
 import { getSessionId } from '../utils/session';
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
 import { isLoopTrack } from '../utils/trackGeometry.js';
+import { extractSegments, calculateBounds } from '../utils/coordinates.js';
 import { useHead } from '@vueuse/head';
 import { buildBoundaryMarkers, buildPauseGapLines, buildSegmentColors, buildSegmentGapMarkers } from '../utils/gapVisualization';
 import '../styles/track-overlays.css';
@@ -170,19 +171,7 @@ function getColorForId(id) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function extractSegments(geomGeojson) {
-  if (!geomGeojson || !geomGeojson.coordinates) return [];
 
-  if (geomGeojson.type === 'MultiLineString') {
-    return geomGeojson.coordinates.map(line => line.map(([lng, lat]) => [lat, lng]));
-  }
-
-  if (geomGeojson.type === 'LineString') {
-    return [geomGeojson.coordinates.map(([lng, lat]) => [lat, lng])];
-  }
-
-  return [];
-}
 
 const router = useRouter();
 const route = useRoute();
@@ -223,6 +212,69 @@ const STABILIZATION_DELAY = 3000; // 3 seconds to wait for map auto-zoom to stab
 const lastPoiFetchedTrackId = ref(null); // Track which track ID has had POIs fetched to prevent duplicates
 const mapIsReady = ref(false); // Track if map is ready for POI clustering
 const fetchingTrack = ref(false); // Prevent duplicate track fetches
+
+// Site URL for SEO
+const SITE_URL = (import.meta.env.VITE_SITE_URL || 'https://your-domain.example').replace(/\/+$/, '');
+
+// Reactive head configuration based on track data (must be after track ref is defined)
+const headConfig = computed(() => {
+  if (!track.value) {
+    return {
+      title: 'Track — Trackly',
+      meta: [
+        { name: 'description', content: 'Просмотр трека на Trackly' }
+      ]
+    };
+  }
+
+  const trackUrl = `${SITE_URL}/track/${track.value.id}`;
+  const hasLatlngs = track.value.latlngs && track.value.latlngs.length > 0;
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    'name': track.value.name,
+    'description': track.value.description,
+    'url': trackUrl,
+    ...(hasLatlngs && {
+      'mainEntity': {
+        '@type': 'Place',
+        'name': track.value.name,
+        'geo': {
+          '@type': 'GeoCoordinates',
+          'latitude': track.value.latlngs[0][0],
+          'longitude': track.value.latlngs[0][1]
+        }
+      }
+    })
+  };
+
+  return {
+    title: `${track.value.name} — Trackly`,
+    meta: [
+      { name: 'description', content: track.value.description || 'Просмотрите трек и его параметры на Trackly.' },
+      { property: 'og:title', content: track.value.name || 'Trackly — треки и маршруты' },
+      { property: 'og:description', content: track.value.description || 'Просмотрите трек и его параметры на Trackly.' },
+      { property: 'og:type', content: 'article' },
+      { property: 'og:url', content: trackUrl },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:title', content: track.value.name || '' },
+      { name: 'twitter:description', content: track.value.description || '' }
+    ],
+    link: [
+      { rel: 'canonical', href: trackUrl }
+    ],
+    script: [
+      {
+        type: 'application/ld+json',
+        children: JSON.stringify(jsonLd)
+      }
+    ]
+  };
+});
+
+// Apply head configuration reactively
+useHead(headConfig);
 
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
@@ -267,48 +319,7 @@ const debouncedFetchTrack = useAdvancedDebounce(async (id, zoomLevel) => {
         track.value.latlngs = track.value.path;
       }
 
-      // Set page head/meta for SEO (title, meta tags, canonical, JSON-LD)
-      try {
-        useHead({
-          title: `${track.value.name} — Trackly`,
-          meta: [
-            { name: 'description', content: track.value.description || 'Просмотрите трек и его параметры на Trackly.' },
-            { property: 'og:title', content: track.value.name || 'Trackly — треки и маршруты' },
-            { property: 'og:description', content: track.value.description || 'Просмотрите трек и его параметры на Trackly.' },
-            { property: 'og:type', content: 'article' },
-            { property: 'og:url', content: `${(import.meta.env.VITE_SITE_URL || 'https://your-domain.example').replace(/\/+$/,'')}/track/${track.value.id}` },
-            { name: 'twitter:card', content: 'summary_large_image' },
-            { name: 'twitter:title', content: track.value.name || '' },
-            { name: 'twitter:description', content: track.value.description || '' }
-          ],
-          link: [
-            { rel: 'canonical', href: `${(import.meta.env.VITE_SITE_URL || 'https://your-domain.example').replace(/\/+$/,'')}/track/${track.value.id}` }
-          ],
-          script: [
-            {
-              type: 'application/ld+json',
-              children: JSON.stringify({
-                "@context": "https://schema.org",
-                "@type": "WebPage",
-                "name": track.value.name,
-                "description": track.value.description,
-                "url": `https://your-domain.example/track/${track.value.id}`,
-                "mainEntity": (track.value.latlngs && track.value.latlngs[0]) ? {
-                  "@type": "Place",
-                  "name": track.value.name,
-                  "geo": {
-                    "@type": "GeoCoordinates",
-                    "latitude": track.value.latlngs[0][0],
-                    "longitude": track.value.latlngs[0][1]
-                  }
-                } : undefined
-              })
-            }
-          ]
-        });
-      } catch (err) {
-        console.warn('[TrackView] Failed to update head/meta for track:', err);
-      }
+      // Head/meta will be updated by watcher - removed from async function
       
       // Track positioning is handled entirely by TrackMap's fitBounds with trackBounds
       // and getDetailPanelFitBoundsOptions(). We don't set center/zoom here to avoid
@@ -425,7 +436,7 @@ const coordinateData = computed(() => {
   if (!track.value || !track.value.latlngs || track.value.latlngs.length === 0) {
     return [];
   }
-  
+
   // Return latlngs array directly - it's already in [lat, lng] format
   return track.value.latlngs;
 });
@@ -534,24 +545,6 @@ async function fetchTrack(zoomLevel = null, forceTrackId = null, options = { for
   } else {
     isInitialLoad.value = false; // Mark that initial load is complete for non-initial fetches
   }
-}
-
-function calculateBounds(latlngs) {
-  if (!latlngs || latlngs.length === 0) return null;
-  
-  let north = -90, south = 90, east = -180, west = 180;
-  
-  latlngs.forEach(point => {
-    const lat = point[0];
-    const lng = point[1];
-    
-    if (lat > north) north = lat;
-    if (lat < south) south = lat;
-    if (lng > east) east = lng;
-    if (lng < west) west = lng;
-  });
-  
-  return { north, south, east, west };
 }
 
 function onMapReady() {
@@ -698,75 +691,71 @@ function handleNameUpdated(newName) {
 }
 
 // Chart interaction handlers
-function handleChartPointHover(payload) {
-  // Ignore hover events if point is fixed, unless this payload is explicitly setting a fixed point
-  if (isChartPointFixed.value && !(payload && payload.isFixed)) return;
-  
-  // Store hover point
-  chartHoverPoint.value = payload;
-
-  // Expose last hover payload for E2E/debugging in non-production modes
-  if (import.meta.env.MODE !== 'production') {
-    try {
-      window.__e2e = window.__e2e || {};
-      window.__e2e.lastHoverPayload = payload;
-    } catch (e) {
-      // ignore in environments without window
-    }
-  }
-  
-  // Reconstruct latlng if missing
-  const effectiveIndex = payload.coordinateIndex !== undefined && payload.coordinateIndex !== null
+function getEffectiveIndex(payload) {
+  return payload.coordinateIndex !== undefined && payload.coordinateIndex !== null
     ? payload.coordinateIndex
     : payload.index;
-  let latlng = payload.latlng;
-  
-  if (!latlng && effectiveIndex !== undefined) {
-    // Try to get from coordinateData
-    if (coordinateData.value && coordinateData.value[effectiveIndex]) {
-      latlng = coordinateData.value[effectiveIndex];
-    } else if (track.value && track.value.latlngs) {
-      // Fallback: proportional mapping or interpolation
-      const trackLatlngs = track.value.latlngs;
-      if (trackLatlngs.length > 0) {
-        // Simple proportional mapping
-        const ratio = (typeof effectiveIndex === 'number' ? effectiveIndex : 0) / Math.max(coordinateData.value?.length || 1, 1);
-        const trackIndex = Math.min(
-          Math.round(ratio * (trackLatlngs.length - 1)),
-          trackLatlngs.length - 1
-        );
-        latlng = trackLatlngs[trackIndex];
-      }
-    }
+}
+
+function findLatlngByIndex(index) {
+  if (coordinateData.value?.[index]) {
+    return coordinateData.value[index];
   }
-  
-  // If we have latlng, update marker
-  if (latlng) {
-    // Determine segment index for multi-segment tracks
-    let segmentIndex = 0;
-    if (track.value && track.value.segments && track.value.segments.length > 1) {
-      // Find which segment this point belongs to based on index
-      let accumulatedLength = 0;
-      for (let i = 0; i < track.value.segments.length; i++) {
-        const segmentLength = track.value.segments[i].length;
-        if (effectiveIndex < accumulatedLength + segmentLength) {
-          segmentIndex = i;
-          break;
-        }
-        accumulatedLength += segmentLength;
-      }
-    }
-    
-    markerLatLng.value = {
-      latlng,
-      distanceKm: payload.distanceKm,
-      elevation: payload.elevation,
-      slope: payload.slope,
-      coordinateIndex: effectiveIndex,
-      segmentIndex,
-      isFixed: !!payload.isFixed
-    };
+
+  if (!track.value?.latlngs?.length) return null;
+
+  // Fallback: proportional mapping
+  const ratio = index / Math.max(coordinateData.value?.length || 1, 1);
+  const trackIndex = Math.min(
+    Math.round(ratio * (track.value.latlngs.length - 1)),
+    track.value.latlngs.length - 1
+  );
+  return track.value.latlngs[trackIndex];
+}
+
+function findSegmentIndex(index) {
+  if (!track.value?.segments || track.value.segments.length <= 1) return 0;
+
+  let accumulatedLength = 0;
+  for (let i = 0; i < track.value.segments.length; i++) {
+    const segmentLength = track.value.segments[i].length;
+    if (index < accumulatedLength + segmentLength) return i;
+    accumulatedLength += segmentLength;
   }
+  return 0;
+}
+
+function updateE2EPayload(payload) {
+  if (import.meta.env.MODE === 'production') return;
+  try {
+    window.__e2e = window.__e2e || {};
+    window.__e2e.lastHoverPayload = payload;
+  } catch (e) {
+    // ignore
+  }
+}
+
+function handleChartPointHover(payload) {
+  // Ignore hover events if point is fixed (unless explicitly setting a fixed point)
+  if (isChartPointFixed.value && !payload?.isFixed) return;
+
+  chartHoverPoint.value = payload;
+  updateE2EPayload(payload);
+
+  const effectiveIndex = getEffectiveIndex(payload);
+  const latlng = payload.latlng || (effectiveIndex !== undefined ? findLatlngByIndex(effectiveIndex) : null);
+
+  if (!latlng) return;
+
+  markerLatLng.value = {
+    latlng,
+    distanceKm: payload.distanceKm,
+    elevation: payload.elevation,
+    slope: payload.slope,
+    coordinateIndex: effectiveIndex,
+    segmentIndex: findSegmentIndex(effectiveIndex),
+    isFixed: !!payload.isFixed
+  };
 }
 
 function handleChartPointLeave(event) {
@@ -786,7 +775,7 @@ function handleChartPointLeave(event) {
 function handleChartPointClick(payload) {
   // Toggle fixed state
   isChartPointFixed.value = payload.isFixed;
-  
+
   if (payload.isFixed) {
     // Fix the point - same logic as hover but with isFixed flag
     handleChartPointHover({ ...payload, isFixed: true });
@@ -796,6 +785,16 @@ function handleChartPointClick(payload) {
     markerLatLng.value = null;
   }
 }
+
+// E2E testing hooks (must be after all handler functions are declared)
+const e2eHooks = useTrackViewE2E({
+  track,
+  coordinateData,
+  isChartPointFixed,
+  chartHoverPoint,
+  markerLatLng,
+  handleChartPointHover
+});
 
 function handlePoiClick(poi) {
   console.log('[TrackView] POI clicked:', poi);
@@ -851,123 +850,8 @@ onMounted(async () => {
   // Add track elevation update listener
   window.addEventListener('track-elevation-updated', handleTrackElevationUpdated);
 
-  // Expose E2E hooks for tests and debugging in non-production modes
-  if (import.meta.env.MODE !== 'production') {
-    window.__e2e = window.__e2e || {};
-
-    // Simulate hovering at a chart index. Optionally pass { isFixed: true } to fix the point.
-    window.__e2e.hoverAtIndex = (index, opts = {}) => {
-      try {
-        const idx = Number(index);
-        if (!Number.isFinite(idx) || !coordinateData.value || coordinateData.value.length === 0) return false;
-        const i = Math.max(0, Math.min(idx, coordinateData.value.length - 1));
-        const latlng = coordinateData.value[i];
-        const payload = {
-          index: i,
-          latlng,
-          distanceKm: undefined,
-          elevation: undefined,
-          isFixed: !!(opts && opts.isFixed)
-        };
-        handleChartPointHover(payload);
-        return true;
-      } catch (e) {
-        console.warn('E2E hoverAtIndex failed:', e);
-        return false;
-      }
-    };
-
-    // Fix a point at index
-    window.__e2e.fixAtIndex = (index) => {
-      try {
-        const success = window.__e2e.hoverAtIndex(index, { isFixed: true });
-        return success;
-      } catch (e) {
-        console.warn('E2E fixAtIndex failed:', e);
-        return false;
-      }
-    };
-
-    // Allow hovering at a specific lat/lng for gap testing
-    window.__e2e.hoverAtLatLng = (lat, lng, opts = {}) => {
-      try {
-        if (lat === undefined || lng === undefined) return false;
-        const payload = { latlng: [lat, lng], isFixed: !!(opts && opts.isFixed) };
-        // Support passing an index via opts for deterministic segment selection in E2E
-        if (opts && typeof opts.index !== 'undefined') payload.index = opts.index;
-        handleChartPointHover(payload);
-        // Allow explicit segmentIndex override when back-end segment metadata is not available
-        if (opts && typeof opts.segmentIndex !== 'undefined' && markerLatLng && markerLatLng.value) {
-          try { markerLatLng.value.segmentIndex = opts.segmentIndex; } catch (e) {}
-        }
-        return true;
-      } catch (e) {
-        console.warn('E2E hoverAtLatLng failed:', e);
-        return false;
-      }
-    };
-
-    // Clear any marker or fixed points
-    window.__e2e.clearMarker = () => {
-      try {
-        isChartPointFixed.value = false;
-        chartHoverPoint.value = null;
-        markerLatLng.value = null;
-        return true;
-      } catch (e) {
-        console.warn('E2E clearMarker failed:', e);
-        return false;
-      }
-    };
-
-    // Expose last marker latlng and fixed state for deterministic E2E assertions
-    window.__e2e.getLastMarkerLatLng = () => {
-      try {
-        const v = markerLatLng ? markerLatLng.value && markerLatLng.value.latlng ? markerLatLng.value.latlng : null : null;
-        if (!v) return null;
-        // Coerce array [lat,lng] to object {lat,lng} for tests
-        if (Array.isArray(v) && v.length >= 2) return { lat: v[0], lng: v[1] };
-        // If it's already an object with lat/lng, return as-is
-        if (typeof v === 'object' && v.lat !== undefined && v.lng !== undefined) return v;
-        return null;
-      } catch (e) {
-        return null;
-      }
-    };
-
-    window.__e2e.isMarkerFixed = () => {
-      try {
-        return !!isChartPointFixed.value;
-      } catch (e) {
-        return false;
-      }
-    };
-
-    window.__e2e.getLastMarkerDetails = () => {
-      try {
-        return markerLatLng && markerLatLng.value ? { ...markerLatLng.value } : null;
-      } catch (e) {
-        return null;
-      }
-    };
-
-    window.__e2e.getCoordinateDataLength = () => {
-      try {
-        return coordinateData && coordinateData.value ? coordinateData.value.length : 0;
-      } catch (e) {
-        return 0;
-      }
-    };
-
-    window.__e2e.getLastHoverPayload = () => {
-      try {
-        return window.__e2e && window.__e2e.lastHoverPayload ? { ...window.__e2e.lastHoverPayload } : null;
-      } catch (e) {
-        return null;
-      }
-    };
-
-  }
+  // Initialize E2E hooks for testing
+  e2eHooks.initE2E();
 });
 
 // Cleanup on unmount
@@ -977,19 +861,9 @@ onUnmounted(() => {
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
 
-  // Remove E2E hooks in non-production modes
-  if (import.meta.env.MODE !== 'production' && window.__e2e) {
-    try {
-      delete window.__e2e.hoverAtIndex;
-      delete window.__e2e.fixAtIndex;
-      delete window.__e2e.clearMarker;
-      delete window.__e2e.getLastMarkerLatLng;
-      delete window.__e2e.isMarkerFixed;
-    } catch (e) {
-      // ignore
-    }
-  }
-  
+  // Cleanup E2E hooks
+  e2eHooks.cleanup();
+
   // Clear stabilization timer
   if (mapStabilizationTimer.value) {
     clearTimeout(mapStabilizationTimer.value);
@@ -1012,25 +886,15 @@ onDeactivated(() => {
   // Remove track elevation update listener
   window.removeEventListener('track-elevation-updated', handleTrackElevationUpdated);
 
-  // Remove E2E hooks in non-production modes
-  if (import.meta.env.MODE !== 'production' && window.__e2e) {
-    try {
-      delete window.__e2e.hoverAtIndex;
-      delete window.__e2e.fixAtIndex;
-      delete window.__e2e.clearMarker;
-      delete window.__e2e.getLastMarkerLatLng;
-      delete window.__e2e.isMarkerFixed;
-    } catch (e) {
-      // ignore
-    }
-  }
-  
+  // Cleanup E2E hooks
+  e2eHooks.cleanup();
+
   // Clear stabilization timer
   if (mapStabilizationTimer.value) {
     clearTimeout(mapStabilizationTimer.value);
     mapStabilizationTimer.value = null;
   }
-  
+
   // Stop elevation polling in TrackDetailPanel by marking it as not for current track
   // This prevents continued polling when navigating away from TrackView
   window.dispatchEvent(new CustomEvent('stop-elevation-polling'));

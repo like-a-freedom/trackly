@@ -29,6 +29,7 @@
     "leaflet": "^1.9.4",
     "leaflet-polylinedecorator": "^1.6.0",
     "leaflet.markercluster": "^1.5.3",
+    "lodash-es": "^4.17.23",
     "lucide-vue-next": "^0.563.0",
     "vue": "^3.5.27",
     "vue-chartjs": "^5.3.3",

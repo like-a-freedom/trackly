@@ -87,10 +87,14 @@ if (L.Map && L.Map.prototype.latLngToContainerPoint) {
 const origLayerRemove = L.Layer.prototype.remove;
 L.Layer.prototype.remove = function () {
     try {
-        // Clear any pending zoom animation listeners
+        // Clear any pending zoom animation listeners (only if they exist)
         if (this._map && this._map.off) {
-            this._map.off('zoomanim', this._animateZoom, this);
-            this._map.off('zoomend', this._onZoomEnd, this);
+            if (typeof this._animateZoom === 'function') {
+                this._map.off('zoomanim', this._animateZoom, this);
+            }
+            if (typeof this._onZoomEnd === 'function') {
+                this._map.off('zoomend', this._onZoomEnd, this);
+            }
         }
         return origLayerRemove.call(this);
     } catch (err) {
