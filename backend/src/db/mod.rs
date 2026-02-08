@@ -12,10 +12,12 @@ pub use api_usage::{
 
 // Re-export track-related functions and types
 pub use tracks::{
-    InsertTrackParams, UpdateElevationParams, UpdateSlopeParams, delete_track, get_track_by_id,
-    get_track_detail, get_track_detail_adaptive, insert_track, list_public_tracks_for_sitemap,
-    list_tracks, list_tracks_geojson, search_tracks, track_exists, update_track_categories,
-    update_track_description, update_track_elevation, update_track_name, update_track_slope,
+    InsertTrackFromEditorParams, InsertTrackParams, UpdateElevationParams, UpdateSlopeParams,
+    delete_track, duplicate_track, get_track_by_id, get_track_detail, get_track_detail_adaptive,
+    get_track_ownership, insert_track, insert_track_from_editor, list_public_tracks_for_sitemap,
+    list_tracks, list_tracks_geojson, publish_track, search_tracks, track_exists,
+    update_track_categories, update_track_description, update_track_elevation,
+    update_track_geometry, update_track_name, update_track_slope,
 };
 
 // Re-export user-related functions and types

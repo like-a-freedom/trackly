@@ -2030,6 +2030,69 @@ pub async fn delete_poi(
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ============================================================================
+// Track Editor Handlers
+// ============================================================================
+
+/// POST /api/tracks/create — Create a new track from editor geometry.
+pub async fn create_track_from_editor(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Json(request): Json<crate::services::track_editor::CreateTrackFromEditorRequest>,
+) -> Result<(StatusCode, Json<TrackUploadResponse>), StatusCode> {
+    let user_id = auth_user.user().map(|u| u.user_id);
+    let service = crate::services::track_editor::TrackEditorService::new(pool);
+    let response = service.create_track(request, user_id).await?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// PUT /api/tracks/{id}/geometry — Update track geometry.
+pub async fn update_track_geometry(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Path(track_id): Path<Uuid>,
+    Json(request): Json<crate::services::track_editor::UpdateTrackGeometryRequest>,
+) -> Result<StatusCode, StatusCode> {
+    // Check ownership
+    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
+        .await
+        .map_err(handle_db_error)?;
+    check_track_ownership(
+        track_user_id,
+        track_session_id,
+        &auth_user,
+        request.session_id,
+    )?;
+
+    let service = crate::services::track_editor::TrackEditorService::new(pool);
+    service.update_geometry(track_id, request).await?;
+    Ok(StatusCode::OK)
+}
+
+/// POST /api/tracks/{id}/duplicate — Duplicate an existing track.
+pub async fn duplicate_track(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Path(source_id): Path<Uuid>,
+    Json(request): Json<crate::services::track_editor::DuplicateTrackRequest>,
+) -> Result<(StatusCode, Json<TrackUploadResponse>), StatusCode> {
+    // Check ownership of source track
+    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, source_id)
+        .await
+        .map_err(handle_db_error)?;
+    check_track_ownership(
+        track_user_id,
+        track_session_id,
+        &auth_user,
+        request.session_id,
+    )?;
+
+    let user_id = auth_user.user().map(|u| u.user_id);
+    let service = crate::services::track_editor::TrackEditorService::new(pool);
+    let response = service.duplicate_track(source_id, request, user_id).await?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
 #[cfg(test)]
 mod track_crud_tests {
     use super::*;

@@ -97,6 +97,7 @@ async fn main() {
         .allow_methods([
             Method::GET,
             Method::POST,
+            Method::PUT,
             Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,
@@ -151,6 +152,19 @@ async fn main() {
         .route(
             "/api/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
+        )
+        // Track editor routes
+        .route(
+            "/api/tracks/create",
+            post(handlers::create_track_from_editor),
+        )
+        .route(
+            "/api/tracks/{id}/geometry",
+            axum::routing::put(handlers::update_track_geometry),
+        )
+        .route(
+            "/api/tracks/{id}/duplicate",
+            post(handlers::duplicate_track),
         )
         .route(
             "/observability/map-interactions",
