@@ -56,6 +56,22 @@
       </label>
     </div>
 
+    <div class="toolbar-divider" />
+
+    <!-- POI mode toggle -->
+    <div class="toolbar-group">
+      <button
+        class="toolbar-btn"
+        :class="{ active: poiMode }"
+        title="Режим добавления POI"
+        data-testid="poi-mode-btn"
+        @click="$emit('togglePoiMode')"
+      >
+        <span class="toolbar-btn-icon">📍</span>
+        <span class="toolbar-btn-label">POI</span>
+      </button>
+    </div>
+
     <!-- Spacer -->
     <div class="toolbar-spacer" />
 
@@ -64,7 +80,29 @@
       <span class="stat-item" title="Дистанция">
         📏 {{ distanceDisplay }}
       </span>
+      <span class="stat-item" title="Ориентировочное время">
+        ⏱ {{ timeDisplay }}
+      </span>
       <span class="stat-item" title="Точки"> 📍 {{ totalPoints }} </span>
+    </div>
+
+    <!-- Export dropdown -->
+    <div class="toolbar-group export-group">
+      <button
+        class="toolbar-btn"
+        :disabled="!savedTrackId"
+        title="Экспорт трека (Ctrl+E)"
+        data-testid="export-btn"
+        @click="showExportMenu = !showExportMenu"
+      >
+        <span class="toolbar-btn-icon">📥</span>
+        <span class="toolbar-btn-label">Экспорт</span>
+      </button>
+      <div v-if="showExportMenu" class="export-dropdown" data-testid="export-dropdown">
+        <button class="export-item" @click="handleExport('gpx')">🗺 GPX</button>
+        <button class="export-item" @click="handleExport('kml')">🌍 KML</button>
+        <button class="export-item" @click="handleExport('geojson')">📄 GeoJSON</button>
+      </div>
     </div>
 
     <!-- Save button -->
@@ -83,7 +121,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 const props = defineProps({
   mode: { type: String, default: "edit" },
@@ -93,10 +131,15 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
   totalPoints: { type: Number, default: 0 },
   totalDistanceKm: { type: Number, default: 0 },
+  estimatedTimeMinutes: { type: Number, default: 0 },
   routingMode: { type: String, default: "manual" },
+  poiMode: { type: Boolean, default: false },
+  savedTrackId: { type: [String, null], default: null },
 });
 
-defineEmits(["setMode", "undo", "redo", "save", "toggleRouting"]);
+const emit = defineEmits(["setMode", "undo", "redo", "save", "toggleRouting", "togglePoiMode", "export"]);
+
+const showExportMenu = ref(false);
 
 const modes = [
   { id: "view", label: "Просмотр", key: "F1", icon: "👁" },
@@ -110,6 +153,20 @@ const distanceDisplay = computed(() => {
   if (km < 1) return `${Math.round(km * 1000)} м`;
   return `${km.toFixed(2)} км`;
 });
+
+const timeDisplay = computed(() => {
+  const mins = props.estimatedTimeMinutes;
+  if (mins <= 0) return '0 мин';
+  if (mins < 60) return `${Math.round(mins)} мин`;
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+});
+
+function handleExport(format) {
+  showExportMenu.value = false;
+  emit('export', format);
+}
 </script>
 
 <style scoped>
@@ -217,5 +274,56 @@ const distanceDisplay = computed(() => {
 
 .toggle-label {
   user-select: none;
+}
+
+.export-group {
+  position: relative;
+}
+
+.export-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  min-width: 140px;
+  padding: 4px 0;
+}
+
+.export-item {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+}
+
+.export-item:hover {
+  background: #f0f0f0;
+}
+
+@media (max-width: 640px) {
+  .track-editor-toolbar {
+    padding: 4px 8px;
+    gap: 2px;
+  }
+
+  .toolbar-btn-label {
+    display: none;
+  }
+
+  .toolbar-stats {
+    font-size: 11px;
+    gap: 6px;
+    padding: 0 4px;
+  }
 }
 </style>

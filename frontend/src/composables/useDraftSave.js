@@ -2,6 +2,7 @@ import { ref, watch, onBeforeUnmount } from 'vue';
 
 const DRAFT_KEY = 'trackly_draft';
 const DRAFT_VERSION = 1;
+const DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /**
  * Draft save/restore composable.
@@ -17,14 +18,26 @@ export function useDraftSave({ debounceMs = 500 } = {}) {
     const isDirty = ref(false);
     let debounceTimer = null;
 
-    /** Check if a draft exists in localStorage. */
+    /** Check if a draft exists in localStorage and is not expired (30 days TTL). */
     function checkDraft() {
         try {
             const raw = localStorage.getItem(DRAFT_KEY);
             if (raw) {
                 const parsed = JSON.parse(raw);
-                hasDraft.value = parsed?.version === DRAFT_VERSION && !!parsed?.track;
-                return hasDraft.value;
+                if (parsed?.version !== DRAFT_VERSION || !parsed?.track) {
+                    hasDraft.value = false;
+                    return false;
+                }
+                // Check 30-day TTL
+                if (parsed.timestamp) {
+                    const age = Date.now() - new Date(parsed.timestamp).getTime();
+                    if (age > DRAFT_MAX_AGE_MS) {
+                        deleteDraft();
+                        return false;
+                    }
+                }
+                hasDraft.value = true;
+                return true;
             }
         } catch {
             // Corrupted data — ignore
@@ -33,13 +46,21 @@ export function useDraftSave({ debounceMs = 500 } = {}) {
         return false;
     }
 
-    /** Load draft from localStorage. Returns parsed draft object or null. */
+    /** Load draft from localStorage. Returns parsed draft object or null. Enforces 30-day TTL. */
     function loadDraft() {
         try {
             const raw = localStorage.getItem(DRAFT_KEY);
             if (!raw) return null;
             const parsed = JSON.parse(raw);
             if (parsed?.version !== DRAFT_VERSION) return null;
+            // Check 30-day TTL
+            if (parsed.timestamp) {
+                const age = Date.now() - new Date(parsed.timestamp).getTime();
+                if (age > DRAFT_MAX_AGE_MS) {
+                    deleteDraft();
+                    return null;
+                }
+            }
             return parsed;
         } catch {
             return null;

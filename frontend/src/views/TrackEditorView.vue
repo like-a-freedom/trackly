@@ -10,11 +10,16 @@
       :totalPoints="editor.totalPoints.value"
       :totalDistanceKm="editor.totalDistanceKm.value"
       :routingMode="editor.routing.mode.value"
+      :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
+      :poiMode="poiMode"
+      :savedTrackId="editor.savedTrackId.value"
       @setMode="editor.setMode"
       @undo="editor.handleUndo"
       @redo="editor.handleRedo"
       @save="handleSave"
       @toggleRouting="editor.routing.toggleMode"
+      @togglePoiMode="poiMode = !poiMode"
+      @export="handleExport"
     />
 
     <!-- Main content: map + sidebar -->
@@ -25,12 +30,17 @@
         :activeSegmentIndex="editor.activeSegmentIndex.value"
         :editorMode="editor.editorMode.value"
         :totalPoints="editor.totalPoints.value"
+        :pois="editor.pois.value"
+        :poiMode="poiMode"
         @addWaypoint="handleAddWaypoint"
         @moveWaypoint="editor.moveWaypoint"
         @deleteWaypoint="editor.deleteWaypoint"
         @insertWaypoint="editor.insertWaypoint"
         @splitSegment="editor.splitSegment"
         @setActiveSegment="editor.setActiveSegment"
+        @promoteToWaypoint="editor.promoteToWaypoint"
+        @addPoi="handleAddPoi"
+        @deletePoi="editor.deletePoi"
       />
 
       <TrackEditorSidebar
@@ -43,6 +53,8 @@
         :totalPoints="editor.totalPoints.value"
         :error="editor.error.value"
         :showDraftBanner="showDraftBanner"
+        :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
+        :pois="editor.pois.value"
         @update:trackName="editor.trackName.value = $event"
         @update:trackDescription="editor.trackDescription.value = $event"
         @update:trackCategories="editor.trackCategories.value = $event"
@@ -52,6 +64,8 @@
         @setActiveSegment="editor.setActiveSegment"
         @restoreDraft="handleRestoreDraft"
         @deleteDraft="handleDeleteDraft"
+        @joinSegments="handleJoinSegments"
+        @deletePoi="editor.deletePoi"
       />
     </div>
 
@@ -84,6 +98,7 @@ const editor = useTrackEditor({ trackId: trackId.value });
 
 const editorMap = ref(null);
 const showDraftBanner = ref(false);
+const poiMode = ref(false);
 
 // ── Handlers ──────────────────────────────────────────
 function handleAddWaypoint(lat, lng) {
@@ -99,7 +114,6 @@ async function handleSave() {
   const id = await editor.saveTrack();
   if (id) {
     showToast("Трек сохранён", "success");
-    // Navigate to track view
     router.push({ name: "Track", params: { id } });
   } else if (editor.error.value) {
     showToast(editor.error.value, "error", 5000);
@@ -120,6 +134,35 @@ function handleDeleteDraft() {
   editor.deleteDraft();
   showDraftBanner.value = false;
   showToast("Черновик удалён", "info");
+}
+
+async function handleAddPoi(lat, lng) {
+  const name = window.prompt("Название POI:");
+  if (!name) return;
+  await editor.addPoi(lat, lng, name);
+  showToast("POI добавлен", "success");
+}
+
+function handleJoinSegments() {
+  const idx = editor.activeSegmentIndex.value;
+  const segCount = editor.segments.value.length;
+  if (segCount < 2) {
+    showToast("Нужно минимум 2 сегмента для объединения", "warning");
+    return;
+  }
+  // Join active segment with next, or last two if active is the last
+  const a = idx < segCount - 1 ? idx : idx - 1;
+  editor.joinSegments(a, a + 1);
+  showToast("Сегменты объединены", "success");
+}
+
+async function handleExport(format) {
+  try {
+    await editor.exportTrack(format);
+    showToast(`Экспорт ${format.toUpperCase()} запущен`, "success");
+  } catch {
+    showToast("Ошибка экспорта", "error");
+  }
 }
 
 // ── Keyboard shortcuts ──────────────────────────────────
@@ -167,10 +210,35 @@ function onKeyDown(e) {
 
   // New segment
   if ((e.ctrlKey || e.metaKey) && e.key === "s" && !e.shiftKey) {
-    // Ctrl+S for new segment (as per spec)
     e.preventDefault();
     editor.addSegment();
     showToast("Новый сегмент создан", "info");
+  }
+
+  // Delete last point
+  if (e.key === "Delete" || e.key === "Backspace") {
+    e.preventDefault();
+    editor.deleteLastPoint();
+  }
+
+  // Join segments (Ctrl+J)
+  if ((e.ctrlKey || e.metaKey) && e.key === "j") {
+    e.preventDefault();
+    handleJoinSegments();
+  }
+
+  // Export (Ctrl+E)
+  if ((e.ctrlKey || e.metaKey) && e.key === "e") {
+    e.preventDefault();
+    handleExport("gpx");
+  }
+
+  // Escape — exit POI mode or reset mode to view
+  if (e.key === "Escape") {
+    if (poiMode.value) {
+      poiMode.value = false;
+      showToast("Режим POI отключён", "info");
+    }
   }
 
   // Fit bounds

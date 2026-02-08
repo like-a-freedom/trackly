@@ -167,4 +167,79 @@ describe('useDraftSave', () => {
             );
         });
     });
+
+    describe('TTL (30-day expiry)', () => {
+        it('checkDraft returns false for draft older than 30 days', () => {
+            const expired = new Date();
+            expired.setDate(expired.getDate() - 31);
+            storage['trackly_draft'] = JSON.stringify({
+                version: 1,
+                timestamp: expired.toISOString(),
+                track: { name: 'Old' },
+            });
+            const ds = createDraft();
+            expect(ds.hasDraft.value).toBe(false);
+        });
+
+        it('checkDraft returns true for draft within 30 days', () => {
+            const recent = new Date();
+            recent.setDate(recent.getDate() - 10);
+            storage['trackly_draft'] = JSON.stringify({
+                version: 1,
+                timestamp: recent.toISOString(),
+                track: { name: 'Recent' },
+            });
+            const ds = createDraft();
+            expect(ds.hasDraft.value).toBe(true);
+        });
+
+        it('checkDraft auto-deletes expired draft', () => {
+            const expired = new Date();
+            expired.setDate(expired.getDate() - 31);
+            storage['trackly_draft'] = JSON.stringify({
+                version: 1,
+                timestamp: expired.toISOString(),
+                track: { name: 'Expired' },
+            });
+            createDraft();
+            expect(localStorage.removeItem).toHaveBeenCalledWith('trackly_draft');
+        });
+
+        it('loadDraft returns null for expired draft', () => {
+            const ds = createDraft();
+            const expired = new Date();
+            expired.setDate(expired.getDate() - 31);
+            storage['trackly_draft'] = JSON.stringify({
+                version: 1,
+                timestamp: expired.toISOString(),
+                track: { name: 'Expired' },
+                editingState: {},
+            });
+            expect(ds.loadDraft()).toBeNull();
+        });
+
+        it('loadDraft returns valid data for non-expired draft', () => {
+            const ds = createDraft();
+            const recent = new Date();
+            recent.setDate(recent.getDate() - 5);
+            storage['trackly_draft'] = JSON.stringify({
+                version: 1,
+                timestamp: recent.toISOString(),
+                track: { name: 'Fresh' },
+                editingState: {},
+            });
+            const loaded = ds.loadDraft();
+            expect(loaded).not.toBeNull();
+            expect(loaded.track.name).toBe('Fresh');
+        });
+
+        it('treats draft without timestamp as valid (backward compat)', () => {
+            storage['trackly_draft'] = JSON.stringify({
+                version: 1,
+                track: { name: 'No timestamp' },
+            });
+            const ds = createDraft();
+            expect(ds.hasDraft.value).toBe(true);
+        });
+    });
 });

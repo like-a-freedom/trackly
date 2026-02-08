@@ -72,6 +72,23 @@
       >
         <l-tooltip :permanent="false">Финиш</l-tooltip>
       </l-circle-marker>
+
+      <!-- POI markers -->
+      <l-circle-marker
+        v-for="(poi, poiIdx) in pois"
+        :key="`poi-${poiIdx}`"
+        :lat-lng="[poi.lat, poi.lng]"
+        :radius="8"
+        color="#FF6F00"
+        fill-color="#FFB300"
+        :fill-opacity="0.9"
+        :weight="2"
+        :data-testid="`poi-marker-${poiIdx}`"
+        @click="(e) => onPoiClick(poiIdx, e)"
+        @contextmenu="(e) => onPoiContextMenu(poiIdx, e)"
+      >
+        <l-tooltip :permanent="false">{{ poi.name || `POI ${poiIdx + 1}` }}</l-tooltip>
+      </l-circle-marker>
     </l-map>
 
     <!-- Context menu -->
@@ -96,6 +113,22 @@
         @click="handleDeletePoint"
       >
         🗑️ Удалить точку
+      </button>
+      <button
+        v-if="contextMenu.canPromote"
+        class="context-menu-item"
+        data-testid="ctx-promote"
+        @click="handlePromote"
+      >
+        📌 В контрольную точку
+      </button>
+      <button
+        v-if="contextMenu.canDeletePoi"
+        class="context-menu-item"
+        data-testid="ctx-delete-poi"
+        @click="handleDeletePoi"
+      >
+        🗑️ Удалить POI
       </button>
       <button class="context-menu-item" @click="closeContextMenu">
         ✕ Закрыть
@@ -137,6 +170,8 @@ const props = defineProps({
   activeSegmentIndex: { type: Number, default: 0 },
   editorMode: { type: String, default: "edit" },
   totalPoints: { type: Number, default: 0 },
+  pois: { type: Array, default: () => [] },
+  poiMode: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -146,6 +181,9 @@ const emit = defineEmits([
   "insertWaypoint",
   "splitSegment",
   "setActiveSegment",
+  "promoteToWaypoint",
+  "addPoi",
+  "deletePoi",
 ]);
 
 const mapRef = ref(null);
@@ -159,8 +197,11 @@ const contextMenu = ref({
   y: 0,
   segIndex: -1,
   pointIndex: -1,
+  poiIndex: -1,
   canSplit: false,
   canDelete: false,
+  canPromote: false,
+  canDeletePoi: false,
 });
 
 // Drag state
@@ -229,6 +270,13 @@ function onMapClick(e) {
   closeContextMenu();
 
   const { lat, lng } = e.latlng;
+
+  // POI mode: add POI instead of waypoint
+  if (props.poiMode) {
+    emit("addPoi", lat, lng);
+    return;
+  }
+
   emit("addWaypoint", lat, lng);
 }
 
@@ -267,8 +315,13 @@ function onSegmentClick(segIdx, e) {
 }
 
 function onWaypointClick(segIdx, ptIdx, e) {
-  // Promote intermediate point to waypoint or select
   if (e.originalEvent) e.originalEvent.stopPropagation();
+
+  // FR-EDIT-06: Click on intermediate point promotes it to waypoint
+  const seg = props.segments[segIdx];
+  if (seg && !seg.waypoints.includes(ptIdx)) {
+    emit("promoteToWaypoint", segIdx, ptIdx);
+  }
 }
 
 function onWaypointContextMenu(segIdx, ptIdx, e) {
@@ -281,6 +334,7 @@ function onWaypointContextMenu(segIdx, ptIdx, e) {
   const seg = props.segments[segIdx];
   const isFirst = ptIdx === 0;
   const isLast = ptIdx === seg.points.length - 1;
+  const isWaypoint = seg.waypoints.includes(ptIdx);
 
   contextMenu.value = {
     visible: true,
@@ -288,8 +342,11 @@ function onWaypointContextMenu(segIdx, ptIdx, e) {
     y: (e.originalEvent ?? e).clientY,
     segIndex: segIdx,
     pointIndex: ptIdx,
+    poiIndex: -1,
     canSplit: !isFirst && !isLast && seg.points.length >= 3,
     canDelete: seg.points.length > 1,
+    canPromote: !isWaypoint,
+    canDeletePoi: false,
   };
 }
 
@@ -305,8 +362,46 @@ function handleDeletePoint() {
   closeContextMenu();
 }
 
+function handlePromote() {
+  const { segIndex, pointIndex } = contextMenu.value;
+  emit("promoteToWaypoint", segIndex, pointIndex);
+  closeContextMenu();
+}
+
+function onPoiClick(poiIdx, e) {
+  if (e.originalEvent) e.originalEvent.stopPropagation();
+}
+
+function onPoiContextMenu(poiIdx, e) {
+  if (props.editorMode === "view") return;
+  if (e.originalEvent) {
+    e.originalEvent.preventDefault();
+    e.originalEvent.stopPropagation();
+  }
+
+  contextMenu.value = {
+    visible: true,
+    x: (e.originalEvent ?? e).clientX,
+    y: (e.originalEvent ?? e).clientY,
+    segIndex: -1,
+    pointIndex: -1,
+    poiIndex: poiIdx,
+    canSplit: false,
+    canDelete: false,
+    canPromote: false,
+    canDeletePoi: true,
+  };
+}
+
+function handleDeletePoi() {
+  const { poiIndex } = contextMenu.value;
+  emit("deletePoi", poiIndex);
+  closeContextMenu();
+}
+
 function closeContextMenu() {
   contextMenu.value.visible = false;
+  contextMenu.value.poiIndex = -1;
 }
 
 // ── Drag handling ───────────────────────────────────────

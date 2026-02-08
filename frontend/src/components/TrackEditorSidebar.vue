@@ -106,6 +106,15 @@
           </span>
           <div class="segment-actions">
             <button
+              v-if="i < segmentStats.length - 1"
+              class="btn-icon-sm"
+              title="Объединить со следующим (Ctrl+J)"
+              data-testid="join-segment-btn"
+              @click.stop="$emit('joinSegments', i, i + 1)"
+            >
+              ⇋
+            </button>
+            <button
               class="btn-icon-sm"
               title="Развернуть"
               @click.stop="$emit('reverseSegment', i)"
@@ -124,6 +133,35 @@
       </ul>
     </section>
 
+    <!-- POI list -->
+    <section v-if="pois.length > 0" class="sidebar-section" data-testid="poi-section">
+      <div class="section-header">
+        <h3 class="section-title">POI ({{ pois.length }})</h3>
+      </div>
+      <ul class="poi-list">
+        <li
+          v-for="(poi, i) in pois"
+          :key="i"
+          class="poi-item"
+          data-testid="poi-item"
+        >
+          <span class="poi-icon">📍</span>
+          <span class="poi-info">
+            {{ poi.name || `POI ${i + 1}` }}
+            <small v-if="poi.description">{{ poi.description }}</small>
+            <small v-if="poi.distFromStart">📏 {{ formatDistanceM(poi.distFromStart) }} от старта</small>
+          </span>
+          <button
+            class="btn-icon-sm danger"
+            title="Удалить POI"
+            @click.stop="$emit('deletePoi', i)"
+          >
+            ✕
+          </button>
+        </li>
+      </ul>
+    </section>
+
     <!-- Summary -->
     <section
       class="sidebar-section summary-section"
@@ -134,12 +172,20 @@
         <strong>{{ formatDistance(totalDistanceKm) }}</strong>
       </div>
       <div class="summary-row">
+        <span>Время (оценка)</span>
+        <strong>{{ timeDisplay }}</strong>
+      </div>
+      <div class="summary-row">
         <span>Точки</span>
         <strong>{{ totalPoints }}</strong>
       </div>
       <div class="summary-row">
         <span>Сегменты</span>
         <strong>{{ segmentStats.length }}</strong>
+      </div>
+      <div v-if="pois.length > 0" class="summary-row">
+        <span>POI</span>
+        <strong>{{ pois.length }}</strong>
       </div>
     </section>
   </div>
@@ -154,8 +200,10 @@ const props = defineProps({
   activeSegmentIndex: { type: Number, default: 0 },
   totalDistanceKm: { type: Number, default: 0 },
   totalPoints: { type: Number, default: 0 },
+  estimatedTimeMinutes: { type: Number, default: 0 },
   error: { type: String, default: null },
   showDraftBanner: { type: Boolean, default: false },
+  pois: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits([
@@ -166,8 +214,10 @@ const emit = defineEmits([
   "deleteSegment",
   "reverseSegment",
   "setActiveSegment",
+  "joinSegments",
   "restoreDraft",
   "deleteDraft",
+  "deletePoi",
 ]);
 
 const availableCategories = [
@@ -192,6 +242,22 @@ function formatDistance(km) {
   if (km < 1) return `${Math.round(km * 1000)} м`;
   return `${km.toFixed(2)} км`;
 }
+
+function formatDistanceM(meters) {
+  if (meters < 1000) return `${Math.round(meters)} м`;
+  return `${(meters / 1000).toFixed(1)} км`;
+}
+
+import { computed } from "vue";
+
+const timeDisplay = computed(() => {
+  const mins = props.estimatedTimeMinutes;
+  if (mins <= 0) return '0 мин';
+  if (mins < 60) return `${Math.round(mins)} мин`;
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+});
 </script>
 
 <style scoped>
@@ -451,5 +517,52 @@ function formatDistance(km) {
 
 .summary-row strong {
   color: #333;
+}
+
+.poi-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.poi-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.poi-item:hover {
+  background: #f5f5f5;
+}
+
+.poi-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.poi-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.poi-info small {
+  display: block;
+  color: #888;
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .track-editor-sidebar {
+    width: 100%;
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid #e0e0e0;
+    max-height: 40vh;
+  }
 }
 </style>

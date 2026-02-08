@@ -595,4 +595,227 @@ describe('useTrackEditor', () => {
             expect(editor.restoreDraft()).toBe(false);
         });
     });
+
+    describe('promoteToWaypoint', () => {
+        it('adds intermediate point as waypoint', () => {
+            // Add 3 points (indices 0, 1, 2) — 0 and 2 are auto-waypoints
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+            const seg = editor.segments.value[0];
+            // Remove point 1 from waypoints to simulate intermediate point
+            seg.waypoints = [0, 2];
+
+            const result = editor.promoteToWaypoint(0, 1);
+            expect(result).toBe(true);
+            expect(seg.waypoints).toContain(1);
+        });
+
+        it('returns false if already a waypoint', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            const seg = editor.segments.value[0];
+            // point 0 is already a waypoint
+            expect(editor.promoteToWaypoint(0, 0)).toBe(false);
+        });
+
+        it('returns false for invalid index', () => {
+            expect(editor.promoteToWaypoint(0, 99)).toBe(false);
+            expect(editor.promoteToWaypoint(5, 0)).toBe(false);
+        });
+    });
+
+    describe('deleteLastPoint', () => {
+        it('deletes the last point from active segment', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            expect(editor.segments.value[0].points).toHaveLength(2);
+
+            editor.deleteLastPoint();
+            expect(editor.segments.value[0].points).toHaveLength(1);
+        });
+
+        it('returns false for empty segment', () => {
+            expect(editor.deleteLastPoint()).toBe(false);
+        });
+    });
+
+    describe('joinSegments', () => {
+        it('merges two adjacent segments', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addSegment();
+            editor.addWaypoint(50.02, 30.02);
+            editor.addWaypoint(50.03, 30.03);
+            expect(editor.segments.value).toHaveLength(2);
+
+            editor.joinSegments(0, 1);
+            expect(editor.segments.value).toHaveLength(1);
+            expect(editor.segments.value[0].points).toHaveLength(4);
+        });
+
+        it('returns false for non-adjacent segments', () => {
+            editor.addSegment();
+            editor.addSegment();
+            expect(editor.joinSegments(0, 2)).toBe(false);
+        });
+
+        it('returns false if both segments are empty', () => {
+            editor.addSegment();
+            expect(editor.joinSegments(0, 1)).toBe(false);
+        });
+    });
+
+    describe('closeLoop', () => {
+        it('connects last point to first point', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+            const countBefore = editor.segments.value[0].points.length;
+
+            editor.closeLoop();
+            const seg = editor.segments.value[0];
+            expect(seg.points).toHaveLength(countBefore + 1);
+            expect(seg.points[seg.points.length - 1]).toEqual(seg.points[0]);
+        });
+
+        it('returns false for segment with less than 3 points', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            expect(editor.closeLoop()).toBe(false);
+        });
+    });
+
+    describe('shortcutBetweenPoints', () => {
+        it('removes points between two indices', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+            editor.addWaypoint(50.03, 30.03);
+            editor.addWaypoint(50.04, 30.04);
+
+            const result = editor.shortcutBetweenPoints(0, 0, 4);
+            expect(result).toBe(true);
+            // Should keep only first and last
+            expect(editor.segments.value[0].points).toHaveLength(2);
+        });
+
+        it('returns false when points are adjacent', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            expect(editor.shortcutBetweenPoints(0, 0, 1)).toBe(false);
+        });
+
+        it('returns false for invalid indices', () => {
+            expect(editor.shortcutBetweenPoints(0, -1, 5)).toBe(false);
+            expect(editor.shortcutBetweenPoints(99, 0, 1)).toBe(false);
+        });
+    });
+
+    describe('extractSegmentAsTrack', () => {
+        it('returns GeoJSON and name for valid segment', () => {
+            editor.trackName.value = 'Test Track';
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+
+            const result = editor.extractSegmentAsTrack(0);
+            expect(result).not.toBeNull();
+            expect(result.geometry.type).toBe('MultiLineString');
+            expect(result.geometry.coordinates).toHaveLength(1);
+            expect(result.name).toContain('сегмент 1');
+        });
+
+        it('returns null for segment with less than 2 points', () => {
+            editor.addWaypoint(50.0, 30.0);
+            expect(editor.extractSegmentAsTrack(0)).toBeNull();
+        });
+
+        it('returns null for invalid segment index', () => {
+            expect(editor.extractSegmentAsTrack(99)).toBeNull();
+        });
+    });
+
+    describe('POI operations', () => {
+        it('addPoi adds a POI to the list', () => {
+            const result = editor.addPoi(50.0, 30.0, 'Water Source');
+            expect(result).toBe(true);
+            expect(editor.pois.value).toHaveLength(1);
+            expect(editor.pois.value[0].name).toBe('Water Source');
+        });
+
+        it('addPoi rejects invalid coordinates', () => {
+            expect(editor.addPoi(200, 30, 'Bad POI')).toBe(false);
+            expect(editor.pois.value).toHaveLength(0);
+        });
+
+        it('addPoi rejects empty name', () => {
+            expect(editor.addPoi(50.0, 30.0, '')).toBe(false);
+            expect(editor.addPoi(50.0, 30.0, '  ')).toBe(false);
+        });
+
+        it('updatePoi updates POI properties', () => {
+            editor.addPoi(50.0, 30.0, 'Old Name');
+            const result = editor.updatePoi(0, { name: 'New Name', category: 'water' });
+            expect(result).toBe(true);
+            expect(editor.pois.value[0].name).toBe('New Name');
+            expect(editor.pois.value[0].category).toBe('water');
+        });
+
+        it('updatePoi rejects empty name', () => {
+            editor.addPoi(50.0, 30.0, 'POI');
+            expect(editor.updatePoi(0, { name: '' })).toBe(false);
+        });
+
+        it('updatePoi returns false for invalid index', () => {
+            expect(editor.updatePoi(0, { name: 'test' })).toBe(false);
+        });
+
+        it('deletePoi removes a POI', () => {
+            editor.addPoi(50.0, 30.0, 'POI 1');
+            editor.addPoi(51.0, 31.0, 'POI 2');
+            editor.deletePoi(0);
+            expect(editor.pois.value).toHaveLength(1);
+            expect(editor.pois.value[0].name).toBe('POI 2');
+        });
+
+        it('deletePoi returns false for invalid index', () => {
+            expect(editor.deletePoi(-1)).toBe(false);
+            expect(editor.deletePoi(0)).toBe(false);
+        });
+    });
+
+    describe('estimatedTimeMinutes', () => {
+        it('returns 0 for empty track', () => {
+            expect(editor.estimatedTimeMinutes.value).toBe(0);
+        });
+
+        it('uses default 5 km/h for unknown category', () => {
+            // Add 2 points ~1km apart (roughly)
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.009, 30.0); // ~1km north
+            const dist = editor.totalDistanceKm.value;
+            // Time = (dist / 5) * 60 minutes
+            const expected = (dist / 5) * 60;
+            expect(editor.estimatedTimeMinutes.value).toBeCloseTo(expected, 1);
+        });
+
+        it('uses category-specific speed', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.009, 30.0);
+            const dist = editor.totalDistanceKm.value;
+
+            editor.trackCategories.value = ['cycling'];
+            // Cycling = 20 km/h
+            const expected = (dist / 20) * 60;
+            expect(editor.estimatedTimeMinutes.value).toBeCloseTo(expected, 1);
+        });
+    });
+
+    describe('exportTrack', () => {
+        it('returns false for unsaved track', async () => {
+            const result = await editor.exportTrack('gpx');
+            expect(result).toBe(false);
+            expect(editor.error.value).toContain('Сохраните');
+        });
+    });
 });

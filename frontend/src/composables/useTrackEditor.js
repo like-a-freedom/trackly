@@ -130,6 +130,23 @@ export function useTrackEditor({ trackId = null } = {}) {
 
     const isNewTrack = computed(() => !savedTrackId.value);
 
+    /** Average speed (km/h) per category for time estimation. */
+    const CATEGORY_SPEEDS = {
+        hiking: 5,
+        walking: 4,
+        running: 10,
+        cycling: 20,
+    };
+
+    /** Estimated time in minutes based on distance and primary category. */
+    const estimatedTimeMinutes = computed(() => {
+        const dist = totalDistanceKm.value;
+        if (dist <= 0) return 0;
+        const cat = trackCategories.value[0];
+        const speed = CATEGORY_SPEEDS[cat] ?? 5;
+        return (dist / speed) * 60;
+    });
+
     // ── Helpers ──────────────────────────────────────────────
     function createEmptySegment() {
         return { points: [], waypoints: [] };
@@ -301,6 +318,36 @@ export function useTrackEditor({ trackId = null } = {}) {
 
     // ── Segment operations ───────────────────────────────────
     /**
+     * Promote an intermediate (non-waypoint) point to a control point (waypoint).
+     * FR-EDIT-06: Click on intermediate point converts it to control point.
+     * @param {number} segIndex - Segment index
+     * @param {number} pointIndex - Point index within segment
+     * @returns {boolean} Whether the promotion succeeded
+     */
+    function promoteToWaypoint(segIndex, pointIndex) {
+        const seg = segments.value[segIndex];
+        if (!seg || pointIndex < 0 || pointIndex >= seg.points.length) return false;
+        if (seg.waypoints.includes(pointIndex)) return false; // already a waypoint
+
+        saveUndoState();
+        seg.waypoints.push(pointIndex);
+        seg.waypoints.sort((a, b) => a - b);
+        autosave();
+        return true;
+    }
+
+    /**
+     * Delete the last point of the active segment.
+     * Convenience function for Delete/Backspace keyboard shortcut.
+     * @returns {boolean}
+     */
+    function deleteLastPoint() {
+        const seg = segments.value[activeSegmentIndex.value];
+        if (!seg || seg.points.length === 0) return false;
+        return deleteWaypoint(activeSegmentIndex.value, seg.points.length - 1);
+    }
+
+    /**
      * Create a new empty segment and switch to it.
      * @returns {number} New segment index
      */
@@ -398,6 +445,119 @@ export function useTrackEditor({ trackId = null } = {}) {
         }
     }
 
+    /**
+     * Join two adjacent segments into one. UC-12.
+     * The second segment's points are appended to the first.
+     * @param {number} segIndexA - First segment index
+     * @param {number} segIndexB - Second segment index (must be segIndexA + 1)
+     * @returns {boolean}
+     */
+    function joinSegments(segIndexA, segIndexB) {
+        if (segIndexB !== segIndexA + 1) return false;
+        const segA = segments.value[segIndexA];
+        const segB = segments.value[segIndexB];
+        if (!segA || !segB) return false;
+        if (segA.points.length === 0 && segB.points.length === 0) return false;
+
+        saveUndoState();
+
+        const offsetB = segA.points.length;
+        // Append segB points to segA
+        segA.points = segA.points.concat(segB.points);
+        // Merge waypoints with offset
+        const mergedWaypoints = segA.waypoints.concat(
+            segB.waypoints.map((i) => i + offsetB)
+        );
+        segA.waypoints = [...new Set(mergedWaypoints)].sort((a, b) => a - b);
+
+        // Remove segB
+        segments.value.splice(segIndexB, 1);
+        if (activeSegmentIndex.value >= segments.value.length) {
+            activeSegmentIndex.value = segments.value.length - 1;
+        }
+
+        autosave();
+        return true;
+    }
+
+    /**
+     * Close the loop: connect the last point of the active segment to the first.
+     * If the distance is > MIN_POINT_DISTANCE_M, adds a new point at the start position.
+     * @returns {boolean}
+     */
+    function closeLoop() {
+        const seg = segments.value[activeSegmentIndex.value];
+        if (!seg || seg.points.length < 3) return false;
+
+        const first = seg.points[0];
+        const last = seg.points[seg.points.length - 1];
+        const dist = haversineDistance(
+            { lat: first[0], lng: first[1] },
+            { lat: last[0], lng: last[1] }
+        );
+
+        // Already closed
+        if (dist < MIN_POINT_DISTANCE_M) return false;
+
+        saveUndoState();
+        seg.points.push([first[0], first[1]]);
+        seg.waypoints.push(seg.points.length - 1);
+        autosave();
+        return true;
+    }
+
+    /**
+     * Create a shortcut: replace all points between fromIdx and toIdx with a straight line.
+     * Section 11: Shortcut operation.
+     * @param {number} segIndex
+     * @param {number} fromIdx - Start point index
+     * @param {number} toIdx - End point index
+     * @returns {boolean}
+     */
+    function shortcutBetweenPoints(segIndex, fromIdx, toIdx) {
+        const seg = segments.value[segIndex];
+        if (!seg) return false;
+        const lo = Math.min(fromIdx, toIdx);
+        const hi = Math.max(fromIdx, toIdx);
+        if (lo < 0 || hi >= seg.points.length || hi - lo < 2) return false;
+
+        saveUndoState();
+
+        // Keep only start and end points, remove everything in between
+        const startPt = seg.points[lo];
+        const endPt = seg.points[hi];
+        seg.points.splice(lo + 1, hi - lo - 1);
+
+        // Rebuild waypoints
+        seg.waypoints = seg.waypoints
+            .filter((i) => i <= lo || i >= hi)
+            .map((i) => (i > lo ? i - (hi - lo - 1) : i));
+        // Ensure lo and lo+1 are waypoints
+        if (!seg.waypoints.includes(lo)) seg.waypoints.push(lo);
+        if (!seg.waypoints.includes(lo + 1)) seg.waypoints.push(lo + 1);
+        seg.waypoints.sort((a, b) => a - b);
+
+        autosave();
+        return true;
+    }
+
+    /**
+     * Extract a segment as a separate new track (Section 11: New Track From Segment).
+     * Returns the GeoJSON and metadata for the new track without saving it.
+     * @param {number} segIndex
+     * @returns {{ geometry: Object, name: string } | null}
+     */
+    function extractSegmentAsTrack(segIndex) {
+        const seg = segments.value[segIndex];
+        if (!seg || seg.points.length < 2) return null;
+
+        const coords = seg.points.map(([lat, lng]) => [lng, lat]);
+        return {
+            geometry: { type: 'MultiLineString', coordinates: [coords] },
+            name: `${trackName.value} — сегмент ${segIndex + 1}`,
+        };
+    }
+
     /** Set editor mode. */
     function setMode(newMode) {
         if (['view', 'edit', 'fragment', 'routing'].includes(newMode)) {
@@ -471,6 +631,174 @@ export function useTrackEditor({ trackId = null } = {}) {
         activeSegmentIndex.value = 0;
     }
 
+    // ── POI operations ─────────────────────────────────────────
+    /**
+     * Add a POI at [lat, lng]. UC-08.
+     * @param {number} lat
+     * @param {number} lng
+     * @param {string} name - POI name (required)
+     * @param {Object} options
+     * @param {string} options.description
+     * @param {string} options.category
+     * @returns {boolean}
+     */
+    function addPoi(lat, lng, name, { description = '', category = '' } = {}) {
+        if (!isValidCoord(lat, lng)) return false;
+        if (!name || name.trim().length === 0) return false;
+
+        saveUndoState();
+
+        // Calculate distance from track start (along the line)
+        const distFromStart = calcDistanceFromStart(lat, lng);
+
+        pois.value.push({
+            lat,
+            lng,
+            name: name.trim(),
+            description: description.trim(),
+            category,
+            distFromStart,
+            id: null, // Will be set after server save
+        });
+
+        autosave();
+        return true;
+    }
+
+    /**
+     * Update an existing POI's properties. UC-09.
+     * @param {number} poiIndex
+     * @param {Object} updates - { name?, description?, category? }
+     * @returns {boolean}
+     */
+    function updatePoi(poiIndex, updates) {
+        const poi = pois.value[poiIndex];
+        if (!poi) return false;
+        if (updates.name !== undefined && updates.name.trim().length === 0) return false;
+
+        saveUndoState();
+
+        if (updates.name !== undefined) poi.name = updates.name.trim();
+        if (updates.description !== undefined) poi.description = updates.description.trim();
+        if (updates.category !== undefined) poi.category = updates.category;
+
+        autosave();
+        return true;
+    }
+
+    /**
+     * Delete a POI by index. UC-09 alternative.
+     * @param {number} poiIndex
+     * @returns {boolean}
+     */
+    function deletePoi(poiIndex) {
+        if (poiIndex < 0 || poiIndex >= pois.value.length) return false;
+
+        saveUndoState();
+        pois.value.splice(poiIndex, 1);
+        autosave();
+        return true;
+    }
+
+    /** Calculate the distance from track start to a point (approximation along segments). */
+    function calcDistanceFromStart(lat, lng) {
+        let totalDist = 0;
+        let minDist = Infinity;
+        let distAlongTrack = 0;
+
+        for (const seg of segments.value) {
+            for (let i = 0; i < seg.points.length; i++) {
+                const pt = seg.points[i];
+                const d = haversineDistance({ lat: pt[0], lng: pt[1] }, { lat, lng });
+                if (d < minDist) {
+                    minDist = d;
+                    distAlongTrack = totalDist;
+                }
+                if (i > 0) {
+                    const prev = seg.points[i - 1];
+                    totalDist += haversineDistance(
+                        { lat: prev[0], lng: prev[1] },
+                        { lat: pt[0], lng: pt[1] }
+                    );
+                }
+            }
+        }
+
+        return Math.round(distAlongTrack);
+    }
+
+    // ── Export ────────────────────────────────────────────────
+    /**
+     * Export the track in the specified format (GPX, KML, GeoJSON).
+     * NFR-COMP-03.
+     * @param {'gpx'|'kml'|'geojson'} format
+     * @returns {Promise<boolean>} Whether export succeeded
+     */
+    async function exportTrack(format = 'gpx') {
+        const id = savedTrackId.value;
+        if (!id) {
+            error.value = 'Сохраните трек перед экспортом';
+            return false;
+        }
+
+        try {
+            const headers = {};
+            const token = await getAccessToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const resp = await fetch(
+                `${API_BASE}/api/tracks/${id}/export?format=${format}`,
+                { headers }
+            );
+
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+
+            const blob = await resp.blob();
+            const ext = format === 'geojson' ? 'json' : format;
+            const fileName = `${trackName.value || 'track'}.${ext}`;
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            return true;
+        } catch (e) {
+            error.value = `Ошибка экспорта: ${e.message}`;
+            return false;
+        }
+    }
+
+    /** Load POIs associated with a track from the server. */
+    async function loadTrackPois(id) {
+        try {
+            const resp = await fetch(`${API_BASE}/api/tracks/${id}/pois`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (Array.isArray(data)) {
+                pois.value = data.map((p) => ({
+                    id: p.id,
+                    lat: p.lat ?? p.latitude,
+                    lng: p.lon ?? p.lng ?? p.longitude,
+                    name: p.name ?? '',
+                    description: p.description ?? '',
+                    category: p.category ?? '',
+                    distFromStart: p.distance_from_start ?? 0,
+                }));
+            }
+        } catch {
+            // Non-critical — POIs can be added later
+        }
+    }
+
     // ── Server operations ────────────────────────────────────
     /** Load an existing track for editing. */
     async function loadTrack(id) {
@@ -492,6 +820,9 @@ export function useTrackEditor({ trackId = null } = {}) {
             fromGeoJSON(feature.geometry, feature.properties?.waypoints ?? []);
             undoRedo.clear();
             draftSave.markClean();
+
+            // Load associated POIs
+            await loadTrackPois(id);
         } catch (e) {
             error.value = `Ошибка загрузки трека: ${e.message}`;
         } finally {
@@ -678,6 +1009,8 @@ export function useTrackEditor({ trackId = null } = {}) {
         moveWaypoint,
         deleteWaypoint,
         insertWaypoint,
+        promoteToWaypoint,
+        deleteLastPoint,
 
         // Segment ops
         addSegment,
@@ -685,6 +1018,10 @@ export function useTrackEditor({ trackId = null } = {}) {
         splitSegment,
         reverseSegment,
         setActiveSegment,
+        joinSegments,
+        closeLoop,
+        shortcutBetweenPoints,
+        extractSegmentAsTrack,
 
         // Undo/Redo
         handleUndo,
@@ -717,5 +1054,14 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         // POIs
         pois,
+        addPoi,
+        updatePoi,
+        deletePoi,
+
+        // Export
+        exportTrack,
+
+        // Time estimation
+        estimatedTimeMinutes,
     };
 }
