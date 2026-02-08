@@ -141,6 +141,7 @@ async fn main() {
             "/api/tracks/{id}/enrich-elevation",
             post(handlers::enrich_elevation),
         )
+        .route("/api/elevation/preview", post(handlers::preview_elevation))
         .route(
             "/api/tracks/{id}/slope-profile",
             get(handlers::get_track_slope_profile),

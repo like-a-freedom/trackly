@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:wasm": "wasm-pack build ./wasm/fast_paths_wasm --target web --out-dir ./public/wasm --out-name fast_paths_wasm",
     "build": "vite build",
     "preview": "vite preview",
     "preview:seo": "vite preview --port 4173",
@@ -26,6 +27,7 @@
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "idb": "^8.0.3",
     "leaflet": "^1.9.4",
     "leaflet-polylinedecorator": "^1.6.0",
     "leaflet.markercluster": "^1.5.3",

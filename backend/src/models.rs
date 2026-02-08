@@ -343,6 +343,21 @@ pub struct EnrichElevationResponse {
     pub enriched_at: Option<chrono::NaiveDateTime>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ElevationPreviewRequest {
+    pub coordinates: Vec<[f64; 2]>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ElevationPreviewResponse {
+    pub elevation_profile: Vec<f64>,
+    pub elevation_gain: Option<f32>,
+    pub elevation_loss: Option<f32>,
+    pub elevation_min: Option<f32>,
+    pub elevation_max: Option<f32>,
+    pub elevation_dataset: String,
+}
+
 /// Track data needed for elevation enrichment
 #[derive(Debug)]
 pub struct TrackForElevationEnrichment {

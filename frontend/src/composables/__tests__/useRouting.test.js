@@ -5,12 +5,12 @@ describe('useRouting', () => {
     let routing;
 
     beforeEach(() => {
-        routing = useRouting();
+        routing = useRouting({ autoLoad: false });
     });
 
     describe('initial state', () => {
-        it('defaults to manual mode', () => {
-            expect(routing.mode.value).toBe('manual');
+        it('defaults to auto mode', () => {
+            expect(routing.mode.value).toBe('auto');
         });
 
         it('graph is not ready', () => {
@@ -33,20 +33,20 @@ describe('useRouting', () => {
 
         it('ignores invalid mode', () => {
             routing.setMode('invalid');
-            expect(routing.mode.value).toBe('manual');
+            expect(routing.mode.value).toBe('auto');
         });
     });
 
     describe('toggleMode', () => {
-        it('toggles from manual to auto', () => {
-            routing.toggleMode();
-            expect(routing.mode.value).toBe('auto');
-        });
-
         it('toggles from auto to manual', () => {
-            routing.setMode('auto');
             routing.toggleMode();
             expect(routing.mode.value).toBe('manual');
+        });
+
+        it('toggles from manual to auto', () => {
+            routing.setMode('manual');
+            routing.toggleMode();
+            expect(routing.mode.value).toBe('auto');
         });
     });
 
@@ -55,6 +55,7 @@ describe('useRouting', () => {
             const from = { lat: 50.0, lng: 30.0 };
             const to = { lat: 51.0, lng: 31.0 };
 
+            routing.setMode('manual');
             const result = routing.findRoute(from, to);
             expect(result).toEqual([
                 [50.0, 30.0],
@@ -64,6 +65,7 @@ describe('useRouting', () => {
 
         it('does not call onNotAvailable in manual mode', () => {
             const callback = vi.fn();
+            routing.setMode('manual');
             routing.findRoute({ lat: 50, lng: 30 }, { lat: 51, lng: 31 }, {
                 onNotAvailable: callback,
             });
@@ -73,7 +75,6 @@ describe('useRouting', () => {
 
     describe('findRoute — auto mode, graph not ready', () => {
         it('returns null and calls onNotAvailable', () => {
-            routing.setMode('auto');
             const callback = vi.fn();
 
             const result = routing.findRoute(
@@ -84,31 +85,34 @@ describe('useRouting', () => {
 
             expect(result).toBeNull();
             expect(callback).toHaveBeenCalledOnce();
-            expect(callback.mock.calls[0][0]).toContain('unavailable');
+            expect(callback.mock.calls[0][0]).toContain('Автопрокладка');
         });
 
         it('returns null without callback when onNotAvailable not provided', () => {
-            routing.setMode('auto');
             const result = routing.findRoute({ lat: 50, lng: 30 }, { lat: 51, lng: 31 });
             expect(result).toBeNull();
         });
     });
 
-    describe('findRoute — auto mode, graph ready (stub)', () => {
-        it('returns null and calls onNotAvailable (WASM not yet implemented)', () => {
-            routing.setMode('auto');
-            routing.graphReady.value = true;
-            const callback = vi.fn();
+    describe('findRoute — auto mode, graph ready', () => {
+        it('returns routed path from test router', () => {
+            const testRouter = {
+                calc_path: vi.fn(() => [0, 1]),
+            };
+            const testNodeCoords = new Float32Array([50, 30, 51, 31]);
+
+            routing.__setTestGraph({ testRouter, testNodeCoords });
 
             const result = routing.findRoute(
                 { lat: 50, lng: 30 },
-                { lat: 51, lng: 31 },
-                { onNotAvailable: callback }
+                { lat: 51, lng: 31 }
             );
 
-            expect(result).toBeNull();
-            expect(callback).toHaveBeenCalledOnce();
-            expect(callback.mock.calls[0][0]).toContain('not yet implemented');
+            expect(result).toEqual([
+                [50, 30],
+                [51, 31],
+            ]);
+            expect(testRouter.calc_path).toHaveBeenCalledOnce();
         });
     });
 });

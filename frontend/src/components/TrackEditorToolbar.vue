@@ -54,6 +54,10 @@
         />
         <span class="toggle-label">Авто</span>
       </label>
+      <span v-if="graphLoading" class="toolbar-status">Загрузка графа...</span>
+      <span v-else-if="graphError" class="toolbar-status error"
+        >Маршрут недоступен</span
+      >
     </div>
 
     <div class="toolbar-divider" />
@@ -98,10 +102,16 @@
         <span class="toolbar-btn-icon">📥</span>
         <span class="toolbar-btn-label">Экспорт</span>
       </button>
-      <div v-if="showExportMenu" class="export-dropdown" data-testid="export-dropdown">
+      <div
+        v-if="showExportMenu"
+        class="export-dropdown"
+        data-testid="export-dropdown"
+      >
         <button class="export-item" @click="handleExport('gpx')">🗺 GPX</button>
         <button class="export-item" @click="handleExport('kml')">🌍 KML</button>
-        <button class="export-item" @click="handleExport('geojson')">📄 GeoJSON</button>
+        <button class="export-item" @click="handleExport('geojson')">
+          📄 GeoJSON
+        </button>
       </div>
     </div>
 
@@ -133,11 +143,21 @@ const props = defineProps({
   totalDistanceKm: { type: Number, default: 0 },
   estimatedTimeMinutes: { type: Number, default: 0 },
   routingMode: { type: String, default: "manual" },
+  graphLoading: { type: Boolean, default: false },
+  graphError: { type: String, default: null },
   poiMode: { type: Boolean, default: false },
   savedTrackId: { type: [String, null], default: null },
 });
 
-const emit = defineEmits(["setMode", "undo", "redo", "save", "toggleRouting", "togglePoiMode", "export"]);
+const emit = defineEmits([
+  "setMode",
+  "undo",
+  "redo",
+  "save",
+  "toggleRouting",
+  "togglePoiMode",
+  "export",
+]);
 
 const showExportMenu = ref(false);
 
@@ -156,7 +176,7 @@ const distanceDisplay = computed(() => {
 
 const timeDisplay = computed(() => {
   const mins = props.estimatedTimeMinutes;
-  if (mins <= 0) return '0 мин';
+  if (mins <= 0) return "0 мин";
   if (mins < 60) return `${Math.round(mins)} мин`;
   const h = Math.floor(mins / 60);
   const m = Math.round(mins % 60);
@@ -165,7 +185,7 @@ const timeDisplay = computed(() => {
 
 function handleExport(format) {
   showExportMenu.value = false;
-  emit('export', format);
+  emit("export", format);
 }
 </script>
 
@@ -274,6 +294,16 @@ function handleExport(format) {
 
 .toggle-label {
   user-select: none;
+}
+
+.toolbar-status {
+  font-size: 11px;
+  color: #555;
+  margin-left: 6px;
+}
+
+.toolbar-status.error {
+  color: #c62828;
 }
 
 .export-group {

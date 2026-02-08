@@ -10,6 +10,8 @@
       :totalPoints="editor.totalPoints.value"
       :totalDistanceKm="editor.totalDistanceKm.value"
       :routingMode="editor.routing.mode.value"
+      :graphLoading="editor.routing.graphLoading.value"
+      :graphError="editor.routing.graphError.value"
       :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
       :poiMode="poiMode"
       :savedTrackId="editor.savedTrackId.value"
@@ -33,9 +35,9 @@
         :pois="editor.pois.value"
         :poiMode="poiMode"
         @addWaypoint="handleAddWaypoint"
-        @moveWaypoint="editor.moveWaypoint"
-        @deleteWaypoint="editor.deleteWaypoint"
-        @insertWaypoint="editor.insertWaypoint"
+        @moveWaypoint="handleMoveWaypoint"
+        @deleteWaypoint="handleDeleteWaypoint"
+        @insertWaypoint="handleInsertWaypoint"
         @splitSegment="editor.splitSegment"
         @setActiveSegment="editor.setActiveSegment"
         @promoteToWaypoint="editor.promoteToWaypoint"
@@ -55,6 +57,11 @@
         :showDraftBanner="showDraftBanner"
         :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
         :pois="editor.pois.value"
+        :elevationProfile="editor.elevationProfile.value"
+        :elevationStats="editor.elevationStats.value"
+        :elevationLoading="editor.elevationLoading.value"
+        :elevationError="editor.elevationError.value"
+        :coordinateData="editor.coordinateData.value"
         @update:trackName="editor.trackName.value = $event"
         @update:trackDescription="editor.trackDescription.value = $event"
         @update:trackCategories="editor.trackCategories.value = $event"
@@ -110,6 +117,41 @@ function handleAddWaypoint(lat, lng) {
   }
 }
 
+function handleMoveWaypoint(segIndex, pointIndex, lat, lng) {
+  const ok = editor.moveWaypoint(segIndex, pointIndex, lat, lng, {
+    onRoutingNotAvailable: (msg) => showToast(msg, "warning", 5000),
+  });
+  if (!ok) {
+    showToast(
+      "Маршрут не найден. Добавьте промежуточные точки.",
+      "warning",
+      5000
+    );
+  }
+}
+
+function handleDeleteWaypoint(segIndex, pointIndex) {
+  const ok = editor.deleteWaypoint(segIndex, pointIndex, {
+    onRoutingNotAvailable: (msg) => showToast(msg, "warning", 5000),
+  });
+  if (!ok) {
+    showToast("Невозможно удалить точку в этом сегменте.", "warning", 4000);
+  }
+}
+
+function handleInsertWaypoint(segIndex, afterIndex, lat, lng) {
+  const ok = editor.insertWaypoint(segIndex, afterIndex, lat, lng, {
+    onRoutingNotAvailable: (msg) => showToast(msg, "warning", 5000),
+  });
+  if (!ok) {
+    showToast(
+      "Маршрут не найден. Добавьте промежуточные точки.",
+      "warning",
+      5000
+    );
+  }
+}
+
 async function handleSave() {
   const id = await editor.saveTrack();
   if (id) {
@@ -137,10 +179,13 @@ function handleDeleteDraft() {
 }
 
 async function handleAddPoi(lat, lng) {
-  const name = window.prompt("Название POI:");
-  if (!name) return;
-  await editor.addPoi(lat, lng, name);
+  const name = window.prompt("Название POI (необязательно):");
+  const result = await editor.addPoi(lat, lng, name || "");
+  if (!result?.ok) return;
   showToast("POI добавлен", "success");
+  if (result.warning) {
+    showToast(result.warning, "warning", 5000);
+  }
 }
 
 function handleJoinSegments() {
@@ -251,6 +296,8 @@ function onKeyDown(e) {
 // ── Lifecycle ───────────────────────────────────────────
 onMounted(async () => {
   document.addEventListener("keydown", onKeyDown);
+
+  editor.routing.initialize();
 
   if (trackId.value) {
     // Editing existing track

@@ -42,6 +42,7 @@ describe('useTrackEditor', () => {
         vi.stubGlobal('removeEventListener', vi.fn());
 
         editor = useTrackEditor();
+        editor.routing.setMode('manual');
     });
 
     describe('initial state', () => {
@@ -319,10 +320,10 @@ describe('useTrackEditor', () => {
             expect(editor.routing.mode.value).toBe('auto');
         });
 
-        it('edit mode activates manual routing', () => {
+        it('edit mode keeps current routing mode', () => {
             editor.setMode('routing');
             editor.setMode('edit');
-            expect(editor.routing.mode.value).toBe('manual');
+            expect(editor.routing.mode.value).toBe('auto');
         });
     });
 
@@ -738,19 +739,20 @@ describe('useTrackEditor', () => {
     describe('POI operations', () => {
         it('addPoi adds a POI to the list', () => {
             const result = editor.addPoi(50.0, 30.0, 'Water Source');
-            expect(result).toBe(true);
+            expect(result.ok).toBe(true);
             expect(editor.pois.value).toHaveLength(1);
             expect(editor.pois.value[0].name).toBe('Water Source');
         });
 
         it('addPoi rejects invalid coordinates', () => {
-            expect(editor.addPoi(200, 30, 'Bad POI')).toBe(false);
+            expect(editor.addPoi(200, 30, 'Bad POI').ok).toBe(false);
             expect(editor.pois.value).toHaveLength(0);
         });
 
-        it('addPoi rejects empty name', () => {
-            expect(editor.addPoi(50.0, 30.0, '')).toBe(false);
-            expect(editor.addPoi(50.0, 30.0, '  ')).toBe(false);
+        it('addPoi auto-names when empty name provided', () => {
+            const result = editor.addPoi(50.0, 30.0, '');
+            expect(result.ok).toBe(true);
+            expect(editor.pois.value[0].name).toMatch(/^POI\s\d{3}$/);
         });
 
         it('updatePoi updates POI properties', () => {

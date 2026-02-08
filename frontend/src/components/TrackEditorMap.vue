@@ -79,15 +79,18 @@
         :key="`poi-${poiIdx}`"
         :lat-lng="[poi.lat, poi.lng]"
         :radius="8"
-        color="#FF6F00"
-        fill-color="#FFB300"
+        :color="poi.isFarFromTrack ? '#D32F2F' : '#FF6F00'"
+        :fill-color="poi.isFarFromTrack ? '#EF9A9A' : '#FFB300'"
         :fill-opacity="0.9"
         :weight="2"
         :data-testid="`poi-marker-${poiIdx}`"
         @click="(e) => onPoiClick(poiIdx, e)"
         @contextmenu="(e) => onPoiContextMenu(poiIdx, e)"
       >
-        <l-tooltip :permanent="false">{{ poi.name || `POI ${poiIdx + 1}` }}</l-tooltip>
+        <l-tooltip :permanent="false">
+          {{ poi.name || `POI ${poiIdx + 1}` }}
+          <span v-if="poi.isFarFromTrack"> · ⚠️ &gt;1 км от трека</span>
+        </l-tooltip>
       </l-circle-marker>
     </l-map>
 
@@ -407,6 +410,8 @@ function closeContextMenu() {
 // ── Drag handling ───────────────────────────────────────
 function startDrag(segIdx, ptIdx, e) {
   if (props.editorMode === "view") return;
+  const seg = props.segments[segIdx];
+  if (!seg || !seg.waypoints?.includes(ptIdx)) return;
   dragging.value = true;
   dragSegIdx.value = segIdx;
   dragPtIdx.value = ptIdx;

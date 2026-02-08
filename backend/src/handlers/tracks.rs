@@ -1153,6 +1153,51 @@ pub async fn enrich_elevation(
     }))
 }
 
+/// POST /api/elevation/preview — Preview elevation profile for editor without saving.
+pub async fn preview_elevation(
+    Json(request): Json<ElevationPreviewRequest>,
+) -> Result<Json<ElevationPreviewResponse>, StatusCode> {
+    if request.coordinates.len() < 2 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if request.coordinates.len() > 5000 {
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    let mut coordinates = Vec::with_capacity(request.coordinates.len());
+    for coord in request.coordinates {
+        if coord[0] < -90.0 || coord[0] > 90.0 || coord[1] < -180.0 || coord[1] > 180.0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        coordinates.push((coord[0], coord[1]));
+    }
+
+    let enrichment_service = ElevationEnrichmentService::new();
+    let enrichment_result = enrichment_service
+        .enrich_track_elevation(coordinates)
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("disabled") {
+                StatusCode::SERVICE_UNAVAILABLE
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        })?;
+
+    let profile = enrichment_result.elevation_profile.unwrap_or_default();
+
+    Ok(Json(ElevationPreviewResponse {
+        elevation_profile: profile,
+        elevation_gain: enrichment_result.metrics.elevation_gain,
+        elevation_loss: enrichment_result.metrics.elevation_loss,
+        elevation_min: enrichment_result.metrics.elevation_min,
+        elevation_max: enrichment_result.metrics.elevation_max,
+        elevation_dataset: enrichment_result.dataset,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -134,7 +134,11 @@
     </section>
 
     <!-- POI list -->
-    <section v-if="pois.length > 0" class="sidebar-section" data-testid="poi-section">
+    <section
+      v-if="pois.length > 0"
+      class="sidebar-section"
+      data-testid="poi-section"
+    >
       <div class="section-header">
         <h3 class="section-title">POI ({{ pois.length }})</h3>
       </div>
@@ -149,7 +153,12 @@
           <span class="poi-info">
             {{ poi.name || `POI ${i + 1}` }}
             <small v-if="poi.description">{{ poi.description }}</small>
-            <small v-if="poi.distFromStart">📏 {{ formatDistanceM(poi.distFromStart) }} от старта</small>
+            <small v-if="poi.distFromStart"
+              >📏 {{ formatDistanceM(poi.distFromStart) }} от старта</small
+            >
+            <small v-if="poi.isFarFromTrack" class="poi-warning"
+              >⚠️ >1 км от трека</small
+            >
           </span>
           <button
             class="btn-icon-sm danger"
@@ -160,6 +169,27 @@
           </button>
         </li>
       </ul>
+    </section>
+
+    <!-- Elevation profile -->
+    <section class="sidebar-section" data-testid="elevation-section">
+      <div class="section-header">
+        <h3 class="section-title">Профиль высот</h3>
+      </div>
+      <div v-if="elevationLoading" class="elevation-status">
+        Загрузка профиля...
+      </div>
+      <div v-else-if="elevationError" class="elevation-status error">
+        {{ elevationError }}
+      </div>
+      <ElevationChart
+        v-else
+        :elevationData="elevationProfile"
+        :elevationStats="elevationStats"
+        :totalDistance="totalDistanceKm"
+        :coordinateData="coordinateData"
+        chartMode="elevation"
+      />
     </section>
 
     <!-- Summary -->
@@ -204,6 +234,11 @@ const props = defineProps({
   error: { type: String, default: null },
   showDraftBanner: { type: Boolean, default: false },
   pois: { type: Array, default: () => [] },
+  elevationProfile: { type: Array, default: () => [] },
+  elevationStats: { type: Object, default: () => ({}) },
+  elevationLoading: { type: Boolean, default: false },
+  elevationError: { type: String, default: null },
+  coordinateData: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits([
@@ -249,10 +284,11 @@ function formatDistanceM(meters) {
 }
 
 import { computed } from "vue";
+import ElevationChart from "./ElevationChart.vue";
 
 const timeDisplay = computed(() => {
   const mins = props.estimatedTimeMinutes;
-  if (mins <= 0) return '0 мин';
+  if (mins <= 0) return "0 мин";
   if (mins < 60) return `${Math.round(mins)} мин`;
   const h = Math.floor(mins / 60);
   const m = Math.round(mins % 60);
@@ -554,6 +590,21 @@ const timeDisplay = computed(() => {
   display: block;
   color: #888;
   font-size: 11px;
+}
+
+.poi-warning {
+  color: #d32f2f;
+  font-weight: 600;
+}
+
+.elevation-status {
+  font-size: 12px;
+  color: #555;
+  padding: 6px 0;
+}
+
+.elevation-status.error {
+  color: #c62828;
 }
 
 @media (max-width: 640px) {
