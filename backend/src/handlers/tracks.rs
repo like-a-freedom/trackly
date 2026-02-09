@@ -499,6 +499,22 @@ pub async fn list_tracks_geojson(
     Ok(Json(geojson))
 }
 
+pub async fn list_tracks_heatmap(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Query(mut params): Query<TrackGeoJsonQuery>,
+) -> Result<Json<TrackHeatmapResponse>, StatusCode> {
+    if let Some(user) = auth_user.user() {
+        params.owner_user_id = Some(user.user_id);
+    }
+
+    let points = db::list_tracks_heatmap(&pool, params.bbox.as_deref(), params.zoom, &params)
+        .await
+        .map_err(handle_db_error)?;
+
+    Ok(Json(TrackHeatmapResponse { points }))
+}
+
 pub async fn get_track(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,

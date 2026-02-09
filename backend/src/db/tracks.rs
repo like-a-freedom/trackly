@@ -984,6 +984,137 @@ pub async fn list_tracks_geojson(
     })
 }
 
+fn heatmap_grid_size_degrees(zoom_level: f64) -> f64 {
+    let clamped_zoom = zoom_level.clamp(0.0, 20.0);
+    let degrees_per_pixel = 360.0 / (2.0_f64.powf(clamped_zoom) * 256.0);
+    let grid_size = degrees_per_pixel * 10.0;
+    grid_size.clamp(0.00015, 0.05)
+}
+
+pub async fn list_tracks_heatmap(
+    pool: &Arc<PgPool>,
+    bbox: Option<&str>,
+    zoom: Option<f64>,
+    filter_params: &crate::models::TrackGeoJsonQuery,
+) -> Result<Vec<HeatmapPoint>, sqlx::Error> {
+    let start = Instant::now();
+    let bbox_str = match bbox {
+        Some(value) => value,
+        None => return Ok(vec![]),
+    };
+
+    let parts: Vec<&str> = bbox_str.split(',').collect();
+    if parts.len() != 4 {
+        return Ok(vec![]);
+    }
+
+    let coords: Vec<f64> = match parts
+        .iter()
+        .map(|value| value.parse::<f64>())
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(values) => values,
+        Err(_) => return Ok(vec![]),
+    };
+
+    let zoom_level = zoom.unwrap_or(12.0);
+    let grid_size = heatmap_grid_size_degrees(zoom_level);
+    let mine = filter_params.mine.unwrap_or(false);
+
+    let mut builder = QueryBuilder::<Postgres>::new("WITH bbox AS (SELECT ST_MakeEnvelope(");
+    builder.push_bind(coords[0]);
+    builder.push(", ");
+    builder.push_bind(coords[1]);
+    builder.push(", ");
+    builder.push_bind(coords[2]);
+    builder.push(", ");
+    builder.push_bind(coords[3]);
+    builder.push(", 4326) AS geom), filtered AS (SELECT t.geom FROM tracks t, bbox b");
+
+    if mine {
+        if let Some(user_id) = filter_params.owner_user_id {
+            builder.push(" WHERE t.user_id = ");
+            builder.push_bind(user_id);
+        } else if let Some(session_id) = filter_params.owner_session_id {
+            builder.push(" WHERE t.session_id = ");
+            builder.push_bind(session_id);
+        } else {
+            builder.push(" WHERE t.is_public = TRUE");
+        }
+    } else if let Some(user_id) = filter_params.owner_user_id {
+        builder.push(" WHERE (t.user_id = ");
+        builder.push_bind(user_id);
+        builder.push(" OR t.is_public = TRUE)");
+    } else if let Some(session_id) = filter_params.owner_session_id {
+        builder.push(" WHERE (t.session_id = ");
+        builder.push_bind(session_id);
+        builder.push(" OR t.is_public = TRUE)");
+    } else {
+        builder.push(" WHERE t.is_public = TRUE");
+    }
+
+    if let Some(categories) = &filter_params.categories
+        && !categories.is_empty()
+    {
+        builder.push(" AND t.categories && ");
+        builder.push_bind(categories);
+    }
+
+    if let Some(min) = filter_params.min_length {
+        builder.push(" AND t.length_km >= ");
+        builder.push_bind(min);
+    }
+
+    if let Some(max) = filter_params.max_length {
+        builder.push(" AND t.length_km <= ");
+        builder.push_bind(max);
+    }
+
+    if let Some(min) = filter_params.elevation_gain_min {
+        builder.push(" AND t.elevation_gain >= ");
+        builder.push_bind(min);
+    }
+
+    if let Some(max) = filter_params.elevation_gain_max {
+        builder.push(" AND t.elevation_gain <= ");
+        builder.push_bind(max);
+    }
+
+    if let Some(min) = filter_params.slope_min {
+        builder.push(" AND t.slope_min >= ");
+        builder.push_bind(min);
+    }
+
+    if let Some(max) = filter_params.slope_max {
+        builder.push(" AND t.slope_max <= ");
+        builder.push_bind(max);
+    }
+
+    builder.push(" AND ST_Intersects(t.geom, b.geom))");
+    builder.push(", points AS (SELECT (ST_DumpPoints(ST_Intersection(t.geom, b.geom))).geom AS pt FROM filtered t, bbox b)");
+    builder.push(", grid AS (SELECT ST_SnapToGrid(pt, ");
+    builder.push_bind(grid_size);
+    builder.push(", ");
+    builder.push_bind(grid_size);
+    builder.push(") AS cell, COUNT(*)::int AS weight FROM points GROUP BY cell)");
+    builder.push(" SELECT ST_Y(cell) AS lat, ST_X(cell) AS lon, weight FROM grid ORDER BY weight DESC LIMIT ");
+    builder.push_bind(5000_i64);
+
+    let rows = builder.build().fetch_all(&**pool).await?;
+    let points = rows
+        .into_iter()
+        .filter_map(|row| {
+            let lat: f64 = row.try_get("lat").ok()?;
+            let lon: f64 = row.try_get("lon").ok()?;
+            let weight: i32 = row.try_get("weight").unwrap_or(0);
+            Some(HeatmapPoint { lat, lon, weight })
+        })
+        .collect();
+
+    metrics::observe_db_query("list_tracks_heatmap", start.elapsed().as_secs_f64());
+    Ok(points)
+}
+
 pub async fn update_track_description(
     pool: &Arc<PgPool>,
     track_id: Uuid,
@@ -1494,6 +1625,18 @@ mod tests {
         let input = Some("<script>alert('x')</script><b>ok</b>");
         let cleaned = sanitize_description(input);
         assert_eq!(cleaned.as_deref(), Some("<b>ok</b>"));
+    }
+
+    #[test]
+    fn heatmap_grid_size_respects_bounds() {
+        let low_zoom = heatmap_grid_size_degrees(0.0);
+        let mid_zoom = heatmap_grid_size_degrees(12.0);
+        let high_zoom = heatmap_grid_size_degrees(20.0);
+
+        assert!(low_zoom <= 0.05);
+        assert!(high_zoom >= 0.00015);
+        assert!(mid_zoom < low_zoom);
+        assert!(high_zoom < mid_zoom);
     }
 
     #[test]

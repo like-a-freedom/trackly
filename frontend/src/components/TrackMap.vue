@@ -157,6 +157,7 @@ import {
   provide,
 } from "vue";
 import L, { latLngBounds } from "leaflet";
+import "leaflet.heat";
 import {
   getDetailPanelFitBoundsOptions,
   POLYLINE_WEIGHT_ACTIVE,
@@ -195,6 +196,14 @@ const props = defineProps({
   attribution: String,
   activeTrackId: [String, Number, null],
   selectedTrackDetail: Object,
+  heatmapPoints: {
+    type: Array,
+    default: () => [],
+  },
+  showHeatmap: {
+    type: Boolean,
+    default: false,
+  },
   markerLatLng: {
     type: Object,
     default: null,
@@ -230,6 +239,9 @@ const layerKey = ref(0); // For forcing GeoJSON layer re-renders when filter cha
 const mapIsReady = ref(false);
 const trackZoomAnimating = ref(false);
 const isTransitioning = ref(false); // Prevents filter changes during detail view transitions
+const heatLayer = ref(null);
+const heatmapMaxWeight = ref(0);
+const HEATMAP_PANE = "heatmapPane";
 
 // Track clustering functionality
 const clustering = useTrackClustering();
@@ -665,7 +677,84 @@ const filterState = ref({
   lengthRange: [0, 0],
   elevationGainRange: [0, 2000],
   slopeRange: [0, 20],
+  showHeatmap: false,
 });
+
+function ensureHeatmapPane(map) {
+  if (!map.getPane(HEATMAP_PANE)) {
+    map.createPane(HEATMAP_PANE);
+    const pane = map.getPane(HEATMAP_PANE);
+    if (pane) {
+      pane.style.zIndex = "350";
+      pane.style.pointerEvents = "none";
+    }
+  }
+}
+
+function buildHeatmapLatLngs() {
+  if (!Array.isArray(props.heatmapPoints)) return [];
+  return props.heatmapPoints
+    .map((point) => {
+      if (!point) return null;
+      const lat = typeof point.lat === "number" ? point.lat : null;
+      const lon = typeof point.lon === "number" ? point.lon : null;
+      if (lat === null || lon === null) return null;
+      const weight =
+        typeof point.weight === "number" && !Number.isNaN(point.weight)
+          ? Math.max(0, point.weight)
+          : 0;
+      return [lat, lon, weight];
+    })
+    .filter((point) => point !== null);
+}
+
+function removeHeatmapLayer(map) {
+  if (heatLayer.value && map) {
+    map.removeLayer(heatLayer.value);
+  }
+  heatLayer.value = null;
+  heatmapMaxWeight.value = 0;
+}
+
+function updateHeatmapLayer() {
+  if (!mapIsReady.value || isUnmounting.value) return;
+  const map = getMapObject("heatmap");
+  if (!map) return;
+
+  if (!props.showHeatmap) {
+    removeHeatmapLayer(map);
+    return;
+  }
+
+  const latlngs = buildHeatmapLatLngs();
+  if (latlngs.length === 0) {
+    removeHeatmapLayer(map);
+    return;
+  }
+
+  ensureHeatmapPane(map);
+  const maxWeight = Math.max(...latlngs.map((point) => point[2] || 0), 1);
+  const shouldRecreate = !heatLayer.value || heatmapMaxWeight.value !== maxWeight;
+  if (shouldRecreate && heatLayer.value) {
+    map.removeLayer(heatLayer.value);
+    heatLayer.value = null;
+  }
+
+  if (!heatLayer.value) {
+    heatLayer.value = L.heatLayer(latlngs, {
+      radius: 18,
+      blur: 22,
+      minOpacity: 0.25,
+      maxZoom: 17,
+      max: maxWeight,
+      pane: HEATMAP_PANE,
+    });
+    heatLayer.value.addTo(map);
+    heatmapMaxWeight.value = maxWeight;
+  } else {
+    heatLayer.value.setLatLngs(latlngs);
+  }
+}
 
 // Convert polylines to GeoJSON format (no filtering here - use native Leaflet filter)
 const geojsonData = computed(() => {
@@ -1261,6 +1350,8 @@ async function onMapReady(e) {
 
     mapState.value.userChangedZoomOrCenter = false;
     mapIsReady.value = true;
+
+    updateHeatmapLayer();
 
     // Initialize stable bounds for track visibility calculation
     stableBounds.value = map.getBounds();
@@ -2273,6 +2364,14 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => [props.showHeatmap, props.heatmapPoints],
+  () => {
+    updateHeatmapLayer();
+  },
+  { deep: true }
+);
+
 // Cleanup function for component unmounting
 function cleanup() {
   clearBoundsTimeout();
@@ -2293,6 +2392,7 @@ function cleanup() {
   const map = getMapObject("cleanup");
   if (map) {
     removeMarkerPolyline(map);
+    removeHeatmapLayer(map);
   }
 
   // Clear tracks watch timeout

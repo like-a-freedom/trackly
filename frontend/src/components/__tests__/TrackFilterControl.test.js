@@ -1974,3 +1974,23 @@ describe('TrackFilterControl', () => {
         });
     });
 });
+        it('toggles heatmap option and emits showHeatmap', async () => {
+            wrapper = mount(TrackFilterControl, {
+                props: createDefaultProps({
+                    hasTracksInViewport: true
+                }),
+            });
+
+            const optionsButton = wrapper.find('.filter-options-btn');
+            expect(optionsButton.exists()).toBe(true);
+            await optionsButton.trigger('click');
+
+            const heatmapCheckbox = wrapper.find('#show-heatmap');
+            expect(heatmapCheckbox.exists()).toBe(true);
+            await heatmapCheckbox.setValue(true);
+
+            const emitted = wrapper.emitted('update:filter');
+            expect(emitted).toBeTruthy();
+            const latest = emitted[emitted.length - 1][0];
+            expect(latest.showHeatmap).toBe(true);
+        });

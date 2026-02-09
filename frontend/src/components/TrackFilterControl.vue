@@ -107,6 +107,15 @@
                 <span v-if="!hasSlopeData" class="disabled-hint">(no data)</span>
               </label>
             </div>
+            <div class="checkbox-item">
+              <input
+                id="show-heatmap"
+                v-model="showHeatmap"
+                type="checkbox"
+                class="option-checkbox"
+              />
+              <label for="show-heatmap" class="checkbox-label">Heatmap layer</label>
+            </div>
 
           </div>
         </div>
@@ -412,6 +421,7 @@ const showCategories = ref(true);
 const showLength = ref(true);
 const showElevation = ref(true);
 const showSlope = ref(true);
+const showHeatmap = ref(false);
 // New option: show only tracks owned by current session
 const showMyTracks = ref(false);
 
@@ -442,6 +452,7 @@ onMounted(() => {
       showLength.value = options.showLength ?? true;
       showElevation.value = options.showElevation ?? true;
       showSlope.value = options.showSlope ?? true;
+      showHeatmap.value = options.showHeatmap ?? false;
       // Load the "my tracks" visibility option if present
       showMyTracks.value = options.showMyTracks ?? false;
     }
@@ -487,6 +498,9 @@ onMounted(() => {
       }
       if (typeof savedFilters.myTracks === 'boolean') {
         showMyTracks.value = savedFilters.myTracks;
+      }
+      if (typeof savedFilters.showHeatmap === 'boolean') {
+        showHeatmap.value = savedFilters.showHeatmap;
       }
     } catch (e) {
       console.error('Failed to parse filter state from localStorage:', e);
@@ -534,6 +548,7 @@ onMounted(() => {
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   });
 });
 
@@ -542,13 +557,14 @@ watch(isOpen, (val) => {
 });
 
 // Save filter visibility options
-watch([showCategories, showLength, showElevation, showSlope], () => {
+watch([showCategories, showLength, showElevation, showSlope, showHeatmap, showMyTracks], () => {
   try {
     localStorage.setItem(LOCAL_FILTER_OPTIONS_KEY, JSON.stringify({
       showCategories: showCategories.value,
       showLength: showLength.value,
       showElevation: showElevation.value,
       showSlope: showSlope.value,
+      showHeatmap: showHeatmap.value,
       showMyTracks: showMyTracks.value,
     }));
   } catch {}
@@ -570,6 +586,7 @@ watch(() => props.categories, (newCategories) => {
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   });
 });
 
@@ -594,7 +611,7 @@ watch(
   }
 );
 
-watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTracks], ([cats, lengthRange, elevationGainRange, slopeRange, myTracks], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange, oldMyTracks]) => {
+watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTracks, showHeatmap], ([cats, lengthRange, elevationGainRange, slopeRange, myTracks, heatmapVisible], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange, oldMyTracks, oldHeatmapVisible]) => {
   // Emit validated values (filtered to what's available in current viewport)
   const validCategories = props.categories ? cats.filter(cat => props.categories.includes(cat)) : cats;
   let validLengthRange = lengthRange;
@@ -643,6 +660,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
     elevationGainRange: validElevationGainRange,
     slopeRange: validSlopeRange,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   });
   
   // Always persist user's actual choice (not the clamped values)
@@ -653,6 +671,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
       elevationGainRange: elevationGainRange,
       slopeRange: slopeRange,
       myTracks: showMyTracks.value,
+      showHeatmap: showHeatmap.value,
     }));
   }
 }, { deep: true });
@@ -672,6 +691,7 @@ function resetFilters() {
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   }));
   // Also persist options (visibility checkbox state)
   try {
@@ -680,6 +700,7 @@ function resetFilters() {
       showLength: showLength.value,
       showElevation: showElevation.value,
       showSlope: showSlope.value,
+      showHeatmap: showHeatmap.value,
       showMyTracks: showMyTracks.value,
     }));
   } catch (e) {

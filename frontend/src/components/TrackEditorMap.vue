@@ -8,11 +8,36 @@
       :options="mapOptions"
       @ready="onMapReady"
       @click="onMapClick"
+      @mousedown="onMapMouseDown"
+      @touchstart="onMapTouchStart"
     >
       <l-tile-layer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution="&copy; OpenStreetMap contributors"
       />
+
+      <!-- Snap-to-road preview -->
+      <l-polyline
+        v-if="snapPreview && snapPreview.snappedLatLng"
+        :lat-lngs="[snapPreview.cursorLatLng, snapPreview.snappedLatLng]"
+        color="#1976D2"
+        :weight="2"
+        :opacity="0.6"
+        :dash-array="'2,6'"
+        :data-testid="'snap-preview-line'"
+      />
+      <l-circle-marker
+        v-if="snapPreview && snapPreview.snappedLatLng"
+        :lat-lng="snapPreview.snappedLatLng"
+        :radius="5"
+        color="#1976D2"
+        fill-color="#90CAF9"
+        :fill-opacity="0.9"
+        :weight="2"
+        :data-testid="'snap-preview-marker'"
+      >
+        <l-tooltip :permanent="false">Snap</l-tooltip>
+      </l-circle-marker>
 
       <!-- Rendered track segments as polylines -->
       <l-polyline
@@ -23,6 +48,7 @@
         :weight="segIdx === activeSegmentIndex ? 5 : 3"
         :opacity="segIdx === activeSegmentIndex ? 1 : 0.6"
         :smooth-factor="seg.smoothFactor"
+        :dash-array="props.routingMode === 'manual' ? '6,6' : null"
         :data-testid="`segment-line-${segIdx}`"
         @click="(e) => onSegmentClick(segIdx, e)"
       />
@@ -216,9 +242,12 @@ const props = defineProps({
   totalPoints: { type: Number, default: 0 },
   pois: { type: Array, default: () => [] },
   poiMode: { type: Boolean, default: false },
+  routingMode: { type: String, default: "manual" },
   fragmentSelection: { type: Object, default: () => ({}) },
   optimizerPreviewSegments: { type: Array, default: () => [] },
   hoverMarker: { type: Object, default: null },
+  snapToRoadMode: { type: String, default: "auto" },
+  snapToPoint: { type: Function, default: null },
 });
 
 const emit = defineEmits([
@@ -237,13 +266,22 @@ const emit = defineEmits([
 const mapRef = ref(null);
 const mapInstance = ref(null);
 const mapCenter = ref([50.45, 30.52]); // Default to Kyiv
+const mapZoom = ref(14);
 const mapOptions = {
   ...OPTIMIZED_MAP_OPTIONS,
   zoomControl: true,
 };
 
+const snapPreview = ref(null);
+let snapFrame = null;
+let pendingSnapLatLng = null;
+
 const LARGE_TRACK_THRESHOLD = 10000;
 const MAX_RENDER_POINTS = 2000;
+const SNAP_PREVIEW_DISTANCE_M = 50;
+const SNAP_AUTO_MIN_ZOOM = 13;
+const TRACE_MIN_DISTANCE_M = 30;
+const TRACE_MIN_INTERVAL_MS = 120;
 
 // Context menu state
 const contextMenu = ref({
@@ -264,6 +302,9 @@ const dragging = ref(false);
 const dragSegIdx = ref(-1);
 const dragPtIdx = ref(-1);
 const lastDragLatLng = ref(null);
+const traceActive = ref(false);
+const lastTraceLatLng = ref(null);
+let lastTraceTime = 0;
 
 // Computed
 const segmentsWithColors = computed(() => {
@@ -278,7 +319,9 @@ const segmentsWithColors = computed(() => {
     return {
       points,
       color:
-        props.optimizerPreviewSegments.length > 0
+        props.routingMode === "manual"
+          ? "#9E9E9E"
+          : props.optimizerPreviewSegments.length > 0
           ? "#D32F2F"
           : SEGMENT_COLORS[i % SEGMENT_COLORS.length],
       smoothFactor: shouldDownsample ? 2 : 1,
@@ -327,6 +370,55 @@ const endPoint = computed(() => {
   return null;
 });
 
+const snapEnabled = computed(() => {
+  if (props.snapToRoadMode === "on") return true;
+  if (props.snapToRoadMode === "off") return false;
+  return mapZoom.value >= SNAP_AUTO_MIN_ZOOM;
+});
+
+function clearSnapPreview() {
+  snapPreview.value = null;
+}
+
+function resolveSnapPoint(lat, lng, maxDistanceM = SNAP_PREVIEW_DISTANCE_M) {
+  if (!snapEnabled.value || typeof props.snapToPoint !== "function") return null;
+  return props.snapToPoint(lat, lng, { maxDistanceM });
+}
+
+function updateSnapPreview(latlng) {
+  if (!latlng) return;
+  if (!snapEnabled.value) {
+    clearSnapPreview();
+    return;
+  }
+  const snapped = resolveSnapPoint(latlng.lat, latlng.lng, SNAP_PREVIEW_DISTANCE_M);
+  if (!snapped) {
+    clearSnapPreview();
+    return;
+  }
+  snapPreview.value = {
+    cursorLatLng: [latlng.lat, latlng.lng],
+    snappedLatLng: [snapped.lat, snapped.lng],
+    distance: snapped.dist,
+  };
+}
+
+function handleSnapMove(latlng) {
+  pendingSnapLatLng = latlng;
+  if (snapFrame) return;
+  snapFrame = requestAnimationFrame(() => {
+    snapFrame = null;
+    updateSnapPreview(pendingSnapLatLng);
+  });
+}
+
+function resolveClickLatLng(latlng) {
+  if (!latlng) return null;
+  const snapped = resolveSnapPoint(latlng.lat, latlng.lng, SNAP_PREVIEW_DISTANCE_M);
+  if (!snapped) return { lat: latlng.lat, lng: latlng.lng };
+  return { lat: snapped.lat, lng: snapped.lng };
+}
+
 /** Generate visual marker data for waypoints in a segment. */
 function getWaypointMarkers(seg, segIdx) {
   const waypointSet = new Set(seg.waypoints);
@@ -355,16 +447,106 @@ function getWaypointMarkers(seg, segIdx) {
     });
 }
 
+function distanceMeters(a, b) {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const aVal =
+    sinLat * sinLat +
+    Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      sinLng * sinLng;
+  return R * 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1 - aVal));
+}
+
+function startTrace(latlng) {
+  if (!latlng || props.editorMode !== "trace") return;
+  const map = mapInstance.value;
+  if (!map) return;
+
+  traceActive.value = true;
+  lastTraceTime = 0;
+
+  const resolved = resolveClickLatLng(latlng) || latlng;
+  lastTraceLatLng.value = resolved;
+  emit("addWaypoint", resolved.lat, resolved.lng);
+
+  map.dragging.disable();
+  map.on("mousemove", onTraceMove);
+  map.on("mouseup", stopTrace);
+  map.on("touchmove", onTraceMove);
+  map.on("touchend", stopTrace);
+}
+
+function onTraceMove(e) {
+  if (!traceActive.value) return;
+  const map = mapInstance.value;
+  if (!map) return;
+  const latlng = e?.latlng || getLatLngFromTouch(map, e);
+  if (!latlng) return;
+
+  const now = Date.now();
+  if (now - lastTraceTime < TRACE_MIN_INTERVAL_MS) return;
+
+  const last = lastTraceLatLng.value;
+  const dist = last
+    ? distanceMeters({ lat: last.lat, lng: last.lng }, { lat: latlng.lat, lng: latlng.lng })
+    : TRACE_MIN_DISTANCE_M;
+  if (dist < TRACE_MIN_DISTANCE_M) return;
+
+  const resolved = resolveClickLatLng(latlng) || latlng;
+  lastTraceLatLng.value = resolved;
+  lastTraceTime = now;
+  emit("addWaypoint", resolved.lat, resolved.lng);
+}
+
+function stopTrace() {
+  if (!traceActive.value) return;
+  traceActive.value = false;
+  lastTraceLatLng.value = null;
+
+  const map = mapInstance.value;
+  if (!map) return;
+  map.dragging.enable();
+  map.off("mousemove", onTraceMove);
+  map.off("mouseup", stopTrace);
+  map.off("touchmove", onTraceMove);
+  map.off("touchend", stopTrace);
+}
+
 // ── Event handlers ──────────────────────────────────────
 function onMapReady(mapObj) {
   mapInstance.value = mapObj;
+  mapZoom.value = mapObj.getZoom();
+  mapObj.on("zoomend", () => {
+    mapZoom.value = mapObj.getZoom();
+  });
+  mapObj.on("mousemove", (e) => {
+    if (!e?.latlng) return;
+    handleSnapMove(e.latlng);
+  });
+}
+
+function onMapMouseDown(e) {
+  if (props.editorMode !== "trace" || props.poiMode) return;
+  startTrace(e.latlng);
+}
+
+function onMapTouchStart(e) {
+  if (props.editorMode !== "trace" || props.poiMode) return;
+  const map = mapInstance.value;
+  const latlng = e?.latlng || (map ? getLatLngFromTouch(map, e) : null);
+  startTrace(latlng);
 }
 
 function onMapClick(e) {
-  if (props.editorMode === "view") return;
+  if (props.editorMode === "view" || props.editorMode === "trace") return;
   closeContextMenu();
 
-  const { lat, lng } = e.latlng;
+  const snapped = resolveClickLatLng(e.latlng);
+  const { lat, lng } = snapped || e.latlng;
 
   // POI mode: add POI instead of waypoint
   if (props.poiMode) {
@@ -376,7 +558,7 @@ function onMapClick(e) {
 }
 
 function onSegmentClick(segIdx, e) {
-  if (props.editorMode === "view") return;
+  if (props.editorMode === "view" || props.editorMode === "trace") return;
 
   if (props.editorMode === "fragment") {
     const seg = props.segments[segIdx];
@@ -409,8 +591,9 @@ function onSegmentClick(segIdx, e) {
   const seg = props.segments[segIdx];
   if (!seg || seg.points.length < 2) return;
 
-  const clickLat = e.latlng.lat;
-  const clickLng = e.latlng.lng;
+  const snapped = resolveClickLatLng(e.latlng);
+  const clickLat = (snapped || e.latlng).lat;
+  const clickLng = (snapped || e.latlng).lng;
   let bestIdx = 0;
   let bestDist = Infinity;
 
@@ -525,7 +708,7 @@ function closeContextMenu() {
 
 // ── Drag handling ───────────────────────────────────────
 function startDrag(segIdx, ptIdx, e) {
-  if (props.editorMode === "view") return;
+  if (props.editorMode === "view" || props.editorMode === "trace") return;
   const seg = props.segments[segIdx];
   if (!seg || !seg.waypoints?.includes(ptIdx)) return;
   dragging.value = true;
@@ -565,10 +748,11 @@ function onDragEnd(e) {
     map.off("touchend", onDragEnd);
   }
 
-  const latlng =
+  const rawLatLng =
     e.latlng ||
     lastDragLatLng.value ||
     (map ? getLatLngFromTouch(map, e) : null);
+  const latlng = rawLatLng ? resolveClickLatLng(rawLatLng) || rawLatLng : null;
   if (!latlng) {
     dragging.value = false;
     dragSegIdx.value = -1;
@@ -643,6 +827,27 @@ watch(
   }
 );
 
+watch(
+  () => snapEnabled.value,
+  (enabled) => {
+    if (!enabled) {
+      clearSnapPreview();
+    }
+  }
+);
+
+watch(
+  () => props.editorMode,
+  (mode) => {
+    if (mode === "view") {
+      clearSnapPreview();
+    }
+    if (mode !== "trace") {
+      stopTrace();
+    }
+  }
+);
+
 onMounted(() => {
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("click", closeContextMenu);
@@ -651,6 +856,15 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeyDown);
   document.removeEventListener("click", closeContextMenu);
+  stopTrace();
+  if (mapInstance.value) {
+    mapInstance.value.off("mousemove");
+    mapInstance.value.off("zoomend");
+  }
+  if (snapFrame) {
+    cancelAnimationFrame(snapFrame);
+    snapFrame = null;
+  }
 });
 
 // Expose for parent

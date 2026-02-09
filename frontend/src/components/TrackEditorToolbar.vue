@@ -54,6 +54,18 @@
         />
         <span class="toggle-label">Auto</span>
       </label>
+      <label class="toolbar-select" title="Snap to road">
+        <select
+          class="toolbar-select-input"
+          :value="snapToRoadMode"
+          data-testid="snap-mode"
+          @change="$emit('setSnapToRoadMode', $event.target.value)"
+        >
+          <option value="auto">Snap: Auto</option>
+          <option value="on">Snap: On</option>
+          <option value="off">Snap: Off</option>
+        </select>
+      </label>
       <label class="toolbar-select" title="Routing profile">
         <select
           class="toolbar-select-input"
@@ -102,6 +114,13 @@
       <span class="stat-item" title="Distance"> 📏 {{ distanceDisplay }} </span>
       <span class="stat-item" title="Estimated time">
         ⏱ {{ timeDisplay }}
+      </span>
+      <span
+        v-if="manualRoutingPercent > 0"
+        class="stat-item manual-warning"
+        title="Manual routing segments"
+      >
+        ⚠️ {{ manualRoutingPercent }}% manual
       </span>
       <span class="stat-item" title="Points"> 📍 {{ totalPoints }} </span>
     </div>
@@ -158,7 +177,9 @@ const props = defineProps({
   totalPoints: { type: Number, default: 0 },
   totalDistanceKm: { type: Number, default: 0 },
   estimatedTimeMinutes: { type: Number, default: 0 },
+  manualRoutingPercent: { type: Number, default: 0 },
   routingMode: { type: String, default: "manual" },
+  snapToRoadMode: { type: String, default: "auto" },
   routingProfile: { type: String, default: "hiking" },
   graphLoading: { type: Boolean, default: false },
   graphError: { type: String, default: null },
@@ -173,6 +194,7 @@ const emit = defineEmits([
   "redo",
   "save",
   "toggleRouting",
+  "setSnapToRoadMode",
   "setRoutingProfile",
   "togglePoiMode",
   "export",
@@ -185,6 +207,7 @@ const modes = [
   { id: "edit", label: "Draw", key: "F2", icon: "✏️" },
   { id: "fragment", label: "Fragments", key: "F3", icon: "✂️" },
   { id: "routing", label: "Routing", key: "F4", icon: "🗺️" },
+  { id: "trace", label: "Trace", key: "T", icon: "🖊️" },
 ];
 
 const distanceDisplay = computed(() => {
@@ -313,6 +336,11 @@ function handleExport(format) {
 
 .stat-item {
   white-space: nowrap;
+}
+
+.manual-warning {
+  color: #c62828;
+  font-weight: 600;
 }
 
 .save-btn {

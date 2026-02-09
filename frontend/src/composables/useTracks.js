@@ -29,14 +29,18 @@ export {
 export function useTracks() {
     const polylines = ref([]);
     const tracksCollection = ref({ type: 'FeatureCollection', features: [] });
+    const heatmapPoints = ref([]);
     const error = ref(null);
 
     // AbortController for cancelling ongoing requests 
     let currentController = null;
+    let heatmapController = null;
 
     // Simple cache for bbox requests to prevent duplicates
     const bboxCache = new Map();
+    const heatmapCache = new Map();
     const CACHE_TTL = 30000; // 30 seconds
+    const HEATMAP_CACHE_TTL = 30000; // 30 seconds
 
     function getCachedTracks(bboxString) {
         const cached = bboxCache.get(bboxString);
@@ -58,6 +62,69 @@ export function useTracks() {
                 bboxCache.delete(key);
             }
         }
+    }
+
+    function getCachedHeatmap(cacheKey) {
+        const cached = heatmapCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < HEATMAP_CACHE_TTL) {
+            return cached.data;
+        }
+        return null;
+    }
+
+    function setCachedHeatmap(cacheKey, data) {
+        heatmapCache.set(cacheKey, {
+            data,
+            timestamp: Date.now()
+        });
+
+        for (const [key, value] of heatmapCache.entries()) {
+            if (Date.now() - value.timestamp > HEATMAP_CACHE_TTL) {
+                heatmapCache.delete(key);
+            }
+        }
+    }
+
+    function normalizeCategories(categories) {
+        if (!Array.isArray(categories)) return null;
+        return [...categories].map((cat) => String(cat)).sort();
+    }
+
+    function buildFilterQueryParams(options = {}) {
+        const params = new URLSearchParams();
+
+        if (options.ownerSessionId) {
+            params.set('owner_session_id', options.ownerSessionId);
+        }
+
+        if (options.mine) {
+            params.set('mine', 'true');
+        }
+
+        const categories = normalizeCategories(options.categories);
+        if (categories && categories.length > 0) {
+            params.set('categories', categories.join(','));
+        }
+
+        if (Array.isArray(options.lengthRange) && options.lengthRange.length === 2) {
+            const [min, max] = options.lengthRange;
+            if (typeof min === 'number') params.set('min_length', String(min));
+            if (typeof max === 'number') params.set('max_length', String(max));
+        }
+
+        if (Array.isArray(options.elevationGainRange) && options.elevationGainRange.length === 2) {
+            const [min, max] = options.elevationGainRange;
+            if (typeof min === 'number') params.set('elevation_gain_min', String(min));
+            if (typeof max === 'number') params.set('elevation_gain_max', String(max));
+        }
+
+        if (Array.isArray(options.slopeRange) && options.slopeRange.length === 2) {
+            const [min, max] = options.slopeRange;
+            if (typeof min === 'number') params.set('slope_min', String(min));
+            if (typeof max === 'number') params.set('slope_max', String(max));
+        }
+
+        return params;
     }
 
     async function fetchTracksInBounds(bounds, options = {}) {
@@ -141,6 +208,84 @@ export function useTracks() {
         } finally {
             currentController = null;
         }
+    }
+
+    async function fetchHeatmapInBounds(bounds, options = {}) {
+        error.value = null;
+        if (!bounds) return;
+
+        if (heatmapController) {
+            heatmapController.abort();
+        }
+
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        const bboxString = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
+        const zoom = options.zoom || 12;
+        const filterParams = buildFilterQueryParams(options);
+        const filterKey = JSON.stringify({
+            zoom,
+            categories: normalizeCategories(options.categories),
+            lengthRange: options.lengthRange || null,
+            elevationGainRange: options.elevationGainRange || null,
+            slopeRange: options.slopeRange || null,
+            mine: !!options.mine,
+            ownerSessionId: options.ownerSessionId || null
+        });
+        const cacheKey = `${bboxString}|${filterKey}`;
+
+        const cached = getCachedHeatmap(cacheKey);
+        if (cached && !options.forceRefresh) {
+            heatmapPoints.value = cached;
+            return;
+        }
+
+        filterParams.set('bbox', bboxString);
+        filterParams.set('zoom', String(zoom));
+
+        try {
+            heatmapController = new AbortController();
+
+            const headers = {};
+            if (options.mine) {
+                const { accessToken, ensureValidToken } = useAuth();
+                if (accessToken.value) {
+                    try {
+                        await ensureValidToken();
+                        headers['Authorization'] = `Bearer ${accessToken.value}`;
+                    } catch (e) {
+                        console.debug('Auth token expired for heatmap mine filter');
+                    }
+                }
+            }
+
+            const response = await fetch(`/api/tracks/heatmap?${filterParams.toString()}`, {
+                signal: heatmapController.signal,
+                headers
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch heatmap data');
+            const data = await response.json();
+
+            if (data && Array.isArray(data.points)) {
+                heatmapPoints.value = data.points;
+                setCachedHeatmap(cacheKey, data.points);
+            } else {
+                heatmapPoints.value = [];
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                return;
+            }
+            error.value = e.message || 'Unknown error fetching heatmap data';
+            heatmapPoints.value = [];
+        } finally {
+            heatmapController = null;
+        }
+    }
+
+    function clearHeatmap() {
+        heatmapPoints.value = [];
     }
 
     function updatePolylines(data) {
@@ -459,7 +604,10 @@ export function useTracks() {
     return {
         polylines,
         tracksCollection,
+        heatmapPoints,
         fetchTracksInBounds,
+        fetchHeatmapInBounds,
+        clearHeatmap,
         uploadTrack,
         error,
         checkTrackDuplicate,

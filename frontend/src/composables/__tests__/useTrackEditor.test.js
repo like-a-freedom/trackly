@@ -670,7 +670,12 @@ describe('useTrackEditor', () => {
                     segments: [{ points: [[50, 30], [51, 31]], waypoints: [0, 1] }],
                     pois: [],
                 },
-                editingState: { activeSegment: 0, routingMode: 'manual', routingProfile: 'mtb' },
+                editingState: {
+                    activeSegment: 0,
+                    routingMode: 'manual',
+                    routingProfile: 'mtb',
+                    snapToRoadMode: 'on',
+                },
             });
 
             const result = editor.restoreDraft();
@@ -679,10 +684,25 @@ describe('useTrackEditor', () => {
             expect(editor.trackCategories.value).toEqual(['cycling']);
             expect(editor.segments.value[0].points).toHaveLength(2);
             expect(editor.routing.profile.value).toBe('mtb');
+            expect(editor.snapToRoadMode.value).toBe('on');
         });
 
         it('returns false when no draft exists', () => {
             expect(editor.restoreDraft()).toBe(false);
+        });
+    });
+
+    describe('snapToRoadMode', () => {
+        it('updates snap mode with valid values', () => {
+            editor.setSnapToRoadMode('on');
+            expect(editor.snapToRoadMode.value).toBe('on');
+            editor.setSnapToRoadMode('off');
+            expect(editor.snapToRoadMode.value).toBe('off');
+        });
+
+        it('ignores invalid snap mode values', () => {
+            editor.setSnapToRoadMode('invalid');
+            expect(editor.snapToRoadMode.value).toBe('auto');
         });
     });
 

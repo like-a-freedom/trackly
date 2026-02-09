@@ -279,10 +279,10 @@ export function useRouting({ autoLoad = true } = {}) {
         }
     }
 
-    function snapToNode(lat, lng) {
+    function snapToNode(lat, lng, maxDistanceM = MAX_SNAP_DISTANCE_M) {
         if (!nodeCoords || !spatialIndex) return null;
         const { cells, cellSize } = spatialIndex;
-        const maxCellOffset = Math.ceil((MAX_SNAP_DISTANCE_M / 111000) / cellSize);
+        const maxCellOffset = Math.ceil((maxDistanceM / 111000) / cellSize);
         const baseLat = Math.floor(lat / cellSize);
         const baseLng = Math.floor(lng / cellSize);
 
@@ -307,7 +307,7 @@ export function useRouting({ autoLoad = true } = {}) {
             }
         }
 
-        if (!best || best.dist > MAX_SNAP_DISTANCE_M) return null;
+        if (!best || best.dist > maxDistanceM) return null;
         return best;
     }
 
@@ -402,6 +402,21 @@ export function useRouting({ autoLoad = true } = {}) {
     }
 
     /**
+     * Snap an arbitrary point to the nearest node.
+     * @param {number} lat
+     * @param {number} lng
+     * @param {Object} options
+     * @param {number} options.maxDistanceM
+     * @returns {{ lat: number, lng: number, dist: number } | null}
+     */
+    function snapToPoint(lat, lng, { maxDistanceM = MAX_SNAP_DISTANCE_M } = {}) {
+        if (!graphReady.value || !router || !nodeCoords) return null;
+        const snapped = snapToNode(lat, lng, maxDistanceM);
+        if (!snapped) return null;
+        return { lat: snapped.lat, lng: snapped.lng, dist: snapped.dist };
+    }
+
+    /**
      * Set routing mode.
      * @param {'manual'|'auto'} newMode
      */
@@ -457,6 +472,7 @@ export function useRouting({ autoLoad = true } = {}) {
         graphProgress,
         lastRouteMetrics,
         findRoute,
+        snapToPoint,
         setMode,
         toggleMode,
         setProfile,

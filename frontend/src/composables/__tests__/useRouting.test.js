@@ -151,4 +151,38 @@ describe('useRouting', () => {
             expect(routing.lastRouteMetrics.value.snapMs).toBeGreaterThanOrEqual(0);
         });
     });
+
+    describe('snapToPoint', () => {
+        it('returns null when graph is not ready', () => {
+            const result = routing.snapToPoint(50, 30);
+            expect(result).toBeNull();
+        });
+
+        it('snaps to nearest node within max distance', () => {
+            const testRouter = {
+                calc_path: vi.fn(() => [0, 1]),
+            };
+            const testNodeCoords = new Float32Array([50, 30, 51, 31]);
+
+            routing.__setTestGraph({ testRouter, testNodeCoords });
+
+            const result = routing.snapToPoint(50.0001, 30.0001, { maxDistanceM: 200 });
+            expect(result).not.toBeNull();
+            expect(result.lat).toBe(50);
+            expect(result.lng).toBe(30);
+            expect(result.dist).toBeGreaterThanOrEqual(0);
+        });
+
+        it('returns null when beyond max distance', () => {
+            const testRouter = {
+                calc_path: vi.fn(() => [0, 1]),
+            };
+            const testNodeCoords = new Float32Array([50, 30, 51, 31]);
+
+            routing.__setTestGraph({ testRouter, testNodeCoords });
+
+            const result = routing.snapToPoint(50.1, 30.1, { maxDistanceM: 10 });
+            expect(result).toBeNull();
+        });
+    });
 });

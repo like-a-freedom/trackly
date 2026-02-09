@@ -10,6 +10,8 @@
       :url="url"
       :attribution="attribution"
       :activeTrackId="activeTrackId"
+      :heatmapPoints="heatmapPoints"
+      :showHeatmap="showHeatmap"
       :selectedTrackDetail="null"
       @mapReady="onMapReady"
       @update:center="handleCenterUpdate"
@@ -182,10 +184,14 @@ const uploadFormExpanded = ref(false); // Collapsed by default
 const {
   polylines,
   fetchTracksInBounds,
+  fetchHeatmapInBounds,
+  clearHeatmap,
+  heatmapPoints,
   uploadTrack,
   error,
   updateTrackInPolylines,
 } = useTracks();
+const showHeatmap = ref(false);
 // Keep track of the latest filter state coming from TrackMap/TrackFilterControl
 const currentFilterState = ref(null);
 const tooltip = reactive({ visible: false, x: 0, y: 0, data: null });
@@ -257,6 +263,15 @@ const debouncedFetchTracks = useAdvancedDebounce(
       mode: "overview", // Use overview mode for track lists
     };
     fetchTracksInBounds(bounds, options);
+  },
+  500,
+  { leading: false, trailing: true, maxWait: 1000 }
+);
+
+const debouncedFetchHeatmap = useAdvancedDebounce(
+  (bounds, filterState) => {
+    if (!showHeatmap.value) return;
+    fetchHeatmapInBounds(bounds, buildHeatmapOptions(filterState));
   },
   500,
   { leading: false, trailing: true, maxWait: 1000 }
@@ -382,6 +397,9 @@ function onMapReady(e) {
     ownerSessionId: currentFilterState.value?.myTracks ? sessionId : undefined,
   };
   fetchTracksInBounds(bounds.value, options);
+  if (showHeatmap.value) {
+    fetchHeatmapInBounds(bounds.value, buildHeatmapOptions());
+  }
 }
 
 function onBoundsUpdate(newBounds) {
@@ -395,11 +413,13 @@ function onBoundsUpdate(newBounds) {
 
   // Use debounced function for API calls
   debouncedFetchTracks(newBounds);
+  debouncedFetchHeatmap(newBounds, currentFilterState.value);
 }
 
 // Called when filters change in TrackMap/TrackFilterControl (bubbled up)
 function onFilterChanged(newFilterState) {
   currentFilterState.value = newFilterState;
+  showHeatmap.value = !!newFilterState?.showHeatmap;
   // Immediately refresh tracks to reflect server-side filters like "My tracks"
   if (bounds.value) {
     const options = {
@@ -409,7 +429,31 @@ function onFilterChanged(newFilterState) {
       ownerSessionId: newFilterState?.myTracks ? sessionId : undefined,
     };
     fetchTracksInBounds(bounds.value, options);
+    if (showHeatmap.value) {
+      fetchHeatmapInBounds(bounds.value, {
+        ...buildHeatmapOptions(newFilterState),
+        forceRefresh: true,
+      });
+    } else {
+      clearHeatmap();
+    }
   }
+}
+
+function buildHeatmapOptions(filterState = currentFilterState.value) {
+  if (!filterState) {
+    return { zoom: zoom.value };
+  }
+
+  return {
+    zoom: zoom.value,
+    ownerSessionId: filterState.myTracks ? sessionId : undefined,
+    mine: !!filterState.myTracks,
+    categories: filterState.categories,
+    lengthRange: filterState.lengthRange,
+    elevationGainRange: filterState.elevationGainRange,
+    slopeRange: filterState.slopeRange,
+  };
 }
 
 async function onTrackClick(poly, event) {

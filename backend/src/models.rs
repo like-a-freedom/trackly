@@ -171,6 +171,18 @@ pub struct TrackGeoJsonCollection {
     pub features: Vec<TrackGeoJsonFeature>,
 }
 
+#[derive(Serialize)]
+pub struct HeatmapPoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub weight: i32,
+}
+
+#[derive(Serialize)]
+pub struct TrackHeatmapResponse {
+    pub points: Vec<HeatmapPoint>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct TrackGeoJsonQuery {
     pub bbox: Option<String>,

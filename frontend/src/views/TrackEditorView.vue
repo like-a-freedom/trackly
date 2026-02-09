@@ -10,11 +10,13 @@
       :totalPoints="editor.totalPoints.value"
       :totalDistanceKm="editor.totalDistanceKm.value"
       :routingMode="editor.routing.mode.value"
+      :snapToRoadMode="editor.snapToRoadMode.value"
       :routingProfile="editor.routing.profile.value"
       :graphLoading="editor.routing.graphLoading.value"
       :graphError="editor.routing.graphError.value"
       :graphProgress="editor.routing.graphProgress.value"
       :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
+      :manualRoutingPercent="editor.manualRoutingPercent.value"
       :poiMode="poiMode"
       :savedTrackId="editor.savedTrackId.value"
       @setMode="editor.setMode"
@@ -22,6 +24,7 @@
       @redo="editor.handleRedo"
       @save="handleSave"
       @toggleRouting="editor.routing.toggleMode"
+      @setSnapToRoadMode="editor.setSnapToRoadMode"
       @setRoutingProfile="editor.routing.setProfile"
       @togglePoiMode="poiMode = !poiMode"
       @export="handleExport"
@@ -37,6 +40,9 @@
         :totalPoints="editor.totalPoints.value"
         :pois="editor.pois.value"
         :poiMode="poiMode"
+        :routingMode="editor.routing.mode.value"
+        :snapToRoadMode="editor.snapToRoadMode.value"
+        :snapToPoint="editor.routing.snapToPoint"
         :fragmentSelection="editor.fragmentSelection.value"
         :optimizerPreviewSegments="
           editor.optimizerPreview.value?.segments || []
@@ -424,6 +430,10 @@ function onKeyDown(e) {
   if (e.key === "F4") {
     e.preventDefault();
     editor.setMode("routing");
+  }
+  if (e.key === "t" || e.key === "T") {
+    e.preventDefault();
+    editor.setMode("trace");
   }
 
   // Undo/Redo

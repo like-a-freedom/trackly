@@ -138,8 +138,10 @@ export function useTrackEditor({ trackId = null } = {}) {
     const draftSave = useDraftSave();
 
     // ── Editor mode ──────────────────────────────────────────
-    /** 'view' | 'edit' | 'fragment' | 'routing' */
+    /** 'view' | 'edit' | 'fragment' | 'routing' | 'trace' */
     const editorMode = ref('edit');
+    /** 'auto' | 'on' | 'off' */
+    const snapToRoadMode = ref('auto');
 
     // ── Track metadata ───────────────────────────────────────
     const trackName = ref('');
@@ -273,6 +275,10 @@ export function useTrackEditor({ trackId = null } = {}) {
         if (speed <= 0) return 0;
         return (dist / speed) * 60;
     });
+
+    const manualRoutingPercent = computed(() =>
+        routing.mode.value === 'manual' ? 100 : 0
+    );
 
     // ── Helpers ──────────────────────────────────────────────
     function createEmptySegment() {
@@ -685,6 +691,7 @@ export function useTrackEditor({ trackId = null } = {}) {
                 activeSegment: activeSegmentIndex.value,
                 routingMode: routing.mode.value,
                 routingProfile: routing.profile.value,
+                snapToRoadMode: snapToRoadMode.value,
             },
         });
     }
@@ -1227,7 +1234,7 @@ export function useTrackEditor({ trackId = null } = {}) {
 
     /** Set editor mode. */
     function setMode(newMode) {
-        if (['view', 'edit', 'fragment', 'routing'].includes(newMode)) {
+        if (['view', 'edit', 'fragment', 'routing', 'trace'].includes(newMode)) {
             editorMode.value = newMode;
             if (newMode === 'routing') {
                 routing.setMode('auto');
@@ -1235,6 +1242,13 @@ export function useTrackEditor({ trackId = null } = {}) {
             if (newMode !== 'fragment') {
                 clearFragmentSelection();
             }
+        }
+    }
+
+    function setSnapToRoadMode(newMode) {
+        if (['auto', 'on', 'off'].includes(newMode)) {
+            snapToRoadMode.value = newMode;
+            autosave();
         }
     }
 
@@ -1673,6 +1687,9 @@ export function useTrackEditor({ trackId = null } = {}) {
         if (draft.editingState?.routingProfile) {
             routing.setProfile(draft.editingState.routingProfile);
         }
+        if (draft.editingState?.snapToRoadMode) {
+            snapToRoadMode.value = draft.editingState.snapToRoadMode;
+        }
 
         undoRedo.clear();
         scheduleGeometryUpdates();
@@ -1686,6 +1703,8 @@ export function useTrackEditor({ trackId = null } = {}) {
         // Mode
         editorMode,
         setMode,
+        snapToRoadMode,
+        setSnapToRoadMode,
 
         // Metadata
         trackName,
@@ -1791,5 +1810,6 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         // Time estimation
         estimatedTimeMinutes,
+        manualRoutingPercent,
     };
 }
