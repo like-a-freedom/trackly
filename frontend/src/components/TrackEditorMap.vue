@@ -170,6 +170,19 @@
         :pane="'markerPane'"
         :data-testid="`elevation-hover-marker`"
       />
+
+      <!-- Keyboard focus marker -->
+      <l-circle-marker
+        v-if="focusMarker"
+        :lat-lng="focusMarker.latlng"
+        :radius="7"
+        color="#FF8F00"
+        fill-color="#FFE082"
+        :fill-opacity="0.9"
+        :weight="2"
+        :pane="'markerPane'"
+        :data-testid="`keyboard-focus-marker`"
+      />
     </l-map>
 
     <!-- Context menu -->
@@ -276,6 +289,7 @@ const props = defineProps({
   fragmentSelection: { type: Object, default: () => ({}) },
   optimizerPreviewSegments: { type: Array, default: () => [] },
   hoverMarker: { type: Object, default: null },
+  focusMarker: { type: Object, default: null },
   snapToRoadMode: { type: String, default: "auto" },
   snapToPoint: { type: Function, default: null },
 });
@@ -293,6 +307,7 @@ const emit = defineEmits([
   "selectFragmentPoint",
   "cutSegment",
   "newTrackFromSegment",
+  "focusWaypoint",
 ]);
 
 const mapRef = ref(null);
@@ -779,6 +794,8 @@ function onSegmentContextMenu(segIdx, e) {
 function onWaypointClick(segIdx, ptIdx, e) {
   if (e.originalEvent) e.originalEvent.stopPropagation();
 
+  emit("focusWaypoint", segIdx, ptIdx);
+
   // FR-EDIT-06: Click on intermediate point promotes it to waypoint
   const seg = props.segments[segIdx];
   if (seg && !seg.waypoints.includes(ptIdx)) {
@@ -991,6 +1008,18 @@ function panTo(latlng) {
   map.panTo(latlng, { animate: true });
 }
 
+function zoomIn() {
+  const map = mapInstance.value;
+  if (!map) return;
+  map.zoomIn();
+}
+
+function zoomOut() {
+  const map = mapInstance.value;
+  if (!map) return;
+  map.zoomOut();
+}
+
 function findNearestSegmentInsertIndex(seg, clickLat, clickLng) {
   let bestIdx = 0;
   let bestDist = Infinity;
@@ -1063,7 +1092,7 @@ onBeforeUnmount(() => {
 });
 
 // Expose for parent
-defineExpose({ fitBounds, panTo });
+defineExpose({ fitBounds, panTo, zoomIn, zoomOut });
 </script>
 
 <style scoped>

@@ -48,6 +48,7 @@
           editor.optimizerPreview.value?.segments || []
         "
         :hoverMarker="chartHoverMarker"
+        :focusMarker="keyboardFocusMarker"
         @addWaypoint="handleAddWaypoint"
         @moveWaypoint="handleMoveWaypoint"
         @deleteWaypoint="handleDeleteWaypoint"
@@ -60,6 +61,7 @@
         @addPoi="handleAddPoi"
         @deletePoi="handleDeletePoi"
         @newTrackFromSegment="handleNewTrackFromSegment"
+        @focusWaypoint="handleFocusWaypoint"
       />
 
       <TrackEditorSidebar
@@ -154,6 +156,8 @@ const poiMode = ref(false);
 const sidebarCollapsed = ref(false);
 const chartHoverMarker = ref(null);
 const isChartPointFixed = ref(false);
+const selectedPointIndex = ref(null);
+const keyboardFocusMarker = ref(null);
 
 // ── Handlers ──────────────────────────────────────────
 function handleAddWaypoint(lat, lng) {
@@ -425,9 +429,40 @@ function findSegmentPointByIndex(globalIndex) {
   return null;
 }
 
+function findGlobalIndexBySegment(segIndex, pointIndex) {
+  if (segIndex < 0 || pointIndex < 0) return null;
+  let offset = 0;
+  for (let i = 0; i < editor.segments.value.length; i++) {
+    const seg = editor.segments.value[i];
+    if (i === segIndex) {
+      if (pointIndex >= seg.points.length) return null;
+      return offset + pointIndex;
+    }
+    offset += seg.points.length;
+  }
+  return null;
+}
+
 function resolveLatLngForIndex(globalIndex) {
   if (globalIndex === null || globalIndex === undefined) return null;
   return editor.coordinateData.value?.[globalIndex] || null;
+}
+
+function setKeyboardFocusByIndex(globalIndex, { pan = true } = {}) {
+  const latlng = resolveLatLngForIndex(globalIndex);
+  if (!latlng) return false;
+  selectedPointIndex.value = globalIndex;
+  keyboardFocusMarker.value = { latlng };
+  if (pan) {
+    editorMap.value?.panTo(latlng);
+  }
+  return true;
+}
+
+function handleFocusWaypoint(segIndex, pointIndex) {
+  const globalIndex = findGlobalIndexBySegment(segIndex, pointIndex);
+  if (globalIndex === null) return;
+  setKeyboardFocusByIndex(globalIndex, { pan: false });
 }
 
 function handleElevationPointHover(payload) {
@@ -463,6 +498,9 @@ function handleElevationPointClick(payload) {
   handleElevationPointHover({ ...payload, isFixed: true });
 
   const idx = getChartIndex(payload);
+  if (idx !== null && idx !== undefined) {
+    setKeyboardFocusByIndex(idx, { pan: false });
+  }
   const segmentPoint = findSegmentPointByIndex(idx);
   if (segmentPoint) {
     editor.setFragmentPoint(segmentPoint.segIndex, segmentPoint.pointIndex);
@@ -544,6 +582,51 @@ function onKeyDown(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === "e") {
     e.preventDefault();
     handleExport("gpx");
+  }
+
+  // Zoom in/out
+  if (e.key === "+" || e.key === "=") {
+    e.preventDefault();
+    editorMap.value?.zoomIn?.();
+  }
+  if (e.key === "-") {
+    e.preventDefault();
+    editorMap.value?.zoomOut?.();
+  }
+
+  // Navigate points with arrows
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    e.preventDefault();
+    const total = editor.coordinateData.value?.length || 0;
+    if (total === 0) return;
+    const lastIndex = total - 1;
+    if (e.key === "ArrowRight") {
+      const next =
+        selectedPointIndex.value === null
+          ? 0
+          : Math.min(selectedPointIndex.value + 1, lastIndex);
+      setKeyboardFocusByIndex(next);
+    } else {
+      const prev =
+        selectedPointIndex.value === null
+          ? lastIndex
+          : Math.max(selectedPointIndex.value - 1, 0);
+      setKeyboardFocusByIndex(prev);
+    }
+  }
+
+  // Confirm action (Enter) in fragment mode
+  if (e.key === "Enter") {
+    if (
+      editor.editorMode.value === "fragment" &&
+      selectedPointIndex.value !== null
+    ) {
+      e.preventDefault();
+      const segmentPoint = findSegmentPointByIndex(selectedPointIndex.value);
+      if (segmentPoint) {
+        editor.setFragmentPoint(segmentPoint.segIndex, segmentPoint.pointIndex);
+      }
+    }
   }
 
   // Escape — exit POI mode or reset mode to view
