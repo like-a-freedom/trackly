@@ -58,6 +58,8 @@ pub struct CreateTrackFromEditorRequest {
     pub waypoints: Vec<WaypointInput>,
     #[serde(default)]
     pub pois: Vec<PoiInput>,
+    #[serde(default)]
+    pub segment_meta: Option<serde_json::Value>,
     pub session_id: Option<Uuid>,
     #[serde(default)]
     pub is_draft: bool,
@@ -69,6 +71,8 @@ pub struct UpdateTrackGeometryRequest {
     pub geometry: serde_json::Value,
     #[serde(default)]
     pub waypoints: Vec<WaypointInput>,
+    #[serde(default)]
+    pub segment_meta: Option<serde_json::Value>,
     pub session_id: Option<Uuid>,
 }
 
@@ -130,6 +134,7 @@ impl TrackEditorService {
             geom_geojson: &geojson,
             length_km,
             waypoints: waypoints_json,
+            segment_meta: request.segment_meta.clone(),
             hash: &hash,
             session_id: request.session_id,
             user_id,
@@ -169,6 +174,7 @@ impl TrackEditorService {
         let start = Instant::now();
 
         let (geojson, length_km) = self.validate_geometry(&request.geometry)?;
+        self.validate_segment_meta(&request.segment_meta)?;
 
         let waypoints_json = if request.waypoints.is_empty() {
             None
@@ -187,6 +193,7 @@ impl TrackEditorService {
             &geojson,
             length_km,
             waypoints_json,
+            request.segment_meta.clone(),
             &hash,
         )
         .await
@@ -266,6 +273,56 @@ impl TrackEditorService {
                 warn!(lat = wp.lat, lon = wp.lon, "invalid waypoint coordinate");
                 return Err(StatusCode::BAD_REQUEST);
             }
+        }
+
+        self.validate_segment_meta(&request.segment_meta)?;
+
+        Ok(())
+    }
+
+    fn validate_segment_meta(
+        &self,
+        segment_meta: &Option<serde_json::Value>,
+    ) -> Result<(), StatusCode> {
+        let Some(value) = segment_meta else {
+            return Ok(());
+        };
+
+        let Some(list) = value.as_array() else {
+            warn!(
+                reason = "segment_meta_not_array",
+                "segment_meta must be array"
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        };
+
+        if list.len() > MAX_SEGMENTS {
+            warn!(count = list.len(), "too many segment meta entries");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        for entry in list {
+            let Some(obj) = entry.as_object() else {
+                warn!(
+                    reason = "segment_meta_not_object",
+                    "segment_meta entry must be object"
+                );
+                return Err(StatusCode::BAD_REQUEST);
+            };
+
+                if let Some(name) = obj.get("name").and_then(|v| v.as_str())
+                    && name.len() > 80
+                {
+                    warn!(reason = "segment_name_too_long", len = name.len(), "segment name too long");
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+
+                if let Some(color) = obj.get("color").and_then(|v| v.as_str())
+                    && !is_valid_hex_color(color)
+                {
+                    warn!(reason = "segment_color_invalid", color, "segment color invalid");
+                    return Err(StatusCode::BAD_REQUEST);
+                }
         }
 
         Ok(())
@@ -359,6 +416,13 @@ fn is_valid_coordinate(lat: f64, lon: f64) -> bool {
         && (-180.0..=180.0).contains(&lon)
         && lat.is_finite()
         && lon.is_finite()
+}
+
+fn is_valid_hex_color(value: &str) -> bool {
+    if value.len() != 7 || !value.starts_with('#') {
+        return false;
+    }
+    value.chars().skip(1).all(|c| c.is_ascii_hexdigit())
 }
 
 #[cfg(test)]

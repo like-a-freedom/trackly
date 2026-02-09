@@ -136,6 +136,31 @@ describe('useRouting', () => {
             expect(testRouter.calc_path).toHaveBeenCalledOnce();
         });
 
+        it('returns surface types when available', () => {
+            const testRouter = {
+                calc_path: vi.fn(() => [0, 1]),
+            };
+            const testNodeCoords = new Float32Array([50, 30, 51, 31]);
+            const testSurfaceTypes = new Uint8Array([1, 2]);
+
+            routing.__setTestGraph({
+                testRouter,
+                testNodeCoords,
+                testSurfaceTypes,
+            });
+
+            const result = routing.findRouteDetailed(
+                { lat: 50, lng: 30 },
+                { lat: 51, lng: 31 }
+            );
+
+            expect(result.points).toEqual([
+                [50, 30],
+                [51, 31],
+            ]);
+            expect(result.surfaceTypes).toEqual(['asphalt', 'gravel']);
+        });
+
         it('updates timing metrics for the last route', () => {
             const testRouter = {
                 calc_path: vi.fn(() => [0, 1]),

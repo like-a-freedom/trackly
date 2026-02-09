@@ -11,6 +11,13 @@ const GRAPH_VERSION = import.meta.env.VITE_FAST_PATHS_GRAPH_VERSION || 'v1';
 const GRAPH_BASE_URL = import.meta.env.VITE_FAST_PATHS_GRAPH_BASE_URL || '/graphs';
 const GRAPH_MANIFEST_URL = import.meta.env.VITE_FAST_PATHS_MANIFEST_URL || `${GRAPH_BASE_URL}/manifest.json`;
 const WASM_MODULE_URL = import.meta.env.VITE_FAST_PATHS_WASM_URL || '/wasm/fast_paths_wasm.js';
+const SURFACE_TYPES = {
+    0: 'unknown',
+    1: 'asphalt',
+    2: 'gravel',
+    3: 'ground',
+    4: 'path',
+};
 
 function haversineMeters(a, b) {
     const R = 6371000;
@@ -49,6 +56,14 @@ function parseNodeCoords(buffer, format) {
         return new Float64Array(buffer);
     }
     return new Float32Array(buffer);
+}
+
+function parseSurfaceData(buffer, format) {
+    if (!buffer) return null;
+    if (format === 'u16') {
+        return new Uint16Array(buffer);
+    }
+    return new Uint8Array(buffer);
 }
 
 function nowMs() {
@@ -129,6 +144,8 @@ function resolveGraphFiles({ mode, manifest }) {
         nodes: nodesFile,
         nodes_format: 'f32',
         version: GRAPH_VERSION,
+        surfaces: null,
+        surfaces_format: 'u8',
     };
 }
 
@@ -150,6 +167,8 @@ async function loadGraphData(mode, onProgress) {
             graphBytes: cached.graphBytes,
             nodeBytes: cached.nodeBytes,
             nodesFormat: cached.nodesFormat || files.nodes_format || 'f32',
+            surfacesBytes: cached.surfacesBytes || null,
+            surfacesFormat: cached.surfacesFormat || files.surfaces_format || 'u8',
         };
     }
 
@@ -160,9 +179,18 @@ async function loadGraphData(mode, onProgress) {
         ? files.nodes
         : `${GRAPH_BASE_URL}/${files.nodes}`;
 
-    const [graphBytes, nodeBytes] = await Promise.all([
+    const surfaceUrl = files.surfaces
+        ? (files.surfaces.startsWith('http')
+            ? files.surfaces
+            : `${GRAPH_BASE_URL}/${files.surfaces}`)
+        : null;
+
+    const [graphBytes, nodeBytes, surfacesBytes] = await Promise.all([
         fetchArrayBufferWithProgress(graphUrl, onProgress, 0, 70),
-        fetchArrayBufferWithProgress(nodesUrl, onProgress, 70, 100),
+        fetchArrayBufferWithProgress(nodesUrl, onProgress, 70, surfaceUrl ? 90 : 100),
+        surfaceUrl
+            ? fetchArrayBufferWithProgress(surfaceUrl, onProgress, 90, 100)
+            : Promise.resolve(null),
     ]);
 
     await db.put(
@@ -171,6 +199,8 @@ async function loadGraphData(mode, onProgress) {
             graphBytes,
             nodeBytes,
             nodesFormat: files.nodes_format || 'f32',
+            surfacesBytes,
+            surfacesFormat: files.surfaces_format || 'u8',
             timestamp: Date.now(),
             version: files.version || GRAPH_VERSION,
         },
@@ -181,6 +211,8 @@ async function loadGraphData(mode, onProgress) {
         graphBytes,
         nodeBytes,
         nodesFormat: files.nodes_format || 'f32',
+        surfacesBytes,
+        surfacesFormat: files.surfaces_format || 'u8',
     };
 }
 
@@ -233,6 +265,7 @@ export function useRouting({ autoLoad = true } = {}) {
     let router = null;
     let nodeCoords = null;
     let spatialIndex = null;
+    let surfaceByNode = null;
 
     async function ensureGraphLoaded() {
         if (graphReady.value || graphLoading.value) return;
@@ -254,7 +287,7 @@ export function useRouting({ autoLoad = true } = {}) {
                 throw new Error('Routing WASM module is unavailable');
             }
 
-            const { graphBytes, nodeBytes, nodesFormat } = await loadGraphData(
+            const { graphBytes, nodeBytes, nodesFormat, surfacesBytes, surfacesFormat } = await loadGraphData(
                 profile.value,
                 updateProgress
             );
@@ -267,6 +300,7 @@ export function useRouting({ autoLoad = true } = {}) {
             router = new wasm.FastPathsRouter(graphArray);
             nodeCoords = parseNodeCoords(nodeBytes, nodesFormat);
             spatialIndex = buildSpatialIndex(nodeCoords);
+            surfaceByNode = parseSurfaceData(surfacesBytes, surfacesFormat);
 
             graphReady.value = true;
             graphProgress.value = 100;
@@ -311,26 +345,30 @@ export function useRouting({ autoLoad = true } = {}) {
         return best;
     }
 
-    /**
-     * Find a route between two points.
-     * @param {Object} from - { lat, lng }
-     * @param {Object} to - { lat, lng }
-     * @param {Object} options
-     * @param {Function} options.onNotAvailable - Called when auto routing is not available
-     * @returns {Array<[number,number]>|null} Array of [lat, lng] points or null
-     */
-    function findRoute(from, to, { onNotAvailable } = {}) {
+    function getSurfaceTypeForNode(nodeId) {
+        if (!surfaceByNode || typeof nodeId !== 'number') return 'unknown';
+        const code = surfaceByNode[nodeId] ?? 0;
+        return SURFACE_TYPES[code] || 'unknown';
+    }
+
+    function buildSurfaceTypes(nodeIds) {
+        if (!surfaceByNode || !Array.isArray(nodeIds)) return null;
+        return nodeIds.map((nodeId) => getSurfaceTypeForNode(nodeId));
+    }
+
+    function buildRoute(from, to, { onNotAvailable } = {}) {
         const totalStart = nowMs();
         if (mode.value === 'manual') {
-            // Straight line between points
             lastRouteMetrics.value = { snapMs: 0, routeMs: 0, totalMs: 0 };
-            return [
-                [from.lat, from.lng],
-                [to.lat, to.lng],
-            ];
+            return {
+                points: [
+                    [from.lat, from.lng],
+                    [to.lat, to.lng],
+                ],
+                nodeIds: null,
+            };
         }
 
-        // Auto mode — WASM routing
         if (!graphReady.value || !router || !nodeCoords) {
             if (typeof onNotAvailable === 'function') {
                 onNotAvailable(
@@ -398,7 +436,32 @@ export function useRouting({ autoLoad = true } = {}) {
             return null;
         }
 
-        return routePoints;
+        return { points: routePoints, nodeIds };
+    }
+
+    /**
+     * Find a route between two points.
+     * @param {Object} from - { lat, lng }
+     * @param {Object} to - { lat, lng }
+     * @param {Object} options
+     * @param {Function} options.onNotAvailable - Called when auto routing is not available
+     * @returns {Array<[number,number]>|null} Array of [lat, lng] points or null
+     */
+    function findRoute(from, to, { onNotAvailable } = {}) {
+        const result = buildRoute(from, to, { onNotAvailable });
+        return result ? result.points : null;
+    }
+
+    /**
+     * Find a route between two points with surface types if available.
+     * @returns {{ points: Array<[number,number]>, surfaceTypes: string[] } | null}
+     */
+    function findRouteDetailed(from, to, { onNotAvailable } = {}) {
+        const result = buildRoute(from, to, { onNotAvailable });
+        if (!result) return null;
+        const surfaceTypes = buildSurfaceTypes(result.nodeIds) ||
+            result.points.map(() => 'unknown');
+        return { points: result.points, surfaceTypes };
     }
 
     /**
@@ -456,10 +519,11 @@ export function useRouting({ autoLoad = true } = {}) {
         }
     }
 
-    function __setTestGraph({ testRouter, testNodeCoords }) {
+    function __setTestGraph({ testRouter, testNodeCoords, testSurfaceTypes }) {
         router = testRouter;
         nodeCoords = testNodeCoords;
         spatialIndex = testNodeCoords ? buildSpatialIndex(testNodeCoords) : null;
+        surfaceByNode = testSurfaceTypes || null;
         graphReady.value = !!(router && nodeCoords);
     }
 
@@ -472,6 +536,7 @@ export function useRouting({ autoLoad = true } = {}) {
         graphProgress,
         lastRouteMetrics,
         findRoute,
+        findRouteDetailed,
         snapToPoint,
         setMode,
         toggleMode,

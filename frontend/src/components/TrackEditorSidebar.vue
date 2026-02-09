@@ -116,11 +116,29 @@
         >
           <span class="segment-color" :style="{ background: stat.color }" />
           <span class="segment-info">
-            Segment {{ i + 1 }}
+            {{ stat.displayName }}
             <small
               >{{ stat.pointCount }} points ·
               {{ formatDistance(stat.distanceKm) }}</small
             >
+            <div class="segment-meta">
+              <input
+                class="form-input segment-name-input"
+                type="text"
+                :value="stat.name"
+                :placeholder="`Day ${i + 1}`"
+                maxlength="80"
+                @click.stop
+                @input="$emit('updateSegmentName', i, $event.target.value)"
+              />
+              <input
+                class="segment-color-input"
+                type="color"
+                :value="stat.color"
+                @click.stop
+                @input="$emit('updateSegmentColor', i, $event.target.value)"
+              />
+            </div>
           </span>
           <div class="segment-actions">
             <button
@@ -409,6 +427,8 @@ const emit = defineEmits([
   "update:trackName",
   "update:trackDescription",
   "update:trackCategories",
+  "updateSegmentName",
+  "updateSegmentColor",
   "addSegment",
   "deleteSegment",
   "reverseSegment",
@@ -713,6 +733,27 @@ const timeDisplay = computed(() => {
   display: block;
   color: #888;
   font-size: 11px;
+}
+
+.segment-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.segment-name-input {
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+.segment-color-input {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0;
+  background: #fff;
 }
 
 .segment-actions {

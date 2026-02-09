@@ -41,12 +41,23 @@
 
       <!-- Rendered track segments as polylines -->
       <l-polyline
+        v-for="surface in surfacePolylines"
+        :key="surface.id"
+        :lat-lngs="surface.points"
+        :color="surface.color"
+        :weight="surface.weight"
+        :opacity="surface.opacity"
+        :dash-array="surface.dashArray"
+        :interactive="false"
+        :data-testid="`surface-line-${surface.segIndex}`"
+      />
+      <l-polyline
         v-for="(seg, segIdx) in segmentsWithColors"
         :key="`seg-${segIdx}`"
         :lat-lngs="seg.points"
         :color="seg.color"
         :weight="segIdx === activeSegmentIndex ? 5 : 3"
-        :opacity="segIdx === activeSegmentIndex ? 1 : 0.6"
+        :opacity="seg.hasSurface ? 0.05 : segIdx === activeSegmentIndex ? 1 : 0.6"
         :smooth-factor="seg.smoothFactor"
         :dash-array="props.routingMode === 'manual' ? '6,6' : null"
         :data-testid="`segment-line-${segIdx}`"
@@ -282,6 +293,13 @@ const SNAP_PREVIEW_DISTANCE_M = 50;
 const SNAP_AUTO_MIN_ZOOM = 13;
 const TRACE_MIN_DISTANCE_M = 30;
 const TRACE_MIN_INTERVAL_MS = 120;
+const SURFACE_DASH_MAP = {
+  asphalt: null,
+  gravel: "6,6",
+  ground: "2,6",
+  path: "8,4,2,4",
+  unknown: "4,8",
+};
 
 // Context menu state
 const contextMenu = ref({
@@ -307,24 +325,108 @@ const lastTraceLatLng = ref(null);
 let lastTraceTime = 0;
 
 // Computed
+function downsampleWithIndices(points, maxPoints) {
+  if (!Array.isArray(points) || maxPoints <= 0) return { points: [], indices: [] };
+  if (points.length <= maxPoints) {
+    return {
+      points,
+      indices: points.map((_, idx) => idx),
+    };
+  }
+
+  const ratio = (points.length - 1) / (maxPoints - 1);
+  const sampled = [];
+  const indices = [];
+  for (let i = 0; i < maxPoints; i++) {
+    const idx = Math.round(i * ratio);
+    sampled.push(points[idx]);
+    indices.push(idx);
+  }
+  return { points: sampled, indices };
+}
+
 const segmentsWithColors = computed(() => {
   const shouldDownsample = props.totalPoints >= LARGE_TRACK_THRESHOLD;
   return props.segments.map((seg, i) => {
-    const points = shouldDownsample
-      ? downsamplePoints(
-          seg.points,
-          Math.min(MAX_RENDER_POINTS, seg.points.length)
-        )
-      : seg.points;
+    const maxPoints = Math.min(MAX_RENDER_POINTS, seg.points.length);
+    const { points, indices } = shouldDownsample
+      ? downsampleWithIndices(seg.points, maxPoints)
+      : { points: seg.points, indices: seg.points.map((_, idx) => idx) };
+    const baseColor = seg.color || SEGMENT_COLORS[i % SEGMENT_COLORS.length];
+    const hasSurface =
+      Array.isArray(seg.surfaceTypes) &&
+      seg.surfaceTypes.length === seg.points.length &&
+      seg.surfaceTypes.some((type) => type && type !== "unknown");
     return {
       points,
+      indices,
+      hasSurface,
       color:
         props.routingMode === "manual"
           ? "#9E9E9E"
           : props.optimizerPreviewSegments.length > 0
           ? "#D32F2F"
-          : SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+          : baseColor,
       smoothFactor: shouldDownsample ? 2 : 1,
+    };
+  });
+});
+
+const surfacePolylines = computed(() => {
+  const lines = [];
+
+  segmentsWithColors.value.forEach((segRender, segIdx) => {
+    const seg = props.segments[segIdx];
+    if (!seg || !segRender.hasSurface) return;
+    if (!segRender.points || segRender.points.length < 2) return;
+
+    const surfaceTypes = segRender.indices.map(
+      (idx) => seg.surfaceTypes?.[idx] || "unknown"
+    );
+
+    let currentType = surfaceTypes[0] || "unknown";
+    let currentPoints = [segRender.points[0]];
+
+    for (let i = 1; i < segRender.points.length; i++) {
+      const nextType = surfaceTypes[i] || "unknown";
+      if (nextType !== currentType) {
+        if (currentPoints.length >= 2) {
+          lines.push({
+            id: `surface-${segIdx}-${lines.length}`,
+            segIndex: segIdx,
+            surface: currentType,
+            points: currentPoints,
+          });
+        }
+        currentType = nextType;
+        currentPoints = [segRender.points[i - 1], segRender.points[i]];
+      } else {
+        currentPoints.push(segRender.points[i]);
+      }
+    }
+
+    if (currentPoints.length >= 2) {
+      lines.push({
+        id: `surface-${segIdx}-${lines.length}`,
+        segIndex: segIdx,
+        surface: currentType,
+        points: currentPoints,
+      });
+    }
+  });
+
+  return lines.map((line) => {
+    const isActive = line.segIndex === props.activeSegmentIndex;
+    const isUnknown = line.surface === "unknown";
+    return {
+      ...line,
+      color: isUnknown
+        ? "#9E9E9E"
+        : props.segments[line.segIndex]?.color ||
+          SEGMENT_COLORS[line.segIndex % SEGMENT_COLORS.length],
+      dashArray: SURFACE_DASH_MAP[line.surface] || SURFACE_DASH_MAP.unknown,
+      weight: isActive ? 5 : 3,
+      opacity: isActive ? 1 : 0.8,
     };
   });
 });

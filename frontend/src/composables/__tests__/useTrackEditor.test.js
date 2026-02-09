@@ -443,11 +443,16 @@ describe('useTrackEditor', () => {
                 ],
             };
 
-            editor.fromGeoJSON(geojson);
+            editor.fromGeoJSON(geojson, [], [
+                { name: 'Day 1', color: '#111111' },
+                { name: 'Day 2', color: '#222222' },
+            ]);
             expect(editor.segments.value).toHaveLength(2);
             // Converted to [lat, lng] format
             expect(editor.segments.value[0].points[0]).toEqual([50.0, 30.0]);
             expect(editor.segments.value[1].points[0]).toEqual([52.0, 32.0]);
+            expect(editor.segments.value[0].name).toBe('Day 1');
+            expect(editor.segments.value[1].color).toBe('#222222');
         });
 
         it('loads LineString geometry', () => {
@@ -513,6 +518,17 @@ describe('useTrackEditor', () => {
             expect(stats[0].distanceKm).toBeGreaterThan(0);
             expect(stats[0].color).toBeDefined();
             expect(stats[1].pointCount).toBe(1);
+        });
+
+        it('reflects custom segment name and color', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(51.0, 31.0);
+            editor.setSegmentName(0, 'Day 1: Start');
+            editor.setSegmentColor(0, '#123ABC');
+
+            const stats = editor.segmentStats.value[0];
+            expect(stats.displayName).toBe('Day 1: Start');
+            expect(stats.color).toBe('#123ABC');
         });
     });
 

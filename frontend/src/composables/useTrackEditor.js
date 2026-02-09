@@ -14,6 +14,7 @@ const POI_FAR_DISTANCE_M = 1000;
 const OPTIMIZER_DEFAULT_RATIO = 0.1;
 const OPTIMIZER_MIN_RATIO = 0.01;
 const OPTIMIZER_MAX_RATIO = 1.0;
+const SURFACE_UNKNOWN = 'unknown';
 
 /**
  * Segment color palette for differentiating segments visually.
@@ -23,6 +24,10 @@ const SEGMENT_COLORS = [
     '#1976D2', '#D32F2F', '#388E3C', '#7B1FA2',
     '#F57C00', '#0097A7', '#C2185B', '#512DA8',
 ];
+
+function getDefaultSegmentColor(index) {
+    return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
+}
 
 /** Haversine distance in meters between two {lat, lng} points. */
 function haversineDistance(a, b) {
@@ -155,7 +160,7 @@ export function useTrackEditor({ trackId = null } = {}) {
      * `points` are in Leaflet [lat, lng] format.
      * `waypoints` are indices into `points` that were explicitly placed by the user.
      */
-    const segments = ref([createEmptySegment()]);
+    const segments = ref([createEmptySegment(0)]);
     const activeSegmentIndex = ref(0);
 
     // ── Fragment selection ───────────────────────────────────
@@ -209,12 +214,17 @@ export function useTrackEditor({ trackId = null } = {}) {
     );
 
     const segmentStats = computed(() =>
-        segments.value.map((seg, i) => ({
-            index: i,
-            pointCount: seg.points.length,
-            distanceKm: calcSegmentDistance(seg.points) / 1000,
-            color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
-        }))
+        segments.value.map((seg, i) => {
+            const displayName = seg.name?.trim() || `Day ${i + 1}`;
+            return {
+                index: i,
+                name: seg.name ?? '',
+                displayName,
+                pointCount: seg.points.length,
+                distanceKm: calcSegmentDistance(seg.points) / 1000,
+                color: seg.color || getDefaultSegmentColor(i),
+            };
+        })
     );
 
     const canSave = computed(
@@ -281,8 +291,43 @@ export function useTrackEditor({ trackId = null } = {}) {
     );
 
     // ── Helpers ──────────────────────────────────────────────
-    function createEmptySegment() {
-        return { points: [], waypoints: [] };
+    function createEmptySegment(index = 0) {
+        return {
+            points: [],
+            waypoints: [],
+            surfaceTypes: [],
+            name: null,
+            color: getDefaultSegmentColor(index),
+        };
+    }
+
+    function ensureSurfaceTypes(seg) {
+        if (!seg.surfaceTypes) seg.surfaceTypes = [];
+        if (seg.surfaceTypes.length > seg.points.length) {
+            seg.surfaceTypes = seg.surfaceTypes.slice(0, seg.points.length);
+        }
+        while (seg.surfaceTypes.length < seg.points.length) {
+            seg.surfaceTypes.push(SURFACE_UNKNOWN);
+        }
+    }
+
+    function setSegmentName(index, name) {
+        const seg = segments.value[index];
+        if (!seg) return false;
+        const cleaned = String(name ?? '').trim();
+        seg.name = cleaned.length > 0 ? cleaned : null;
+        autosave();
+        return true;
+    }
+
+    function setSegmentColor(index, color) {
+        const seg = segments.value[index];
+        if (!seg) return false;
+        const cleaned = String(color ?? '').trim();
+        if (!/^#([0-9a-fA-F]{6})$/.test(cleaned)) return false;
+        seg.color = cleaned;
+        autosave();
+        return true;
     }
 
     function normalizeWaypoints(seg) {
@@ -300,6 +345,13 @@ export function useTrackEditor({ trackId = null } = {}) {
 
     function buildWaypointsMatrix() {
         return segments.value.map((seg) => [...seg.waypoints]);
+    }
+
+    function buildSegmentMetaPayload() {
+        return segments.value.map((seg, index) => ({
+            name: seg.name ?? null,
+            color: seg.color || getDefaultSegmentColor(index),
+        }));
     }
 
     function getFragmentRange() {
@@ -365,6 +417,7 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         const newPoints = [];
         const newWaypoints = [];
+        const newSurfaceTypes = [];
 
         for (let i = 0; i < orderedWaypoints.length - 1; i++) {
             const fromIdx = orderedWaypoints[i];
@@ -372,26 +425,31 @@ export function useTrackEditor({ trackId = null } = {}) {
             const from = seg.points[fromIdx];
             const to = seg.points[toIdx];
 
-            const route = routing.findRoute(
+            const routeData = routing.findRouteDetailed(
                 { lat: from[0], lng: from[1] },
                 { lat: to[0], lng: to[1] },
                 { onNotAvailable: onRoutingNotAvailable }
             );
 
-            if (!route || route.length < 2) {
+            if (!routeData || routeData.points.length < 2) {
                 return null;
             }
+            const route = routeData.points;
+            const surfaceTypes = routeData.surfaceTypes ||
+                route.map(() => SURFACE_UNKNOWN);
 
             if (newPoints.length === 0) {
                 newPoints.push(...route);
+                newSurfaceTypes.push(...surfaceTypes);
                 newWaypoints.push(0);
             } else {
                 newPoints.push(...route.slice(1));
+                newSurfaceTypes.push(...surfaceTypes.slice(1));
             }
             newWaypoints.push(newPoints.length - 1);
         }
 
-        return { points: newPoints, waypoints: newWaypoints };
+        return { points: newPoints, waypoints: newWaypoints, surfaceTypes: newSurfaceTypes };
     }
 
     function calculateNearestAlongTrack(lat, lng) {
@@ -603,9 +661,13 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         const nextSegments = optimizerPreview.value.segments.map((points, idx) => {
             const waypointList = optimizerPreview.value.waypoints?.[idx] || [];
+            const prevSegment = segments.value[idx];
             const segment = {
                 points,
                 waypoints: waypointList.filter((wp) => wp >= 0 && wp < points.length),
+                surfaceTypes: points.map(() => SURFACE_UNKNOWN),
+                name: prevSegment?.name ?? null,
+                color: prevSegment?.color || getDefaultSegmentColor(idx),
             };
             normalizeWaypoints(segment);
             return segment;
@@ -729,13 +791,16 @@ export function useTrackEditor({ trackId = null } = {}) {
                 routing.ensureGraphLoaded();
             }
             const lastPt = seg.points[seg.points.length - 1];
-            const route = routing.findRoute(
+            const routeData = routing.findRouteDetailed(
                 { lat: lastPt[0], lng: lastPt[1] },
                 { lat, lng },
                 { onNotAvailable: onRoutingNotAvailable }
             );
 
-            if (route && route.length >= 2) {
+            if (routeData && routeData.points.length >= 2) {
+                const route = routeData.points;
+                const surfaceTypes = routeData.surfaceTypes ||
+                    route.map(() => SURFACE_UNKNOWN);
                 saveUndoState();
                 // Add routed points (skip first — it's the existing last point)
                 for (let i = 1; i < route.length; i++) {
@@ -743,6 +808,8 @@ export function useTrackEditor({ trackId = null } = {}) {
                 }
                 // Mark last point as waypoint
                 seg.waypoints.push(seg.points.length - 1);
+                ensureSurfaceTypes(seg);
+                seg.surfaceTypes.push(...surfaceTypes.slice(1));
             } else {
                 // Route failed — don't add the point (per BR-ROUTE-06, no fallback)
                 return false;
@@ -752,6 +819,8 @@ export function useTrackEditor({ trackId = null } = {}) {
             saveUndoState();
             seg.points.push(newPoint);
             seg.waypoints.push(seg.points.length - 1);
+            ensureSurfaceTypes(seg);
+            seg.surfaceTypes[seg.surfaceTypes.length - 1] = SURFACE_UNKNOWN;
         }
 
         autosave();
@@ -774,8 +843,11 @@ export function useTrackEditor({ trackId = null } = {}) {
         const updatedSeg = {
             points: seg.points.map((p) => [...p]),
             waypoints: [...seg.waypoints],
+            surfaceTypes: seg.surfaceTypes ? [...seg.surfaceTypes] : [],
         };
         updatedSeg.points[pointIndex] = [lat, lng];
+        ensureSurfaceTypes(updatedSeg);
+        updatedSeg.surfaceTypes[pointIndex] = SURFACE_UNKNOWN;
         normalizeWaypoints(updatedSeg);
 
         if (routing.mode.value === 'auto') {
@@ -789,9 +861,12 @@ export function useTrackEditor({ trackId = null } = {}) {
             saveUndoState();
             seg.points = routed.points;
             seg.waypoints = routed.waypoints;
+            seg.surfaceTypes = routed.surfaceTypes;
         } else {
             saveUndoState();
             seg.points[pointIndex] = [lat, lng];
+            ensureSurfaceTypes(seg);
+            seg.surfaceTypes[pointIndex] = SURFACE_UNKNOWN;
         }
 
         autosave();
@@ -818,9 +893,13 @@ export function useTrackEditor({ trackId = null } = {}) {
         const updatedSeg = {
             points: seg.points.map((p) => [...p]),
             waypoints: [...seg.waypoints],
+            surfaceTypes: seg.surfaceTypes ? [...seg.surfaceTypes] : [],
         };
 
         updatedSeg.points.splice(pointIndex, 1);
+        if (updatedSeg.surfaceTypes?.length) {
+            updatedSeg.surfaceTypes.splice(pointIndex, 1);
+        }
         updatedSeg.waypoints = updatedSeg.waypoints
             .filter((idx) => idx !== pointIndex)
             .map((idx) => (idx > pointIndex ? idx - 1 : idx));
@@ -835,10 +914,12 @@ export function useTrackEditor({ trackId = null } = {}) {
             saveUndoState();
             seg.points = routed.points;
             seg.waypoints = routed.waypoints;
+            seg.surfaceTypes = routed.surfaceTypes;
         } else {
             saveUndoState();
             seg.points = updatedSeg.points;
             seg.waypoints = updatedSeg.waypoints;
+            seg.surfaceTypes = updatedSeg.surfaceTypes;
         }
 
         autosave();
@@ -862,9 +943,13 @@ export function useTrackEditor({ trackId = null } = {}) {
         const updatedSeg = {
             points: seg.points.map((p) => [...p]),
             waypoints: [...seg.waypoints],
+            surfaceTypes: seg.surfaceTypes ? [...seg.surfaceTypes] : [],
         };
 
         updatedSeg.points.splice(afterIndex + 1, 0, [lat, lng]);
+        if (updatedSeg.surfaceTypes) {
+            updatedSeg.surfaceTypes.splice(afterIndex + 1, 0, SURFACE_UNKNOWN);
+        }
         updatedSeg.waypoints = updatedSeg.waypoints.map((idx) =>
             idx > afterIndex ? idx + 1 : idx
         );
@@ -881,10 +966,12 @@ export function useTrackEditor({ trackId = null } = {}) {
             saveUndoState();
             seg.points = routed.points;
             seg.waypoints = routed.waypoints;
+            seg.surfaceTypes = routed.surfaceTypes;
         } else {
             saveUndoState();
             seg.points = updatedSeg.points;
             seg.waypoints = updatedSeg.waypoints;
+            seg.surfaceTypes = updatedSeg.surfaceTypes;
         }
 
         autosave();
@@ -929,7 +1016,7 @@ export function useTrackEditor({ trackId = null } = {}) {
      */
     function addSegment() {
         if (segments.value.length >= MAX_SEGMENTS) return -1;
-        const newSeg = createEmptySegment();
+        const newSeg = createEmptySegment(segments.value.length);
         segments.value.push(newSeg);
         activeSegmentIndex.value = segments.value.length - 1;
         autosave();
@@ -949,7 +1036,7 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         if (segments.value.length === 1) {
             // Last segment — reset to empty
-            segments.value = [createEmptySegment()];
+            segments.value = [createEmptySegment(0)];
             activeSegmentIndex.value = 0;
         } else {
             segments.value.splice(segIndex, 1);
@@ -979,6 +1066,12 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         const firstPoints = seg.points.slice(0, pointIndex + 1);
         const secondPoints = seg.points.slice(pointIndex);
+        const firstSurface = seg.surfaceTypes
+            ? seg.surfaceTypes.slice(0, pointIndex + 1)
+            : [];
+        const secondSurface = seg.surfaceTypes
+            ? seg.surfaceTypes.slice(pointIndex)
+            : [];
 
         // Rebuild waypoint indices for each half
         const firstWaypoints = seg.waypoints
@@ -991,8 +1084,15 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         seg.points = firstPoints;
         seg.waypoints = firstWaypoints;
+        seg.surfaceTypes = firstSurface;
 
-        const newSeg = { points: secondPoints, waypoints: secondWaypoints };
+        const newSeg = {
+            points: secondPoints,
+            waypoints: secondWaypoints,
+            surfaceTypes: secondSurface,
+            name: null,
+            color: getDefaultSegmentColor(activeSegmentIndex.value + 1),
+        };
         segments.value.splice(activeSegmentIndex.value + 1, 0, newSeg);
 
         autosave();
@@ -1013,6 +1113,9 @@ export function useTrackEditor({ trackId = null } = {}) {
         const len = seg.points.length;
         seg.points.reverse();
         seg.waypoints = seg.waypoints.map((i) => len - 1 - i).sort((a, b) => a - b);
+        if (seg.surfaceTypes) {
+            seg.surfaceTypes.reverse();
+        }
 
         autosave();
         scheduleGeometryUpdates();
@@ -1028,6 +1131,10 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         const fragment = seg.points.slice(startIdx, endIdx + 1).reverse();
         seg.points.splice(startIdx, fragment.length, ...fragment);
+        if (seg.surfaceTypes) {
+            const surfaceFragment = seg.surfaceTypes.slice(startIdx, endIdx + 1).reverse();
+            seg.surfaceTypes.splice(startIdx, surfaceFragment.length, ...surfaceFragment);
+        }
 
         seg.waypoints = seg.waypoints.map((idx) => {
             if (idx < startIdx || idx > endIdx) return idx;
@@ -1060,6 +1167,12 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         const firstPoints = seg.points.slice(0, startIdx + 1);
         const secondPoints = seg.points.slice(endIdx);
+        const firstSurface = seg.surfaceTypes
+            ? seg.surfaceTypes.slice(0, startIdx + 1)
+            : [];
+        const secondSurface = seg.surfaceTypes
+            ? seg.surfaceTypes.slice(endIdx)
+            : [];
         if (firstPoints.length < 2 || secondPoints.length < 2) return false;
 
         saveUndoState();
@@ -1072,10 +1185,19 @@ export function useTrackEditor({ trackId = null } = {}) {
             .map((idx) => idx - endIdx)
             .sort((a, b) => a - b);
 
-        segments.value[segIndex] = { points: firstPoints, waypoints: firstWaypoints };
+        segments.value[segIndex] = {
+            points: firstPoints,
+            waypoints: firstWaypoints,
+            surfaceTypes: firstSurface,
+            name: seg.name ?? null,
+            color: seg.color || getDefaultSegmentColor(segIndex),
+        };
         segments.value.splice(segIndex + 1, 0, {
             points: secondPoints,
             waypoints: secondWaypoints,
+            surfaceTypes: secondSurface,
+            name: null,
+            color: getDefaultSegmentColor(segIndex + 1),
         });
 
         activeSegmentIndex.value = segIndex;
@@ -1093,16 +1215,25 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         const from = seg.points[startIdx];
         const to = seg.points[endIdx];
-        const route = routing.findRoute(
+        const routeData = routing.findRouteDetailed(
             { lat: from[0], lng: from[1] },
             { lat: to[0], lng: to[1] },
             { onNotAvailable: onRoutingNotAvailable }
         );
 
-        if (!route || route.length < 2) return false;
+        if (!routeData || routeData.points.length < 2) return false;
 
         saveUndoState();
-        replaceRangeWithPoints(segIndex, startIdx, endIdx, route);
+        replaceRangeWithPoints(segIndex, startIdx, endIdx, routeData.points);
+        if (seg.surfaceTypes) {
+            seg.surfaceTypes.splice(
+                startIdx,
+                endIdx - startIdx + 1,
+                ...routeData.surfaceTypes
+            );
+        } else {
+            seg.surfaceTypes = routeData.surfaceTypes;
+        }
         autosave();
         scheduleGeometryUpdates();
         clearFragmentSelection();
@@ -1135,6 +1266,11 @@ export function useTrackEditor({ trackId = null } = {}) {
         const offsetB = segA.points.length;
         // Append segB points to segA
         segA.points = segA.points.concat(segB.points);
+        if (segA.surfaceTypes || segB.surfaceTypes) {
+            ensureSurfaceTypes(segA);
+            ensureSurfaceTypes(segB);
+            segA.surfaceTypes = segA.surfaceTypes.concat(segB.surfaceTypes);
+        }
         // Merge waypoints with offset
         const mergedWaypoints = segA.waypoints.concat(
             segB.waypoints.map((i) => i + offsetB)
@@ -1174,6 +1310,8 @@ export function useTrackEditor({ trackId = null } = {}) {
         saveUndoState();
         seg.points.push([first[0], first[1]]);
         seg.waypoints.push(seg.points.length - 1);
+        ensureSurfaceTypes(seg);
+        seg.surfaceTypes.push(seg.surfaceTypes[0] || SURFACE_UNKNOWN);
         autosave();
         scheduleGeometryUpdates();
         return true;
@@ -1200,6 +1338,9 @@ export function useTrackEditor({ trackId = null } = {}) {
         const startPt = seg.points[lo];
         const endPt = seg.points[hi];
         seg.points.splice(lo + 1, hi - lo - 1);
+        if (seg.surfaceTypes) {
+            seg.surfaceTypes.splice(lo + 1, hi - lo - 1);
+        }
 
         // Rebuild waypoints
         seg.waypoints = seg.waypoints
@@ -1285,7 +1426,7 @@ export function useTrackEditor({ trackId = null } = {}) {
     }
 
     /** Load geometry from GeoJSON MultiLineString. */
-    function fromGeoJSON(geojson, waypoints = []) {
+    function fromGeoJSON(geojson, waypoints = [], segmentMeta = []) {
         if (!geojson?.coordinates) return;
 
         const coords = geojson.type === 'MultiLineString'
@@ -1294,11 +1435,21 @@ export function useTrackEditor({ trackId = null } = {}) {
                 ? [geojson.coordinates]
                 : [];
 
-        segments.value = coords.map((line) => {
+        const metaList = Array.isArray(segmentMeta) ? segmentMeta : [];
+        segments.value = coords.map((line, index) => {
             const points = line.map(([lng, lat]) => [lat, lng]);
             // All points are waypoints if no explicit waypoints provided
             const waypointIndices = Array.from({ length: points.length }, (_, i) => i);
-            return { points, waypoints: waypointIndices };
+            const meta = metaList[index] || {};
+            return {
+                points,
+                waypoints: waypointIndices,
+                surfaceTypes: points.map(() => SURFACE_UNKNOWN),
+                name: typeof meta.name === 'string' ? meta.name : null,
+                color: typeof meta.color === 'string'
+                    ? meta.color
+                    : getDefaultSegmentColor(index),
+            };
         });
 
         // Override with explicit waypoints if provided
@@ -1494,7 +1645,8 @@ export function useTrackEditor({ trackId = null } = {}) {
             trackCategories.value = feature.properties?.categories ?? [];
             savedTrackId.value = id;
 
-            fromGeoJSON(feature.geometry, feature.properties?.waypoints ?? []);
+            const segmentMeta = feature.segment_meta ?? feature.properties?.segment_meta ?? [];
+            fromGeoJSON(feature.geometry, feature.properties?.waypoints ?? [], segmentMeta);
             const elevationProfileData =
                 feature.elevation_profile || feature.properties?.elevation_profile;
             if (Array.isArray(elevationProfileData)) {
@@ -1572,6 +1724,7 @@ export function useTrackEditor({ trackId = null } = {}) {
                         body: JSON.stringify({
                             geometry: geojson,
                             waypoints: waypointsPayload,
+                            segment_meta: buildSegmentMetaPayload(),
                             session_id: sessionId,
                         }),
                     }
@@ -1599,6 +1752,7 @@ export function useTrackEditor({ trackId = null } = {}) {
                         categories: trackCategories.value,
                         geometry: geojson,
                         waypoints: waypointsPayload,
+                        segment_meta: buildSegmentMetaPayload(),
                         pois: pois.value.map((p) => ({
                             lat: p.lat,
                             lon: p.lng,
@@ -1720,6 +1874,8 @@ export function useTrackEditor({ trackId = null } = {}) {
         coordinateData,
         segmentStats,
         SEGMENT_COLORS,
+        setSegmentName,
+        setSegmentColor,
 
         // Fragment selection
         fragmentSelection,

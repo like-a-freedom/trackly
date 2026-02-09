@@ -69,6 +69,7 @@ pub struct TrackDetail {
     pub description: Option<String>,
     pub categories: Vec<String>,
     pub geom_geojson: serde_json::Value, // Store geometry as GeoJSON for API
+    pub segment_meta: Option<serde_json::Value>, // Per-segment metadata (name, color)
     pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
     pub pause_gaps: Option<Vec<GapInfo>>, // Time-based gaps on continuous tracks
     pub length_km: f64,
@@ -115,9 +116,10 @@ pub struct TrackSimplified {
     pub name: String,
     pub description: Option<String>,
     pub categories: Vec<String>,
-    pub geom_geojson: serde_json::Value,    // Simplified geometry
+    pub geom_geojson: serde_json::Value, // Simplified geometry
+    pub segment_meta: Option<serde_json::Value>, // Per-segment metadata (name, color)
     pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
-    pub pause_gaps: Option<Vec<GapInfo>>,   // Time-based gaps on continuous tracks
+    pub pause_gaps: Option<Vec<GapInfo>>, // Time-based gaps on continuous tracks
     pub length_km: f64,
     // Include data profiles for charts (but geometry will be simplified)
     pub elevation_profile: Option<serde_json::Value>,

@@ -170,6 +170,7 @@ mod tests {
                 "type": "LineString",
                 "coordinates": [[37.6176, 55.7558], [37.6177, 55.7559]]
             }),
+            segment_meta: None,
             segment_gaps: None,
             pause_gaps: None,
             length_km: 0.1,

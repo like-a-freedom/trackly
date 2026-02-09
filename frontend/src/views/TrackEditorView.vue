@@ -87,6 +87,8 @@
         @update:trackName="editor.trackName.value = $event"
         @update:trackDescription="editor.trackDescription.value = $event"
         @update:trackCategories="editor.trackCategories.value = $event"
+        @updateSegmentName="editor.setSegmentName"
+        @updateSegmentColor="editor.setSegmentColor"
         @update:optimizerTargetRatio="editor.setOptimizerTargetRatio"
         @addSegment="editor.addSegment"
         @deleteSegment="editor.deleteSegment"

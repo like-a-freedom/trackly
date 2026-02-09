@@ -311,7 +311,7 @@ pub async fn get_track_detail(
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
+        SELECT id, name, description, categories, auto_classifications, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -335,6 +335,7 @@ pub async fn get_track_detail(
                 .try_get("auto_classifications")
                 .unwrap_or_else(|_| Vec::new()),
             geom_geojson: row.try_get::<serde_json::Value, _>("geom_geojson")?,
+            segment_meta: row.try_get("segment_meta").ok(),
             segment_gaps,
             pause_gaps,
             length_km: row
@@ -398,7 +399,7 @@ pub async fn get_track_detail_adaptive(
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
+        SELECT id, name, description, categories, auto_classifications, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -507,6 +508,7 @@ pub async fn get_track_detail_adaptive(
                 .try_get("auto_classifications")
                 .unwrap_or_else(|_| Vec::new()),
             geom_geojson,
+            segment_meta: row.try_get("segment_meta").ok(),
             segment_gaps,
             pause_gaps,
             length_km: normalized_length_km.unwrap_or_else(|| {
@@ -1411,6 +1413,7 @@ pub struct InsertTrackFromEditorParams<'a> {
     pub geom_geojson: &'a serde_json::Value,
     pub length_km: f64,
     pub waypoints: Option<serde_json::Value>,
+    pub segment_meta: Option<serde_json::Value>,
     pub hash: &'a str,
     pub session_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
@@ -1428,13 +1431,13 @@ pub async fn insert_track_from_editor(
         r#"
         INSERT INTO tracks (
             id, name, description, categories, geom,
-            length_km, waypoints, hash, session_id, user_id,
+            length_km, waypoints, segment_meta, hash, session_id, user_id,
             is_draft, source, is_public, created_at
         )
         VALUES (
             $1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326),
             $6, $7, $8, $9, $10,
-            $11, $12, $13, DEFAULT
+            $11, $12, $13, $14, DEFAULT
         )
         "#,
     )
@@ -1445,6 +1448,7 @@ pub async fn insert_track_from_editor(
     .bind(params.geom_geojson)
     .bind(params.length_km)
     .bind(params.waypoints)
+    .bind(params.segment_meta)
     .bind(params.hash)
     .bind(params.session_id)
     .bind(params.user_id)
@@ -1465,6 +1469,7 @@ pub async fn update_track_geometry(
     geom_geojson: &serde_json::Value,
     length_km: f64,
     waypoints: Option<serde_json::Value>,
+    segment_meta: Option<serde_json::Value>,
     hash: &str,
 ) -> Result<(), sqlx::Error> {
     let start = Instant::now();
@@ -1474,13 +1479,15 @@ pub async fn update_track_geometry(
         SET geom = ST_SetSRID(ST_GeomFromGeoJSON($1), 4326),
             length_km = $2,
             waypoints = $3,
-            hash = $4
-        WHERE id = $5
+            segment_meta = COALESCE($4, segment_meta),
+            hash = $5
+        WHERE id = $6
         "#,
     )
     .bind(geom_geojson)
     .bind(length_km)
     .bind(waypoints)
+    .bind(segment_meta)
     .bind(hash)
     .bind(track_id)
     .execute(&**pool)
