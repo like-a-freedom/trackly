@@ -71,6 +71,45 @@ async function fetchManifest() {
     }
 }
 
+async function fetchArrayBufferWithProgress(url, onProgress, startPct, endPct) {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+        throw new Error('Failed to load routing graph data');
+    }
+
+    const total = Number(resp.headers.get('content-length') || 0);
+    if (!resp.body || !total) {
+        const buf = await resp.arrayBuffer();
+        if (onProgress) onProgress(endPct);
+        return buf;
+    }
+
+    const reader = resp.body.getReader();
+    let received = 0;
+    const chunks = [];
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (onProgress) {
+            const ratio = Math.min(1, received / total);
+            onProgress(startPct + (endPct - startPct) * ratio);
+        }
+    }
+
+    const buffer = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+        buffer.set(chunk, offset);
+        offset += chunk.length;
+    }
+
+    if (onProgress) onProgress(endPct);
+    return buffer.buffer;
+}
+
 function resolveGraphFiles({ mode, manifest }) {
     if (manifest?.graphs?.[GRAPH_REGION]?.[mode]) {
         return manifest.graphs[GRAPH_REGION][mode];
@@ -86,7 +125,7 @@ function resolveGraphFiles({ mode, manifest }) {
     };
 }
 
-async function loadGraphData(mode) {
+async function loadGraphData(mode, onProgress) {
     const db = await openGraphDb();
     const manifest = await fetchManifest();
     const files = resolveGraphFiles({ mode, manifest });
@@ -99,6 +138,7 @@ async function loadGraphData(mode) {
         Date.now() - cached.timestamp < GRAPH_TTL_MS &&
         cached.version === (files.version || GRAPH_VERSION)
     ) {
+        if (onProgress) onProgress(100);
         return {
             graphBytes: cached.graphBytes,
             nodeBytes: cached.nodeBytes,
@@ -113,17 +153,10 @@ async function loadGraphData(mode) {
         ? files.nodes
         : `${GRAPH_BASE_URL}/${files.nodes}`;
 
-    const [graphResp, nodesResp] = await Promise.all([
-        fetch(graphUrl),
-        fetch(nodesUrl),
+    const [graphBytes, nodeBytes] = await Promise.all([
+        fetchArrayBufferWithProgress(graphUrl, onProgress, 0, 70),
+        fetchArrayBufferWithProgress(nodesUrl, onProgress, 70, 100),
     ]);
-
-    if (!graphResp.ok || !nodesResp.ok) {
-        throw new Error('Failed to load routing graph data');
-    }
-
-    const graphBytes = await graphResp.arrayBuffer();
-    const nodeBytes = await nodesResp.arrayBuffer();
 
     await db.put(
         GRAPH_STORE,
@@ -184,6 +217,9 @@ export function useRouting({ autoLoad = true } = {}) {
     /** Last graph error message, if any. */
     const graphError = ref(null);
 
+    /** Graph download progress (0-100). */
+    const graphProgress = ref(0);
+
     let router = null;
     let nodeCoords = null;
     let spatialIndex = null;
@@ -194,6 +230,13 @@ export function useRouting({ autoLoad = true } = {}) {
 
         graphLoading.value = true;
         graphError.value = null;
+        graphProgress.value = 0;
+
+        const updateProgress = (value) => {
+            if (typeof value !== 'number') return;
+            const next = Math.max(graphProgress.value, Math.min(100, Math.round(value)));
+            graphProgress.value = next;
+        };
 
         try {
             const wasm = await loadWasmModule();
@@ -201,7 +244,10 @@ export function useRouting({ autoLoad = true } = {}) {
                 throw new Error('Routing WASM module is unavailable');
             }
 
-            const { graphBytes, nodeBytes, nodesFormat } = await loadGraphData(profile.value);
+            const { graphBytes, nodeBytes, nodesFormat } = await loadGraphData(
+                profile.value,
+                updateProgress
+            );
             const graphArray = new Uint8Array(graphBytes);
 
             if (typeof wasm.validate_graph_bytes === 'function') {
@@ -213,9 +259,11 @@ export function useRouting({ autoLoad = true } = {}) {
             spatialIndex = buildSpatialIndex(nodeCoords);
 
             graphReady.value = true;
+            graphProgress.value = 100;
         } catch (e) {
             graphReady.value = false;
             graphError.value = e?.message || 'Failed to load routing graph';
+            graphProgress.value = 0;
         } finally {
             graphLoading.value = false;
         }
@@ -350,6 +398,7 @@ export function useRouting({ autoLoad = true } = {}) {
             profile.value = newProfile;
             if (mode.value === 'auto' && autoLoad) {
                 graphReady.value = false;
+                graphProgress.value = 0;
                 ensureGraphLoaded();
             }
         }
@@ -374,6 +423,7 @@ export function useRouting({ autoLoad = true } = {}) {
         graphReady,
         graphLoading,
         graphError,
+        graphProgress,
         findRoute,
         setMode,
         toggleMode,

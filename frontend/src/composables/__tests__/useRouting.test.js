@@ -17,6 +17,10 @@ describe('useRouting', () => {
             expect(routing.graphReady.value).toBe(false);
             expect(routing.graphLoading.value).toBe(false);
         });
+
+        it('graph progress starts at 0', () => {
+            expect(routing.graphProgress.value).toBe(0);
+        });
     });
 
     describe('setMode', () => {

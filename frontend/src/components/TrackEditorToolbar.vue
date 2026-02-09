@@ -54,7 +54,10 @@
         />
         <span class="toggle-label">Auto</span>
       </label>
-      <span v-if="graphLoading" class="toolbar-status">Loading graph...</span>
+      <span v-if="graphLoading" class="toolbar-status">
+        Loading graph...
+        <span v-if="graphProgress > 0">{{ graphProgress }}%</span>
+      </span>
       <span v-else-if="graphError" class="toolbar-status error"
         >Route unavailable</span
       >
@@ -81,9 +84,7 @@
 
     <!-- Stats -->
     <div class="toolbar-stats" data-testid="toolbar-stats">
-      <span class="stat-item" title="Distance">
-        📏 {{ distanceDisplay }}
-      </span>
+      <span class="stat-item" title="Distance"> 📏 {{ distanceDisplay }} </span>
       <span class="stat-item" title="Estimated time">
         ⏱ {{ timeDisplay }}
       </span>
@@ -145,6 +146,7 @@ const props = defineProps({
   routingMode: { type: String, default: "manual" },
   graphLoading: { type: Boolean, default: false },
   graphError: { type: String, default: null },
+  graphProgress: { type: Number, default: 0 },
   poiMode: { type: Boolean, default: false },
   savedTrackId: { type: [String, null], default: null },
 });

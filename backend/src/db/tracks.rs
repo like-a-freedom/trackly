@@ -1139,7 +1139,7 @@ pub async fn get_track_by_id(
         SELECT id, session_id, user_id, elevation_enriched, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched_at, elevation_dataset, ST_AsGeoJSON(geom)::jsonb as geom_geojson
         FROM tracks
         WHERE id = $1
-        "#
+        "#,
     )
     .bind(track_id)
     .fetch_optional(pool)
@@ -2289,8 +2289,8 @@ mod tests {
 
         // For now, just verify the format is parseable
         assert!(mock_geom_text.starts_with("LINESTRING("));
-        assert!(mock_geom_text.contains(","));
-        assert!(mock_geom_text.ends_with(")"));
+        assert!(mock_geom_text.contains(','));
+        assert!(mock_geom_text.ends_with(')'));
     }
 
     #[test]

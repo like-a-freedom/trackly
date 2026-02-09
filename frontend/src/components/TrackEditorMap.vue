@@ -41,6 +41,7 @@
           :data-testid="`waypoint-${segIdx}-${pt.index}`"
           @click="(e) => onWaypointClick(segIdx, pt.index, e)"
           @mousedown="(e) => startDrag(segIdx, pt.index, e)"
+          @touchstart="(e) => startDrag(segIdx, pt.index, e)"
           @contextmenu="(e) => onWaypointContextMenu(segIdx, pt.index, e)"
         />
       </template>
@@ -156,6 +157,7 @@ import {
   LCircleMarker,
   LTooltip,
 } from "@vue-leaflet/vue-leaflet";
+import { getLatLngFromTouch } from "../utils/touch.js";
 
 const SEGMENT_COLORS = [
   "#1976D2",
@@ -211,6 +213,7 @@ const contextMenu = ref({
 const dragging = ref(false);
 const dragSegIdx = ref(-1);
 const dragPtIdx = ref(-1);
+const lastDragLatLng = ref(null);
 
 // Computed
 const segmentsWithColors = computed(() =>
@@ -415,6 +418,7 @@ function startDrag(segIdx, ptIdx, e) {
   dragging.value = true;
   dragSegIdx.value = segIdx;
   dragPtIdx.value = ptIdx;
+  lastDragLatLng.value = null;
 
   const map = mapInstance.value;
   if (!map) return;
@@ -422,11 +426,18 @@ function startDrag(segIdx, ptIdx, e) {
   map.dragging.disable();
   map.on("mousemove", onDragMove);
   map.on("mouseup", onDragEnd);
+  map.on("touchmove", onDragMove);
+  map.on("touchend", onDragEnd);
 }
 
 function onDragMove(e) {
   if (!dragging.value) return;
-  // Visual feedback could be added here
+  const map = mapInstance.value;
+  if (!map) return;
+  const latlng = e.latlng || getLatLngFromTouch(map, e);
+  if (latlng) {
+    lastDragLatLng.value = latlng;
+  }
 }
 
 function onDragEnd(e) {
@@ -437,14 +448,24 @@ function onDragEnd(e) {
     map.dragging.enable();
     map.off("mousemove", onDragMove);
     map.off("mouseup", onDragEnd);
+    map.off("touchmove", onDragMove);
+    map.off("touchend", onDragEnd);
+  }
+
+  const latlng = e.latlng || lastDragLatLng.value || (map ? getLatLngFromTouch(map, e) : null);
+  if (!latlng) {
+    dragging.value = false;
+    dragSegIdx.value = -1;
+    dragPtIdx.value = -1;
+    return;
   }
 
   emit(
     "moveWaypoint",
     dragSegIdx.value,
     dragPtIdx.value,
-    e.latlng.lat,
-    e.latlng.lng
+    latlng.lat,
+    latlng.lng
   );
 
   dragging.value = false;

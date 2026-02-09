@@ -12,6 +12,7 @@
       :routingMode="editor.routing.mode.value"
       :graphLoading="editor.routing.graphLoading.value"
       :graphError="editor.routing.graphError.value"
+      :graphProgress="editor.routing.graphProgress.value"
       :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
       :poiMode="poiMode"
       :savedTrackId="editor.savedTrackId.value"
@@ -123,7 +124,7 @@ function handleMoveWaypoint(segIndex, pointIndex, lat, lng) {
   });
   if (!ok) {
     showToast(
-      "Route not found. Add intermediate points.",
+      "Route not found. Add intermediate points or switch to manual mode.",
       "warning",
       5000
     );
@@ -145,7 +146,7 @@ function handleInsertWaypoint(segIndex, afterIndex, lat, lng) {
   });
   if (!ok) {
     showToast(
-      "Route not found. Add intermediate points.",
+      "Route not found. Add intermediate points or switch to manual mode.",
       "warning",
       5000
     );
