@@ -230,7 +230,10 @@ const segmentsWithColors = computed(() => {
   const shouldDownsample = props.totalPoints >= LARGE_TRACK_THRESHOLD;
   return props.segments.map((seg, i) => {
     const points = shouldDownsample
-      ? downsamplePoints(seg.points, Math.min(MAX_RENDER_POINTS, seg.points.length))
+      ? downsamplePoints(
+          seg.points,
+          Math.min(MAX_RENDER_POINTS, seg.points.length)
+        )
       : seg.points;
     return {
       points,
@@ -469,7 +472,10 @@ function onDragEnd(e) {
     map.off("touchend", onDragEnd);
   }
 
-  const latlng = e.latlng || lastDragLatLng.value || (map ? getLatLngFromTouch(map, e) : null);
+  const latlng =
+    e.latlng ||
+    lastDragLatLng.value ||
+    (map ? getLatLngFromTouch(map, e) : null);
   if (!latlng) {
     dragging.value = false;
     dragSegIdx.value = -1;

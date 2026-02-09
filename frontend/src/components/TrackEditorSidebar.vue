@@ -7,7 +7,7 @@
         data-testid="toggle-sidebar-btn"
         @click="$emit('toggleCollapse')"
       >
-        {{ collapsed ? '▲' : '▼' }}
+        {{ collapsed ? "▲" : "▼" }}
       </button>
     </div>
     <!-- Draft recovery banner -->
@@ -28,11 +28,7 @@
       <p>{{ error }}</p>
     </div>
 
-    <div
-      v-if="totalPoints < 2"
-      class="info-banner"
-      data-testid="editor-tips"
-    >
+    <div v-if="totalPoints < 2" class="info-banner" data-testid="editor-tips">
       <p>
         Click on the map to add points. Use F1–F4 to switch modes and Ctrl+Z/Y
         for undo/redo.
