@@ -7,7 +7,8 @@ export function useTrackMapE2E({
   isPanningOrZooming,
   mapIsReady,
   trackZoomAnimating,
-  props
+  props,
+  highlightSegmentForMarker
 }) {
   // Only initialize in non-production modes
   if (import.meta.env.MODE === 'production') {
@@ -44,6 +45,22 @@ export function useTrackMapE2E({
     window.__e2e.forceHighlightSegment = (lat, lng, segmentIndex = 0) => {
       try {
         if (typeof lat === 'undefined' || typeof lng === 'undefined') return false;
+
+        if (highlightSegmentForMarker) {
+          try {
+            if (window.__e2e) {
+              window.__e2e.lastGapLineExists = false;
+              window.__e2e.lastHighlightedColor = null;
+            }
+            highlightSegmentForMarker({
+              latlng: [lat, lng],
+              segmentIndex,
+              isFixed: false
+            });
+          } catch (e) {
+            console.warn('E2E forceHighlightSegment highlight failed:', e);
+          }
+        }
         
         const mapInstance = window.__e2e?._lastMapInstance;
         if (!mapInstance) return false;

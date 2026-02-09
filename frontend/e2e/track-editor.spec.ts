@@ -142,6 +142,21 @@ test.describe('Track Editor', () => {
             const editor = page.locator('.track-editor-view');
             await expect(editor).toBeVisible();
         });
+
+        test('F3 key does not crash', async ({ page }) => {
+            await page.keyboard.press('F3');
+            await page.waitForTimeout(200);
+
+            const editor = page.locator('.track-editor-view');
+            await expect(editor).toBeVisible();
+        });
+    });
+
+    test.describe('Loop action', () => {
+        test('loop button is visible', async ({ page }) => {
+            const loopBtn = page.locator('[data-testid="loop-btn"]');
+            await expect(loopBtn).toBeVisible();
+        });
     });
 });
 

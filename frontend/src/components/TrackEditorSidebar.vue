@@ -151,6 +151,60 @@
       </ul>
     </section>
 
+    <!-- Fragment actions -->
+    <section
+      v-if="fragmentInfo"
+      class="sidebar-section"
+      data-testid="fragment-section"
+    >
+      <div class="section-header">
+        <h3 class="section-title">Fragment tools</h3>
+        <button
+          class="btn-icon-sm"
+          title="Clear selection"
+          data-testid="fragment-clear-btn"
+          @click="$emit('clearFragment')"
+        >
+          ✕
+        </button>
+      </div>
+      <p class="fragment-meta">
+        Segment {{ fragmentInfo.segIndex + 1 }} · Points:
+        {{ fragmentInfo.points }}
+        <span v-if="!fragmentInfo.complete"> · Select end point</span>
+      </p>
+      <div class="fragment-actions" v-if="fragmentInfo.complete">
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="fragment-reroute-btn"
+          @click="$emit('rerouteFragment')"
+        >
+          Reroute
+        </button>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="fragment-delete-connect-btn"
+          @click="$emit('deleteFragmentConnect')"
+        >
+          Delete + Connect
+        </button>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="fragment-delete-split-btn"
+          @click="$emit('deleteFragmentSplit')"
+        >
+          Delete + Split
+        </button>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="fragment-reverse-btn"
+          @click="$emit('reverseFragment')"
+        >
+          Reverse
+        </button>
+      </div>
+    </section>
+
     <!-- POI list -->
     <section
       v-if="pois.length > 0"
@@ -207,7 +261,80 @@
         :totalDistance="totalDistanceKm"
         :coordinateData="coordinateData"
         chartMode="elevation"
+        @chart-point-hover="$emit('chart-point-hover', $event)"
+        @chart-point-leave="$emit('chart-point-leave', $event)"
+        @chart-point-click="$emit('chart-point-click', $event)"
       />
+    </section>
+
+    <!-- Track optimizer -->
+    <section class="sidebar-section" data-testid="optimizer-section">
+      <div class="section-header">
+        <h3 class="section-title">Track optimizer</h3>
+      </div>
+      <p class="optimizer-meta">Keep {{ optimizerPercent }}% of points</p>
+      <input
+        type="range"
+        min="1"
+        max="100"
+        step="1"
+        class="optimizer-range"
+        :value="optimizerPercent"
+        :disabled="totalPoints < 2"
+        @input="handleOptimizerRatioInput"
+      />
+      <div class="optimizer-stats" v-if="optimizerStats">
+        <span>
+          Points: {{ optimizerStats.originalPoints }} →
+          {{ optimizerStats.simplifiedPoints }}
+        </span>
+        <span>
+          {{ Math.round((optimizerStats.compressionRatio || 0) * 100) }}%
+        </span>
+        <span>
+          Tolerance: {{ optimizerStats.toleranceUsed?.toFixed(1) || 0 }} m
+        </span>
+      </div>
+      <div v-if="optimizerLoading" class="optimizer-status">
+        Building preview...
+      </div>
+      <div v-else-if="optimizerError" class="optimizer-status error">
+        {{ optimizerError }}
+      </div>
+      <div class="optimizer-actions">
+        <button
+          class="btn-secondary btn-sm"
+          :disabled="optimizerLoading || totalPoints < 2"
+          data-testid="optimizer-preview-btn"
+          @click="$emit('previewOptimization')"
+        >
+          Preview
+        </button>
+        <button
+          class="btn-secondary btn-sm"
+          :disabled="!hasOptimizerPreview"
+          data-testid="optimizer-apply-btn"
+          @click="$emit('applyOptimization')"
+        >
+          Apply
+        </button>
+        <button
+          class="btn-secondary btn-sm"
+          :disabled="!hasOptimizerPreview"
+          data-testid="optimizer-clear-btn"
+          @click="$emit('clearOptimization')"
+        >
+          Cancel
+        </button>
+        <button
+          class="btn-secondary btn-sm"
+          :disabled="!hasOptimizerPreview"
+          data-testid="optimizer-download-btn"
+          @click="$emit('downloadOptimization')"
+        >
+          Download GeoJSON
+        </button>
+      </div>
     </section>
 
     <!-- Summary -->
@@ -235,11 +362,23 @@
         <span>POI</span>
         <strong>{{ pois.length }}</strong>
       </div>
+      <div class="summary-row">
+        <span>Loop</span>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="loop-btn"
+          @click="$emit('closeLoop')"
+        >
+          Close loop
+        </button>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
+const OPTIMIZER_DEFAULT_RATIO = 0.1;
+
 const props = defineProps({
   trackName: { type: String, default: "" },
   trackDescription: { type: String, default: "" },
@@ -258,6 +397,12 @@ const props = defineProps({
   elevationError: { type: String, default: null },
   coordinateData: { type: Array, default: () => [] },
   collapsed: { type: Boolean, default: false },
+  fragmentSelection: { type: Object, default: () => ({}) },
+  optimizerTargetRatio: { type: Number, default: OPTIMIZER_DEFAULT_RATIO },
+  optimizerPreview: { type: Object, default: null },
+  optimizerStats: { type: Object, default: null },
+  optimizerLoading: { type: Boolean, default: false },
+  optimizerError: { type: String, default: null },
 });
 
 const emit = defineEmits([
@@ -273,6 +418,20 @@ const emit = defineEmits([
   "deleteDraft",
   "deletePoi",
   "toggleCollapse",
+  "clearFragment",
+  "deleteFragmentConnect",
+  "deleteFragmentSplit",
+  "reverseFragment",
+  "rerouteFragment",
+  "closeLoop",
+  "update:optimizerTargetRatio",
+  "previewOptimization",
+  "applyOptimization",
+  "clearOptimization",
+  "downloadOptimization",
+  "chart-point-hover",
+  "chart-point-leave",
+  "chart-point-click",
 ]);
 
 const availableCategories = [
@@ -281,6 +440,30 @@ const availableCategories = [
   { id: "running", label: "Running", icon: "🏃" },
   { id: "cycling", label: "Cycling", icon: "🚴" },
 ];
+
+const fragmentInfo = computed(() => {
+  const sel = props.fragmentSelection || {};
+  if (
+    sel.segIndex === null ||
+    sel.segIndex === undefined ||
+    sel.startIdx === null ||
+    sel.startIdx === undefined
+  ) {
+    return null;
+  }
+  const end = sel.endIdx;
+  const complete = end !== null && end !== undefined;
+  const lo = complete ? Math.min(sel.startIdx, end) : sel.startIdx;
+  const hi = complete ? Math.max(sel.startIdx, end) : sel.startIdx;
+  const points = complete ? hi - lo + 1 : 1;
+  return {
+    segIndex: sel.segIndex,
+    startIdx: lo,
+    endIdx: complete ? hi : null,
+    complete,
+    points,
+  };
+});
 
 function handleCategoryToggle(catId) {
   const current = [...props.trackCategories];
@@ -301,6 +484,21 @@ function formatDistance(km) {
 function formatDistanceM(meters) {
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
+}
+
+const optimizerPercent = computed(() => {
+  const ratio = props.optimizerTargetRatio ?? OPTIMIZER_DEFAULT_RATIO;
+  return Math.round(ratio * 100);
+});
+
+const hasOptimizerPreview = computed(() => {
+  return !!(props.optimizerPreview && props.optimizerPreview.segments?.length);
+});
+
+function handleOptimizerRatioInput(event) {
+  const value = Number(event.target.value);
+  if (!Number.isFinite(value)) return;
+  emit("update:optimizerTargetRatio", value / 100);
 }
 
 import { computed } from "vue";
@@ -598,6 +796,18 @@ const timeDisplay = computed(() => {
   color: #333;
 }
 
+.fragment-meta {
+  font-size: 12px;
+  color: #555;
+  margin: 4px 0 8px;
+}
+
+.fragment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .poi-list {
   list-style: none;
   margin: 0;
@@ -647,6 +857,42 @@ const timeDisplay = computed(() => {
 }
 
 .elevation-status.error {
+  color: #c62828;
+}
+
+.optimizer-meta {
+  font-size: 12px;
+  color: #555;
+  margin: 4px 0 8px;
+}
+
+.optimizer-range {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.optimizer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.optimizer-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #555;
+  margin: 6px 0;
+}
+
+.optimizer-status {
+  font-size: 12px;
+  color: #555;
+}
+
+.optimizer-status.error {
   color: #c62828;
 }
 

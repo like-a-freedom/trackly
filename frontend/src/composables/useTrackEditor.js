@@ -11,6 +11,9 @@ const MAX_SEGMENTS = 100;
 const MIN_POINT_DISTANCE_M = 5;
 const MAX_ELEVATION_PREVIEW_POINTS = 2000;
 const POI_FAR_DISTANCE_M = 1000;
+const OPTIMIZER_DEFAULT_RATIO = 0.1;
+const OPTIMIZER_MIN_RATIO = 0.01;
+const OPTIMIZER_MAX_RATIO = 1.0;
 
 /**
  * Segment color palette for differentiating segments visually.
@@ -83,6 +86,19 @@ function clampCoordinateArray(points, maxPoints) {
     return sampled;
 }
 
+function parseGeoJSONSegments(geojson) {
+    if (!geojson?.coordinates) return [];
+    let coords = [];
+    if (geojson.type === 'LineString') {
+        coords = [geojson.coordinates];
+    } else if (geojson.type === 'MultiLineString') {
+        coords = geojson.coordinates;
+    } else {
+        return [];
+    }
+    return coords.map((line) => line.map(([lng, lat]) => [lat, lng]));
+}
+
 /** Calculate total distance for an array of [lat, lng] points. */
 function calcSegmentDistance(points) {
     let total = 0;
@@ -140,6 +156,13 @@ export function useTrackEditor({ trackId = null } = {}) {
     const segments = ref([createEmptySegment()]);
     const activeSegmentIndex = ref(0);
 
+    // ── Fragment selection ───────────────────────────────────
+    const fragmentSelection = ref({
+        segIndex: null,
+        startIdx: null,
+        endIdx: null,
+    });
+
     // ── POIs ─────────────────────────────────────────────────
     const pois = ref([]);
 
@@ -156,6 +179,13 @@ export function useTrackEditor({ trackId = null } = {}) {
     const elevationStats = ref({});
     const elevationLoading = ref(false);
     const elevationError = ref(null);
+
+    // ── Optimization preview ───────────────────────────────
+    const optimizerTargetRatio = ref(OPTIMIZER_DEFAULT_RATIO);
+    const optimizerPreview = ref(null);
+    const optimizerStats = ref(null);
+    const optimizerLoading = ref(false);
+    const optimizerError = ref(null);
 
     // ── Computed ─────────────────────────────────────────────
     const activeSegment = computed(() => segments.value[activeSegmentIndex.value]);
@@ -211,6 +241,15 @@ export function useTrackEditor({ trackId = null } = {}) {
         walking: 4,
         running: 10,
         cycling: 20,
+        mtb: 15,
+    };
+
+    const CATEGORY_SLOPE_PENALTY = {
+        hiking: 0.5,
+        walking: 0.5,
+        running: 0.6,
+        cycling: 0.4,
+        mtb: 0.5,
     };
 
     /** Estimated time in minutes based on distance and primary category. */
@@ -218,7 +257,20 @@ export function useTrackEditor({ trackId = null } = {}) {
         const dist = totalDistanceKm.value;
         if (dist <= 0) return 0;
         const cat = trackCategories.value[0];
-        const speed = CATEGORY_SPEEDS[cat] ?? 5;
+        const baseSpeed = CATEGORY_SPEEDS[cat] ?? 5;
+        let speed = baseSpeed;
+
+        const gain = elevationStats.value?.gain ?? 0;
+        const distanceMeters = dist * 1000;
+        if (gain > 0 && distanceMeters > 0) {
+            const avgSlope = (gain / distanceMeters) * 100;
+            if (avgSlope >= 10) {
+                const slopePenalty = CATEGORY_SLOPE_PENALTY[cat] ?? 0.5;
+                speed = baseSpeed * slopePenalty;
+            }
+        }
+
+        if (speed <= 0) return 0;
         return (dist / speed) * 60;
     });
 
@@ -238,6 +290,67 @@ export function useTrackEditor({ trackId = null } = {}) {
         seg.waypoints = Array.from(waypointSet)
             .filter((idx) => idx >= 0 && idx < seg.points.length)
             .sort((a, b) => a - b);
+    }
+
+    function buildWaypointsMatrix() {
+        return segments.value.map((seg) => [...seg.waypoints]);
+    }
+
+    function getFragmentRange() {
+        const { segIndex, startIdx, endIdx } = fragmentSelection.value;
+        if (segIndex === null || startIdx === null || endIdx === null) return null;
+        const lo = Math.min(startIdx, endIdx);
+        const hi = Math.max(startIdx, endIdx);
+        return { segIndex, startIdx: lo, endIdx: hi };
+    }
+
+    function setFragmentPoint(segIndex, pointIndex) {
+        const seg = segments.value[segIndex];
+        if (!seg || pointIndex < 0 || pointIndex >= seg.points.length) return false;
+
+        const current = fragmentSelection.value;
+        if (current.segIndex !== segIndex || current.startIdx === null) {
+            fragmentSelection.value = { segIndex, startIdx: pointIndex, endIdx: null };
+            return true;
+        }
+
+        if (current.endIdx === null) {
+            fragmentSelection.value = {
+                segIndex,
+                startIdx: current.startIdx,
+                endIdx: pointIndex,
+            };
+            return true;
+        }
+
+        fragmentSelection.value = { segIndex, startIdx: pointIndex, endIdx: null };
+        return true;
+    }
+
+    function clearFragmentSelection() {
+        fragmentSelection.value = { segIndex: null, startIdx: null, endIdx: null };
+    }
+
+    function replaceRangeWithPoints(segIndex, startIdx, endIdx, newPoints) {
+        const seg = segments.value[segIndex];
+        if (!seg) return false;
+
+        const removeCount = endIdx - startIdx + 1;
+        const before = seg.points.slice(0, startIdx);
+        const after = seg.points.slice(endIdx + 1);
+
+        seg.points = before.concat(newPoints, after);
+
+        const keepWaypoints = seg.waypoints
+            .filter((idx) => idx < startIdx || idx > endIdx)
+            .map((idx) => (idx > endIdx ? idx - removeCount + newPoints.length : idx));
+
+        const startWaypoint = startIdx;
+        const endWaypoint = startIdx + newPoints.length - 1;
+        seg.waypoints = [...new Set([...keepWaypoints, startWaypoint, endWaypoint])].sort(
+            (a, b) => a - b
+        );
+        return true;
     }
 
     function buildRoutedSegment(seg, { onRoutingNotAvailable } = {}) {
@@ -337,10 +450,13 @@ export function useTrackEditor({ trackId = null } = {}) {
     function scheduleGeometryUpdates() {
         updatePoiMetrics();
         scheduleElevationPreview();
+        clearOptimizationPreview({ keepRatio: true, silent: true });
     }
 
     let elevationTimer = null;
     let elevationAbort = null;
+    let optimizerTimer = null;
+    let optimizerAbort = null;
 
     function scheduleElevationPreview() {
         if (typeof fetch !== 'function') return;
@@ -399,6 +515,138 @@ export function useTrackEditor({ trackId = null } = {}) {
                 elevationLoading.value = false;
             }
         }, 600);
+    }
+
+    function setOptimizerTargetRatio(nextRatio) {
+        const ratio = Number(nextRatio);
+        if (!Number.isFinite(ratio)) return;
+        optimizerTargetRatio.value = Math.min(
+            OPTIMIZER_MAX_RATIO,
+            Math.max(OPTIMIZER_MIN_RATIO, ratio)
+        );
+        scheduleOptimizationPreview(optimizerTargetRatio.value);
+    }
+
+    function scheduleOptimizationPreview(ratio) {
+        if (optimizerTimer) clearTimeout(optimizerTimer);
+        optimizerTimer = setTimeout(() => {
+            previewOptimization(ratio);
+        }, 500);
+    }
+
+    async function previewOptimization(ratio = optimizerTargetRatio.value) {
+        if (typeof fetch !== 'function') return false;
+        const geojson = toGeoJSON();
+        if (!geojson) {
+            optimizerError.value = 'Track needs at least 2 points to optimize.';
+            return false;
+        }
+
+        optimizerLoading.value = true;
+        optimizerError.value = null;
+
+        if (optimizerAbort) {
+            optimizerAbort.abort();
+        }
+        optimizerAbort = new AbortController();
+
+        try {
+            const resp = await fetch(`${API_BASE}/api/tracks/simplify-preview`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    geometry: geojson,
+                    waypoints: buildWaypointsMatrix(),
+                    target_ratio: ratio,
+                }),
+                signal: optimizerAbort.signal,
+            });
+
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+
+            const data = await resp.json();
+            const previewSegments = parseGeoJSONSegments(data.geometry);
+            optimizerPreview.value = {
+                geometry: data.geometry,
+                segments: previewSegments,
+                waypoints: Array.isArray(data.waypoints) ? data.waypoints : [],
+            };
+            optimizerStats.value = {
+                originalPoints: data.original_points,
+                simplifiedPoints: data.simplified_points,
+                compressionRatio: data.compression_ratio,
+                toleranceUsed: data.tolerance_used,
+            };
+            return true;
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                optimizerError.value = 'Unable to build optimization preview.';
+            }
+            return false;
+        } finally {
+            optimizerLoading.value = false;
+        }
+    }
+
+    function applyOptimizationPreview() {
+        if (!optimizerPreview.value?.segments?.length) return false;
+
+        saveUndoState();
+
+        const nextSegments = optimizerPreview.value.segments.map((points, idx) => {
+            const waypointList = optimizerPreview.value.waypoints?.[idx] || [];
+            const segment = {
+                points,
+                waypoints: waypointList.filter((wp) => wp >= 0 && wp < points.length),
+            };
+            normalizeWaypoints(segment);
+            return segment;
+        });
+
+        segments.value = nextSegments.length > 0 ? nextSegments : [createEmptySegment()];
+        activeSegmentIndex.value = Math.min(
+            activeSegmentIndex.value,
+            segments.value.length - 1
+        );
+
+        autosave();
+        scheduleGeometryUpdates();
+        clearOptimizationPreview({ keepRatio: true });
+        return true;
+    }
+
+    function clearOptimizationPreview({ keepRatio = true, silent = false } = {}) {
+        if (optimizerTimer) clearTimeout(optimizerTimer);
+        if (optimizerAbort) {
+            optimizerAbort.abort();
+        }
+        optimizerPreview.value = null;
+        optimizerStats.value = null;
+        if (!silent) {
+            optimizerError.value = null;
+        }
+        if (!keepRatio) {
+            optimizerTargetRatio.value = OPTIMIZER_DEFAULT_RATIO;
+        }
+    }
+
+    function downloadOptimizationPreview() {
+        if (!optimizerPreview.value?.geometry) return false;
+        const data = optimizerPreview.value.geometry;
+        const blob = new Blob([JSON.stringify(data)], {
+            type: 'application/geo+json',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${trackName.value || 'track'}-optimized.geojson`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return true;
     }
 
     /** Snapshot current geometry state for undo. */
@@ -762,6 +1010,97 @@ export function useTrackEditor({ trackId = null } = {}) {
         scheduleGeometryUpdates();
     }
 
+    /** Reverse points within a fragment range. */
+    function reverseFragment(segIndex, startIdx, endIdx) {
+        const seg = segments.value[segIndex];
+        if (!seg) return false;
+        if (endIdx - startIdx < 1) return false;
+
+        saveUndoState();
+
+        const fragment = seg.points.slice(startIdx, endIdx + 1).reverse();
+        seg.points.splice(startIdx, fragment.length, ...fragment);
+
+        seg.waypoints = seg.waypoints.map((idx) => {
+            if (idx < startIdx || idx > endIdx) return idx;
+            return startIdx + (endIdx - idx);
+        });
+        seg.waypoints.sort((a, b) => a - b);
+
+        autosave();
+        scheduleGeometryUpdates();
+        return true;
+    }
+
+    /** Delete fragment interior and connect endpoints with a straight line. */
+    function deleteFragmentConnect(segIndex, startIdx, endIdx) {
+        const seg = segments.value[segIndex];
+        if (!seg) return false;
+        if (endIdx - startIdx < 2) return false;
+        const ok = shortcutBetweenPoints(segIndex, startIdx, endIdx);
+        if (ok) {
+            clearFragmentSelection();
+        }
+        return ok;
+    }
+
+    /** Delete fragment interior and split into two segments. */
+    function deleteFragmentSplit(segIndex, startIdx, endIdx) {
+        const seg = segments.value[segIndex];
+        if (!seg) return false;
+        if (endIdx - startIdx < 2) return false;
+
+        const firstPoints = seg.points.slice(0, startIdx + 1);
+        const secondPoints = seg.points.slice(endIdx);
+        if (firstPoints.length < 2 || secondPoints.length < 2) return false;
+
+        saveUndoState();
+
+        const firstWaypoints = seg.waypoints
+            .filter((idx) => idx <= startIdx)
+            .sort((a, b) => a - b);
+        const secondWaypoints = seg.waypoints
+            .filter((idx) => idx >= endIdx)
+            .map((idx) => idx - endIdx)
+            .sort((a, b) => a - b);
+
+        segments.value[segIndex] = { points: firstPoints, waypoints: firstWaypoints };
+        segments.value.splice(segIndex + 1, 0, {
+            points: secondPoints,
+            waypoints: secondWaypoints,
+        });
+
+        activeSegmentIndex.value = segIndex;
+        autosave();
+        scheduleGeometryUpdates();
+        clearFragmentSelection();
+        return true;
+    }
+
+    /** Re-route between fragment endpoints. */
+    function rerouteFragment(segIndex, startIdx, endIdx, { onRoutingNotAvailable } = {}) {
+        const seg = segments.value[segIndex];
+        if (!seg) return false;
+        if (endIdx - startIdx < 2) return false;
+
+        const from = seg.points[startIdx];
+        const to = seg.points[endIdx];
+        const route = routing.findRoute(
+            { lat: from[0], lng: from[1] },
+            { lat: to[0], lng: to[1] },
+            { onNotAvailable: onRoutingNotAvailable }
+        );
+
+        if (!route || route.length < 2) return false;
+
+        saveUndoState();
+        replaceRangeWithPoints(segIndex, startIdx, endIdx, route);
+        autosave();
+        scheduleGeometryUpdates();
+        clearFragmentSelection();
+        return true;
+    }
+
     /** Switch active segment. */
     function setActiveSegment(index) {
         if (index >= 0 && index < segments.value.length) {
@@ -891,6 +1230,9 @@ export function useTrackEditor({ trackId = null } = {}) {
             editorMode.value = newMode;
             if (newMode === 'routing') {
                 routing.setMode('auto');
+            }
+            if (newMode !== 'fragment') {
+                clearFragmentSelection();
             }
         }
     }
@@ -1356,6 +1698,16 @@ export function useTrackEditor({ trackId = null } = {}) {
         segmentStats,
         SEGMENT_COLORS,
 
+        // Fragment selection
+        fragmentSelection,
+        setFragmentPoint,
+        clearFragmentSelection,
+        getFragmentRange,
+        deleteFragmentConnect,
+        deleteFragmentSplit,
+        reverseFragment,
+        rerouteFragment,
+
         // Waypoint ops
         addWaypoint,
         moveWaypoint,
@@ -1410,6 +1762,19 @@ export function useTrackEditor({ trackId = null } = {}) {
         elevationStats,
         elevationLoading,
         elevationError,
+
+        // Optimizer
+        optimizerTargetRatio,
+        optimizerPreview,
+        optimizerStats,
+        optimizerLoading,
+        optimizerError,
+        setOptimizerTargetRatio,
+        scheduleOptimizationPreview,
+        previewOptimization,
+        applyOptimizationPreview,
+        clearOptimizationPreview,
+        downloadOptimizationPreview,
 
         // POIs
         pois,

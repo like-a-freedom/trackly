@@ -125,6 +125,10 @@ async fn main() {
             get(handlers::get_track_simplified),
         )
         .route(
+            "/api/tracks/simplify-preview",
+            post(handlers::simplify_track_preview),
+        )
+        .route(
             "/api/tracks/{id}/description",
             axum::routing::patch(handlers::update_track_description),
         )

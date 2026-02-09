@@ -314,6 +314,24 @@ pub struct TrackSimplificationQuery {
     pub mode: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TrackSimplifyPreviewRequest {
+    pub geometry: serde_json::Value,
+    #[serde(default)]
+    pub waypoints: Vec<Vec<usize>>,
+    pub target_ratio: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TrackSimplifyPreviewResponse {
+    pub geometry: serde_json::Value,
+    pub waypoints: Vec<Vec<usize>>,
+    pub original_points: usize,
+    pub simplified_points: usize,
+    pub compression_ratio: f64,
+    pub tolerance_used: f64,
+}
+
 #[derive(Debug, Serialize)]
 pub struct TrackSearchResult {
     pub id: Uuid,

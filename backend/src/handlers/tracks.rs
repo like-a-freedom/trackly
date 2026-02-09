@@ -10,6 +10,7 @@ use crate::services::gpx_export::GpxExportService;
 use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
 use crate::track_utils::{
     ElevationEnrichmentService, calculate_file_hash, extract_coordinates_from_geojson,
+    extract_segments_from_geojson, geojson_from_segments, simplify_segments_to_ratio,
 };
 use axum::http::header::REFERER;
 use axum::{
@@ -29,6 +30,8 @@ use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
+
+const MAX_SIMPLIFY_POINTS: usize = 100_000;
 
 // Safe error handling - don't expose internal details
 fn handle_db_error(err: sqlx::Error) -> StatusCode {
@@ -611,6 +614,47 @@ pub async fn get_track_simplified(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+/// POST /api/tracks/simplify-preview — Simplify editor geometry for optimizer preview.
+pub async fn simplify_track_preview(
+    Json(request): Json<TrackSimplifyPreviewRequest>,
+) -> Result<Json<TrackSimplifyPreviewResponse>, StatusCode> {
+    if !(0.0..=1.0).contains(&request.target_ratio) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let segments =
+        extract_segments_from_geojson(&request.geometry).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    if segments.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let total_points: usize = segments.iter().map(|s| s.len()).sum();
+    if total_points < 2 || total_points > MAX_SIMPLIFY_POINTS {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let waypoint_ref = if request.waypoints.len() == segments.len() {
+        Some(request.waypoints.as_slice())
+    } else {
+        None
+    };
+
+    let (simplified_segments, simplified_waypoints, stats) =
+        simplify_segments_to_ratio(&segments, waypoint_ref, request.target_ratio);
+
+    let geometry = geojson_from_segments(&simplified_segments);
+
+    Ok(Json(TrackSimplifyPreviewResponse {
+        geometry,
+        waypoints: simplified_waypoints,
+        original_points: stats.original_points,
+        simplified_points: stats.simplified_points,
+        compression_ratio: stats.compression_ratio,
+        tolerance_used: stats.tolerance_used,
+    }))
 }
 
 pub async fn update_track_description(

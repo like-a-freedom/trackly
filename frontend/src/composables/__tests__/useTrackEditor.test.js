@@ -267,6 +267,69 @@ describe('useTrackEditor', () => {
         });
     });
 
+    describe('fragment operations', () => {
+        it('selects fragment start and end points', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+
+            editor.setFragmentPoint(0, 0);
+            editor.setFragmentPoint(0, 2);
+
+            const range = editor.getFragmentRange();
+            expect(range).toEqual({ segIndex: 0, startIdx: 0, endIdx: 2 });
+        });
+
+        it('deleteFragmentConnect removes interior points', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+            editor.addWaypoint(50.03, 30.03);
+
+            const ok = editor.deleteFragmentConnect(0, 0, 3);
+            expect(ok).toBe(true);
+            expect(editor.segments.value[0].points).toHaveLength(2);
+        });
+
+        it('deleteFragmentSplit creates two segments', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+            editor.addWaypoint(50.03, 30.03);
+            editor.addWaypoint(50.04, 30.04);
+
+            const ok = editor.deleteFragmentSplit(0, 1, 3);
+            expect(ok).toBe(true);
+            expect(editor.segments.value).toHaveLength(2);
+            expect(editor.segments.value[0].points).toHaveLength(2);
+            expect(editor.segments.value[1].points).toHaveLength(2);
+        });
+
+        it('reverseFragment reverses a subrange', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+            editor.addWaypoint(50.03, 30.03);
+
+            const ok = editor.reverseFragment(0, 1, 2);
+            expect(ok).toBe(true);
+            expect(editor.segments.value[0].points[1]).toEqual([50.02, 30.02]);
+            expect(editor.segments.value[0].points[2]).toEqual([50.01, 30.01]);
+        });
+
+        it('rerouteFragment replaces range using manual routing', () => {
+            editor.routing.setMode('manual');
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+            editor.addWaypoint(50.03, 30.03);
+
+            const ok = editor.rerouteFragment(0, 1, 3);
+            expect(ok).toBe(true);
+            expect(editor.segments.value[0].points.length).toBeGreaterThanOrEqual(3);
+        });
+    });
+
     describe('undo / redo', () => {
         it('undoes adding a waypoint', () => {
             editor.addWaypoint(50.0, 30.0);
@@ -835,6 +898,78 @@ describe('useTrackEditor', () => {
             // Cycling = 20 km/h
             const expected = (dist / 20) * 60;
             expect(editor.estimatedTimeMinutes.value).toBeCloseTo(expected, 1);
+        });
+
+        it('applies slope penalty when elevation gain is steep', () => {
+            editor.trackCategories.value = ['hiking'];
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.009, 30.0); // ~1km
+            const dist = editor.totalDistanceKm.value;
+
+            editor.elevationStats.value = { gain: 200 };
+            const expected = (dist / (5 * 0.5)) * 60;
+            expect(editor.estimatedTimeMinutes.value).toBeCloseTo(expected, 1);
+        });
+    });
+
+    describe('optimizer preview', () => {
+        it('stores preview data from backend', async () => {
+            const previewResponse = {
+                geometry: {
+                    type: 'MultiLineString',
+                    coordinates: [[[30.0, 50.0], [31.0, 51.0]]],
+                },
+                waypoints: [[0, 1]],
+                original_points: 2,
+                simplified_points: 2,
+                compression_ratio: 1,
+                tolerance_used: 0,
+            };
+
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve(previewResponse),
+            }));
+
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(51.0, 31.0);
+
+            const ok = await editor.previewOptimization(0.5);
+            expect(ok).toBe(true);
+            expect(editor.optimizerPreview.value).not.toBeNull();
+            expect(editor.optimizerPreview.value.segments[0]).toEqual([
+                [50.0, 30.0],
+                [51.0, 31.0],
+            ]);
+            expect(editor.optimizerStats.value.originalPoints).toBe(2);
+        });
+
+        it('applies optimization preview to segments', async () => {
+            const previewResponse = {
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [[30.0, 50.0], [31.0, 51.0]],
+                },
+                waypoints: [[0, 1]],
+                original_points: 2,
+                simplified_points: 2,
+                compression_ratio: 1,
+                tolerance_used: 0,
+            };
+
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve(previewResponse),
+            }));
+
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(51.0, 31.0);
+
+            await editor.previewOptimization(0.5);
+            const applied = editor.applyOptimizationPreview();
+            expect(applied).toBe(true);
+            expect(editor.segments.value[0].points).toHaveLength(2);
+            expect(editor.optimizerPreview.value).toBeNull();
         });
     });
 

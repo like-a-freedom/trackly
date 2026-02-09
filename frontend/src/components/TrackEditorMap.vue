@@ -27,6 +27,29 @@
         @click="(e) => onSegmentClick(segIdx, e)"
       />
 
+      <!-- Optimizer preview line -->
+      <l-polyline
+        v-for="(seg, segIdx) in optimizerPreviewSegments"
+        :key="`optimizer-preview-${segIdx}`"
+        :lat-lngs="seg"
+        color="#1E88E5"
+        :weight="4"
+        :opacity="0.9"
+        :dash-array="'6,6'"
+        :data-testid="`optimizer-preview-${segIdx}`"
+      />
+
+      <!-- Fragment selection preview -->
+      <l-polyline
+        v-if="fragmentPreview && fragmentPreview.points.length > 1"
+        :lat-lngs="fragmentPreview.points"
+        color="#7B1FA2"
+        :weight="4"
+        :opacity="0.9"
+        :dash-array="fragmentPreview.complete ? '6,6' : '2,6'"
+        :data-testid="`fragment-preview`"
+      />
+
       <!-- Waypoint markers -->
       <template v-for="(seg, segIdx) in segments">
         <l-circle-marker
@@ -94,6 +117,19 @@
           <span v-if="poi.isFarFromTrack"> · ⚠️ &gt;1 km from track</span>
         </l-tooltip>
       </l-circle-marker>
+
+      <!-- Elevation chart hover marker -->
+      <l-circle-marker
+        v-if="hoverMarker"
+        :lat-lng="hoverMarker.latlng"
+        :radius="8"
+        color="#1E88E5"
+        fill-color="#90CAF9"
+        :fill-opacity="0.9"
+        :weight="2"
+        :pane="'markerPane'"
+        :data-testid="`elevation-hover-marker`"
+      />
     </l-map>
 
     <!-- Context menu -->
@@ -180,6 +216,9 @@ const props = defineProps({
   totalPoints: { type: Number, default: 0 },
   pois: { type: Array, default: () => [] },
   poiMode: { type: Boolean, default: false },
+  fragmentSelection: { type: Object, default: () => ({}) },
+  optimizerPreviewSegments: { type: Array, default: () => [] },
+  hoverMarker: { type: Object, default: null },
 });
 
 const emit = defineEmits([
@@ -192,6 +231,7 @@ const emit = defineEmits([
   "promoteToWaypoint",
   "addPoi",
   "deletePoi",
+  "selectFragmentPoint",
 ]);
 
 const mapRef = ref(null);
@@ -237,10 +277,39 @@ const segmentsWithColors = computed(() => {
       : seg.points;
     return {
       points,
-      color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+      color:
+        props.optimizerPreviewSegments.length > 0
+          ? "#D32F2F"
+          : SEGMENT_COLORS[i % SEGMENT_COLORS.length],
       smoothFactor: shouldDownsample ? 2 : 1,
     };
   });
+});
+
+const fragmentPreview = computed(() => {
+  const selection = props.fragmentSelection || {};
+  const segIndex = selection.segIndex;
+  const startIdx = selection.startIdx;
+  const endIdx = selection.endIdx;
+  if (
+    segIndex === null ||
+    segIndex === undefined ||
+    startIdx === null ||
+    startIdx === undefined
+  ) {
+    return null;
+  }
+  const seg = props.segments[segIndex];
+  if (!seg) return null;
+  if (endIdx === null || endIdx === undefined) {
+    return { points: [seg.points[startIdx]], complete: false };
+  }
+  const lo = Math.min(startIdx, endIdx);
+  const hi = Math.max(startIdx, endIdx);
+  return {
+    points: seg.points.slice(lo, hi + 1),
+    complete: true,
+  };
 });
 
 const startPoint = computed(() => {
@@ -308,6 +377,30 @@ function onMapClick(e) {
 
 function onSegmentClick(segIdx, e) {
   if (props.editorMode === "view") return;
+
+  if (props.editorMode === "fragment") {
+    const seg = props.segments[segIdx];
+    if (!seg || seg.points.length < 2) return;
+
+    const clickLat = e.latlng.lat;
+    const clickLng = e.latlng.lng;
+    let bestIdx = 0;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < seg.points.length; i++) {
+      const [lat, lng] = seg.points[i];
+      const d = Math.hypot(clickLat - lat, clickLng - lng);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+
+    emit("selectFragmentPoint", segIdx, bestIdx);
+
+    if (e.originalEvent) e.originalEvent.stopPropagation();
+    return;
+  }
 
   // Set this segment as active
   emit("setActiveSegment", segIdx);
@@ -531,6 +624,12 @@ function fitBounds() {
   }
 }
 
+function panTo(latlng) {
+  const map = mapInstance.value;
+  if (!map || !latlng) return;
+  map.panTo(latlng, { animate: true });
+}
+
 // Watch segments to auto-fit on first point addition
 watch(
   () => props.totalPoints,
@@ -555,7 +654,7 @@ onBeforeUnmount(() => {
 });
 
 // Expose for parent
-defineExpose({ fitBounds });
+defineExpose({ fitBounds, panTo });
 </script>
 
 <style scoped>

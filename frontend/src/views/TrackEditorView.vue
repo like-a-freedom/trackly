@@ -35,10 +35,16 @@
         :totalPoints="editor.totalPoints.value"
         :pois="editor.pois.value"
         :poiMode="poiMode"
+        :fragmentSelection="editor.fragmentSelection.value"
+        :optimizerPreviewSegments="
+          editor.optimizerPreview.value?.segments || []
+        "
+        :hoverMarker="chartHoverMarker"
         @addWaypoint="handleAddWaypoint"
         @moveWaypoint="handleMoveWaypoint"
         @deleteWaypoint="handleDeleteWaypoint"
         @insertWaypoint="handleInsertWaypoint"
+        @selectFragmentPoint="handleSelectFragmentPoint"
         @splitSegment="editor.splitSegment"
         @setActiveSegment="editor.setActiveSegment"
         @promoteToWaypoint="editor.promoteToWaypoint"
@@ -64,9 +70,16 @@
         :elevationError="editor.elevationError.value"
         :coordinateData="editor.coordinateData.value"
         :collapsed="sidebarCollapsed"
+        :fragmentSelection="editor.fragmentSelection.value"
+        :optimizerTargetRatio="editor.optimizerTargetRatio.value"
+        :optimizerPreview="editor.optimizerPreview.value"
+        :optimizerStats="editor.optimizerStats.value"
+        :optimizerLoading="editor.optimizerLoading.value"
+        :optimizerError="editor.optimizerError.value"
         @update:trackName="editor.trackName.value = $event"
         @update:trackDescription="editor.trackDescription.value = $event"
         @update:trackCategories="editor.trackCategories.value = $event"
+        @update:optimizerTargetRatio="editor.setOptimizerTargetRatio"
         @addSegment="editor.addSegment"
         @deleteSegment="editor.deleteSegment"
         @reverseSegment="editor.reverseSegment"
@@ -76,6 +89,19 @@
         @joinSegments="handleJoinSegments"
         @deletePoi="editor.deletePoi"
         @toggleCollapse="sidebarCollapsed = !sidebarCollapsed"
+        @clearFragment="editor.clearFragmentSelection"
+        @deleteFragmentConnect="handleDeleteFragmentConnect"
+        @deleteFragmentSplit="handleDeleteFragmentSplit"
+        @reverseFragment="handleReverseFragment"
+        @rerouteFragment="handleRerouteFragment"
+        @closeLoop="handleCloseLoop"
+        @previewOptimization="editor.previewOptimization"
+        @applyOptimization="handleApplyOptimization"
+        @clearOptimization="editor.clearOptimizationPreview"
+        @downloadOptimization="editor.downloadOptimizationPreview"
+        @chart-point-hover="handleElevationPointHover"
+        @chart-point-leave="handleElevationPointLeave"
+        @chart-point-click="handleElevationPointClick"
       />
     </div>
 
@@ -110,6 +136,8 @@ const editorMap = ref(null);
 const showDraftBanner = ref(false);
 const poiMode = ref(false);
 const sidebarCollapsed = ref(false);
+const chartHoverMarker = ref(null);
+const isChartPointFixed = ref(false);
 
 // ── Handlers ──────────────────────────────────────────
 function handleAddWaypoint(lat, lng) {
@@ -205,12 +233,170 @@ function handleJoinSegments() {
   showToast("Segments merged", "success");
 }
 
+function handleSelectFragmentPoint(segIdx, pointIdx) {
+  if (editor.editorMode.value !== "fragment") return;
+  editor.setFragmentPoint(segIdx, pointIdx);
+}
+
+function handleDeleteFragmentConnect() {
+  const range = editor.getFragmentRange();
+  if (!range) return;
+  const ok = editor.deleteFragmentConnect(
+    range.segIndex,
+    range.startIdx,
+    range.endIdx
+  );
+  if (!ok) {
+    showToast("Select a fragment with at least 3 points.", "warning");
+  } else {
+    showToast("Fragment removed and connected.", "success");
+  }
+}
+
+function handleDeleteFragmentSplit() {
+  const range = editor.getFragmentRange();
+  if (!range) return;
+  const ok = editor.deleteFragmentSplit(
+    range.segIndex,
+    range.startIdx,
+    range.endIdx
+  );
+  if (!ok) {
+    showToast("Fragment split requires at least two valid parts.", "warning");
+  } else {
+    showToast("Fragment removed and split into two segments.", "success");
+  }
+}
+
+function handleReverseFragment() {
+  const range = editor.getFragmentRange();
+  if (!range) return;
+  const ok = editor.reverseFragment(
+    range.segIndex,
+    range.startIdx,
+    range.endIdx
+  );
+  if (!ok) {
+    showToast("Select a fragment with at least 2 points.", "warning");
+  } else {
+    showToast("Fragment reversed.", "success");
+    editor.clearFragmentSelection();
+  }
+}
+
+function handleRerouteFragment() {
+  const range = editor.getFragmentRange();
+  if (!range) return;
+  const ok = editor.rerouteFragment(
+    range.segIndex,
+    range.startIdx,
+    range.endIdx,
+    {
+      onRoutingNotAvailable: (msg) => showToast(msg, "warning", 5000),
+    }
+  );
+  if (!ok) {
+    showToast("Unable to reroute fragment.", "warning");
+  } else {
+    showToast("Fragment rerouted.", "success");
+  }
+}
+
+function handleCloseLoop() {
+  const ok = editor.closeLoop();
+  if (!ok) {
+    showToast(
+      "Loop requires at least 3 points and a gap from the start.",
+      "warning"
+    );
+  } else {
+    showToast("Loop closed.", "success");
+  }
+}
+
+function handleApplyOptimization() {
+  const ok = editor.applyOptimizationPreview();
+  if (!ok) {
+    showToast("Optimization preview is not ready.", "warning");
+  } else {
+    showToast("Optimization applied.", "success");
+  }
+}
+
 async function handleExport(format) {
   try {
     await editor.exportTrack(format);
     showToast(`Export ${format.toUpperCase()} started`, "success");
   } catch {
     showToast("Export error", "error");
+  }
+}
+
+// ── Elevation chart interactions ─────────────────────────
+function getChartIndex(payload) {
+  if (!payload) return null;
+  return payload.coordinateIndex ?? payload.index ?? null;
+}
+
+function findSegmentPointByIndex(globalIndex) {
+  if (globalIndex === null || globalIndex === undefined) return null;
+  let offset = 0;
+  for (let segIndex = 0; segIndex < editor.segments.value.length; segIndex++) {
+    const seg = editor.segments.value[segIndex];
+    if (globalIndex < offset + seg.points.length) {
+      return { segIndex, pointIndex: globalIndex - offset };
+    }
+    offset += seg.points.length;
+  }
+  return null;
+}
+
+function resolveLatLngForIndex(globalIndex) {
+  if (globalIndex === null || globalIndex === undefined) return null;
+  return editor.coordinateData.value?.[globalIndex] || null;
+}
+
+function handleElevationPointHover(payload) {
+  if (isChartPointFixed.value && !payload?.isFixed) return;
+  const idx = getChartIndex(payload);
+  const latlng = payload?.latlng || resolveLatLngForIndex(idx);
+  if (!latlng) return;
+  chartHoverMarker.value = {
+    latlng,
+    distanceKm: payload?.distanceKm,
+    elevation: payload?.elevation,
+  };
+}
+
+function handleElevationPointLeave(event) {
+  if (event?.clearFixed) {
+    isChartPointFixed.value = false;
+    chartHoverMarker.value = null;
+    return;
+  }
+  if (!isChartPointFixed.value) {
+    chartHoverMarker.value = null;
+  }
+}
+
+function handleElevationPointClick(payload) {
+  isChartPointFixed.value = payload?.isFixed;
+  if (!payload?.isFixed) {
+    chartHoverMarker.value = null;
+    return;
+  }
+
+  handleElevationPointHover({ ...payload, isFixed: true });
+
+  const idx = getChartIndex(payload);
+  const segmentPoint = findSegmentPointByIndex(idx);
+  if (segmentPoint) {
+    editor.setFragmentPoint(segmentPoint.segIndex, segmentPoint.pointIndex);
+  }
+
+  const latlng = payload?.latlng || resolveLatLngForIndex(idx);
+  if (latlng) {
+    editorMap.value?.panTo(latlng);
   }
 }
 

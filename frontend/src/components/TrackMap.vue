@@ -299,7 +299,8 @@ const e2eHooks = useTrackMapE2E({
   isPanningOrZooming,
   mapIsReady,
   trackZoomAnimating,
-  props
+  props,
+  highlightSegmentForMarker
 });
 
 function clearAnimationTimeout() {
@@ -1459,6 +1460,12 @@ function clearSegmentHighlight(map) {
       map.removeLayer(markerGapLine.value);
       markerGapLine.value = null;
     }
+    if (import.meta.env.MODE !== "production" && window.__e2e) {
+      try {
+        window.__e2e.lastGapLineExists = false;
+        window.__e2e.lastHighlightedColor = null;
+      } catch (e) {}
+    }
   } catch (e) {
     console.warn("[TrackMap] Error clearing segment highlight:", e);
     hoveredSegmentPolyline.value = null;
@@ -1650,15 +1657,22 @@ function highlightSegmentForMarker(markerData) {
 
 function findNearestPointOnCoords(point, coords) {
   if (!point || !coords || coords.length === 0) return null;
-  const [plat, plng] = point;
+  const pointArray = Array.isArray(point)
+    ? point
+    : [point.lat, point.lng];
+  const [plat, plng] = pointArray;
+  if (!Number.isFinite(plat) || !Number.isFinite(plng)) return null;
   let best = null;
   let bestDist = Infinity;
   for (let i = 0; i < coords.length; i++) {
-    const [lat, lng] = coords[i];
+    const coord = coords[i];
+    const coordArray = Array.isArray(coord) ? coord : [coord.lat, coord.lng];
+    const [lat, lng] = coordArray;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     const d = (lat - plat) * (lat - plat) + (lng - plng) * (lng - plng);
     if (d < bestDist) {
       bestDist = d;
-      best = coords[i];
+      best = coordArray;
     }
   }
   return best;
