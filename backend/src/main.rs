@@ -190,7 +190,9 @@ async fn main() {
         )
         .route(
             "/api/pois/{id}",
-            get(handlers::get_poi).delete(handlers::delete_poi),
+            get(handlers::get_poi)
+                .patch(handlers::update_poi)
+                .delete(handlers::delete_poi),
         )
         .route("/api/tracks/{track_id}/pois", get(handlers::get_track_pois))
         .route(

@@ -1958,6 +1958,105 @@ pub async fn get_poi(
     Ok(Json(poi))
 }
 
+/// PATCH /pois/:id - Update POI details
+pub async fn update_poi(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<i32>,
+    Json(request): Json<UpdatePoiRequest>,
+) -> Result<Json<Poi>, StatusCode> {
+    let has_changes = request.name.is_some()
+        || request.description.is_some()
+        || request.category.is_some();
+    if !has_changes {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if let Some(name) = request.name.as_deref() {
+        if name.trim().is_empty() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        validate_text_field(name, MAX_NAME_LENGTH, "name")?;
+    }
+
+    if let Some(Some(desc)) = request.description.as_ref() {
+        validate_text_field(desc, MAX_DESCRIPTION_LENGTH, "description")?;
+    }
+
+    if let Some(Some(cat)) = request.category.as_ref() {
+        validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
+    }
+
+    let owner_session_id: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT session_id
+        FROM pois
+        WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to check POI ownership: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let Some(owner) = owner_session_id {
+        if Some(owner) != request.session_id {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
+
+    let name_provided = request.name.is_some();
+    let desc_provided = request.description.is_some();
+    let cat_provided = request.category.is_some();
+
+    let name_value = request.name.as_ref().map(|v| v.trim().to_string());
+    let desc_value = request
+        .description
+        .clone()
+        .flatten()
+        .map(|v| v.trim().to_string());
+    let cat_value = request
+        .category
+        .clone()
+        .flatten()
+        .map(|v| v.trim().to_string());
+
+    let poi = sqlx::query_as::<_, Poi>(
+        r#"
+        UPDATE pois
+        SET
+            name = CASE WHEN $2 THEN $3 ELSE name END,
+            description = CASE WHEN $4 THEN $5 ELSE description END,
+            category = CASE WHEN $6 THEN $7 ELSE category END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING
+            id, name, description, category, elevation,
+            ST_AsGeoJSON(geom::geometry)::jsonb as geom,
+            session_id, created_at, updated_at
+        "#,
+    )
+    .bind(id)
+    .bind(name_provided)
+    .bind(name_value)
+    .bind(desc_provided)
+    .bind(desc_value)
+    .bind(cat_provided)
+    .bind(cat_value)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to update POI: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    info!("Updated POI {}", poi.id);
+    Ok(Json(poi))
+}
+
 /// GET /tracks/:track_id/pois - Get POIs for a track with distance info
 pub async fn get_track_pois(
     State(pool): State<Arc<PgPool>>,

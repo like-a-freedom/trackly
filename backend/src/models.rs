@@ -600,6 +600,15 @@ pub struct CreatePoiRequest {
     pub session_id: Option<Uuid>,
 }
 
+/// Request to update an existing POI
+#[derive(Debug, Deserialize)]
+pub struct UpdatePoiRequest {
+    pub name: Option<String>,
+    pub description: Option<Option<String>>,
+    pub category: Option<Option<String>>,
+    pub session_id: Option<Uuid>,
+}
+
 /// Query parameters for listing POIs
 #[derive(Debug, Deserialize)]
 pub struct PoiQuery {

@@ -880,34 +880,39 @@ describe('useTrackEditor', () => {
             expect(editor.pois.value[0].name).toMatch(/^POI\s\d{3}$/);
         });
 
-        it('updatePoi updates POI properties', () => {
+        it('updatePoi updates POI properties', async () => {
             editor.addPoi(50.0, 30.0, 'Old Name');
-            const result = editor.updatePoi(0, { name: 'New Name', category: 'water' });
-            expect(result).toBe(true);
+            const result = await editor.updatePoi(0, { name: 'New Name', category: 'water' });
+            expect(result.ok).toBe(true);
             expect(editor.pois.value[0].name).toBe('New Name');
             expect(editor.pois.value[0].category).toBe('water');
         });
 
-        it('updatePoi rejects empty name', () => {
+        it('updatePoi rejects empty name', async () => {
             editor.addPoi(50.0, 30.0, 'POI');
-            expect(editor.updatePoi(0, { name: '' })).toBe(false);
+            const result = await editor.updatePoi(0, { name: '' });
+            expect(result.ok).toBe(false);
         });
 
-        it('updatePoi returns false for invalid index', () => {
-            expect(editor.updatePoi(0, { name: 'test' })).toBe(false);
+        it('updatePoi returns false for invalid index', async () => {
+            const result = await editor.updatePoi(0, { name: 'test' });
+            expect(result.ok).toBe(false);
         });
 
-        it('deletePoi removes a POI', () => {
+        it('deletePoi removes a POI', async () => {
             editor.addPoi(50.0, 30.0, 'POI 1');
             editor.addPoi(51.0, 31.0, 'POI 2');
-            editor.deletePoi(0);
+            const result = await editor.deletePoi(0);
+            expect(result.ok).toBe(true);
             expect(editor.pois.value).toHaveLength(1);
             expect(editor.pois.value[0].name).toBe('POI 2');
         });
 
-        it('deletePoi returns false for invalid index', () => {
-            expect(editor.deletePoi(-1)).toBe(false);
-            expect(editor.deletePoi(0)).toBe(false);
+        it('deletePoi returns false for invalid index', async () => {
+            const result1 = await editor.deletePoi(-1);
+            const result2 = await editor.deletePoi(0);
+            expect(result1.ok).toBe(false);
+            expect(result2.ok).toBe(false);
         });
     });
 

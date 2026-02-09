@@ -57,7 +57,7 @@
         @setActiveSegment="editor.setActiveSegment"
         @promoteToWaypoint="editor.promoteToWaypoint"
         @addPoi="handleAddPoi"
-        @deletePoi="editor.deletePoi"
+        @deletePoi="handleDeletePoi"
       />
 
       <TrackEditorSidebar
@@ -97,7 +97,8 @@
         @restoreDraft="handleRestoreDraft"
         @deleteDraft="handleDeleteDraft"
         @joinSegments="handleJoinSegments"
-        @deletePoi="editor.deletePoi"
+        @deletePoi="handleDeletePoi"
+        @updatePoi="handleUpdatePoi"
         @toggleCollapse="sidebarCollapsed = !sidebarCollapsed"
         @clearFragment="editor.clearFragmentSelection"
         @deleteFragmentConnect="handleDeleteFragmentConnect"
@@ -227,6 +228,24 @@ async function handleAddPoi(lat, lng) {
   showToast("POI added", "success");
   if (result.warning) {
     showToast(result.warning, "warning", 5000);
+  }
+}
+
+async function handleUpdatePoi(poiIndex, updates) {
+  const result = await editor.updatePoi(poiIndex, updates);
+  if (result?.ok) {
+    showToast("POI updated", "success");
+  } else {
+    showToast(result?.error || "Unable to update POI", "error", 5000);
+  }
+}
+
+async function handleDeletePoi(poiIndex) {
+  const result = await editor.deletePoi(poiIndex);
+  if (result?.ok) {
+    showToast("POI deleted", "success");
+  } else {
+    showToast(result?.error || "Unable to delete POI", "error", 5000);
   }
 }
 

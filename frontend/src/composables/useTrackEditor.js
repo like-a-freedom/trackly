@@ -1516,19 +1516,52 @@ export function useTrackEditor({ trackId = null } = {}) {
      * @param {Object} updates - { name?, description?, category? }
      * @returns {boolean}
      */
-    function updatePoi(poiIndex, updates) {
+    async function updatePoi(poiIndex, updates) {
         const poi = pois.value[poiIndex];
-        if (!poi) return false;
-        if (updates.name !== undefined && updates.name.trim().length === 0) return false;
+        if (!poi) return { ok: false, error: 'POI not found' };
+        if (updates.name !== undefined && updates.name.trim().length === 0) {
+            return { ok: false, error: 'POI name cannot be empty' };
+        }
+
+        const nextName = updates.name !== undefined ? updates.name.trim() : poi.name;
+        const nextDescription = updates.description !== undefined
+            ? (updates.description ?? '').trim()
+            : (poi.description ?? '');
+        const nextCategory = updates.category !== undefined
+            ? updates.category
+            : (poi.category ?? '');
+
+        if (savedTrackId.value && poi.id) {
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    ...(await getAuthHeader()),
+                };
+                const resp = await fetch(`${API_BASE}/api/pois/${poi.id}`, {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        name: nextName,
+                        description: nextDescription,
+                        category: nextCategory,
+                        session_id: getSessionId(),
+                    }),
+                });
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+            } catch (e) {
+                error.value = `POI update error: ${e.message}`;
+                return { ok: false, error: error.value };
+            }
+        }
 
         saveUndoState();
-
-        if (updates.name !== undefined) poi.name = updates.name.trim();
-        if (updates.description !== undefined) poi.description = updates.description.trim();
-        if (updates.category !== undefined) poi.category = updates.category;
-
+        poi.name = nextName;
+        poi.description = nextDescription;
+        poi.category = nextCategory;
         autosave();
-        return true;
+        return { ok: true };
     }
 
     /**
@@ -1536,13 +1569,34 @@ export function useTrackEditor({ trackId = null } = {}) {
      * @param {number} poiIndex
      * @returns {boolean}
      */
-    function deletePoi(poiIndex) {
-        if (poiIndex < 0 || poiIndex >= pois.value.length) return false;
+    async function deletePoi(poiIndex) {
+        if (poiIndex < 0 || poiIndex >= pois.value.length) {
+            return { ok: false, error: 'POI not found' };
+        }
+
+        const poi = pois.value[poiIndex];
+        if (savedTrackId.value && poi.id) {
+            try {
+                const headers = {
+                    ...(await getAuthHeader()),
+                };
+                const resp = await fetch(
+                    `${API_BASE}/api/tracks/${savedTrackId.value}/pois/${poi.id}`,
+                    { method: 'DELETE', headers }
+                );
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+            } catch (e) {
+                error.value = `POI delete error: ${e.message}`;
+                return { ok: false, error: error.value };
+            }
+        }
 
         saveUndoState();
         pois.value.splice(poiIndex, 1);
         autosave();
-        return true;
+        return { ok: true };
     }
 
     /** Calculate the distance from track start to a point (approximation along segments). */

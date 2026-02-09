@@ -240,7 +240,7 @@
           data-testid="poi-item"
         >
           <span class="poi-icon">📍</span>
-          <span class="poi-info">
+          <span class="poi-info" v-if="poiEditIndex !== i">
             {{ poi.name || `POI ${i + 1}` }}
             <small v-if="poi.description">{{ poi.description }}</small>
             <small v-if="poi.distFromStart"
@@ -250,7 +250,50 @@
               >⚠️ >1 km from track</small
             >
           </span>
+          <div v-else class="poi-edit">
+            <input
+              class="form-input"
+              type="text"
+              maxlength="80"
+              placeholder="POI name"
+              v-model="poiEditDraft.name"
+            />
+            <textarea
+              class="form-input form-textarea"
+              rows="2"
+              maxlength="500"
+              placeholder="Description (optional)"
+              v-model="poiEditDraft.description"
+            />
+            <select class="form-input" v-model="poiEditDraft.category">
+              <option value="">Category: none</option>
+              <option
+                v-for="cat in poiCategories"
+                :key="cat.id"
+                :value="cat.id"
+              >
+                {{ cat.icon }} {{ cat.label }}
+              </option>
+            </select>
+            <div class="poi-edit-actions">
+              <button class="btn-secondary btn-sm" @click.stop="savePoiEdit">
+                Save
+              </button>
+              <button class="btn-secondary btn-sm" @click.stop="cancelPoiEdit">
+                Cancel
+              </button>
+            </div>
+          </div>
           <button
+            v-if="poiEditIndex !== i"
+            class="btn-icon-sm"
+            title="Edit POI"
+            @click.stop="startPoiEdit(i)"
+          >
+            ✎
+          </button>
+          <button
+            v-if="poiEditIndex !== i"
             class="btn-icon-sm danger"
             title="Delete POI"
             @click.stop="$emit('deletePoi', i)"
@@ -437,6 +480,7 @@ const emit = defineEmits([
   "restoreDraft",
   "deleteDraft",
   "deletePoi",
+  "updatePoi",
   "toggleCollapse",
   "clearFragment",
   "deleteFragmentConnect",
@@ -460,6 +504,23 @@ const availableCategories = [
   { id: "running", label: "Running", icon: "🏃" },
   { id: "cycling", label: "Cycling", icon: "🚴" },
 ];
+
+const poiCategories = [
+  { id: "water", label: "Water", icon: "💧" },
+  { id: "camping", label: "Camping", icon: "⛺" },
+  { id: "viewpoint", label: "Viewpoint", icon: "📷" },
+  { id: "danger", label: "Danger", icon: "⚠️" },
+  { id: "food", label: "Food", icon: "🍽️" },
+  { id: "shelter", label: "Shelter", icon: "🏠" },
+  { id: "other", label: "Other", icon: "📍" },
+];
+
+const poiEditIndex = ref(null);
+const poiEditDraft = ref({
+  name: "",
+  description: "",
+  category: "",
+});
 
 const fragmentInfo = computed(() => {
   const sel = props.fragmentSelection || {};
@@ -506,6 +567,31 @@ function formatDistanceM(meters) {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
+function startPoiEdit(index) {
+  const poi = props.pois?.[index];
+  if (!poi) return;
+  poiEditIndex.value = index;
+  poiEditDraft.value = {
+    name: poi.name || "",
+    description: poi.description || "",
+    category: poi.category || "",
+  };
+}
+
+function cancelPoiEdit() {
+  poiEditIndex.value = null;
+}
+
+function savePoiEdit() {
+  if (poiEditIndex.value === null || poiEditIndex.value === undefined) return;
+  emit("updatePoi", poiEditIndex.value, {
+    name: poiEditDraft.value.name,
+    description: poiEditDraft.value.description,
+    category: poiEditDraft.value.category,
+  });
+  poiEditIndex.value = null;
+}
+
 const optimizerPercent = computed(() => {
   const ratio = props.optimizerTargetRatio ?? OPTIMIZER_DEFAULT_RATIO;
   return Math.round(ratio * 100);
@@ -521,8 +607,17 @@ function handleOptimizerRatioInput(event) {
   emit("update:optimizerTargetRatio", value / 100);
 }
 
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import ElevationChart from "./ElevationChart.vue";
+
+watch(
+  () => props.pois.length,
+  (nextLength) => {
+    if (poiEditIndex.value !== null && poiEditIndex.value >= nextLength) {
+      poiEditIndex.value = null;
+    }
+  }
+);
 
 const timeDisplay = computed(() => {
   const mins = props.estimatedTimeMinutes;
@@ -884,6 +979,18 @@ const timeDisplay = computed(() => {
   display: block;
   color: #888;
   font-size: 11px;
+}
+
+.poi-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.poi-edit-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .poi-warning {
