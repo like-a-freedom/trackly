@@ -571,6 +571,7 @@ pub async fn get_track_simplified(
                 name: track.name,
                 description: track.description,
                 categories: track.categories,
+                distance_markers_enabled: track.distance_markers_enabled,
                 geom_geojson: track.geom_geojson,
                 segment_meta: track.segment_meta,
                 segment_gaps: track.segment_gaps,
@@ -809,6 +810,36 @@ pub async fn update_track_categories(
     }
 
     metrics::record_track_edit("categories");
+    metrics::record_session_activity(Some(payload.session_id), "edit");
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn update_track_distance_markers(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    auth_user: OptionalAuthUser,
+    Json(payload): Json<UpdateTrackDistanceMarkersRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let track = db::get_track_detail(&pool, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let track = match track {
+        Some(t) => t,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    check_track_ownership(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        Some(payload.session_id),
+    )?;
+
+    db::update_track_distance_markers(&pool, id, payload.distance_markers_enabled)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    metrics::record_track_edit("distance_markers");
     metrics::record_session_activity(Some(payload.session_id), "edit");
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1368,6 +1399,7 @@ mod tests {
             name: "Adaptive Test".to_string(),
             description: None,
             categories: vec!["running".into()],
+            distance_markers_enabled: Some(true),
             auto_classifications: vec![],
             geom_geojson: serde_json::json!({"type":"LineString","coordinates": coords}),
             segment_meta: None,
@@ -1964,9 +1996,8 @@ pub async fn update_poi(
     Path(id): Path<i32>,
     Json(request): Json<UpdatePoiRequest>,
 ) -> Result<Json<Poi>, StatusCode> {
-    let has_changes = request.name.is_some()
-        || request.description.is_some()
-        || request.category.is_some();
+    let has_changes =
+        request.name.is_some() || request.description.is_some() || request.category.is_some();
     if !has_changes {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -2002,10 +2033,10 @@ pub async fn update_poi(
     })?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    if let Some(owner) = owner_session_id {
-        if Some(owner) != request.session_id {
-            return Err(StatusCode::FORBIDDEN);
-        }
+    if let Some(owner) = owner_session_id
+        && Some(owner) != request.session_id
+    {
+        return Err(StatusCode::FORBIDDEN);
     }
 
     let name_provided = request.name.is_some();

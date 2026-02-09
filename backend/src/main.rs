@@ -148,6 +148,10 @@ async fn main() {
             "/api/tracks/{id}/categories",
             axum::routing::patch(handlers::update_track_categories),
         )
+        .route(
+            "/api/tracks/{id}/distance-markers",
+            axum::routing::patch(handlers::update_track_distance_markers),
+        )
         .route("/api/tracks/{id}/export", get(handlers::export_track_gpx))
         .route(
             "/api/tracks/{id}/enrich-elevation",

@@ -311,7 +311,7 @@ pub async fn get_track_detail(
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
+        SELECT id, name, description, categories, auto_classifications, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -331,6 +331,7 @@ pub async fn get_track_detail(
             name: row.try_get("name")?,
             description: row.try_get("description")?,
             categories: row.try_get("categories")?,
+            distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
             auto_classifications: row
                 .try_get("auto_classifications")
                 .unwrap_or_else(|_| Vec::new()),
@@ -399,7 +400,7 @@ pub async fn get_track_detail_adaptive(
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
+        SELECT id, name, description, categories, auto_classifications, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -504,6 +505,7 @@ pub async fn get_track_detail_adaptive(
             categories: row
                 .try_get("categories")
                 .expect("Failed to get categories: categories column missing or wrong type"),
+            distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
             auto_classifications: row
                 .try_get("auto_classifications")
                 .unwrap_or_else(|_| Vec::new()),
@@ -1188,6 +1190,32 @@ pub async fn update_track_categories(
     Ok(())
 }
 
+pub async fn update_track_distance_markers(
+    pool: &Arc<PgPool>,
+    track_id: Uuid,
+    enabled: bool,
+) -> Result<(), sqlx::Error> {
+    let start = Instant::now();
+    sqlx::query(
+        r#"
+        UPDATE tracks
+        SET distance_markers_enabled = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        "#,
+    )
+    .bind(enabled)
+    .bind(track_id)
+    .execute(&**pool)
+    .await?;
+
+    metrics::observe_db_query(
+        "update_track_distance_markers",
+        start.elapsed().as_secs_f64(),
+    );
+    Ok(())
+}
+
 pub async fn delete_track(pool: &Arc<PgPool>, track_id: Uuid) -> Result<u64, sqlx::Error> {
     let start = Instant::now();
     let result = sqlx::query(
@@ -1525,7 +1553,7 @@ pub async fn duplicate_track(
             avg_speed, avg_hr, hr_min, hr_max,
             moving_time, pause_time, moving_avg_speed, moving_avg_pace,
             hr_data, temp_data, time_data, duration_seconds,
-            hash, recorded_at, session_id, user_id, is_public,
+            hash, recorded_at, session_id, user_id, is_public, distance_markers_enabled,
             speed_data, pace_data, waypoints, source
         )
         SELECT
@@ -1537,7 +1565,7 @@ pub async fn duplicate_track(
             avg_speed, avg_hr, hr_min, hr_max,
             moving_time, pause_time, moving_avg_speed, moving_avg_pace,
             hr_data, temp_data, time_data, duration_seconds,
-            $2, recorded_at, $3, $5, is_public,
+            $2, recorded_at, $3, $5, is_public, distance_markers_enabled,
             speed_data, pace_data, waypoints, 'duplicate'
         FROM tracks
         WHERE id = $6

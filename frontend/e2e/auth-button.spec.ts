@@ -38,6 +38,7 @@ test.describe('Auth Button UI', () => {
     test('login button has correct icon-only style', async ({ page }) => {
         const loginButton = page.locator('button.login-button');
         await expect(loginButton).toBeVisible();
+        await expect(loginButton).toBeEnabled({ timeout: 10000 });
 
         // Check that SVG icon exists and is visible (Google icon)
         const googleIcon = loginButton.locator('svg');

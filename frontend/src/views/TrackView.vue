@@ -45,7 +45,9 @@
         <LTooltip sticky>{{ gap.label }}</LTooltip>
       </LPolyline>
       <TrackDistanceMarkers
-        v-if="track?.latlngs && track.latlngs.length >= 2"
+        v-if="
+          track?.latlngs && track.latlngs.length >= 2 && distanceMarkersEnabled
+        "
         :latlngs="track.latlngs"
         :trackId="track.id"
         :zoom="zoom"
@@ -105,6 +107,7 @@
         @close="goHome"
         @description-updated="handleDescriptionUpdated"
         @name-updated="handleNameUpdated"
+        @distance-markers-updated="handleDistanceMarkersUpdated"
         @chart-point-hover="handleChartPointHover"
         @chart-point-leave="handleChartPointLeave"
         @chart-point-click="handleChartPointClick"
@@ -278,8 +281,7 @@ const headConfig = computed(() => {
       {
         name: "description",
         content:
-          track.value.description ||
-          "View a track and its details on Trackly.",
+          track.value.description || "View a track and its details on Trackly.",
       },
       {
         property: "og:title",
@@ -288,8 +290,7 @@ const headConfig = computed(() => {
       {
         property: "og:description",
         content:
-          track.value.description ||
-          "View a track and its details on Trackly.",
+          track.value.description || "View a track and its details on Trackly.",
       },
       { property: "og:type", content: "article" },
       { property: "og:url", content: trackUrl },
@@ -442,6 +443,10 @@ const pauseGapLines = computed(() =>
 
 const segmentBoundaryMarkers = computed(() => {
   return buildBoundaryMarkers(track.value?.segments, segmentColors.value);
+});
+
+const distanceMarkersEnabled = computed(() => {
+  return track.value?.distance_markers_enabled !== false;
 });
 
 // Computed properties
@@ -802,6 +807,15 @@ function handleNameUpdated(newName) {
   if (track.value) {
     track.value.name = newName;
     showToast("Track name updated successfully", "success");
+  }
+}
+
+function handleDistanceMarkersUpdated(enabled) {
+  if (track.value) {
+    track.value = {
+      ...track.value,
+      distance_markers_enabled: enabled,
+    };
   }
 }
 

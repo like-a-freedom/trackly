@@ -165,6 +165,7 @@ mod tests {
             name: "Test Track".to_string(),
             description: Some("Test Description".to_string()),
             categories: vec!["running".to_string()],
+            distance_markers_enabled: Some(true),
             auto_classifications: vec![],
             geom_geojson: json!({
                 "type": "LineString",

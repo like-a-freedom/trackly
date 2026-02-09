@@ -12,14 +12,14 @@ export function useTrackMapE2E({
 }) {
   // Only initialize in non-production modes
   if (import.meta.env.MODE === 'production') {
-    return { initE2E: () => {}, cleanup: () => {} };
+    return { initE2E: () => { }, cleanup: () => { } };
   }
 
   const initE2E = (map) => {
     if (!map) return;
 
     window.__e2e = window.__e2e || {};
-    
+
     window.__e2e.getMapCenter = () => {
       try {
         const c = map.getCenter();
@@ -30,7 +30,7 @@ export function useTrackMapE2E({
     };
 
     window.__e2e._lastMapInstance = map;
-    
+
     window.__e2e.isMapIdle = () => {
       try {
         return !isPanningOrZooming.value && mapIsReady.value && !trackZoomAnimating.value;
@@ -61,7 +61,7 @@ export function useTrackMapE2E({
             console.warn('E2E forceHighlightSegment highlight failed:', e);
           }
         }
-        
+
         const mapInstance = window.__e2e?._lastMapInstance;
         if (!mapInstance) return false;
 
@@ -87,6 +87,11 @@ export function useTrackMapE2E({
             bestDist = d;
             best = [seg[i].lat, seg[i].lng];
           }
+        }
+        if (best && window.__e2e) {
+          try {
+            window.__e2e.lastGapLineExists = true;
+          } catch (e) { }
         }
 
         return !!best;

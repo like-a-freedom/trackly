@@ -101,6 +101,9 @@ config.global.stubs = {
 // Mock leaflet.markercluster
 vi.mock('leaflet.markercluster', () => ({}));
 
+// Mock leaflet.heat plugin (tests run in Node and don't need heat plugin behavior)
+vi.mock('leaflet.heat', () => ({}));
+
 // Create global L variable for plugins that expect it
 global.L = {
     map: vi.fn(() => ({

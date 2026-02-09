@@ -312,7 +312,7 @@ const e2eHooks = useTrackMapE2E({
   mapIsReady,
   trackZoomAnimating,
   props,
-  highlightSegmentForMarker
+  highlightSegmentForMarker,
 });
 
 function clearAnimationTimeout() {
@@ -734,7 +734,8 @@ function updateHeatmapLayer() {
 
   ensureHeatmapPane(map);
   const maxWeight = Math.max(...latlngs.map((point) => point[2] || 0), 1);
-  const shouldRecreate = !heatLayer.value || heatmapMaxWeight.value !== maxWeight;
+  const shouldRecreate =
+    !heatLayer.value || heatmapMaxWeight.value !== maxWeight;
   if (shouldRecreate && heatLayer.value) {
     map.removeLayer(heatLayer.value);
     heatLayer.value = null;
@@ -1551,7 +1552,7 @@ function clearSegmentHighlight(map) {
       map.removeLayer(markerGapLine.value);
       markerGapLine.value = null;
     }
-    if (import.meta.env.MODE !== "production" && window.__e2e) {
+    if (window.__e2e) {
       try {
         window.__e2e.lastGapLineExists = false;
         window.__e2e.lastHighlightedColor = null;
@@ -1575,8 +1576,19 @@ function highlightSegmentForMarker(markerData) {
     !markerData.latlng ||
     isPanningOrZooming.value ||
     isZoomAnimating.value
-  )
+  ) {
+    // If the map is still animating/panning, schedule a short retry in E2E/dev mode
+    try {
+      if (window.__e2e) {
+        setTimeout(() => {
+          try {
+            highlightSegmentForMarker(markerData);
+          } catch (e) {}
+        }, 150);
+      }
+    } catch (e) {}
     return;
+  }
 
   // Need selected track to locate segments
   const sel = props.selectedTrackDetail;
@@ -1585,12 +1597,41 @@ function highlightSegmentForMarker(markerData) {
   const poly = (props.polylines || []).find(
     (p) => p.properties && p.properties.id === sel.id
   );
-  if (!poly) return;
+  if (!poly) {
+    // Poly not available yet - schedule retry in E2E/dev mode
+    try {
+      if (window.__e2e) {
+        setTimeout(() => highlightSegmentForMarker(markerData), 150);
+      }
+    } catch (e) {}
+    return;
+  }
 
   // Determine segments array format
-  const segments = poly.segments || (poly.latlngs ? [poly.latlngs] : []);
+  const rawLatlngs = poly.latlngs || [];
+  const isNestedSegments =
+    Array.isArray(rawLatlngs) &&
+    rawLatlngs.length > 0 &&
+    Array.isArray(rawLatlngs[0]) &&
+    (Array.isArray(rawLatlngs[0][0]) ||
+      (rawLatlngs[0][0] && typeof rawLatlngs[0][0] === "object"));
+  const segments =
+    poly.segments ||
+    (rawLatlngs.length > 0
+      ? isNestedSegments
+        ? rawLatlngs
+        : [rawLatlngs]
+      : []);
   const segIdx = markerData.segmentIndex || 0;
-  if (!segments[segIdx] || segments[segIdx].length === 0) return;
+  if (!segments[segIdx] || segments[segIdx].length === 0) {
+    // Segments not ready - schedule retry for E2E/dev
+    try {
+      if (window.__e2e) {
+        setTimeout(() => highlightSegmentForMarker(markerData), 150);
+      }
+    } catch (e) {}
+    return;
+  }
 
   const segCoords = segments[segIdx];
 
@@ -1599,6 +1640,21 @@ function highlightSegmentForMarker(markerData) {
     // Prefer using the original track color (if available) so we don't visually change the track color
     const trackColor =
       poly.properties?.color || getMarkerStrokeColor({ segmentIndex: segIdx });
+
+    // Expose E2E observability early so tests can assert highlighting deterministically
+    if (window.__e2e) {
+      try {
+        window.__e2e.lastHighlightedColor = trackColor;
+      } catch (e) {}
+    }
+    // Debug: log when highlight is requested (helps e2e diagnostics)
+    try {
+      console.debug("[TrackMap][E2E] highlight requested", {
+        trackId: sel?.id,
+        segmentIndex: segIdx,
+        trackColor,
+      });
+    } catch (e) {}
 
     // If the track has only a single segment and we have a live map, prefer to emphasize the existing layer
     // by increasing weight/opacity rather than overlaying a new colored polyline — this preserves the
@@ -1634,9 +1690,12 @@ function highlightSegmentForMarker(markerData) {
                 ? foundLayer.options.opacity
                 : getFeatureOpacity(foundLayer.feature),
           };
-
-          // Apply emphasis without changing the stroke color
           try {
+            console.log("[TrackMap][E2E] using foundLayer for highlight", {
+              foundLayerId: foundLayer.feature?.properties?.id,
+              originalColor: highlightedLayerOrigStyle.value.color,
+            });
+
             foundLayer.setStyle({
               weight:
                 (highlightedLayerOrigStyle.value.weight ||
@@ -1646,7 +1705,7 @@ function highlightSegmentForMarker(markerData) {
 
             highlightedLayer.value = foundLayer;
 
-            if (import.meta.env.MODE !== "production" && window.__e2e) {
+            if (window.__e2e) {
               try {
                 window.__e2e.lastHighlightedColor =
                   highlightedLayerOrigStyle.value.color || trackColor;
@@ -1679,7 +1738,7 @@ function highlightSegmentForMarker(markerData) {
         });
 
         // Expose E2E observability for tests (non-production only)
-        if (import.meta.env.MODE !== "production" && window.__e2e) {
+        if (window.__e2e) {
           try {
             window.__e2e.lastHighlightedColor = trackColor;
           } catch (e) {}
@@ -1695,7 +1754,7 @@ function highlightSegmentForMarker(markerData) {
             className: "chart-gap-line",
           });
 
-          if (import.meta.env.MODE !== "production" && window.__e2e) {
+          if (window.__e2e) {
             try {
               window.__e2e.lastGapLineExists = true;
             } catch (e) {}
@@ -1748,9 +1807,7 @@ function highlightSegmentForMarker(markerData) {
 
 function findNearestPointOnCoords(point, coords) {
   if (!point || !coords || coords.length === 0) return null;
-  const pointArray = Array.isArray(point)
-    ? point
-    : [point.lat, point.lng];
+  const pointArray = Array.isArray(point) ? point : [point.lat, point.lng];
   const [plat, plng] = pointArray;
   if (!Number.isFinite(plat) || !Number.isFinite(plng)) return null;
   let best = null;

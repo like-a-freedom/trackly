@@ -310,19 +310,26 @@ impl TrackEditorService {
                 return Err(StatusCode::BAD_REQUEST);
             };
 
-                if let Some(name) = obj.get("name").and_then(|v| v.as_str())
-                    && name.len() > 80
-                {
-                    warn!(reason = "segment_name_too_long", len = name.len(), "segment name too long");
-                    return Err(StatusCode::BAD_REQUEST);
-                }
+            if let Some(name) = obj.get("name").and_then(|v| v.as_str())
+                && name.len() > 80
+            {
+                warn!(
+                    reason = "segment_name_too_long",
+                    len = name.len(),
+                    "segment name too long"
+                );
+                return Err(StatusCode::BAD_REQUEST);
+            }
 
-                if let Some(color) = obj.get("color").and_then(|v| v.as_str())
-                    && !is_valid_hex_color(color)
-                {
-                    warn!(reason = "segment_color_invalid", color, "segment color invalid");
-                    return Err(StatusCode::BAD_REQUEST);
-                }
+            if let Some(color) = obj.get("color").and_then(|v| v.as_str())
+                && !is_valid_hex_color(color)
+            {
+                warn!(
+                    reason = "segment_color_invalid",
+                    color, "segment color invalid"
+                );
+                return Err(StatusCode::BAD_REQUEST);
+            }
         }
 
         Ok(())

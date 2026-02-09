@@ -52,12 +52,14 @@
         @moveWaypoint="handleMoveWaypoint"
         @deleteWaypoint="handleDeleteWaypoint"
         @insertWaypoint="handleInsertWaypoint"
+        @cutSegment="handleCutSegment"
         @selectFragmentPoint="handleSelectFragmentPoint"
         @splitSegment="editor.splitSegment"
         @setActiveSegment="editor.setActiveSegment"
         @promoteToWaypoint="editor.promoteToWaypoint"
         @addPoi="handleAddPoi"
         @deletePoi="handleDeletePoi"
+        @newTrackFromSegment="handleNewTrackFromSegment"
       />
 
       <TrackEditorSidebar
@@ -106,6 +108,9 @@
         @reverseFragment="handleReverseFragment"
         @rerouteFragment="handleRerouteFragment"
         @closeLoop="handleCloseLoop"
+        @reverseTrack="handleReverseTrack"
+        @duplicateTrack="handleDuplicateTrack"
+        @newTrackFromSegment="handleNewTrackFromSegment"
         @previewOptimization="editor.previewOptimization"
         @applyOptimization="handleApplyOptimization"
         @clearOptimization="editor.clearOptimizationPreview"
@@ -192,6 +197,17 @@ function handleInsertWaypoint(segIndex, afterIndex, lat, lng) {
       "warning",
       5000
     );
+  }
+}
+
+function handleCutSegment(segIndex, afterIndex, lat, lng) {
+  const ok = editor.cutSegmentAt(segIndex, afterIndex, lat, lng, {
+    onRoutingNotAvailable: (msg) => showToast(msg, "warning", 5000),
+  });
+  if (!ok) {
+    showToast("Unable to cut segment at this point.", "warning", 4000);
+  } else {
+    showToast("Segment cut created.", "success");
   }
 }
 
@@ -341,6 +357,35 @@ function handleCloseLoop() {
   } else {
     showToast("Loop closed.", "success");
   }
+}
+
+function handleReverseTrack() {
+  const ok = editor.reverseTrack();
+  if (!ok) {
+    showToast("Track reverse requires at least 2 points.", "warning");
+  } else {
+    showToast("Track reversed.", "success");
+  }
+}
+
+async function handleDuplicateTrack() {
+  const result = await editor.duplicateTrack();
+  if (!result?.ok) {
+    showToast(result?.error || "Unable to duplicate track", "error", 5000);
+    return;
+  }
+  showToast("Track duplicated", "success");
+  router.push({ name: "Track", params: { id: result.id } });
+}
+
+async function handleNewTrackFromSegment(segIndex) {
+  const result = await editor.createTrackFromSegment(segIndex);
+  if (!result?.ok) {
+    showToast(result?.error || "Unable to create track", "error", 5000);
+    return;
+  }
+  showToast("New track created from segment", "success");
+  router.push({ name: "Track", params: { id: result.id } });
 }
 
 function handleApplyOptimization() {

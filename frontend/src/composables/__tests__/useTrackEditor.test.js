@@ -253,6 +253,20 @@ describe('useTrackEditor', () => {
             expect(editor.segments.value[0].points[2]).toEqual([50.0, 30.0]);
         });
 
+        it('reverseTrack reverses segments and points', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(51.0, 31.0);
+            editor.addSegment();
+            editor.addWaypoint(52.0, 32.0);
+            editor.addWaypoint(53.0, 33.0);
+
+            const ok = editor.reverseTrack();
+            expect(ok).toBe(true);
+            expect(editor.segments.value).toHaveLength(2);
+            expect(editor.segments.value[0].points[0]).toEqual([53.0, 33.0]);
+            expect(editor.segments.value[1].points[0]).toEqual([51.0, 31.0]);
+        });
+
         it('setActiveSegment switches active segment', () => {
             editor.addSegment();
             editor.setActiveSegment(0);
@@ -858,6 +872,53 @@ describe('useTrackEditor', () => {
 
         it('returns null for invalid segment index', () => {
             expect(editor.extractSegmentAsTrack(99)).toBeNull();
+        });
+    });
+
+    describe('cutSegmentAt', () => {
+        it('inserts a point and splits segment', () => {
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+            editor.addWaypoint(50.02, 30.02);
+
+            const ok = editor.cutSegmentAt(0, 0, 50.005, 30.005);
+            expect(ok).toBe(true);
+            expect(editor.segments.value).toHaveLength(2);
+        });
+    });
+
+    describe('createTrackFromSegment', () => {
+        it('creates a new track from a segment', async () => {
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ id: 'segment-track-1' }),
+            }));
+
+            editor.trackName.value = 'My Track';
+            editor.addWaypoint(50.0, 30.0);
+            editor.addWaypoint(50.01, 30.01);
+
+            const result = await editor.createTrackFromSegment(0);
+            expect(result.ok).toBe(true);
+            expect(result.id).toBe('segment-track-1');
+
+            const [url, options] = fetch.mock.calls[0];
+            expect(url).toBe('/api/tracks/create');
+            expect(options.method).toBe('POST');
+        });
+    });
+
+    describe('duplicateTrack', () => {
+        it('duplicates an existing track', async () => {
+            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ id: 'dup-123' }),
+            }));
+
+            editor.savedTrackId.value = 'existing-123';
+            const result = await editor.duplicateTrack();
+            expect(result.ok).toBe(true);
+            expect(result.id).toBe('dup-123');
         });
     });
 

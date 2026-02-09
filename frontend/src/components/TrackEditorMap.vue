@@ -57,11 +57,14 @@
         :lat-lngs="seg.points"
         :color="seg.color"
         :weight="segIdx === activeSegmentIndex ? 5 : 3"
-        :opacity="seg.hasSurface ? 0.05 : segIdx === activeSegmentIndex ? 1 : 0.6"
+        :opacity="
+          seg.hasSurface ? 0.05 : segIdx === activeSegmentIndex ? 1 : 0.6
+        "
         :smooth-factor="seg.smoothFactor"
         :dash-array="props.routingMode === 'manual' ? '6,6' : null"
         :data-testid="`segment-line-${segIdx}`"
         @click="(e) => onSegmentClick(segIdx, e)"
+        @contextmenu="(e) => onSegmentContextMenu(segIdx, e)"
       />
 
       <!-- Optimizer preview line -->
@@ -185,6 +188,22 @@
         ✂️ Split segment
       </button>
       <button
+        v-if="contextMenu.canCut"
+        class="context-menu-item"
+        data-testid="ctx-cut"
+        @click="handleCut"
+      >
+        ✂️ Cut here
+      </button>
+      <button
+        v-if="contextMenu.canNewTrack"
+        class="context-menu-item"
+        data-testid="ctx-new-track-segment"
+        @click="handleNewTrackFromSegment"
+      >
+        🧭 New track from segment
+      </button>
+      <button
         v-if="contextMenu.canDelete"
         class="context-menu-item"
         data-testid="ctx-delete"
@@ -272,6 +291,8 @@ const emit = defineEmits([
   "addPoi",
   "deletePoi",
   "selectFragmentPoint",
+  "cutSegment",
+  "newTrackFromSegment",
 ]);
 
 const mapRef = ref(null);
@@ -309,7 +330,11 @@ const contextMenu = ref({
   segIndex: -1,
   pointIndex: -1,
   poiIndex: -1,
+  afterIndex: -1,
+  latlng: null,
   canSplit: false,
+  canCut: false,
+  canNewTrack: false,
   canDelete: false,
   canPromote: false,
   canDeletePoi: false,
@@ -326,7 +351,8 @@ let lastTraceTime = 0;
 
 // Computed
 function downsampleWithIndices(points, maxPoints) {
-  if (!Array.isArray(points) || maxPoints <= 0) return { points: [], indices: [] };
+  if (!Array.isArray(points) || maxPoints <= 0)
+    return { points: [], indices: [] };
   if (points.length <= maxPoints) {
     return {
       points,
@@ -483,7 +509,8 @@ function clearSnapPreview() {
 }
 
 function resolveSnapPoint(lat, lng, maxDistanceM = SNAP_PREVIEW_DISTANCE_M) {
-  if (!snapEnabled.value || typeof props.snapToPoint !== "function") return null;
+  if (!snapEnabled.value || typeof props.snapToPoint !== "function")
+    return null;
   return props.snapToPoint(lat, lng, { maxDistanceM });
 }
 
@@ -493,7 +520,11 @@ function updateSnapPreview(latlng) {
     clearSnapPreview();
     return;
   }
-  const snapped = resolveSnapPoint(latlng.lat, latlng.lng, SNAP_PREVIEW_DISTANCE_M);
+  const snapped = resolveSnapPoint(
+    latlng.lat,
+    latlng.lng,
+    SNAP_PREVIEW_DISTANCE_M
+  );
   if (!snapped) {
     clearSnapPreview();
     return;
@@ -516,7 +547,11 @@ function handleSnapMove(latlng) {
 
 function resolveClickLatLng(latlng) {
   if (!latlng) return null;
-  const snapped = resolveSnapPoint(latlng.lat, latlng.lng, SNAP_PREVIEW_DISTANCE_M);
+  const snapped = resolveSnapPoint(
+    latlng.lat,
+    latlng.lng,
+    SNAP_PREVIEW_DISTANCE_M
+  );
   if (!snapped) return { lat: latlng.lat, lng: latlng.lng };
   return { lat: snapped.lat, lng: snapped.lng };
 }
@@ -559,7 +594,8 @@ function distanceMeters(a, b) {
     sinLat * sinLat +
     Math.cos((a.lat * Math.PI) / 180) *
       Math.cos((b.lat * Math.PI) / 180) *
-      sinLng * sinLng;
+      sinLng *
+      sinLng;
   return R * 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1 - aVal));
 }
 
@@ -594,7 +630,10 @@ function onTraceMove(e) {
 
   const last = lastTraceLatLng.value;
   const dist = last
-    ? distanceMeters({ lat: last.lat, lng: last.lng }, { lat: latlng.lat, lng: latlng.lng })
+    ? distanceMeters(
+        { lat: last.lat, lng: last.lng },
+        { lat: latlng.lat, lng: latlng.lng }
+      )
     : TRACE_MIN_DISTANCE_M;
   if (dist < TRACE_MIN_DISTANCE_M) return;
 
@@ -696,26 +735,45 @@ function onSegmentClick(segIdx, e) {
   const snapped = resolveClickLatLng(e.latlng);
   const clickLat = (snapped || e.latlng).lat;
   const clickLng = (snapped || e.latlng).lng;
-  let bestIdx = 0;
-  let bestDist = Infinity;
-
-  for (let i = 0; i < seg.points.length - 1; i++) {
-    const [lat1, lng1] = seg.points[i];
-    const [lat2, lng2] = seg.points[i + 1];
-    // Simple midpoint distance check
-    const midLat = (lat1 + lat2) / 2;
-    const midLng = (lng1 + lng2) / 2;
-    const d = Math.hypot(clickLat - midLat, clickLng - midLng);
-    if (d < bestDist) {
-      bestDist = d;
-      bestIdx = i;
-    }
-  }
+  const bestIdx = findNearestSegmentInsertIndex(seg, clickLat, clickLng);
 
   emit("insertWaypoint", segIdx, bestIdx, clickLat, clickLng);
 
   // Stop propagation to prevent map click
   if (e.originalEvent) e.originalEvent.stopPropagation();
+}
+
+function onSegmentContextMenu(segIdx, e) {
+  if (props.editorMode === "view") return;
+  if (e.originalEvent) {
+    e.originalEvent.preventDefault();
+    e.originalEvent.stopPropagation();
+  }
+
+  const seg = props.segments[segIdx];
+  if (!seg || seg.points.length < 2) return;
+
+  const snapped = resolveClickLatLng(e.latlng);
+  const clickLat = (snapped || e.latlng).lat;
+  const clickLng = (snapped || e.latlng).lng;
+  const bestIdx = findNearestSegmentInsertIndex(seg, clickLat, clickLng);
+
+  contextMenu.value = {
+    visible: true,
+    x: (e.originalEvent ?? e).clientX,
+    y: (e.originalEvent ?? e).clientY,
+    segIndex: segIdx,
+    pointIndex: -1,
+    poiIndex: -1,
+    afterIndex: bestIdx,
+    latlng: { lat: clickLat, lng: clickLng },
+    canSplit: false,
+    canCut: seg.points.length >= 2,
+    canNewTrack: seg.points.length >= 2,
+    canDelete: false,
+    canPromote: false,
+    canDeletePoi: false,
+  };
 }
 
 function onWaypointClick(segIdx, ptIdx, e) {
@@ -757,6 +815,19 @@ function onWaypointContextMenu(segIdx, ptIdx, e) {
 function handleSplit() {
   const { segIndex, pointIndex } = contextMenu.value;
   emit("splitSegment", pointIndex);
+  closeContextMenu();
+}
+
+function handleCut() {
+  const { segIndex, afterIndex, latlng } = contextMenu.value;
+  if (!latlng) return;
+  emit("cutSegment", segIndex, afterIndex, latlng.lat, latlng.lng);
+  closeContextMenu();
+}
+
+function handleNewTrackFromSegment() {
+  const { segIndex } = contextMenu.value;
+  emit("newTrackFromSegment", segIndex);
   closeContextMenu();
 }
 
@@ -806,6 +877,10 @@ function handleDeletePoi() {
 function closeContextMenu() {
   contextMenu.value.visible = false;
   contextMenu.value.poiIndex = -1;
+  contextMenu.value.segIndex = -1;
+  contextMenu.value.pointIndex = -1;
+  contextMenu.value.afterIndex = -1;
+  contextMenu.value.latlng = null;
 }
 
 // ── Drag handling ───────────────────────────────────────
@@ -914,6 +989,24 @@ function panTo(latlng) {
   const map = mapInstance.value;
   if (!map || !latlng) return;
   map.panTo(latlng, { animate: true });
+}
+
+function findNearestSegmentInsertIndex(seg, clickLat, clickLng) {
+  let bestIdx = 0;
+  let bestDist = Infinity;
+
+  for (let i = 0; i < seg.points.length - 1; i++) {
+    const [lat1, lng1] = seg.points[i];
+    const [lat2, lng2] = seg.points[i + 1];
+    const midLat = (lat1 + lat2) / 2;
+    const midLng = (lng1 + lng2) / 2;
+    const d = Math.hypot(clickLat - midLat, clickLng - midLng);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
 }
 
 // Watch segments to auto-fit on first point addition

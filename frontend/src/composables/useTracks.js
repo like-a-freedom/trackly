@@ -562,6 +562,39 @@ export function useTracks() {
         }
     }
 
+    async function updateTrackDistanceMarkers(id, enabled) {
+        error.value = null;
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            const { accessToken, ensureValidToken, isAuthenticated } = useAuth();
+
+            if (isAuthenticated.value && accessToken.value) {
+                await ensureValidToken();
+                headers['Authorization'] = `Bearer ${accessToken.value}`;
+            }
+
+            const response = await fetch(`/api/tracks/${id}/distance-markers`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    distance_markers_enabled: !!enabled,
+                    session_id: getSessionId()
+                })
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || 'Failed to update distance markers');
+            }
+
+            updateTrackInPolylines(id, { distance_markers_enabled: !!enabled });
+            return true;
+        } catch (e) {
+            error.value = e.message || 'Unknown error updating distance markers';
+            throw e;
+        }
+    }
+
     /**
      * Update track visibility (public/private)
      * @param {string} id - track ID
@@ -615,6 +648,7 @@ export function useTracks() {
         processTrackData,
         updateTrackInPolylines,
         updateTrackCategories,
+        updateTrackDistanceMarkers,
         updateTrackVisibility,
         // Export utility functions
         validateSpeedData,

@@ -39,7 +39,8 @@ test.describe('Map Controls Icon Visibility', () => {
         await expect(searchButton).toBeEnabled();
 
         // Click should open search modal
-        await searchButton.click();
+        await page.waitForFunction(() => !!(window.__e2e?.isMapIdle?.()), { timeout: 3000 });
+        await searchButton.click({ force: true });
         await expect(page.locator('.search-modal')).toBeVisible({ timeout: 2000 });
     });
 

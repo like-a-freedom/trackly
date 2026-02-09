@@ -487,6 +487,24 @@ export function useTrackEditor({ trackId = null } = {}) {
         };
     }
 
+    function findNearestPointIndex(seg, lat, lng) {
+        if (!seg || !seg.points?.length) return null;
+        let bestIndex = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < seg.points.length; i++) {
+            const [ptLat, ptLng] = seg.points[i];
+            const dist = haversineDistance(
+                { lat: ptLat, lng: ptLng },
+                { lat, lng }
+            );
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIndex = i;
+            }
+        }
+        return bestIndex;
+    }
+
     function getNextPoiName() {
         let maxNumber = 0;
         for (const poi of pois.value) {
@@ -1121,6 +1139,40 @@ export function useTrackEditor({ trackId = null } = {}) {
         scheduleGeometryUpdates();
     }
 
+    /** Reverse the entire track (segments order and point directions). */
+    function reverseTrack() {
+        if (!segments.value.length) return false;
+
+        saveUndoState();
+
+        segments.value = segments.value
+            .map((seg) => {
+                if (!seg || seg.points.length < 2) return seg;
+                const len = seg.points.length;
+                const reversed = {
+                    ...seg,
+                    points: [...seg.points].reverse(),
+                    waypoints: seg.waypoints
+                        .map((i) => len - 1 - i)
+                        .sort((a, b) => a - b),
+                    surfaceTypes: seg.surfaceTypes
+                        ? [...seg.surfaceTypes].reverse()
+                        : [],
+                };
+                return reversed;
+            })
+            .reverse();
+
+        activeSegmentIndex.value = Math.max(
+            0,
+            segments.value.length - 1 - activeSegmentIndex.value
+        );
+
+        autosave();
+        scheduleGeometryUpdates();
+        return true;
+    }
+
     /** Reverse points within a fragment range. */
     function reverseFragment(segIndex, startIdx, endIdx) {
         const seg = segments.value[segIndex];
@@ -1356,6 +1408,31 @@ export function useTrackEditor({ trackId = null } = {}) {
         return true;
     }
 
+    /** Cut a segment at a clicked point on the line (insert + split). */
+    function cutSegmentAt(segIndex, afterIndex, lat, lng, { onRoutingNotAvailable } = {}) {
+        if (!isValidCoord(lat, lng)) return false;
+        const seg = segments.value[segIndex];
+        if (!seg || seg.points.length < 2) return false;
+
+        const inserted = insertWaypoint(segIndex, afterIndex, lat, lng, {
+            onRoutingNotAvailable,
+        });
+        if (!inserted) return false;
+
+        const updatedSeg = segments.value[segIndex];
+        const splitIndex = findNearestPointIndex(updatedSeg, lat, lng);
+        if (splitIndex === null) return false;
+
+        const prevActive = activeSegmentIndex.value;
+        activeSegmentIndex.value = segIndex;
+        const ok = splitSegment(splitIndex);
+        if (!ok) {
+            activeSegmentIndex.value = prevActive;
+            return false;
+        }
+        return true;
+    }
+
     /**
      * Extract a segment as a separate new track (Section 11: New Track From Segment).
      * Returns the GeoJSON and metadata for the new track without saving it.
@@ -1371,6 +1448,103 @@ export function useTrackEditor({ trackId = null } = {}) {
             geometry: { type: 'MultiLineString', coordinates: [coords] },
             name: `${trackName.value} — segment ${segIndex + 1}`,
         };
+    }
+
+    async function createTrackFromSegment(segIndex, { name } = {}) {
+        const segmentPayload = extractSegmentAsTrack(segIndex);
+        if (!segmentPayload) {
+            return { ok: false, error: 'Segment must have at least 2 points' };
+        }
+        const seg = segments.value[segIndex];
+        if (!seg) return { ok: false, error: 'Segment not found' };
+
+        const baseName = segmentPayload.name || `Segment ${segIndex + 1}`;
+        const finalName = String(name ?? baseName).trim();
+        if (!finalName) {
+            return { ok: false, error: 'Track name is required' };
+        }
+
+        const headers = {
+            'Content-Type': 'application/json',
+            ...(await getAuthHeader()),
+        };
+
+        const waypointsPayload = (seg.waypoints || [])
+            .filter((idx) => idx >= 0 && idx < seg.points.length)
+            .map((idx) => ({
+                lat: seg.points[idx][0],
+                lon: seg.points[idx][1],
+                index: idx,
+            }));
+
+        const segmentMetaPayload = [
+            {
+                name: seg.name ?? null,
+                color: seg.color || getDefaultSegmentColor(0),
+            },
+        ];
+
+        try {
+            const resp = await fetch(`${API_BASE}/api/tracks/create`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    name: finalName,
+                    description: trackDescription.value.trim(),
+                    categories: trackCategories.value,
+                    geometry: segmentPayload.geometry,
+                    waypoints: waypointsPayload,
+                    segment_meta: segmentMetaPayload,
+                    session_id: getSessionId(),
+                    is_draft: false,
+                }),
+            });
+
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+
+            const data = await resp.json();
+            return { ok: true, id: data.id };
+        } catch (e) {
+            error.value = `Segment export error: ${e.message}`;
+            return { ok: false, error: error.value };
+        }
+    }
+
+    async function duplicateTrack({ name } = {}) {
+        if (!savedTrackId.value) {
+            return { ok: false, error: 'Save the track before duplicating' };
+        }
+
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(await getAuthHeader()),
+            };
+            const payload = {
+                session_id: getSessionId(),
+            };
+            if (name && String(name).trim().length > 0) {
+                payload.name = String(name).trim();
+            }
+            const resp = await fetch(
+                `${API_BASE}/api/tracks/${savedTrackId.value}/duplicate`,
+                {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload),
+                }
+            );
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+            const data = await resp.json();
+            return { ok: true, id: data.id };
+        } catch (e) {
+            error.value = `Duplicate error: ${e.message}`;
+            return { ok: false, error: error.value };
+        }
     }
 
     /** Set editor mode. */
@@ -1954,11 +2128,15 @@ export function useTrackEditor({ trackId = null } = {}) {
         deleteSegment,
         splitSegment,
         reverseSegment,
+        reverseTrack,
         setActiveSegment,
         joinSegments,
         closeLoop,
         shortcutBetweenPoints,
+        cutSegmentAt,
         extractSegmentAsTrack,
+        createTrackFromSegment,
+        duplicateTrack,
 
         // Undo/Redo
         handleUndo,

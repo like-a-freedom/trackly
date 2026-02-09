@@ -152,6 +152,14 @@
             </button>
             <button
               class="btn-icon-sm"
+              title="New track from segment"
+              data-testid="new-track-from-segment-btn"
+              @click.stop="$emit('newTrackFromSegment', i)"
+            >
+              🧭
+            </button>
+            <button
+              class="btn-icon-sm"
               title="Reverse"
               @click.stop="$emit('reverseSegment', i)"
             >
@@ -167,6 +175,29 @@
           </div>
         </li>
       </ul>
+    </section>
+
+    <!-- Track actions -->
+    <section class="sidebar-section" data-testid="track-actions">
+      <div class="section-header">
+        <h3 class="section-title">Track actions</h3>
+      </div>
+      <div class="track-actions">
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="duplicate-track-btn"
+          @click="$emit('duplicateTrack')"
+        >
+          Duplicate track
+        </button>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="reverse-track-btn"
+          @click="$emit('reverseTrack')"
+        >
+          Reverse track
+        </button>
+      </div>
     </section>
 
     <!-- Fragment actions -->
@@ -488,6 +519,9 @@ const emit = defineEmits([
   "reverseFragment",
   "rerouteFragment",
   "closeLoop",
+  "reverseTrack",
+  "duplicateTrack",
+  "newTrackFromSegment",
   "update:optimizerTargetRatio",
   "previewOptimization",
   "applyOptimization",
@@ -1024,6 +1058,12 @@ const timeDisplay = computed(() => {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 6px;
+}
+
+.track-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .optimizer-stats {

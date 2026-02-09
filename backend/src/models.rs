@@ -68,6 +68,7 @@ pub struct TrackDetail {
     pub name: String,
     pub description: Option<String>,
     pub categories: Vec<String>,
+    pub distance_markers_enabled: Option<bool>,
     pub geom_geojson: serde_json::Value, // Store geometry as GeoJSON for API
     pub segment_meta: Option<serde_json::Value>, // Per-segment metadata (name, color)
     pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
@@ -116,6 +117,7 @@ pub struct TrackSimplified {
     pub name: String,
     pub description: Option<String>,
     pub categories: Vec<String>,
+    pub distance_markers_enabled: Option<bool>,
     pub geom_geojson: serde_json::Value, // Simplified geometry
     pub segment_meta: Option<serde_json::Value>, // Per-segment metadata (name, color)
     pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
@@ -307,6 +309,12 @@ pub struct UpdateTrackNameRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdateTrackCategoriesRequest {
     pub categories: Vec<String>,
+    pub session_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTrackDistanceMarkersRequest {
+    pub distance_markers_enabled: bool,
     pub session_id: Uuid,
 }
 

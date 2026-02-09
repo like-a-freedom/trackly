@@ -577,6 +577,24 @@
           </div>
         </div>
 
+        <div class="stats-section">
+          <div class="section-header">
+            <h3>Map overlays</h3>
+          </div>
+          <label class="toggle-row" data-testid="distance-markers-toggle">
+            <input
+              type="checkbox"
+              :checked="distanceMarkersEnabled"
+              :disabled="!isOwner"
+              @change="handleDistanceMarkersToggle"
+            />
+            <span>Distance markers</span>
+          </label>
+          <p class="toggle-help" v-if="!isOwner">
+            Only the track owner can change overlay settings.
+          </p>
+        </div>
+
         <!-- Speed and Pace Section -->
         <div class="stats-section" v-if="hasSpeedData">
           <h3>Statistics</h3>
@@ -1024,6 +1042,7 @@ const emit = defineEmits([
   "description-updated",
   "name-updated",
   "categories-updated",
+  "distance-markers-updated",
   "deleted",
   "chart-point-hover",
   "chart-point-leave",
@@ -1143,6 +1162,7 @@ const descriptionError = ref("");
 const selectedCategories = ref([]);
 const savingCategories = ref(false);
 const categoriesError = ref("");
+const distanceMarkersEnabled = ref(true);
 
 const categoriesList = [
   { value: "hiking", label: "Hiking" },
@@ -1153,7 +1173,11 @@ const categoriesList = [
   { value: "other", label: "Other" },
 ];
 
-const { updateTrackCategories, updateTrackInPolylines } = useTracks();
+const {
+  updateTrackCategories,
+  updateTrackInPolylines,
+  updateTrackDistanceMarkers,
+} = useTracks();
 
 // Initialize selectedCategories from track.categories
 watch(
@@ -1170,6 +1194,35 @@ watch(
   },
   { immediate: true }
 );
+
+watch(
+  () => props.track?.distance_markers_enabled,
+  (nextValue) => {
+    distanceMarkersEnabled.value = nextValue !== false;
+  },
+  { immediate: true }
+);
+
+async function handleDistanceMarkersToggle(event) {
+  if (!props.track?.id) return;
+  const nextValue = !!event.target.checked;
+  distanceMarkersEnabled.value = nextValue;
+
+  try {
+    await updateTrackDistanceMarkers(props.track.id, nextValue);
+    props.track.distance_markers_enabled = nextValue;
+    track.value = { ...props.track };
+    emit("distance-markers-updated", nextValue);
+    showToast(
+      nextValue ? "Distance markers enabled" : "Distance markers hidden",
+      "success"
+    );
+  } catch (err) {
+    distanceMarkersEnabled.value =
+      props.track?.distance_markers_enabled !== false;
+    showToast(err.message || "Failed to update overlays", "error");
+  }
+}
 
 // Auto-save on change
 async function onCategoriesChange(newValue) {
@@ -3990,6 +4043,25 @@ defineExpose({
   border-radius: 8px;
   color: #777;
   font-style: italic;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95em;
+  color: #2d3748;
+}
+
+.toggle-row input {
+  width: 16px;
+  height: 16px;
+}
+
+.toggle-help {
+  margin-top: 6px;
+  font-size: 0.85em;
+  color: #718096;
 }
 
 /* Track Metadata */
