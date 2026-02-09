@@ -54,6 +54,21 @@
         />
         <span class="toggle-label">Auto</span>
       </label>
+      <label class="toolbar-select" title="Routing profile">
+        <select
+          class="toolbar-select-input"
+          :value="routingProfile"
+          data-testid="routing-profile"
+          @change="$emit('setRoutingProfile', $event.target.value)"
+        >
+          <option value="hiking">Hiking</option>
+          <option value="walking">Walking</option>
+          <option value="running">Running</option>
+          <option value="cycling">Cycling</option>
+          <option value="mtb">MTB</option>
+          <option value="driving">Driving</option>
+        </select>
+      </label>
       <span v-if="graphLoading" class="toolbar-status">
         Loading graph...
         <span v-if="graphProgress > 0">{{ graphProgress }}%</span>
@@ -144,6 +159,7 @@ const props = defineProps({
   totalDistanceKm: { type: Number, default: 0 },
   estimatedTimeMinutes: { type: Number, default: 0 },
   routingMode: { type: String, default: "manual" },
+  routingProfile: { type: String, default: "hiking" },
   graphLoading: { type: Boolean, default: false },
   graphError: { type: String, default: null },
   graphProgress: { type: Number, default: 0 },
@@ -157,6 +173,7 @@ const emit = defineEmits([
   "redo",
   "save",
   "toggleRouting",
+  "setRoutingProfile",
   "togglePoiMode",
   "export",
 ]);
@@ -202,6 +219,21 @@ function handleExport(format) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   z-index: 1000;
   flex-wrap: wrap;
+}
+
+.toolbar-select {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.toolbar-select-input {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #111827;
+  background: #fff;
 }
 
 .toolbar-group {

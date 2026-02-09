@@ -4,6 +4,11 @@
 
 use crate::track_utils::geometry::haversine_distance;
 
+type SegmentPoints = Vec<(f64, f64)>;
+type SegmentWaypoints = Vec<usize>;
+type Segments = Vec<SegmentPoints>;
+type Waypoints = Vec<SegmentWaypoints>;
+
 /// Simplify a track using Douglas-Peucker algorithm
 /// Returns simplified track with fewer points while preserving shape
 pub fn simplify_track(points: &[(f64, f64)], tolerance_m: f64) -> Vec<(f64, f64)> {
@@ -407,12 +412,12 @@ fn simplify_segment_with_waypoints(
 }
 
 fn simplify_segments_with_tolerance(
-    segments: &[Vec<(f64, f64)>],
-    waypoints: Option<&[Vec<usize>]>,
+    segments: &[SegmentPoints],
+    waypoints: Option<&[SegmentWaypoints]>,
     tolerance: f64,
-) -> (Vec<Vec<(f64, f64)>>, Vec<Vec<usize>>, usize) {
-    let mut simplified_segments: Vec<Vec<(f64, f64)>> = Vec::with_capacity(segments.len());
-    let mut simplified_waypoints: Vec<Vec<usize>> = Vec::with_capacity(segments.len());
+) -> (Segments, Waypoints, usize) {
+    let mut simplified_segments: Segments = Vec::with_capacity(segments.len());
+    let mut simplified_waypoints: Waypoints = Vec::with_capacity(segments.len());
     let mut total_points = 0usize;
 
     for (idx, segment) in segments.iter().enumerate() {
@@ -433,10 +438,10 @@ fn simplify_segments_with_tolerance(
 /// Simplify segments with a target ratio while preserving waypoints.
 /// Returns simplified segments, waypoints, and stats for the applied tolerance.
 pub fn simplify_segments_to_ratio(
-    segments: &[Vec<(f64, f64)>],
-    waypoints: Option<&[Vec<usize>]>,
+    segments: &[SegmentPoints],
+    waypoints: Option<&[SegmentWaypoints]>,
     target_ratio: f64,
-) -> (Vec<Vec<(f64, f64)>>, Vec<Vec<usize>>, SimplificationStats) {
+) -> (Segments, Waypoints, SimplificationStats) {
     let original_points: usize = segments.iter().map(|s| s.len()).sum();
 
     if original_points <= 2 {
@@ -461,10 +466,8 @@ pub fn simplify_segments_to_ratio(
         min_points += if seg.len() >= 2 { 2 } else { seg.len() };
     }
 
-    let target_points = ((original_points as f64) * ratio)
-        .round()
-        .max(min_points)
-        .min(original_points);
+    let target_points = ((original_points as f64) * ratio).round() as usize;
+    let target_points = target_points.max(min_points).min(original_points);
 
     if target_points >= original_points {
         let (points, wps, simplified_points) =
@@ -706,9 +709,7 @@ mod tests {
 
     #[test]
     fn test_simplify_segments_to_ratio_preserves_waypoints() {
-        let points: Vec<(f64, f64)> = (0..10)
-            .map(|i| (55.0 + i as f64 * 0.0001, 37.0))
-            .collect();
+        let points: Vec<(f64, f64)> = (0..10).map(|i| (55.0 + i as f64 * 0.0001, 37.0)).collect();
         let segments = vec![points.clone()];
         let waypoints = vec![vec![0, 5, 9]];
 

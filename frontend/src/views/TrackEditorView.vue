@@ -10,6 +10,7 @@
       :totalPoints="editor.totalPoints.value"
       :totalDistanceKm="editor.totalDistanceKm.value"
       :routingMode="editor.routing.mode.value"
+      :routingProfile="editor.routing.profile.value"
       :graphLoading="editor.routing.graphLoading.value"
       :graphError="editor.routing.graphError.value"
       :graphProgress="editor.routing.graphProgress.value"
@@ -21,6 +22,7 @@
       @redo="editor.handleRedo"
       @save="handleSave"
       @toggleRouting="editor.routing.toggleMode"
+      @setRoutingProfile="editor.routing.setProfile"
       @togglePoiMode="poiMode = !poiMode"
       @export="handleExport"
     />

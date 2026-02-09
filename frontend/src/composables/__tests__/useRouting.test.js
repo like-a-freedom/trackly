@@ -54,6 +54,23 @@ describe('useRouting', () => {
         });
     });
 
+    describe('setProfile', () => {
+        it('sets a valid profile', () => {
+            routing.setProfile('cycling');
+            expect(routing.profile.value).toBe('cycling');
+        });
+
+        it('supports mtb profile', () => {
+            routing.setProfile('mtb');
+            expect(routing.profile.value).toBe('mtb');
+        });
+
+        it('ignores invalid profiles', () => {
+            routing.setProfile('invalid');
+            expect(routing.profile.value).toBe('hiking');
+        });
+    });
+
     describe('findRoute — manual mode', () => {
         it('returns straight line between two points', () => {
             const from = { lat: 50.0, lng: 30.0 };

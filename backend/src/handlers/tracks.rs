@@ -632,7 +632,7 @@ pub async fn simplify_track_preview(
     }
 
     let total_points: usize = segments.iter().map(|s| s.len()).sum();
-    if total_points < 2 || total_points > MAX_SIMPLIFY_POINTS {
+    if !(2..=MAX_SIMPLIFY_POINTS).contains(&total_points) {
         return Err(StatusCode::BAD_REQUEST);
     }
 

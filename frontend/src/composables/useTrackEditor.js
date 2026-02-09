@@ -684,6 +684,7 @@ export function useTrackEditor({ trackId = null } = {}) {
             editingState: {
                 activeSegment: activeSegmentIndex.value,
                 routingMode: routing.mode.value,
+                routingProfile: routing.profile.value,
             },
         });
     }
@@ -1668,6 +1669,9 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         if (draft.editingState?.routingMode) {
             routing.setMode(draft.editingState.routingMode);
+        }
+        if (draft.editingState?.routingProfile) {
+            routing.setProfile(draft.editingState.routingProfile);
         }
 
         undoRedo.clear();

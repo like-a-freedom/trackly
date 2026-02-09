@@ -212,7 +212,7 @@ export function useRouting({ autoLoad = true } = {}) {
     /** Current routing mode: 'manual' | 'auto' */
     const mode = ref('auto');
 
-    /** Current routing profile: 'hiking' | 'walking' | 'running' | 'cycling' | 'driving' */
+    /** Current routing profile: 'hiking' | 'walking' | 'running' | 'cycling' | 'mtb' | 'driving' */
     const profile = ref('hiking');
 
     /** Whether the WASM routing graph is loaded and ready. */
@@ -424,7 +424,7 @@ export function useRouting({ autoLoad = true } = {}) {
 
     function setProfile(newProfile) {
         if (
-            ['hiking', 'walking', 'running', 'cycling', 'driving'].includes(newProfile)
+            ['hiking', 'walking', 'running', 'cycling', 'mtb', 'driving'].includes(newProfile)
         ) {
             profile.value = newProfile;
             if (mode.value === 'auto' && autoLoad) {

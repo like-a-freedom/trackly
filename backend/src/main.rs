@@ -8,8 +8,10 @@ use backend::{handlers, logging, metrics, services};
 use mimalloc::MiMalloc;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 use tracing::info;
 
 #[global_allocator]
@@ -111,9 +113,14 @@ async fn main() {
         "CORS configured"
     );
 
+    let graph_dir = std::env::var("FAST_PATHS_GRAPH_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("data/graphs"));
+
     let app = Router::new()
         .route("/health", get(handlers::health))
         .route("/metrics", get(metrics::serve_metrics))
+        .nest_service("/graphs", ServeDir::new(graph_dir))
         .route("/api/tracks/upload", post(handlers::upload_track))
         .route("/api/tracks", get(handlers::list_tracks_geojson))
         .route("/api/tracks", post(handlers::upload_track))

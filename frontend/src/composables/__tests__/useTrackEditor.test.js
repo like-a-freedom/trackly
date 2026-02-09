@@ -670,7 +670,7 @@ describe('useTrackEditor', () => {
                     segments: [{ points: [[50, 30], [51, 31]], waypoints: [0, 1] }],
                     pois: [],
                 },
-                editingState: { activeSegment: 0, routingMode: 'manual' },
+                editingState: { activeSegment: 0, routingMode: 'manual', routingProfile: 'mtb' },
             });
 
             const result = editor.restoreDraft();
@@ -678,6 +678,7 @@ describe('useTrackEditor', () => {
             expect(editor.trackName.value).toBe('Draft Track');
             expect(editor.trackCategories.value).toEqual(['cycling']);
             expect(editor.segments.value[0].points).toHaveLength(2);
+            expect(editor.routing.profile.value).toBe('mtb');
         });
 
         it('returns false when no draft exists', () => {
