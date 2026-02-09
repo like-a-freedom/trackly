@@ -110,9 +110,14 @@
           v-for="(stat, i) in segmentStats"
           :key="i"
           class="segment-item"
-          :class="{ active: i === activeSegmentIndex }"
+          :class="{
+            active: i === activeSegmentIndex,
+            highlighted: i === highlightedSegmentIndex,
+          }"
           data-testid="segment-item"
           @click="$emit('setActiveSegment', i)"
+          @mouseenter="$emit('hoverSegment', i)"
+          @mouseleave="$emit('leaveSegment')"
         >
           <span class="segment-color" :style="{ background: stat.color }" />
           <span class="segment-info">
@@ -495,6 +500,7 @@ const props = defineProps({
   optimizerStats: { type: Object, default: null },
   optimizerLoading: { type: Boolean, default: false },
   optimizerError: { type: String, default: null },
+  highlightedSegmentIndex: { type: Number, default: null },
 });
 
 const emit = defineEmits([
@@ -530,6 +536,8 @@ const emit = defineEmits([
   "chart-point-hover",
   "chart-point-leave",
   "chart-point-click",
+  "hoverSegment",
+  "leaveSegment",
 ]);
 
 const availableCategories = [
@@ -844,6 +852,11 @@ const timeDisplay = computed(() => {
 
 .segment-item.active {
   background: #e8f0fe;
+}
+
+.segment-item.highlighted {
+  background: #fff9c4;
+  box-shadow: inset 3px 0 0 #ffd600;
 }
 
 .segment-color {

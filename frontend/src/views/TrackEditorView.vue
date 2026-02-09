@@ -18,6 +18,7 @@
       :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
       :manualRoutingPercent="editor.manualRoutingPercent.value"
       :poiMode="poiMode"
+      :showDistanceMarkers="showDistanceMarkers"
       :savedTrackId="editor.savedTrackId.value"
       @setMode="editor.setMode"
       @undo="editor.handleUndo"
@@ -27,6 +28,7 @@
       @setSnapToRoadMode="editor.setSnapToRoadMode"
       @setRoutingProfile="editor.routing.setProfile"
       @togglePoiMode="poiMode = !poiMode"
+      @toggleDistanceMarkers="showDistanceMarkers = !showDistanceMarkers"
       @export="handleExport"
     />
 
@@ -49,6 +51,9 @@
         "
         :hoverMarker="chartHoverMarker"
         :focusMarker="keyboardFocusMarker"
+        :highlightedSegmentIndex="highlightedSegmentIndex"
+        :showDistanceMarkers="showDistanceMarkers"
+        :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
         @addWaypoint="handleAddWaypoint"
         @moveWaypoint="handleMoveWaypoint"
         @deleteWaypoint="handleDeleteWaypoint"
@@ -62,6 +67,11 @@
         @deletePoi="handleDeletePoi"
         @newTrackFromSegment="handleNewTrackFromSegment"
         @focusWaypoint="handleFocusWaypoint"
+        @hoverSegment="(i) => (highlightedSegmentIndex = i)"
+        @leaveSegment="() => (highlightedSegmentIndex = null)"
+        @reverseSegment="handleReverseSegmentMap"
+        @joinSegmentsVisual="handleJoinSegmentsVisual"
+        @shortcutBetweenPoints="handleShortcutBetweenPoints"
       />
 
       <TrackEditorSidebar
@@ -82,6 +92,7 @@
         :elevationError="editor.elevationError.value"
         :coordinateData="editor.coordinateData.value"
         :collapsed="sidebarCollapsed"
+        :highlightedSegmentIndex="highlightedSegmentIndex"
         :fragmentSelection="editor.fragmentSelection.value"
         :optimizerTargetRatio="editor.optimizerTargetRatio.value"
         :optimizerPreview="editor.optimizerPreview.value"
@@ -120,6 +131,8 @@
         @chart-point-hover="handleElevationPointHover"
         @chart-point-leave="handleElevationPointLeave"
         @chart-point-click="handleElevationPointClick"
+        @hoverSegment="(i) => (highlightedSegmentIndex = i)"
+        @leaveSegment="() => (highlightedSegmentIndex = null)"
       />
     </div>
 
@@ -158,6 +171,8 @@ const chartHoverMarker = ref(null);
 const isChartPointFixed = ref(false);
 const selectedPointIndex = ref(null);
 const keyboardFocusMarker = ref(null);
+const highlightedSegmentIndex = ref(null);
+const showDistanceMarkers = ref(false);
 
 // ── Handlers ──────────────────────────────────────────
 function handleAddWaypoint(lat, lng) {
@@ -280,6 +295,40 @@ function handleJoinSegments() {
   const a = idx < segCount - 1 ? idx : idx - 1;
   editor.joinSegments(a, a + 1);
   showToast("Segments merged", "success");
+}
+
+function handleReverseSegmentMap(segIndex) {
+  editor.reverseSegment(segIndex);
+  showToast("Segment reversed", "success");
+}
+
+function handleJoinSegmentsVisual(originSegIdx, targetSegIdx) {
+  const segCount = editor.segments.value.length;
+  if (segCount < 2) {
+    showToast("You need at least 2 segments to merge", "warning");
+    return;
+  }
+  // Make segments adjacent by sorting indices
+  const a = Math.min(originSegIdx, targetSegIdx);
+  const b = Math.max(originSegIdx, targetSegIdx);
+  if (b === a + 1) {
+    // Already adjacent
+    editor.joinSegments(a, b);
+    showToast("Segments joined", "success");
+  } else {
+    // Non-adjacent: move target next to origin then join
+    // For simplicity, join the two nearest: swap segments to make adjacent
+    showToast("Can only join adjacent segments. Reorder first.", "warning");
+  }
+}
+
+function handleShortcutBetweenPoints(segIdx, fromIdx, toIdx) {
+  const ok = editor.shortcutBetweenPoints(segIdx, fromIdx, toIdx);
+  if (ok) {
+    showToast("Shortcut applied", "success");
+  } else {
+    showToast("Cannot apply shortcut here", "warning");
+  }
 }
 
 function handleSelectFragmentPoint(segIdx, pointIdx) {

@@ -104,6 +104,16 @@
         <span class="toolbar-btn-icon">📍</span>
         <span class="toolbar-btn-label">POI</span>
       </button>
+      <button
+        class="toolbar-btn"
+        :class="{ active: showDistanceMarkers }"
+        title="Distance markers"
+        data-testid="distance-markers-btn"
+        @click="$emit('toggleDistanceMarkers')"
+      >
+        <span class="toolbar-btn-icon">📐</span>
+        <span class="toolbar-btn-label">Km</span>
+      </button>
     </div>
 
     <!-- Spacer -->
@@ -185,6 +195,7 @@ const props = defineProps({
   graphError: { type: String, default: null },
   graphProgress: { type: Number, default: 0 },
   poiMode: { type: Boolean, default: false },
+  showDistanceMarkers: { type: Boolean, default: false },
   savedTrackId: { type: [String, null], default: null },
 });
 
@@ -197,6 +208,7 @@ const emit = defineEmits([
   "setSnapToRoadMode",
   "setRoutingProfile",
   "togglePoiMode",
+  "toggleDistanceMarkers",
   "export",
 ]);
 
