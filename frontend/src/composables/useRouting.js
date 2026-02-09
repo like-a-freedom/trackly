@@ -51,6 +51,13 @@ function parseNodeCoords(buffer, format) {
     return new Float32Array(buffer);
 }
 
+function nowMs() {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+        return performance.now();
+    }
+    return Date.now();
+}
+
 async function openGraphDb() {
     return openDB(GRAPH_DB_NAME, 1, {
         upgrade(db) {
@@ -220,6 +227,9 @@ export function useRouting({ autoLoad = true } = {}) {
     /** Graph download progress (0-100). */
     const graphProgress = ref(0);
 
+    /** Last routing timing metrics. */
+    const lastRouteMetrics = ref({ snapMs: 0, routeMs: 0, totalMs: 0 });
+
     let router = null;
     let nodeCoords = null;
     let spatialIndex = null;
@@ -310,8 +320,10 @@ export function useRouting({ autoLoad = true } = {}) {
      * @returns {Array<[number,number]>|null} Array of [lat, lng] points or null
      */
     function findRoute(from, to, { onNotAvailable } = {}) {
+        const totalStart = nowMs();
         if (mode.value === 'manual') {
             // Straight line between points
+            lastRouteMetrics.value = { snapMs: 0, routeMs: 0, totalMs: 0 };
             return [
                 [from.lat, from.lng],
                 [to.lat, to.lng],
@@ -329,8 +341,10 @@ export function useRouting({ autoLoad = true } = {}) {
             return null;
         }
 
+        const snapStart = nowMs();
         const snappedFrom = snapToNode(from.lat, from.lng);
         const snappedTo = snapToNode(to.lat, to.lng);
+        const snapMs = nowMs() - snapStart;
 
         if (!snappedFrom || !snappedTo) {
             if (typeof onNotAvailable === 'function') {
@@ -341,6 +355,7 @@ export function useRouting({ autoLoad = true } = {}) {
             return null;
         }
 
+        const routeStart = nowMs();
         const nodeIds = router.calc_path(snappedFrom.nodeId, snappedTo.nodeId);
         if (!nodeIds || nodeIds.length === 0) {
             if (typeof onNotAvailable === 'function') {
@@ -348,6 +363,11 @@ export function useRouting({ autoLoad = true } = {}) {
                     'No route found between selected points. Add intermediate points or switch to manual mode.'
                 );
             }
+            lastRouteMetrics.value = {
+                snapMs,
+                routeMs: nowMs() - routeStart,
+                totalMs: nowMs() - totalStart,
+            };
             return null;
         }
 
@@ -356,6 +376,17 @@ export function useRouting({ autoLoad = true } = {}) {
             const idx = nodeId * 2;
             if (idx + 1 >= nodeCoords.length) continue;
             routePoints.push([nodeCoords[idx], nodeCoords[idx + 1]]);
+        }
+
+        const routeMs = nowMs() - routeStart;
+        const totalMs = nowMs() - totalStart;
+        lastRouteMetrics.value = { snapMs, routeMs, totalMs };
+
+        if (totalMs > 50 || routeMs > 1) {
+            console.warn(
+                `[Routing] Slow route: snap ${snapMs.toFixed(2)}ms, ` +
+                    `route ${routeMs.toFixed(2)}ms, total ${totalMs.toFixed(2)}ms`
+            );
         }
 
         if (routePoints.length < 2) {
@@ -424,6 +455,7 @@ export function useRouting({ autoLoad = true } = {}) {
         graphLoading,
         graphError,
         graphProgress,
+        lastRouteMetrics,
         findRoute,
         setMode,
         toggleMode,

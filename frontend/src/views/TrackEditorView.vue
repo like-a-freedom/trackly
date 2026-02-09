@@ -63,6 +63,7 @@
         :elevationLoading="editor.elevationLoading.value"
         :elevationError="editor.elevationError.value"
         :coordinateData="editor.coordinateData.value"
+        :collapsed="sidebarCollapsed"
         @update:trackName="editor.trackName.value = $event"
         @update:trackDescription="editor.trackDescription.value = $event"
         @update:trackCategories="editor.trackCategories.value = $event"
@@ -74,6 +75,7 @@
         @deleteDraft="handleDeleteDraft"
         @joinSegments="handleJoinSegments"
         @deletePoi="editor.deletePoi"
+        @toggleCollapse="sidebarCollapsed = !sidebarCollapsed"
       />
     </div>
 
@@ -107,6 +109,7 @@ const editor = useTrackEditor({ trackId: trackId.value });
 const editorMap = ref(null);
 const showDraftBanner = ref(false);
 const poiMode = ref(false);
+const sidebarCollapsed = ref(false);
 
 // ── Handlers ──────────────────────────────────────────
 function handleAddWaypoint(lat, lng) {
@@ -294,9 +297,26 @@ function onKeyDown(e) {
   }
 }
 
+function checkBrowserSupport() {
+  const hasFetch = typeof fetch === "function";
+  const hasWasm = typeof WebAssembly !== "undefined";
+  const hasURL = typeof URL !== "undefined";
+  const hasPromise = typeof Promise !== "undefined";
+
+  if (!hasFetch || !hasWasm || !hasURL || !hasPromise) {
+    showToast(
+      "Your browser is not supported. Please use a recent version of Chrome, Firefox, Safari, or Edge.",
+      "error",
+      8000
+    );
+  }
+}
+
 // ── Lifecycle ───────────────────────────────────────────
 onMounted(async () => {
   document.addEventListener("keydown", onKeyDown);
+
+  checkBrowserSupport();
 
   editor.routing.initialize();
 

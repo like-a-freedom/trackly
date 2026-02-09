@@ -60,6 +60,25 @@ export function computeCumulativeDistances(latlngs) {
 }
 
 /**
+ * Downsample an array of points to a maximum size while keeping endpoints.
+ * @param {Array<[number, number]>} points - Array of [lat, lng] coordinates
+ * @param {number} maxPoints - Maximum number of points to keep
+ * @returns {Array<[number, number]>} Downsampled points
+ */
+export function downsamplePoints(points, maxPoints) {
+    if (!Array.isArray(points) || maxPoints <= 0) return [];
+    if (points.length <= maxPoints) return points;
+
+    const ratio = (points.length - 1) / (maxPoints - 1);
+    const sampled = [];
+    for (let i = 0; i < maxPoints; i++) {
+        const idx = Math.round(i * ratio);
+        sampled.push(points[idx]);
+    }
+    return sampled;
+}
+
+/**
  * Interpolate a point along a line segment
  * @param {[number, number]} start - Start point [lat, lng]
  * @param {[number, number]} end - End point [lat, lng]

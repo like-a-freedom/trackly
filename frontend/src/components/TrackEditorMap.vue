@@ -5,7 +5,7 @@
       class="editor-map"
       :zoom="14"
       :center="mapCenter"
-      :options="{ zoomControl: true, preferCanvas: true }"
+      :options="mapOptions"
       @ready="onMapReady"
       @click="onMapClick"
     >
@@ -22,6 +22,7 @@
         :color="seg.color"
         :weight="segIdx === activeSegmentIndex ? 5 : 3"
         :opacity="segIdx === activeSegmentIndex ? 1 : 0.6"
+        :smooth-factor="seg.smoothFactor"
         :data-testid="`segment-line-${segIdx}`"
         @click="(e) => onSegmentClick(segIdx, e)"
       />
@@ -158,6 +159,8 @@ import {
   LTooltip,
 } from "@vue-leaflet/vue-leaflet";
 import { getLatLngFromTouch } from "../utils/touch.js";
+import { OPTIMIZED_MAP_OPTIONS } from "../utils/mapPerformance.js";
+import { downsamplePoints } from "../utils/trackGeometry.js";
 
 const SEGMENT_COLORS = [
   "#1976D2",
@@ -194,6 +197,13 @@ const emit = defineEmits([
 const mapRef = ref(null);
 const mapInstance = ref(null);
 const mapCenter = ref([50.45, 30.52]); // Default to Kyiv
+const mapOptions = {
+  ...OPTIMIZED_MAP_OPTIONS,
+  zoomControl: true,
+};
+
+const LARGE_TRACK_THRESHOLD = 10000;
+const MAX_RENDER_POINTS = 2000;
 
 // Context menu state
 const contextMenu = ref({
@@ -216,12 +226,19 @@ const dragPtIdx = ref(-1);
 const lastDragLatLng = ref(null);
 
 // Computed
-const segmentsWithColors = computed(() =>
-  props.segments.map((seg, i) => ({
-    points: seg.points,
-    color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
-  }))
-);
+const segmentsWithColors = computed(() => {
+  const shouldDownsample = props.totalPoints >= LARGE_TRACK_THRESHOLD;
+  return props.segments.map((seg, i) => {
+    const points = shouldDownsample
+      ? downsamplePoints(seg.points, Math.min(MAX_RENDER_POINTS, seg.points.length))
+      : seg.points;
+    return {
+      points,
+      color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+      smoothFactor: shouldDownsample ? 2 : 1,
+    };
+  });
+});
 
 const startPoint = computed(() => {
   for (const seg of props.segments) {

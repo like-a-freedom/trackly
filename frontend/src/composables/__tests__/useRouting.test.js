@@ -118,5 +118,20 @@ describe('useRouting', () => {
             ]);
             expect(testRouter.calc_path).toHaveBeenCalledOnce();
         });
+
+        it('updates timing metrics for the last route', () => {
+            const testRouter = {
+                calc_path: vi.fn(() => [0, 1]),
+            };
+            const testNodeCoords = new Float32Array([50, 30, 51, 31]);
+
+            routing.__setTestGraph({ testRouter, testNodeCoords });
+
+            routing.findRoute({ lat: 50, lng: 30 }, { lat: 51, lng: 31 });
+
+            expect(routing.lastRouteMetrics.value.totalMs).toBeGreaterThanOrEqual(0);
+            expect(routing.lastRouteMetrics.value.routeMs).toBeGreaterThanOrEqual(0);
+            expect(routing.lastRouteMetrics.value.snapMs).toBeGreaterThanOrEqual(0);
+        });
     });
 });

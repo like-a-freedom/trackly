@@ -358,4 +358,19 @@ function handleExport(format) {
     padding: 0 4px;
   }
 }
+
+@media (pointer: coarse) {
+  .toolbar-btn {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  .toolbar-btn-icon {
+    font-size: 18px;
+  }
+
+  .toolbar-toggle {
+    font-size: 13px;
+  }
+}
 </style>

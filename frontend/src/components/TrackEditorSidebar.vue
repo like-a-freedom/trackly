@@ -1,5 +1,15 @@
 <template>
-  <div class="track-editor-sidebar">
+  <div class="track-editor-sidebar" :class="{ collapsed }">
+    <div class="sidebar-mobile-bar">
+      <span class="mobile-bar-title">Editor panel</span>
+      <button
+        class="btn-icon-sm"
+        data-testid="toggle-sidebar-btn"
+        @click="$emit('toggleCollapse')"
+      >
+        {{ collapsed ? '▲' : '▼' }}
+      </button>
+    </div>
     <!-- Draft recovery banner -->
     <div v-if="showDraftBanner" class="draft-banner" data-testid="draft-banner">
       <p>An unsaved draft was found. Restore it?</p>
@@ -16,6 +26,17 @@
     <!-- Error display -->
     <div v-if="error" class="error-banner" data-testid="error-banner">
       <p>{{ error }}</p>
+    </div>
+
+    <div
+      v-if="totalPoints < 2"
+      class="info-banner"
+      data-testid="editor-tips"
+    >
+      <p>
+        Click on the map to add points. Use F1–F4 to switch modes and Ctrl+Z/Y
+        for undo/redo.
+      </p>
     </div>
 
     <!-- Metadata form -->
@@ -61,6 +82,7 @@
             :key="cat.id"
             class="category-chip"
             :class="{ selected: trackCategories.includes(cat.id) }"
+            :data-testid="`category-chip-${cat.id}`"
           >
             <input
               type="checkbox"
@@ -239,6 +261,7 @@ const props = defineProps({
   elevationLoading: { type: Boolean, default: false },
   elevationError: { type: String, default: null },
   coordinateData: { type: Array, default: () => [] },
+  collapsed: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -253,6 +276,7 @@ const emit = defineEmits([
   "restoreDraft",
   "deleteDraft",
   "deletePoi",
+  "toggleCollapse",
 ]);
 
 const availableCategories = [
@@ -308,6 +332,21 @@ const timeDisplay = computed(() => {
   font-size: 13px;
 }
 
+.sidebar-mobile-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.mobile-bar-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: #444;
+}
+
 .draft-banner {
   background: #fff3e0;
   border-bottom: 1px solid #ffe0b2;
@@ -334,6 +373,14 @@ const timeDisplay = computed(() => {
 
 .error-banner p {
   margin: 0;
+}
+
+.info-banner {
+  background: #e8f0fe;
+  border-bottom: 1px solid #c7d7fb;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #1a4fa3;
 }
 
 .sidebar-section {
@@ -614,6 +661,37 @@ const timeDisplay = computed(() => {
     border-left: none;
     border-top: 1px solid #e0e0e0;
     max-height: 40vh;
+  }
+
+  .sidebar-mobile-bar {
+    display: flex;
+  }
+
+  .track-editor-sidebar.collapsed {
+    max-height: 44px;
+    overflow: hidden;
+  }
+
+  .track-editor-sidebar.collapsed .sidebar-section,
+  .track-editor-sidebar.collapsed .draft-banner,
+  .track-editor-sidebar.collapsed .error-banner,
+  .track-editor-sidebar.collapsed .info-banner {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .btn-icon,
+  .btn-icon-sm,
+  .btn-primary,
+  .btn-secondary {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .form-input {
+    padding: 8px 10px;
+    font-size: 14px;
   }
 }
 </style>

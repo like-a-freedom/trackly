@@ -34,4 +34,7 @@ export default defineConfig({
       '/metrics': 'http://localhost:8080',
     },
   },
+  build: {
+    target: 'es2019',
+  },
 })

@@ -71,8 +71,8 @@ test.describe('Track Editor', () => {
 
     test.describe('Metadata form', () => {
         test('sidebar has name and description fields', async ({ page }) => {
-            const nameInput = page.locator('input[placeholder*="Название"], input[placeholder*="name"]');
-            const descInput = page.locator('textarea[placeholder*="Описание"], textarea[placeholder*="description"]');
+            const nameInput = page.locator('[data-testid="track-name-input"]');
+            const descInput = page.locator('[data-testid="track-desc-input"]');
 
             // At least a name input should exist
             const nameCount = await nameInput.count();
@@ -82,7 +82,7 @@ test.describe('Track Editor', () => {
 
         test('categories can be selected', async ({ page }) => {
             // Look for category buttons or checkboxes
-            const categoryElements = page.locator('.editor-sidebar label, .editor-sidebar .category-btn');
+            const categoryElements = page.locator('[data-testid^="category-chip-"]');
             const count = await categoryElements.count();
             // Should have at least hiking, walking, running, cycling
             expect(count).toBeGreaterThanOrEqual(0); // May be checkboxes
@@ -91,17 +91,17 @@ test.describe('Track Editor', () => {
 
     test.describe('Save button state', () => {
         test('save button is disabled when track is empty', async ({ page }) => {
-            const saveBtn = page.locator('button:has-text("Сохранить"), button:has-text("Save")');
+            const saveBtn = page.locator('[data-testid="save-btn"]');
             if (await saveBtn.count() > 0) {
                 await expect(saveBtn.first()).toBeDisabled();
             }
         });
 
         test('save button is disabled when only name is filled', async ({ page }) => {
-            const nameInput = page.locator('input[placeholder*="Название"], input[placeholder*="name"]').first();
+            const nameInput = page.locator('[data-testid="track-name-input"]').first();
             if (await nameInput.count() > 0) {
                 await nameInput.fill('Test Track');
-                const saveBtn = page.locator('button:has-text("Сохранить"), button:has-text("Save")');
+                const saveBtn = page.locator('[data-testid="save-btn"]');
                 if (await saveBtn.count() > 0) {
                     await expect(saveBtn.first()).toBeDisabled();
                 }
@@ -111,14 +111,14 @@ test.describe('Track Editor', () => {
 
     test.describe('Undo / Redo', () => {
         test('undo button is disabled initially', async ({ page }) => {
-            const undoBtn = page.locator('button[title*="Undo"], button[title*="Отменить"], button:has-text("↩")').first();
+            const undoBtn = page.locator('[data-testid="undo-btn"]').first();
             if (await undoBtn.count() > 0) {
                 await expect(undoBtn).toBeDisabled();
             }
         });
 
         test('redo button is disabled initially', async ({ page }) => {
-            const redoBtn = page.locator('button[title*="Redo"], button[title*="Повторить"], button:has-text("↪")').first();
+            const redoBtn = page.locator('[data-testid="redo-btn"]').first();
             if (await redoBtn.count() > 0) {
                 await expect(redoBtn).toBeDisabled();
             }
