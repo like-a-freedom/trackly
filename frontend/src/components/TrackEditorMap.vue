@@ -280,7 +280,7 @@
       <l-polyline
         v-if="shortcutOrigin && shortcutTargetIdx !== null"
         :lat-lngs="shortcutCursorLine"
-        :color="'#4CAF50'"
+        :color="shortcutCursorValid ? '#4CAF50' : '#D32F2F'"
         :weight="3"
         :opacity="0.8"
         :dash-array="'7,7'"
@@ -585,6 +585,14 @@ const shortcutCursorLine = computed(() => {
   const targetPt = seg.points[shortcutTargetIdx.value];
   if (!originPt || !targetPt) return [];
   return [originPt, targetPt];
+});
+
+/** Whether the shortcut operation is valid (at least 2 points apart) */
+const shortcutCursorValid = computed(() => {
+  if (!shortcutOrigin.value || shortcutTargetIdx.value === null) return false;
+  const lo = Math.min(shortcutOrigin.value.pointIdx, shortcutTargetIdx.value);
+  const hi = Math.max(shortcutOrigin.value.pointIdx, shortcutTargetIdx.value);
+  return hi - lo >= 2;
 });
 
 /** Points that will be deleted by the shortcut operation */

@@ -44,6 +44,24 @@ function haversineDistance(a, b) {
     return R * 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1 - aVal));
 }
 
+/** Build a minimal GPX XML string from an array of [lat, lng] points. */
+function buildFragmentGpx(points, name = 'Fragment') {
+    const escXml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const trkpts = points
+        .map(([lat, lng]) => `      <trkpt lat="${lat}" lon="${lng}"></trkpt>`)
+        .join('\n');
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Trackly"
+  xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>${escXml(name)}</name>
+    <trkseg>
+${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+}
+
 function toMeters(lat, lng, originLat = lat) {
     const rad = Math.PI / 180;
     const x = lng * Math.cos(originLat * rad) * 111320;
@@ -1370,6 +1388,122 @@ export function useTrackEditor({ trackId = null } = {}) {
     }
 
     /**
+     * Close loop by returning the same way — duplicate all points in reverse.
+     * §16.2.13: "Той же дорогой" option.
+     * @returns {boolean}
+     */
+    function closeLoopSameWay() {
+        const seg = segments.value[activeSegmentIndex.value];
+        if (!seg || seg.points.length < 2) return false;
+
+        const first = seg.points[0];
+        const last = seg.points[seg.points.length - 1];
+        const dist = haversineDistance(
+            { lat: first[0], lng: first[1] },
+            { lat: last[0], lng: last[1] }
+        );
+
+        // Already closed
+        if (dist < MIN_POINT_DISTANCE_M) return false;
+
+        saveUndoState();
+
+        // Duplicate all points except the last one in reverse, then add start point
+        const reversed = seg.points.slice(0, -1).reverse();
+        for (const pt of reversed) {
+            seg.points.push([pt[0], pt[1]]);
+            ensureSurfaceTypes(seg);
+            seg.surfaceTypes.push(SURFACE_UNKNOWN);
+        }
+        // Rebuild waypoints: mark first, last, and the turnaround point
+        const turnIdx = seg.points.length - reversed.length;
+        if (!seg.waypoints.includes(turnIdx)) seg.waypoints.push(turnIdx);
+        seg.waypoints.push(seg.points.length - 1);
+        seg.waypoints.sort((a, b) => a - b);
+
+        autosave();
+        scheduleGeometryUpdates();
+        return true;
+    }
+
+    /**
+     * Close loop via routing — find a different route from last point to first.
+     * §16.2.13: "Вернуться другим путём" option.
+     * Uses the WASM router to find an alternative path.
+     * @param {Object} [options]
+     * @param {Function} [options.onRoutingNotAvailable] - Callback if routing WASM not loaded
+     * @returns {boolean}
+     */
+    function closeLoopDifferentRoute({ onRoutingNotAvailable } = {}) {
+        const seg = segments.value[activeSegmentIndex.value];
+        if (!seg || seg.points.length < 2) return false;
+
+        const first = seg.points[0];
+        const last = seg.points[seg.points.length - 1];
+        const dist = haversineDistance(
+            { lat: first[0], lng: first[1] },
+            { lat: last[0], lng: last[1] }
+        );
+
+        // Already closed
+        if (dist < MIN_POINT_DISTANCE_M) return false;
+
+        const routeData = routing.findRouteDetailed(
+            { lat: last[0], lng: last[1] },
+            { lat: first[0], lng: first[1] },
+            { onNotAvailable: onRoutingNotAvailable }
+        );
+
+        if (!routeData || routeData.points.length < 2) return false;
+
+        saveUndoState();
+
+        // Append routed points (skip the first since it matches current last point)
+        const routedPts = routeData.points.slice(1);
+        const routedSurfaces = routeData.surfaceTypes.slice(1);
+        for (let i = 0; i < routedPts.length; i++) {
+            seg.points.push(routedPts[i]);
+            ensureSurfaceTypes(seg);
+            seg.surfaceTypes.push(routedSurfaces[i] || SURFACE_UNKNOWN);
+        }
+        seg.waypoints.push(seg.points.length - 1);
+        seg.waypoints.sort((a, b) => a - b);
+
+        autosave();
+        scheduleGeometryUpdates();
+        return true;
+    }
+
+    /**
+     * Export a fragment as a GPX file (client-side).
+     * §16.2.4: "Экспорт — Скачать только этот фрагмент"
+     * @returns {boolean}
+     */
+    function exportFragment() {
+        const range = getFragmentRange();
+        if (!range) return false;
+        const { segIndex, startIdx, endIdx } = range;
+        const seg = segments.value[segIndex];
+        if (!seg) return false;
+        const pts = seg.points.slice(startIdx, endIdx + 1);
+        if (pts.length < 2) return false;
+
+        const name = trackName.value || 'track';
+        const gpxContent = buildFragmentGpx(pts, `${name} (fragment)`);
+
+        const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${name}_fragment.gpx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return true;
+    }
+
+    /**
      * Create a shortcut: replace all points between fromIdx and toIdx with a straight line.
      * Section 11: Shortcut operation.
      * @param {number} segIndex
@@ -2132,6 +2266,8 @@ export function useTrackEditor({ trackId = null } = {}) {
         setActiveSegment,
         joinSegments,
         closeLoop,
+        closeLoopSameWay,
+        closeLoopDifferentRoute,
         shortcutBetweenPoints,
         cutSegmentAt,
         extractSegmentAsTrack,
@@ -2195,6 +2331,7 @@ export function useTrackEditor({ trackId = null } = {}) {
 
         // Export
         exportTrack,
+        exportFragment,
 
         // Time estimation
         estimatedTimeMinutes,

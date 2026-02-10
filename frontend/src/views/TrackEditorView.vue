@@ -121,6 +121,9 @@
         @reverseFragment="handleReverseFragment"
         @rerouteFragment="handleRerouteFragment"
         @closeLoop="handleCloseLoop"
+        @closeLoopSameWay="handleCloseLoopSameWay"
+        @closeLoopDifferentRoute="handleCloseLoopDifferentRoute"
+        @exportFragment="handleExportFragment"
         @reverseTrack="handleReverseTrack"
         @duplicateTrack="handleDuplicateTrack"
         @newTrackFromSegment="handleNewTrackFromSegment"
@@ -409,6 +412,42 @@ function handleCloseLoop() {
     );
   } else {
     showToast("Loop closed.", "success");
+  }
+}
+
+function handleCloseLoopSameWay() {
+  const ok = editor.closeLoopSameWay();
+  if (!ok) {
+    showToast(
+      "Requires at least 2 points and a gap from the start.",
+      "warning"
+    );
+  } else {
+    showToast("Return path added (same way).", "success");
+  }
+}
+
+function handleCloseLoopDifferentRoute() {
+  const ok = editor.closeLoopDifferentRoute({
+    onRoutingNotAvailable: () =>
+      showToast("Routing data not loaded yet — try again.", "warning"),
+  });
+  if (!ok) {
+    showToast(
+      "Could not find a return route. Try manually or use 'Same way back'.",
+      "warning"
+    );
+  } else {
+    showToast("Return path added via different route.", "success");
+  }
+}
+
+function handleExportFragment() {
+  const ok = editor.exportFragment();
+  if (!ok) {
+    showToast("Select a fragment with at least 2 points first.", "warning");
+  } else {
+    showToast("Fragment exported as GPX.", "success");
   }
 }
 

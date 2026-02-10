@@ -94,6 +94,29 @@
       <GeolocationButton @location-found="onLocationFound" />
     </div>
 
+    <!-- Create track button — top right -->
+    <button
+      class="create-track-btn"
+      title="Create new track"
+      aria-label="Create new track"
+      @click="router.push({ name: 'TrackCreate' })"
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+      <span class="create-track-label">Create Track</span>
+    </button>
+
     <!-- Auth button - positioned in bottom left -->
     <div class="auth-button-overlay">
       <LoginButton />
@@ -817,6 +840,58 @@ body,
 
 .map-controls-overlay > * {
   pointer-events: auto; /* Re-enable pointer events for buttons */
+}
+
+/* Create Track button - top right */
+.create-track-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.create-track-btn:hover {
+  background: #1565c0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  transform: translateY(-1px);
+}
+
+.create-track-btn:active {
+  background: #0d47a1;
+  transform: translateY(0);
+}
+
+.create-track-btn svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .create-track-btn {
+    top: 12px;
+    right: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .create-track-label {
+    display: none; /* Icon only on mobile */
+  }
 }
 
 /* Auth button overlay - positioned in bottom left */

@@ -256,6 +256,13 @@
         >
           Reverse
         </button>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="fragment-export-btn"
+          @click="$emit('exportFragment')"
+        >
+          Export GPX
+        </button>
       </div>
     </section>
 
@@ -465,8 +472,31 @@
           class="btn-secondary btn-sm"
           data-testid="loop-btn"
           @click="$emit('closeLoop')"
+          title="Connect last point to first (straight)"
         >
           Close loop
+        </button>
+      </div>
+      <div class="summary-row">
+        <span></span>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="loop-same-way-btn"
+          @click="$emit('closeLoopSameWay')"
+          title="Return the same way (duplicate in reverse)"
+        >
+          Same way back
+        </button>
+      </div>
+      <div class="summary-row">
+        <span></span>
+        <button
+          class="btn-secondary btn-sm"
+          data-testid="loop-different-route-btn"
+          @click="$emit('closeLoopDifferentRoute')"
+          title="Return via different route (auto-route)"
+        >
+          Different route
         </button>
       </div>
     </section>

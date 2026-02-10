@@ -199,6 +199,31 @@
                 </button>
                 <button
                   v-if="isOwner"
+                  class="edit-track-geometry-btn"
+                  @click="goToEditor"
+                  title="Edit track geometry"
+                  aria-label="Edit track geometry"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                    />
+                    <path
+                      d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                    />
+                  </svg>
+                </button>
+                <button
+                  v-if="isOwner"
                   class="delete-track-btn"
                   @click="confirmDelete"
                   title="Delete track permanently"
@@ -993,7 +1018,7 @@ import {
   onMounted,
   onUnmounted,
 } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import Multiselect from "@vueform/multiselect";
 import "@vueform/multiselect/themes/default.css";
 import ElevationChart from "./ElevationChart.vue";
@@ -1049,6 +1074,7 @@ const emit = defineEmits([
   "chart-point-click",
 ]);
 const route = useRoute();
+const router = useRouter();
 const isClosing = ref(false);
 const isCollapsed = ref(false);
 // Use global unit management
@@ -2157,6 +2183,10 @@ function startEditName() {
     }
   });
 }
+function goToEditor() {
+  if (!props.track?.id) return;
+  router.push({ name: "TrackEdit", params: { id: props.track.id } });
+}
 async function confirmDelete() {
   if (deletingTrack.value) return;
   if (!track.value?.id) return;
@@ -3149,6 +3179,27 @@ defineExpose({
 .delete-track-btn:hover {
   background: rgba(220, 38, 38, 0.1);
   color: #b91c1c;
+  transform: scale(1.05);
+}
+
+.edit-track-geometry-btn {
+  background: none;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+}
+
+.edit-track-geometry-btn:hover {
+  background: rgba(25, 118, 210, 0.1);
+  color: #1565c0;
   transform: scale(1.05);
 }
 
