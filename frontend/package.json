@@ -22,8 +22,9 @@
     "@vue-leaflet/vue-leaflet": "^0.10.1",
     "@vueform/multiselect": "^2.6.11",
     "@vueform/slider": "^2.1.10",
-    "@vueuse/core": "^14.2.0",
+    "@vueuse/core": "^14.2.1",
     "@vueuse/head": "^2.0.0",
+    "agent-browser": "^0.21.0",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -34,25 +35,28 @@
     "leaflet.markercluster": "^1.5.3",
     "lodash-es": "^4.17.23",
     "lucide-vue-next": "^0.563.0",
-    "vue": "^3.5.27",
+    "vue": "^3.5.30",
     "vue-chartjs": "^5.3.3",
-    "vue-router": "^5.0.2",
+    "vue-router": "^5.0.3",
     "vue-sonner": "^2.0.9",
     "vue3-slider": "^1.10.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.1",
-    "@types/node": "^25.2.0",
-    "@vitejs/plugin-vue": "^6.0.4",
-    "@vitest/coverage-v8": "^4.0.18",
-    "@vitest/ui": "^4.0.18",
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.5.0",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/ui": "^4.1.0",
     "@vue/test-utils": "^2.4.6",
     "form-data": "^4.0.5",
-    "jsdom": "^28.0.0",
-    "playwright": "^1.58.1",
+    "jsdom": "^28.1.0",
+    "playwright": "^1.58.2",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1",
-    "vitest": "^4.0.18",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0",
     "vitest-canvas-mock": "^1.1.3"
-  }
+  },
+  "trustedDependencies": [
+    "agent-browser"
+  ]
 }

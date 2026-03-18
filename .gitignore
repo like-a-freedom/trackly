@@ -2,6 +2,7 @@
 dev/
 .github/instructions/
 .github/prompts/
+.superpowers/
 # macOS
 .DS_Store
 data/
