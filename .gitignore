@@ -7,8 +7,10 @@ dev/
 data/
 docs/
 AGENTS.md
+.superpowers/
 skills/
 artifacts/
+frontend/wasm/fast_paths_wasm/target
 
 # Node.js
 node_modules/
