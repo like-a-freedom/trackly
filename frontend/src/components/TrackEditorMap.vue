@@ -1,5 +1,8 @@
 <template>
-  <div class="editor-map-wrapper">
+  <div
+    class="editor-map-wrapper"
+    data-testid="track-editor-map-wrapper"
+  >
     <l-map
       ref="mapRef"
       class="editor-map"
@@ -36,14 +39,16 @@
         :weight="2"
         :data-testid="'snap-preview-marker'"
       >
-        <l-tooltip :permanent="false">Snap</l-tooltip>
+        <l-tooltip :permanent="false">
+          Snap
+        </l-tooltip>
       </l-circle-marker>
 
       <!-- Highlighted segment (hover linkage) -->
       <l-polyline
         v-if="
           props.highlightedSegmentIndex !== null &&
-          segmentsWithColors[props.highlightedSegmentIndex]
+            segmentsWithColors[props.highlightedSegmentIndex]
         "
         :key="'highlight-seg'"
         :lat-lngs="segmentsWithColors[props.highlightedSegmentIndex].points"
@@ -164,7 +169,9 @@
         :weight="3"
         :pane="'markerPane'"
       >
-        <l-tooltip :permanent="false">Start</l-tooltip>
+        <l-tooltip :permanent="false">
+          Start
+        </l-tooltip>
       </l-circle-marker>
 
       <!-- End marker (red flag) -->
@@ -178,7 +185,9 @@
         :weight="3"
         :pane="'markerPane'"
       >
-        <l-tooltip :permanent="false">Finish</l-tooltip>
+        <l-tooltip :permanent="false">
+          Finish
+        </l-tooltip>
       </l-circle-marker>
 
       <!-- POI markers -->
@@ -265,8 +274,8 @@
       <l-polyline
         v-if="
           joinCursorOrigin &&
-          joinHoverSegIdx !== null &&
-          segmentsWithColors[joinHoverSegIdx]
+            joinHoverSegIdx !== null &&
+            segmentsWithColors[joinHoverSegIdx]
         "
         :lat-lngs="segmentsWithColors[joinHoverSegIdx].points"
         color="#4CAF50"
@@ -309,6 +318,8 @@
       class="context-menu"
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
       data-testid="context-menu"
+      role="menu"
+      aria-label="Map editing actions"
     >
       <button
         v-if="contextMenu.canSplit"
@@ -382,7 +393,10 @@
       >
         ⚡ Shortcut
       </button>
-      <button class="context-menu-item" @click="closeContextMenu">
+      <button
+        class="context-menu-item"
+        @click="closeContextMenu"
+      >
         ✕ Close
       </button>
     </div>
@@ -466,7 +480,7 @@ const mapCenter = ref([50.45, 30.52]); // Default to Kyiv
 const mapZoom = ref(14);
 const mapOptions = {
   ...OPTIMIZED_MAP_OPTIONS,
-  zoomControl: true,
+  zoomControl: false,
 };
 
 const snapPreview = ref(null);
@@ -1609,43 +1623,47 @@ defineExpose({ fitBounds, panTo, zoomIn, zoomOut });
 
 <style scoped>
 .editor-map-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
   position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  background: #dbeafe;
 }
 
 .editor-map {
-  flex: 1;
-  min-height: 400px;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
   z-index: 1;
 }
 
 .context-menu {
   position: fixed;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 16px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(14px);
   z-index: 2000;
   min-width: 180px;
-  padding: 4px 0;
+  padding: 6px;
 }
 
 .context-menu-item {
   display: block;
   width: 100%;
-  padding: 8px 14px;
+  padding: 10px 14px;
   border: none;
   background: transparent;
+  border-radius: 12px;
   text-align: left;
   font-size: 13px;
   cursor: pointer;
-  color: #333;
+  color: #1e293b;
 }
 
 .context-menu-item:hover {
-  background: #f0f0f0;
+  background: #eff6ff;
 }
 </style>

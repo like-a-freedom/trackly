@@ -50,7 +50,7 @@ const TrackEditorMapStub = defineComponent({
             panTo: mapPanTo,
             fitBounds: mapFitBounds,
         });
-        return () => h('div');
+        return () => h('div', { 'data-testid': 'track-editor-map-stub' });
     },
 });
 
@@ -60,100 +60,64 @@ const TrackEditorToolbarStub = defineComponent({
         'mode',
         'canUndo',
         'canRedo',
-        'canSave',
-        'saving',
-        'totalPoints',
-        'totalDistanceKm',
+        'poiMode',
         'routingMode',
         'snapToRoadMode',
         'routingProfile',
-        'graphLoading',
-        'graphError',
-        'graphProgress',
-        'estimatedTimeMinutes',
-        'manualRoutingPercent',
-        'poiMode',
-        'savedTrackId',
+        'showDistanceMarkers',
     ],
     emits: [
         'setMode',
         'undo',
         'redo',
-        'save',
+        'togglePoiMode',
         'toggleRouting',
         'setSnapToRoadMode',
         'setRoutingProfile',
-        'togglePoiMode',
-        'export',
+        'toggleDistanceMarkers',
     ],
     setup() {
-        return () => h('div');
+        return () => h('div', { 'data-testid': 'track-editor-toolbar-stub' });
     },
 });
 
-const TrackEditorSidebarStub = defineComponent({
-    name: 'TrackEditorSidebar',
+const TrackEditorLeftPanelStub = defineComponent({
+    name: 'TrackEditorLeftPanel',
+    emits: ['addSegment', 'chart-point-click', 'save', 'export'],
+    setup(_, { emit }) {
+        return () => h('div', { 'data-testid': 'track-editor-left-panel-stub' }, [
+            h('button', {
+                'data-testid': 'track-editor-left-panel-add-segment',
+                onClick: () => emit('addSegment'),
+            }),
+            h('button', {
+                'data-testid': 'track-editor-left-panel-chart-click',
+                onClick: () => emit('chart-point-click', {
+                    coordinateIndex: 1,
+                    isFixed: true,
+                    latlng: [11, 21],
+                }),
+            }),
+        ]);
+    },
+});
+
+const TrackEditorInspectorStub = defineComponent({
+    name: 'TrackEditorInspector',
     props: [
-        'trackName',
-        'trackDescription',
-        'trackCategories',
+        'editorMode',
+        'poiMode',
         'segmentStats',
         'activeSegmentIndex',
-        'totalDistanceKm',
-        'totalPoints',
-        'error',
-        'showDraftBanner',
-        'estimatedTimeMinutes',
         'pois',
-        'elevationProfile',
-        'elevationStats',
-        'elevationLoading',
-        'elevationError',
-        'coordinateData',
-        'collapsed',
-        'fragmentSelection',
-        'optimizerTargetRatio',
-        'optimizerPreview',
-        'optimizerStats',
-        'optimizerLoading',
-        'optimizerError',
+        'fragmentInfo',
     ],
     emits: [
-        'update:trackName',
-        'update:trackDescription',
-        'update:trackCategories',
-        'updateSegmentName',
-        'updateSegmentColor',
-        'update:optimizerTargetRatio',
-        'addSegment',
-        'deleteSegment',
-        'reverseSegment',
-        'setActiveSegment',
-        'restoreDraft',
-        'deleteDraft',
-        'joinSegments',
         'deletePoi',
         'updatePoi',
-        'toggleCollapse',
-        'clearFragment',
-        'deleteFragmentConnect',
-        'deleteFragmentSplit',
-        'reverseFragment',
-        'rerouteFragment',
-        'closeLoop',
-        'reverseTrack',
-        'duplicateTrack',
-        'newTrackFromSegment',
-        'previewOptimization',
-        'applyOptimization',
-        'clearOptimization',
-        'downloadOptimization',
-        'chart-point-hover',
-        'chart-point-leave',
-        'chart-point-click',
     ],
     setup() {
-        return () => h('div');
+        return () => h('div', { 'data-testid': 'track-editor-inspector-stub' });
     },
 });
 
@@ -287,8 +251,9 @@ describe('TrackEditorView keyboard shortcuts', () => {
             global: {
                 stubs: {
                     TrackEditorMap: TrackEditorMapStub,
+                    TrackEditorLeftPanel: TrackEditorLeftPanelStub,
                     TrackEditorToolbar: TrackEditorToolbarStub,
-                    TrackEditorSidebar: TrackEditorSidebarStub,
+                    TrackEditorInspector: TrackEditorInspectorStub,
                     Toast: ToastStub,
                 },
             },
@@ -299,6 +264,41 @@ describe('TrackEditorView keyboard shortcuts', () => {
         if (wrapper) {
             wrapper.unmount();
         }
+    });
+
+    it('renders the new editor shell zones around the map', () => {
+        const leftPanel = wrapper.find('[data-testid="editor-left-panel"]');
+        const toolbar = wrapper.find('[data-testid="editor-toolbar"]');
+        const mapRegion = wrapper.find('[data-testid="editor-map-region"]');
+        const inspector = wrapper.find('[data-testid="editor-right-inspector"]');
+
+        expect(leftPanel.exists()).toBe(true);
+        expect(toolbar.exists()).toBe(true);
+        expect(mapRegion.exists()).toBe(true);
+        expect(inspector.exists()).toBe(true);
+
+        expect(leftPanel.isVisible()).toBe(true);
+        expect(toolbar.isVisible()).toBe(true);
+        expect(mapRegion.isVisible()).toBe(true);
+        expect(inspector.isVisible()).toBe(true);
+
+        expect(leftPanel.find('[data-testid="track-editor-left-panel-stub"]').exists()).toBe(true);
+        expect(toolbar.find('[data-testid="track-editor-toolbar-stub"]').exists()).toBe(true);
+        expect(mapRegion.find('[data-testid="track-editor-map-stub"]').exists()).toBe(true);
+        expect(inspector.find('[data-testid="track-editor-inspector-stub"]').exists()).toBe(true);
+    });
+
+    it('mounts the editor as a full-screen map stage with a dedicated overlay layer', () => {
+        const mapStage = wrapper.find('[data-testid="editor-map-stage"]');
+        const overlayLayer = wrapper.find('[data-testid="editor-overlay-layer"]');
+
+        expect(mapStage.exists()).toBe(true);
+        expect(overlayLayer.exists()).toBe(true);
+        expect(mapStage.find('[data-testid="editor-map-region"]').exists()).toBe(true);
+
+        expect(overlayLayer.find('[data-testid="editor-left-panel"]').exists()).toBe(true);
+        expect(overlayLayer.find('[data-testid="editor-toolbar"]').exists()).toBe(true);
+        expect(overlayLayer.find('[data-testid="editor-right-inspector"]').exists()).toBe(true);
     });
 
     it('zooms map with + and - hotkeys', () => {
@@ -319,5 +319,58 @@ describe('TrackEditorView keyboard shortcuts', () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
         expect(mockEditor.setFragmentPoint).toHaveBeenCalledWith(0, 0);
+    });
+
+    it('preserves mode-switching shortcuts', () => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F1' }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F3' }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F4' }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }));
+
+        expect(mockEditor.setMode).toHaveBeenNthCalledWith(1, 'view');
+        expect(mockEditor.setMode).toHaveBeenNthCalledWith(2, 'edit');
+        expect(mockEditor.setMode).toHaveBeenNthCalledWith(3, 'fragment');
+        expect(mockEditor.setMode).toHaveBeenNthCalledWith(4, 'routing');
+        expect(mockEditor.setMode).toHaveBeenNthCalledWith(5, 'trace');
+    });
+
+    it('preserves undo redo and save shortcuts', async () => {
+        mockEditor.saveTrack.mockResolvedValue('saved-track-id');
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'S', ctrlKey: true, shiftKey: true }));
+
+        expect(mockEditor.handleUndo).toHaveBeenCalledTimes(1);
+        expect(mockEditor.handleRedo).toHaveBeenCalledTimes(1);
+
+        await Promise.resolve();
+        expect(mockEditor.saveTrack).toHaveBeenCalledTimes(1);
+        expect(mockRouter.push).toHaveBeenCalledWith({
+            name: 'Track',
+            params: { id: 'saved-track-id' },
+        });
+    });
+
+    it('preserves non-map action shortcuts', () => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
+
+        expect(mockEditor.addSegment).toHaveBeenCalledTimes(1);
+        expect(mockEditor.deleteLastPoint).toHaveBeenCalledTimes(1);
+    });
+
+    it('forwards bottom deck segment actions to editor logic', async () => {
+        await wrapper.find('[data-testid="track-editor-left-panel-add-segment"]').trigger('click');
+
+        expect(mockEditor.addSegment).toHaveBeenCalledTimes(1);
+    });
+
+    it('routes chart clicks from the bottom deck back to the map-facing shell', async () => {
+        await wrapper.find('[data-testid="track-editor-left-panel-chart-click"]').trigger('click');
+
+        expect(mockEditor.setFragmentPoint).toHaveBeenCalledWith(0, 1);
+        expect(mapPanTo).toHaveBeenCalledWith([11, 21]);
     });
 });

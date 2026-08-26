@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container" v-if="!loading">
+  <div v-if="!loading" class="app-container">
     <TrackMap
       v-if="track && polylines.length > 0 && trackBounds"
       key="track-detail-map"
@@ -7,13 +7,13 @@
       :zoom="zoom"
       :center="center"
       :bounds="trackBounds"
-      :markerLatLng="markerLatLng"
+      :marker-lat-lng="markerLatLng"
       :url="url"
       :attribution="attribution"
-      :autoPanOnChartHover="shouldAutoPan"
-      :activeTrackId="track.id"
-      :selectedTrackDetail="track"
-      @mapReady="onMapReady"
+      :auto-pan-on-chart-hover="shouldAutoPan"
+      :active-track-id="track.id"
+      :selected-track-detail="track"
+      @map-ready="onMapReady"
       @update:center="handleCenterUpdate"
       @update:zoom="handleZoomUpdate"
     >
@@ -21,8 +21,8 @@
       <PoiClusterGroup
         v-if="pois.length > 0 && mapIsReady"
         :pois="pois"
-        :disableClusteringAtZoom="15"
-        :maxClusterRadius="32"
+        :disable-clustering-at-zoom="15"
+        :max-cluster-radius="32"
         @poi-click="handlePoiClick"
       />
 
@@ -40,27 +40,29 @@
         :color="gap.color"
         :weight="4"
         :opacity="0.7"
-        :dashArray="'8 8'"
+        :dash-array="'8 8'"
       >
-        <LTooltip sticky>{{ gap.label }}</LTooltip>
+        <LTooltip sticky>
+          {{ gap.label }}
+        </LTooltip>
       </LPolyline>
       <TrackDistanceMarkers
         v-if="
           track?.latlngs && track.latlngs.length >= 2 && distanceMarkersEnabled
         "
         :latlngs="track.latlngs"
-        :trackId="track.id"
+        :track-id="track.id"
         :zoom="zoom"
-        :trackLengthKm="track.length_km || 0"
+        :track-length-km="track.length_km || 0"
         @marker-click="handleDistanceMarkerClick"
       />
       <TrackEndpoints
         v-if="track?.latlngs && track.latlngs.length >= 2"
-        :startPosition="track.latlngs[0]"
-        :endPosition="track.latlngs[track.latlngs.length - 1]"
-        :isLoop="isTrackLoop"
-        :startTime="track.recorded_at"
-        :endTime="endTime"
+        :start-position="track.latlngs[0]"
+        :end-position="track.latlngs[track.latlngs.length - 1]"
+        :is-loop="isTrackLoop"
+        :start-time="track.recorded_at"
+        :end-time="endTime"
         @marker-click="handleEndpointClick"
       />
       <LCircleMarker
@@ -69,8 +71,8 @@
         :lat-lng="gap.position"
         :radius="6"
         color="#1f2937"
-        fillColor="#ffffff"
-        :fillOpacity="1"
+        fill-color="#ffffff"
+        :fill-opacity="1"
         :weight="2"
       >
         <LTooltip :permanent="false">
@@ -84,8 +86,8 @@
         :lat-lng="boundary.position"
         :radius="5"
         :color="boundary.color"
-        fillColor="#ffffff"
-        :fillOpacity="1"
+        fill-color="#ffffff"
+        :fill-opacity="1"
         :weight="2"
       >
         <LTooltip :permanent="false">
@@ -101,9 +103,9 @@
       <TrackDetailPanel
         v-if="track"
         :track="track"
-        :isOwner="isOwner"
-        :sessionId="sessionId"
-        :coordinateData="coordinateData"
+        :is-owner="isOwner"
+        :session-id="sessionId"
+        :coordinate-data="coordinateData"
         @close="goHome"
         @description-updated="handleDescriptionUpdated"
         @name-updated="handleNameUpdated"
@@ -120,7 +122,7 @@
     <div v-if="!track && !loading" class="error-message">
       <h2>Track not found</h2>
       <p>The track you're looking for doesn't exist or has been removed.</p>
-      <button @click="goHome" class="btn-home">Go to Home</button>
+      <button class="btn-home" @click="goHome">Go to Home</button>
     </div>
   </div>
   <div v-else class="loading-container">
@@ -144,7 +146,7 @@ import {
 } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import TrackMap from "../components/TrackMap.vue";
-import Toast from "../components/Toast.vue";
+import Toast from "../components/ToastNotification.vue";
 import TrackDetailPanel from "../components/TrackDetailPanel.vue";
 import PoiClusterGroup from "../components/PoiClusterGroup.vue";
 import TrackEndpoints from "../components/TrackEndpoints.vue";

@@ -6,7 +6,7 @@ const TEST_SESSION = process.env.E2E_SESSION_ID || '11111111-1111-1111-1111-1111
 test('upload invalid GPX shows user error', async ({ page }) => {
     test.setTimeout(60_000);
     await page.context().addCookies([{ name: 'session_id', value: TEST_SESSION, domain: 'localhost', path: '/' }]);
-    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', (window as any).E2E_SESSION_ID || '11111111-1111-1111-1111-111111111111'); } catch (e) { } });
+    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', (window as any).E2E_SESSION_ID || '11111111-1111-1111-1111-111111111111'); } catch (e) { void 0; } });
 
     await page.goto(FRONTEND);
     await page.waitForLoadState('networkidle');

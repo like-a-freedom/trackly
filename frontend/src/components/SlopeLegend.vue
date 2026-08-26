@@ -1,6 +1,11 @@
 <template>
-  <div class="slope-legend" v-if="show">
-    <div class="legend-title">Slope Gradient</div>
+  <div
+    v-if="show"
+    class="slope-legend"
+  >
+    <div class="legend-title">
+      Slope Gradient
+    </div>
     <div class="legend-items">
       <div 
         v-for="range in slopeRanges" 
@@ -10,7 +15,7 @@
         <div 
           class="legend-color" 
           :style="{ backgroundColor: range.color }"
-        ></div>
+        />
         <span class="legend-label">{{ formatRange(range) }}</span>
       </div>
     </div>

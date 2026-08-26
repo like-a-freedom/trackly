@@ -29,7 +29,7 @@ test('upload cooldown: server enforces wait and allows upload after timeout', as
     test.setTimeout(90_000);
 
     await page.context().addCookies([{ name: 'session_id', value: TEST_SESSION, domain: 'localhost', path: '/' }]);
-    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', (window as any).E2E_SESSION_ID || '11111111-1111-1111-1111-111111111111'); } catch (e) { } });
+    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', (window as any).E2E_SESSION_ID || '11111111-1111-1111-1111-111111111111'); } catch (e) { void 0; } });
 
     // First upload — should succeed
     const name1 = `E2E Cooldown 1 ${Date.now()}`;

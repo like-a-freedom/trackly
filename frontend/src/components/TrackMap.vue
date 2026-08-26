@@ -12,7 +12,7 @@
     @zoomstart="onZoomStart"
     @zoomend="onZoomEnd"
   >
-    <l-tile-layer :url="url" :attribution="attribution"></l-tile-layer>
+    <l-tile-layer :url="url" :attribution="attribution" />
     <template
       v-if="mapIsReady && shouldRenderGeoJson && displayMode === 'tracks'"
     >
@@ -37,22 +37,24 @@
       v-if="!props.selectedTrackDetail"
       class="map-filter-control"
       :categories="allCategories"
-      :minLength="minTrackLength"
-      :maxLength="maxTrackLength"
-      :minElevationGain="minElevationGain"
-      :maxElevationGain="maxElevationGain"
-      :minSlope="minSlope"
-      :maxSlope="maxSlope"
-      :globalCategories="globalCategories"
-      :globalMinLength="globalMinTrackLength"
-      :globalMaxLength="globalMaxTrackLength"
-      :globalMinElevationGain="globalMinElevationGain"
-      :globalMaxElevationGain="globalMaxElevationGain"
-      :globalMinSlope="globalMinSlope"
-      :globalMaxSlope="globalMaxSlope"
-      :hasElevationData="hasElevationData"
-      :hasSlopeData="hasSlopeData"
-      :hasTracksInViewport="!!(props.polylines && props.polylines.length > 0)"
+      :min-length="minTrackLength"
+      :max-length="maxTrackLength"
+      :min-elevation-gain="minElevationGain"
+      :max-elevation-gain="maxElevationGain"
+      :min-slope="minSlope"
+      :max-slope="maxSlope"
+      :global-categories="globalCategories"
+      :global-min-length="globalMinTrackLength"
+      :global-max-length="globalMaxTrackLength"
+      :global-min-elevation-gain="globalMinElevationGain"
+      :global-max-elevation-gain="globalMaxElevationGain"
+      :global-min-slope="globalMinSlope"
+      :global-max-slope="globalMaxSlope"
+      :has-elevation-data="hasElevationData"
+      :has-slope-data="hasSlopeData"
+      :has-tracks-in-viewport="
+        !!(props.polylines && props.polylines.length > 0)
+      "
       @update:filter="onFilterChange"
     />
 
@@ -61,11 +63,11 @@
       v-if="markerLatLng && markerLatLng.latlng && !isPanningOrZooming"
       :lat-lng="markerLatLng.latlng"
       :radius="markerLatLng.isFixed ? 8 : 7"
-      :fillColor="
+      :fill-color="
         markerLatLng.isFixed ? getMarkerFillColor(markerLatLng) : 'white'
       "
       :color="getMarkerStrokeColor(markerLatLng)"
-      :fillOpacity="markerLatLng.isFixed ? 0.3 : 1"
+      :fill-opacity="markerLatLng.isFixed ? 0.3 : 1"
       :weight="markerLatLng.isFixed ? 3 : 2.5"
       :pane="'markerPane'"
       class="chart-hover-marker"
@@ -133,7 +135,7 @@
       </LTooltip>
     </LCircleMarker>
 
-    <slot></slot>
+    <slot />
   </l-map>
 </template>
 
@@ -233,7 +235,7 @@ const leafletMap = ref(null);
 // Provide leaflet map instance to child components in slot
 provide("leafletMap", leafletMap);
 
-const bounds = ref(null);
+const mapBounds = ref(null);
 const mapKey = ref(0);
 const layerKey = ref(0); // For forcing GeoJSON layer re-renders when filter changes
 const mapIsReady = ref(false);
@@ -1665,7 +1667,7 @@ function highlightSegmentForMarker(markerData) {
       try {
         let foundLayer = null;
         // Search for the GeoJSON layer by feature id
-        map.eachLayer &&
+        if (map.eachLayer) {
           map.eachLayer((layer) => {
             if (
               !foundLayer &&
@@ -1677,6 +1679,7 @@ function highlightSegmentForMarker(markerData) {
               foundLayer = layer;
             }
           });
+        }
 
         if (foundLayer && typeof foundLayer.setStyle === "function") {
           // Save original style so it can be restored later
@@ -2186,9 +2189,9 @@ async function handleTrackSelected(newDetail) {
         );
       }
 
-      bounds.value = null;
+      mapBounds.value = null;
       await nextTick();
-      bounds.value = latLngBounds(selectedPolyline.latlngs);
+      mapBounds.value = latLngBounds(selectedPolyline.latlngs);
     }
   } catch (error) {
     console.error("[TrackMap] Error in handleTrackSelected:", error, {
@@ -2208,7 +2211,7 @@ async function handleTrackDeselected() {
     // Clean up any hover polylines before flying back
     removeMarkerPolyline(map);
 
-    bounds.value = null;
+    mapBounds.value = null;
 
     let center = mapState.value.preSelection.center;
     let zoom = mapState.value.preSelection.zoom;

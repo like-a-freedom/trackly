@@ -1,142 +1,167 @@
 <template>
   <div class="track-editor-view">
-    <!-- Toolbar -->
-    <TrackEditorToolbar
-      :mode="editor.editorMode.value"
-      :canUndo="editor.canUndo.value"
-      :canRedo="editor.canRedo.value"
-      :canSave="editor.canSave.value"
-      :saving="editor.saving.value"
-      :totalPoints="editor.totalPoints.value"
-      :totalDistanceKm="editor.totalDistanceKm.value"
-      :routingMode="editor.routing.mode.value"
-      :snapToRoadMode="editor.snapToRoadMode.value"
-      :routingProfile="editor.routing.profile.value"
-      :graphLoading="editor.routing.graphLoading.value"
-      :graphError="editor.routing.graphError.value"
-      :graphProgress="editor.routing.graphProgress.value"
-      :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
-      :manualRoutingPercent="editor.manualRoutingPercent.value"
-      :poiMode="poiMode"
-      :showDistanceMarkers="showDistanceMarkers"
-      :savedTrackId="editor.savedTrackId.value"
-      @setMode="editor.setMode"
-      @undo="editor.handleUndo"
-      @redo="editor.handleRedo"
-      @save="handleSave"
-      @toggleRouting="editor.routing.toggleMode"
-      @setSnapToRoadMode="editor.setSnapToRoadMode"
-      @setRoutingProfile="editor.routing.setProfile"
-      @togglePoiMode="poiMode = !poiMode"
-      @toggleDistanceMarkers="showDistanceMarkers = !showDistanceMarkers"
-      @export="handleExport"
-    />
+    <div class="editor-shell">
+      <section class="editor-map-stage" data-testid="editor-map-stage">
+        <section class="editor-map-region" data-testid="editor-map-region">
+          <TrackEditorMap
+            ref="editorMap"
+            :segments="editor.segments.value"
+            :active-segment-index="editor.activeSegmentIndex.value"
+            :editor-mode="editor.editorMode.value"
+            :total-points="editor.totalPoints.value"
+            :pois="editor.pois.value"
+            :poi-mode="poiMode"
+            :routing-mode="editor.routing.mode.value"
+            :snap-to-road-mode="editor.snapToRoadMode.value"
+            :snap-to-point="editor.routing.snapToPoint"
+            :fragment-selection="editor.fragmentSelection.value"
+            :optimizer-preview-segments="
+              editor.optimizerPreview.value?.segments || []
+            "
+            :hover-marker="chartHoverMarker"
+            :focus-marker="keyboardFocusMarker"
+            :highlighted-segment-index="highlightedSegmentIndex"
+            :show-distance-markers="showDistanceMarkers"
+            :estimated-time-minutes="editor.estimatedTimeMinutes.value"
+            @add-waypoint="handleAddWaypoint"
+            @move-waypoint="handleMoveWaypoint"
+            @delete-waypoint="handleDeleteWaypoint"
+            @insert-waypoint="handleInsertWaypoint"
+            @cut-segment="handleCutSegment"
+            @select-fragment-point="handleSelectFragmentPoint"
+            @split-segment="editor.splitSegment"
+            @set-active-segment="editor.setActiveSegment"
+            @promote-to-waypoint="editor.promoteToWaypoint"
+            @add-poi="handleAddPoi"
+            @delete-poi="handleDeletePoi"
+            @new-track-from-segment="handleNewTrackFromSegment"
+            @focus-waypoint="handleFocusWaypoint"
+            @hover-segment="(i) => (highlightedSegmentIndex = i)"
+            @leave-segment="() => (highlightedSegmentIndex = null)"
+            @reverse-segment="handleReverseSegmentMap"
+            @join-segments-visual="handleJoinSegmentsVisual"
+            @shortcut-between-points="handleShortcutBetweenPoints"
+          />
+        </section>
 
-    <!-- Main content: map + sidebar -->
-    <div class="editor-body">
-      <TrackEditorMap
-        ref="editorMap"
-        :segments="editor.segments.value"
-        :activeSegmentIndex="editor.activeSegmentIndex.value"
-        :editorMode="editor.editorMode.value"
-        :totalPoints="editor.totalPoints.value"
-        :pois="editor.pois.value"
-        :poiMode="poiMode"
-        :routingMode="editor.routing.mode.value"
-        :snapToRoadMode="editor.snapToRoadMode.value"
-        :snapToPoint="editor.routing.snapToPoint"
-        :fragmentSelection="editor.fragmentSelection.value"
-        :optimizerPreviewSegments="
-          editor.optimizerPreview.value?.segments || []
-        "
-        :hoverMarker="chartHoverMarker"
-        :focusMarker="keyboardFocusMarker"
-        :highlightedSegmentIndex="highlightedSegmentIndex"
-        :showDistanceMarkers="showDistanceMarkers"
-        :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
-        @addWaypoint="handleAddWaypoint"
-        @moveWaypoint="handleMoveWaypoint"
-        @deleteWaypoint="handleDeleteWaypoint"
-        @insertWaypoint="handleInsertWaypoint"
-        @cutSegment="handleCutSegment"
-        @selectFragmentPoint="handleSelectFragmentPoint"
-        @splitSegment="editor.splitSegment"
-        @setActiveSegment="editor.setActiveSegment"
-        @promoteToWaypoint="editor.promoteToWaypoint"
-        @addPoi="handleAddPoi"
-        @deletePoi="handleDeletePoi"
-        @newTrackFromSegment="handleNewTrackFromSegment"
-        @focusWaypoint="handleFocusWaypoint"
-        @hoverSegment="(i) => (highlightedSegmentIndex = i)"
-        @leaveSegment="() => (highlightedSegmentIndex = null)"
-        @reverseSegment="handleReverseSegmentMap"
-        @joinSegmentsVisual="handleJoinSegmentsVisual"
-        @shortcutBetweenPoints="handleShortcutBetweenPoints"
-      />
+        <div class="editor-overlay-layer" data-testid="editor-overlay-layer">
+          <!-- Left panel: track identity, alerts, tabbed content -->
+          <aside class="editor-left-panel" data-testid="editor-left-panel">
+            <TrackEditorLeftPanel
+              :track-name="editor.trackName.value"
+              :track-description="editor.trackDescription.value"
+              :track-categories="editor.trackCategories.value"
+              :total-points="editor.totalPoints.value"
+              :total-distance-km="editor.totalDistanceKm.value"
+              :estimated-time-minutes="editor.estimatedTimeMinutes.value"
+              :manual-routing-percent="editor.manualRoutingPercent.value"
+              :can-save="editor.canSave.value"
+              :saving="editor.saving.value"
+              :saved-track-id="editor.savedTrackId.value"
+              :routing-mode="editor.routing.mode.value"
+              :graph-loading="editor.routing.graphLoading.value"
+              :graph-error="editor.routing.graphError.value"
+              :graph-progress="editor.routing.graphProgress.value"
+              :show-draft-banner="showDraftBanner"
+              :error="editor.error.value"
+              :segment-stats="editor.segmentStats.value"
+              :active-segment-index="editor.activeSegmentIndex.value"
+              :highlighted-segment-index="highlightedSegmentIndex"
+              :pois="editor.pois.value"
+              :elevation-profile="editor.elevationProfile.value"
+              :elevation-stats="editor.elevationStats.value"
+              :elevation-loading="editor.elevationLoading.value"
+              :elevation-error="editor.elevationError.value"
+              :coordinate-data="editor.coordinateData.value"
+              :fragment-info="fragmentInfo"
+              :optimizer-target-ratio="editor.optimizerTargetRatio.value"
+              :optimizer-preview="editor.optimizerPreview.value"
+              :optimizer-stats="editor.optimizerStats.value"
+              :optimizer-loading="editor.optimizerLoading.value"
+              :optimizer-error="editor.optimizerError.value"
+              @save="handleSave"
+              @export="handleExport"
+              @restore-draft="handleRestoreDraft"
+              @delete-draft="handleDeleteDraft"
+              @update:track-name="editor.trackName.value = $event"
+              @update:track-description="editor.trackDescription.value = $event"
+              @update:track-categories="editor.trackCategories.value = $event"
+              @update-segment-name="editor.setSegmentName"
+              @update-segment-color="editor.setSegmentColor"
+              @update:optimizer-target-ratio="editor.setOptimizerTargetRatio"
+              @add-segment="editor.addSegment"
+              @delete-segment="editor.deleteSegment"
+              @reverse-segment="editor.reverseSegment"
+              @set-active-segment="editor.setActiveSegment"
+              @join-segments="handleJoinSegments"
+              @new-track-from-segment="handleNewTrackFromSegment"
+              @clear-fragment="editor.clearFragmentSelection"
+              @delete-fragment-connect="handleDeleteFragmentConnect"
+              @delete-fragment-split="handleDeleteFragmentSplit"
+              @reverse-fragment="handleReverseFragment"
+              @reroute-fragment="handleRerouteFragment"
+              @close-loop="handleCloseLoop"
+              @close-loop-same-way="handleCloseLoopSameWay"
+              @close-loop-different-route="handleCloseLoopDifferentRoute"
+              @export-fragment="handleExportFragment"
+              @reverse-track="handleReverseTrack"
+              @duplicate-track="handleDuplicateTrack"
+              @preview-optimization="editor.previewOptimization"
+              @apply-optimization="handleApplyOptimization"
+              @clear-optimization="editor.clearOptimizationPreview"
+              @download-optimization="editor.downloadOptimizationPreview"
+              @chart-point-hover="handleElevationPointHover"
+              @chart-point-leave="handleElevationPointLeave"
+              @chart-point-click="handleElevationPointClick"
+              @hover-segment="(i) => (highlightedSegmentIndex = i)"
+              @leave-segment="() => (highlightedSegmentIndex = null)"
+            />
+          </aside>
 
-      <TrackEditorSidebar
-        :trackName="editor.trackName.value"
-        :trackDescription="editor.trackDescription.value"
-        :trackCategories="editor.trackCategories.value"
-        :segmentStats="editor.segmentStats.value"
-        :activeSegmentIndex="editor.activeSegmentIndex.value"
-        :totalDistanceKm="editor.totalDistanceKm.value"
-        :totalPoints="editor.totalPoints.value"
-        :error="editor.error.value"
-        :showDraftBanner="showDraftBanner"
-        :estimatedTimeMinutes="editor.estimatedTimeMinutes.value"
-        :pois="editor.pois.value"
-        :elevationProfile="editor.elevationProfile.value"
-        :elevationStats="editor.elevationStats.value"
-        :elevationLoading="editor.elevationLoading.value"
-        :elevationError="editor.elevationError.value"
-        :coordinateData="editor.coordinateData.value"
-        :collapsed="sidebarCollapsed"
-        :highlightedSegmentIndex="highlightedSegmentIndex"
-        :fragmentSelection="editor.fragmentSelection.value"
-        :optimizerTargetRatio="editor.optimizerTargetRatio.value"
-        :optimizerPreview="editor.optimizerPreview.value"
-        :optimizerStats="editor.optimizerStats.value"
-        :optimizerLoading="editor.optimizerLoading.value"
-        :optimizerError="editor.optimizerError.value"
-        @update:trackName="editor.trackName.value = $event"
-        @update:trackDescription="editor.trackDescription.value = $event"
-        @update:trackCategories="editor.trackCategories.value = $event"
-        @updateSegmentName="editor.setSegmentName"
-        @updateSegmentColor="editor.setSegmentColor"
-        @update:optimizerTargetRatio="editor.setOptimizerTargetRatio"
-        @addSegment="editor.addSegment"
-        @deleteSegment="editor.deleteSegment"
-        @reverseSegment="editor.reverseSegment"
-        @setActiveSegment="editor.setActiveSegment"
-        @restoreDraft="handleRestoreDraft"
-        @deleteDraft="handleDeleteDraft"
-        @joinSegments="handleJoinSegments"
-        @deletePoi="handleDeletePoi"
-        @updatePoi="handleUpdatePoi"
-        @toggleCollapse="sidebarCollapsed = !sidebarCollapsed"
-        @clearFragment="editor.clearFragmentSelection"
-        @deleteFragmentConnect="handleDeleteFragmentConnect"
-        @deleteFragmentSplit="handleDeleteFragmentSplit"
-        @reverseFragment="handleReverseFragment"
-        @rerouteFragment="handleRerouteFragment"
-        @closeLoop="handleCloseLoop"
-        @closeLoopSameWay="handleCloseLoopSameWay"
-        @closeLoopDifferentRoute="handleCloseLoopDifferentRoute"
-        @exportFragment="handleExportFragment"
-        @reverseTrack="handleReverseTrack"
-        @duplicateTrack="handleDuplicateTrack"
-        @newTrackFromSegment="handleNewTrackFromSegment"
-        @previewOptimization="editor.previewOptimization"
-        @applyOptimization="handleApplyOptimization"
-        @clearOptimization="editor.clearOptimizationPreview"
-        @downloadOptimization="editor.downloadOptimizationPreview"
-        @chart-point-hover="handleElevationPointHover"
-        @chart-point-leave="handleElevationPointLeave"
-        @chart-point-click="handleElevationPointClick"
-        @hoverSegment="(i) => (highlightedSegmentIndex = i)"
-        @leaveSegment="() => (highlightedSegmentIndex = null)"
-      />
+          <!-- Center toolbar: mode switching + routing controls -->
+          <div class="editor-toolbar" data-testid="editor-toolbar">
+            <TrackEditorToolbar
+              :mode="editor.editorMode.value"
+              :can-undo="editor.canUndo.value"
+              :can-redo="editor.canRedo.value"
+              :poi-mode="poiMode"
+              :routing-mode="editor.routing.mode.value"
+              :snap-to-road-mode="editor.snapToRoadMode.value"
+              :routing-profile="editor.routing.profile.value"
+              :show-distance-markers="showDistanceMarkers"
+              @set-mode="editor.setMode"
+              @undo="editor.handleUndo"
+              @redo="editor.handleRedo"
+              @toggle-poi-mode="poiMode = !poiMode"
+              @toggle-routing="editor.routing.toggleMode"
+              @set-snap-to-road-mode="editor.setSnapToRoadMode"
+              @set-routing-profile="editor.routing.setProfile"
+              @toggle-distance-markers="
+                showDistanceMarkers = !showDistanceMarkers
+              "
+              @reload-graph="handleReloadGraph"
+              @switch-to-manual="handleSwitchToManual"
+            />
+          </div>
+
+          <aside
+            class="editor-right-inspector"
+            data-testid="editor-right-inspector"
+          >
+            <TrackEditorInspector
+              :editor-mode="editor.editorMode.value"
+              :total-points="editor.totalPoints.value"
+              :poi-mode="poiMode"
+              :segment-stats="editor.segmentStats.value"
+              :active-segment-index="editor.activeSegmentIndex.value"
+              :pois="editor.pois.value"
+              :fragment-info="fragmentInfo"
+              @delete-poi="handleDeletePoi"
+              @update-poi="handleUpdatePoi"
+            />
+          </aside>
+        </div>
+      </section>
     </div>
 
     <!-- Toast notifications -->
@@ -153,10 +178,11 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useTrackEditor } from "../composables/useTrackEditor";
 import { useToast } from "../composables/useToast";
-import TrackEditorToolbar from "../components/TrackEditorToolbar.vue";
 import TrackEditorMap from "../components/TrackEditorMap.vue";
-import TrackEditorSidebar from "../components/TrackEditorSidebar.vue";
-import Toast from "../components/Toast.vue";
+import TrackEditorLeftPanel from "../components/editor/TrackEditorLeftPanel.vue";
+import TrackEditorToolbar from "../components/editor/TrackEditorToolbar.vue";
+import TrackEditorInspector from "../components/editor/TrackEditorInspector.vue";
+import Toast from "../components/ToastNotification.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -169,13 +195,40 @@ const editor = useTrackEditor({ trackId: trackId.value });
 const editorMap = ref(null);
 const showDraftBanner = ref(false);
 const poiMode = ref(false);
-const sidebarCollapsed = ref(false);
 const chartHoverMarker = ref(null);
 const isChartPointFixed = ref(false);
 const selectedPointIndex = ref(null);
 const keyboardFocusMarker = ref(null);
 const highlightedSegmentIndex = ref(null);
 const showDistanceMarkers = ref(false);
+
+const fragmentInfo = computed(() => {
+  const selection = editor.fragmentSelection.value || {};
+  if (
+    selection.segIndex === null ||
+    selection.segIndex === undefined ||
+    selection.startIdx === null ||
+    selection.startIdx === undefined
+  ) {
+    return null;
+  }
+
+  const hasEnd = selection.endIdx !== null && selection.endIdx !== undefined;
+  const low = hasEnd
+    ? Math.min(selection.startIdx, selection.endIdx)
+    : selection.startIdx;
+  const high = hasEnd
+    ? Math.max(selection.startIdx, selection.endIdx)
+    : selection.startIdx;
+
+  return {
+    segIndex: selection.segIndex,
+    startIdx: low,
+    endIdx: hasEnd ? high : null,
+    complete: hasEnd,
+    points: hasEnd ? high - low + 1 : 1,
+  };
+});
 
 // ── Handlers ──────────────────────────────────────────
 function handleAddWaypoint(lat, lng) {
@@ -231,6 +284,14 @@ function handleCutSegment(segIndex, afterIndex, lat, lng) {
   } else {
     showToast("Segment cut created.", "success");
   }
+}
+
+function handleReloadGraph() {
+  editor.routing.ensureGraphLoaded();
+}
+
+function handleSwitchToManual() {
+  editor.routing.setMode("manual");
 }
 
 async function handleSave() {
@@ -780,23 +841,138 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .track-editor-view {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  height: 100dvh;
   height: 100vh;
   width: 100%;
   overflow: hidden;
 }
 
-.editor-body {
-  display: flex;
-  flex: 1;
+.editor-shell {
+  position: relative;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
-/* Responsive: sidebar below map on small screens */
+.editor-map-stage {
+  --overlay-pad: 12px;
+  --overlay-gap: 12px;
+  --panel-width: 288px;
+  --inspector-width: 280px;
+  --content-left: calc(
+    var(--overlay-pad) + var(--panel-width) + var(--overlay-gap)
+  );
+  --content-right: calc(
+    var(--overlay-pad) + var(--inspector-width) + var(--overlay-gap)
+  );
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.editor-map-region {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.editor-left-panel,
+.editor-toolbar,
+.editor-right-inspector {
+  position: absolute;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+/* Left panel: full-height sidebar */
+.editor-left-panel {
+  top: var(--overlay-pad);
+  left: var(--overlay-pad);
+  width: var(--panel-width);
+  height: calc(100% - var(--overlay-pad) * 2);
+  z-index: 3;
+}
+
+/* Toolbar: centered pill above the map content area */
+.editor-toolbar {
+  top: var(--overlay-pad);
+  left: var(--content-left);
+  right: var(--content-right);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.editor-toolbar > * {
+  pointer-events: auto;
+}
+
+/* Right inspector: full-height column */
+.editor-right-inspector {
+  top: var(--overlay-pad);
+  right: var(--overlay-pad);
+  width: var(--inspector-width);
+  max-height: calc(100% - var(--overlay-pad) * 2);
+  overflow: auto;
+  z-index: 3;
+}
+
+@media (max-width: 1180px) {
+  .editor-map-stage {
+    --panel-width: 264px;
+    --inspector-width: 248px;
+  }
+}
+
+@media (max-width: 980px) {
+  .editor-map-stage {
+    --panel-width: 240px;
+    --inspector-width: 220px;
+  }
+}
+
 @media (max-width: 768px) {
-  .editor-body {
-    flex-direction: column;
+  .editor-map-stage {
+    --overlay-pad: 8px;
+    --overlay-gap: 8px;
+    --panel-width: 0px;
+    --inspector-width: 0px;
+    --content-left: var(--overlay-pad);
+    --content-right: var(--overlay-pad);
+  }
+
+  /* Panel becomes a bottom sheet on mobile */
+  .editor-left-panel {
+    top: auto;
+    left: var(--overlay-pad);
+    right: var(--overlay-pad);
+    bottom: var(--overlay-pad);
+    width: auto;
+    height: 240px;
+    z-index: 4;
+  }
+
+  /* Toolbar full-width on mobile */
+  .editor-toolbar {
+    left: var(--overlay-pad);
+    right: var(--overlay-pad);
+    justify-content: flex-start;
+  }
+
+  /* Inspector hidden on mobile to preserve map space */
+  .editor-right-inspector {
+    display: none;
   }
 }
 </style>

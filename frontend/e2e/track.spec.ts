@@ -1,9 +1,9 @@
 // Include local E2E test types for test-only window helpers
-/// <reference path="../src/types/e2e.d.ts" />
+import "../src/types/e2e.d.ts"
 
-// @ts-ignore: Playwright test types may not be resolvable in the static analysis environment
+// @ts-expect-error: Playwright test types may not be resolvable in the static analysis environment
 import { test, expect } from '@playwright/test';
-// @ts-ignore: Import types for Page/Locator (silence static analysis in development environment)
+// @ts-expect-error: Import types for Page/Locator (silence static analysis in development environment)
 import type { Page, Locator } from '@playwright/test';
 import { setupTestTracks, cleanupTestTracks } from './setup-real-tracks';
 

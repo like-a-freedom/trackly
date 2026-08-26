@@ -1,6 +1,6 @@
-/// <reference path="../src/types/e2e.d.ts" />
+import "../src/types/e2e.d.ts"
 
-// @ts-ignore: Playwright test types may not be resolvable in the static analysis environment
+// @ts-expect-error: Playwright test types may not be resolvable in the static analysis environment
 import { test, expect } from '@playwright/test';
 
 test.describe('Map Controls Icon Visibility', () => {

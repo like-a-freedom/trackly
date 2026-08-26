@@ -1,7 +1,11 @@
 <template>
   <!-- This component renders POI markers inside a MarkerClusterGroup for client-side clustering -->
   <!-- Present a minimal, hidden root element because Leaflet manages DOM layers externally. -->
-  <div class="poi-cluster-root" aria-hidden="true" style="display:none"></div>
+  <div
+    class="poi-cluster-root"
+    aria-hidden="true"
+    style="display:none"
+  />
 </template>
 
 <script setup>

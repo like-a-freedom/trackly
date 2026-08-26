@@ -125,11 +125,13 @@ describe('useMemoization', () => {
             // Add 5 items to cache with max size 3
             for (let i = 0; i < 5; i++) {
                 const dep = ref(i);
-                useMemoizedComputed(
+                const memoizedValue = useMemoizedComputed(
                     computeFn,
                     [() => dep.value],
                     { cache }
                 ).value;
+
+                expect(memoizedValue).toBe(i);
             }
 
             expect(cache.cache.size).toBeLessThanOrEqual(3);

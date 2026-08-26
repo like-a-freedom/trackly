@@ -10,502 +10,99 @@
         {{ collapsed ? "▲" : "▼" }}
       </button>
     </div>
-    <!-- Draft recovery banner -->
-    <div v-if="showDraftBanner" class="draft-banner" data-testid="draft-banner">
-      <p>An unsaved draft was found. Restore it?</p>
-      <div class="draft-actions">
-        <button class="btn-primary btn-sm" @click="$emit('restoreDraft')">
-          Restore
-        </button>
-        <button class="btn-secondary btn-sm" @click="$emit('deleteDraft')">
-          Delete
-        </button>
-      </div>
-    </div>
+    <TrackEditorInspectorOverview
+      :show-draft-banner="showDraftBanner"
+      :error="error"
+      :total-points="totalPoints"
+      :track-name="trackName"
+      :track-description="trackDescription"
+      :track-categories="trackCategories"
+      @restore-draft="$emit('restoreDraft')"
+      @delete-draft="$emit('deleteDraft')"
+      @update:track-name="$emit('update:trackName', $event)"
+      @update:track-description="$emit('update:trackDescription', $event)"
+      @update:track-categories="$emit('update:trackCategories', $event)"
+    />
 
-    <!-- Error display -->
-    <div v-if="error" class="error-banner" data-testid="error-banner">
-      <p>{{ error }}</p>
-    </div>
+    <TrackEditorInspectorSegments
+      :segment-stats="segmentStats"
+      :active-segment-index="activeSegmentIndex"
+      :highlighted-segment-index="highlightedSegmentIndex"
+      @add-segment="$emit('addSegment')"
+      @set-active-segment="$emit('setActiveSegment', $event)"
+      @hover-segment="$emit('hoverSegment', $event)"
+      @leave-segment="$emit('leaveSegment')"
+      @update-segment-name="$emit('updateSegmentName', ...$event)"
+      @update-segment-color="$emit('updateSegmentColor', ...$event)"
+      @join-segments="$emit('joinSegments', ...$event)"
+      @new-track-from-segment="$emit('newTrackFromSegment', $event)"
+      @reverse-segment="$emit('reverseSegment', $event)"
+      @delete-segment="$emit('deleteSegment', $event)"
+    />
 
-    <div v-if="totalPoints < 2" class="info-banner" data-testid="editor-tips">
-      <p>
-        Click on the map to add points. Use F1–F4 to switch modes and Ctrl+Z/Y
-        for undo/redo.
-      </p>
-    </div>
+    <TrackEditorInspectorTrackActions
+      @duplicate-track="$emit('duplicateTrack')"
+      @reverse-track="$emit('reverseTrack')"
+    />
 
-    <!-- Metadata form -->
-    <section class="sidebar-section">
-      <h3 class="section-title">Track metadata</h3>
-      <div class="form-group">
-        <label for="track-name" class="form-label">
-          Name <span class="required">*</span>
-        </label>
-        <input
-          id="track-name"
-          type="text"
-          class="form-input"
-          :value="trackName"
-          maxlength="255"
-          placeholder="Enter track name"
-          data-testid="track-name-input"
-          @input="$emit('update:trackName', $event.target.value)"
-        />
-        <span class="char-count">{{ trackName.length }} / 255</span>
-      </div>
+    <TrackEditorInspectorFragmentTools
+      :fragment-info="fragmentInfo"
+      @clear-fragment="$emit('clearFragment')"
+      @reroute-fragment="$emit('rerouteFragment')"
+      @delete-fragment-connect="$emit('deleteFragmentConnect')"
+      @delete-fragment-split="$emit('deleteFragmentSplit')"
+      @reverse-fragment="$emit('reverseFragment')"
+      @export-fragment="$emit('exportFragment')"
+    />
 
-      <div class="form-group">
-        <label for="track-desc" class="form-label">Description</label>
-        <textarea
-          id="track-desc"
-          class="form-input form-textarea"
-          :value="trackDescription"
-          maxlength="5000"
-          rows="3"
-          placeholder="Route description (optional)"
-          data-testid="track-desc-input"
-          @input="$emit('update:trackDescription', $event.target.value)"
-        />
-        <span class="char-count">{{ trackDescription.length }} / 5000</span>
-      </div>
+    <TrackEditorInspectorPois
+      :pois="pois"
+      @delete-poi="$emit('deletePoi', $event)"
+      @update-poi="$emit('updatePoi', ...$event)"
+    />
 
-      <div class="form-group">
-        <label class="form-label">Categories</label>
-        <div class="category-chips">
-          <label
-            v-for="cat in availableCategories"
-            :key="cat.id"
-            class="category-chip"
-            :class="{ selected: trackCategories.includes(cat.id) }"
-            :data-testid="`category-chip-${cat.id}`"
-          >
-            <input
-              type="checkbox"
-              :value="cat.id"
-              :checked="trackCategories.includes(cat.id)"
-              @change="handleCategoryToggle(cat.id)"
-            />
-            <span>{{ cat.icon }} {{ cat.label }}</span>
-          </label>
-        </div>
-      </div>
-    </section>
+    <TrackEditorInspectorElevation
+      :elevation-profile="elevationProfile"
+      :elevation-stats="elevationStats"
+      :total-distance-km="totalDistanceKm"
+      :coordinate-data="coordinateData"
+      :elevation-loading="elevationLoading"
+      :elevation-error="elevationError"
+      @chart-point-hover="$emit('chart-point-hover', $event)"
+      @chart-point-leave="$emit('chart-point-leave', $event)"
+      @chart-point-click="$emit('chart-point-click', $event)"
+    />
 
-    <!-- Segments list -->
-    <section class="sidebar-section">
-      <div class="section-header">
-        <h3 class="section-title">Segments</h3>
-        <button
-          class="btn-icon"
-          title="New segment (Ctrl+S)"
-          data-testid="add-segment-btn"
-          @click="$emit('addSegment')"
-        >
-          ＋
-        </button>
-      </div>
-      <ul class="segment-list">
-        <li
-          v-for="(stat, i) in segmentStats"
-          :key="i"
-          class="segment-item"
-          :class="{
-            active: i === activeSegmentIndex,
-            highlighted: i === highlightedSegmentIndex,
-          }"
-          data-testid="segment-item"
-          @click="$emit('setActiveSegment', i)"
-          @mouseenter="$emit('hoverSegment', i)"
-          @mouseleave="$emit('leaveSegment')"
-        >
-          <span class="segment-color" :style="{ background: stat.color }" />
-          <span class="segment-info">
-            {{ stat.displayName }}
-            <small
-              >{{ stat.pointCount }} points ·
-              {{ formatDistance(stat.distanceKm) }}</small
-            >
-            <div class="segment-meta">
-              <input
-                class="form-input segment-name-input"
-                type="text"
-                :value="stat.name"
-                :placeholder="`Day ${i + 1}`"
-                maxlength="80"
-                @click.stop
-                @input="$emit('updateSegmentName', i, $event.target.value)"
-              />
-              <input
-                class="segment-color-input"
-                type="color"
-                :value="stat.color"
-                @click.stop
-                @input="$emit('updateSegmentColor', i, $event.target.value)"
-              />
-            </div>
-          </span>
-          <div class="segment-actions">
-            <button
-              v-if="i < segmentStats.length - 1"
-              class="btn-icon-sm"
-              title="Merge with next (Ctrl+J)"
-              data-testid="join-segment-btn"
-              @click.stop="$emit('joinSegments', i, i + 1)"
-            >
-              ⇋
-            </button>
-            <button
-              class="btn-icon-sm"
-              title="New track from segment"
-              data-testid="new-track-from-segment-btn"
-              @click.stop="$emit('newTrackFromSegment', i)"
-            >
-              🧭
-            </button>
-            <button
-              class="btn-icon-sm"
-              title="Reverse"
-              @click.stop="$emit('reverseSegment', i)"
-            >
-              ↔
-            </button>
-            <button
-              class="btn-icon-sm danger"
-              title="Delete segment"
-              @click.stop="$emit('deleteSegment', i)"
-            >
-              ✕
-            </button>
-          </div>
-        </li>
-      </ul>
-    </section>
+    <TrackEditorInspectorOptimizer
+      :optimizer-target-ratio="optimizerTargetRatio"
+      :optimizer-preview="optimizerPreview"
+      :optimizer-stats="optimizerStats"
+      :optimizer-loading="optimizerLoading"
+      :optimizer-error="optimizerError"
+      :total-points="totalPoints"
+      @update:optimizer-target-ratio="
+        $emit('update:optimizerTargetRatio', $event)
+      "
+      @preview-optimization="$emit('previewOptimization')"
+      @apply-optimization="$emit('applyOptimization')"
+      @clear-optimization="$emit('clearOptimization')"
+      @download-optimization="$emit('downloadOptimization')"
+    />
 
-    <!-- Track actions -->
-    <section class="sidebar-section" data-testid="track-actions">
-      <div class="section-header">
-        <h3 class="section-title">Track actions</h3>
-      </div>
-      <div class="track-actions">
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="duplicate-track-btn"
-          @click="$emit('duplicateTrack')"
-        >
-          Duplicate track
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="reverse-track-btn"
-          @click="$emit('reverseTrack')"
-        >
-          Reverse track
-        </button>
-      </div>
-    </section>
-
-    <!-- Fragment actions -->
-    <section
-      v-if="fragmentInfo"
-      class="sidebar-section"
-      data-testid="fragment-section"
-    >
-      <div class="section-header">
-        <h3 class="section-title">Fragment tools</h3>
-        <button
-          class="btn-icon-sm"
-          title="Clear selection"
-          data-testid="fragment-clear-btn"
-          @click="$emit('clearFragment')"
-        >
-          ✕
-        </button>
-      </div>
-      <p class="fragment-meta">
-        Segment {{ fragmentInfo.segIndex + 1 }} · Points:
-        {{ fragmentInfo.points }}
-        <span v-if="!fragmentInfo.complete"> · Select end point</span>
-      </p>
-      <div class="fragment-actions" v-if="fragmentInfo.complete">
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="fragment-reroute-btn"
-          @click="$emit('rerouteFragment')"
-        >
-          Reroute
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="fragment-delete-connect-btn"
-          @click="$emit('deleteFragmentConnect')"
-        >
-          Delete + Connect
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="fragment-delete-split-btn"
-          @click="$emit('deleteFragmentSplit')"
-        >
-          Delete + Split
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="fragment-reverse-btn"
-          @click="$emit('reverseFragment')"
-        >
-          Reverse
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="fragment-export-btn"
-          @click="$emit('exportFragment')"
-        >
-          Export GPX
-        </button>
-      </div>
-    </section>
-
-    <!-- POI list -->
-    <section
-      v-if="pois.length > 0"
-      class="sidebar-section"
-      data-testid="poi-section"
-    >
-      <div class="section-header">
-        <h3 class="section-title">POI ({{ pois.length }})</h3>
-      </div>
-      <ul class="poi-list">
-        <li
-          v-for="(poi, i) in pois"
-          :key="i"
-          class="poi-item"
-          data-testid="poi-item"
-        >
-          <span class="poi-icon">📍</span>
-          <span class="poi-info" v-if="poiEditIndex !== i">
-            {{ poi.name || `POI ${i + 1}` }}
-            <small v-if="poi.description">{{ poi.description }}</small>
-            <small v-if="poi.distFromStart"
-              >📏 {{ formatDistanceM(poi.distFromStart) }} from start</small
-            >
-            <small v-if="poi.isFarFromTrack" class="poi-warning"
-              >⚠️ >1 km from track</small
-            >
-          </span>
-          <div v-else class="poi-edit">
-            <input
-              class="form-input"
-              type="text"
-              maxlength="80"
-              placeholder="POI name"
-              v-model="poiEditDraft.name"
-            />
-            <textarea
-              class="form-input form-textarea"
-              rows="2"
-              maxlength="500"
-              placeholder="Description (optional)"
-              v-model="poiEditDraft.description"
-            />
-            <select class="form-input" v-model="poiEditDraft.category">
-              <option value="">Category: none</option>
-              <option
-                v-for="cat in poiCategories"
-                :key="cat.id"
-                :value="cat.id"
-              >
-                {{ cat.icon }} {{ cat.label }}
-              </option>
-            </select>
-            <div class="poi-edit-actions">
-              <button class="btn-secondary btn-sm" @click.stop="savePoiEdit">
-                Save
-              </button>
-              <button class="btn-secondary btn-sm" @click.stop="cancelPoiEdit">
-                Cancel
-              </button>
-            </div>
-          </div>
-          <button
-            v-if="poiEditIndex !== i"
-            class="btn-icon-sm"
-            title="Edit POI"
-            @click.stop="startPoiEdit(i)"
-          >
-            ✎
-          </button>
-          <button
-            v-if="poiEditIndex !== i"
-            class="btn-icon-sm danger"
-            title="Delete POI"
-            @click.stop="$emit('deletePoi', i)"
-          >
-            ✕
-          </button>
-        </li>
-      </ul>
-    </section>
-
-    <!-- Elevation profile -->
-    <section class="sidebar-section" data-testid="elevation-section">
-      <div class="section-header">
-        <h3 class="section-title">Elevation profile</h3>
-      </div>
-      <div v-if="elevationLoading" class="elevation-status">
-        Loading profile...
-      </div>
-      <div v-else-if="elevationError" class="elevation-status error">
-        {{ elevationError }}
-      </div>
-      <ElevationChart
-        v-else
-        :elevationData="elevationProfile"
-        :elevationStats="elevationStats"
-        :totalDistance="totalDistanceKm"
-        :coordinateData="coordinateData"
-        chartMode="elevation"
-        @chart-point-hover="$emit('chart-point-hover', $event)"
-        @chart-point-leave="$emit('chart-point-leave', $event)"
-        @chart-point-click="$emit('chart-point-click', $event)"
-      />
-    </section>
-
-    <!-- Track optimizer -->
-    <section class="sidebar-section" data-testid="optimizer-section">
-      <div class="section-header">
-        <h3 class="section-title">Track optimizer</h3>
-      </div>
-      <p class="optimizer-meta">Keep {{ optimizerPercent }}% of points</p>
-      <input
-        type="range"
-        min="1"
-        max="100"
-        step="1"
-        class="optimizer-range"
-        :value="optimizerPercent"
-        :disabled="totalPoints < 2"
-        @input="handleOptimizerRatioInput"
-      />
-      <div class="optimizer-stats" v-if="optimizerStats">
-        <span>
-          Points: {{ optimizerStats.originalPoints }} →
-          {{ optimizerStats.simplifiedPoints }}
-        </span>
-        <span>
-          {{ Math.round((optimizerStats.compressionRatio || 0) * 100) }}%
-        </span>
-        <span>
-          Tolerance: {{ optimizerStats.toleranceUsed?.toFixed(1) || 0 }} m
-        </span>
-      </div>
-      <div v-if="optimizerLoading" class="optimizer-status">
-        Building preview...
-      </div>
-      <div v-else-if="optimizerError" class="optimizer-status error">
-        {{ optimizerError }}
-      </div>
-      <div class="optimizer-actions">
-        <button
-          class="btn-secondary btn-sm"
-          :disabled="optimizerLoading || totalPoints < 2"
-          data-testid="optimizer-preview-btn"
-          @click="$emit('previewOptimization')"
-        >
-          Preview
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          :disabled="!hasOptimizerPreview"
-          data-testid="optimizer-apply-btn"
-          @click="$emit('applyOptimization')"
-        >
-          Apply
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          :disabled="!hasOptimizerPreview"
-          data-testid="optimizer-clear-btn"
-          @click="$emit('clearOptimization')"
-        >
-          Cancel
-        </button>
-        <button
-          class="btn-secondary btn-sm"
-          :disabled="!hasOptimizerPreview"
-          data-testid="optimizer-download-btn"
-          @click="$emit('downloadOptimization')"
-        >
-          Download GeoJSON
-        </button>
-      </div>
-    </section>
-
-    <!-- Summary -->
-    <section
-      class="sidebar-section summary-section"
-      data-testid="track-summary"
-    >
-      <div class="summary-row">
-        <span>Distance</span>
-        <strong>{{ formatDistance(totalDistanceKm) }}</strong>
-      </div>
-      <div class="summary-row">
-        <span>Time (estimate)</span>
-        <strong>{{ timeDisplay }}</strong>
-      </div>
-      <div class="summary-row">
-        <span>Points</span>
-        <strong>{{ totalPoints }}</strong>
-      </div>
-      <div class="summary-row">
-        <span>Segments</span>
-        <strong>{{ segmentStats.length }}</strong>
-      </div>
-      <div v-if="pois.length > 0" class="summary-row">
-        <span>POI</span>
-        <strong>{{ pois.length }}</strong>
-      </div>
-      <div class="summary-row">
-        <span>Loop</span>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="loop-btn"
-          @click="$emit('closeLoop')"
-          title="Connect last point to first (straight)"
-        >
-          Close loop
-        </button>
-      </div>
-      <div class="summary-row">
-        <span></span>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="loop-same-way-btn"
-          @click="$emit('closeLoopSameWay')"
-          title="Return the same way (duplicate in reverse)"
-        >
-          Same way back
-        </button>
-      </div>
-      <div class="summary-row">
-        <span></span>
-        <button
-          class="btn-secondary btn-sm"
-          data-testid="loop-different-route-btn"
-          @click="$emit('closeLoopDifferentRoute')"
-          title="Return via different route (auto-route)"
-        >
-          Different route
-        </button>
-      </div>
-    </section>
+    <TrackEditorInspectorSummary
+      :total-distance-km="totalDistanceKm"
+      :estimated-time-minutes="estimatedTimeMinutes"
+      :total-points="totalPoints"
+      :segment-count="segmentStats.length"
+      :poi-count="pois.length"
+      @close-loop="$emit('closeLoop')"
+      @close-loop-same-way="$emit('closeLoopSameWay')"
+      @close-loop-different-route="$emit('closeLoopDifferentRoute')"
+    />
   </div>
 </template>
 
 <script setup>
-const OPTIMIZER_DEFAULT_RATIO = 0.1;
-
 const props = defineProps({
   trackName: { type: String, default: "" },
   trackDescription: { type: String, default: "" },
@@ -525,7 +122,7 @@ const props = defineProps({
   coordinateData: { type: Array, default: () => [] },
   collapsed: { type: Boolean, default: false },
   fragmentSelection: { type: Object, default: () => ({}) },
-  optimizerTargetRatio: { type: Number, default: OPTIMIZER_DEFAULT_RATIO },
+  optimizerTargetRatio: { type: Number, default: 0.1 },
   optimizerPreview: { type: Object, default: null },
   optimizerStats: { type: Object, default: null },
   optimizerLoading: { type: Boolean, default: false },
@@ -555,6 +152,9 @@ const emit = defineEmits([
   "reverseFragment",
   "rerouteFragment",
   "closeLoop",
+  "closeLoopSameWay",
+  "closeLoopDifferentRoute",
+  "exportFragment",
   "reverseTrack",
   "duplicateTrack",
   "newTrackFromSegment",
@@ -569,30 +169,6 @@ const emit = defineEmits([
   "hoverSegment",
   "leaveSegment",
 ]);
-
-const availableCategories = [
-  { id: "hiking", label: "Hiking", icon: "🥾" },
-  { id: "walking", label: "Walking", icon: "🚶" },
-  { id: "running", label: "Running", icon: "🏃" },
-  { id: "cycling", label: "Cycling", icon: "🚴" },
-];
-
-const poiCategories = [
-  { id: "water", label: "Water", icon: "💧" },
-  { id: "camping", label: "Camping", icon: "⛺" },
-  { id: "viewpoint", label: "Viewpoint", icon: "📷" },
-  { id: "danger", label: "Danger", icon: "⚠️" },
-  { id: "food", label: "Food", icon: "🍽️" },
-  { id: "shelter", label: "Shelter", icon: "🏠" },
-  { id: "other", label: "Other", icon: "📍" },
-];
-
-const poiEditIndex = ref(null);
-const poiEditDraft = ref({
-  name: "",
-  description: "",
-  category: "",
-});
 
 const fragmentInfo = computed(() => {
   const sel = props.fragmentSelection || {};
@@ -618,87 +194,15 @@ const fragmentInfo = computed(() => {
   };
 });
 
-function handleCategoryToggle(catId) {
-  const current = [...props.trackCategories];
-  const index = current.indexOf(catId);
-  if (index >= 0) {
-    current.splice(index, 1);
-  } else {
-    current.push(catId);
-  }
-  emit("update:trackCategories", current);
-}
-
-function formatDistance(km) {
-  if (km < 1) return `${Math.round(km * 1000)} m`;
-  return `${km.toFixed(2)} km`;
-}
-
-function formatDistanceM(meters) {
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function startPoiEdit(index) {
-  const poi = props.pois?.[index];
-  if (!poi) return;
-  poiEditIndex.value = index;
-  poiEditDraft.value = {
-    name: poi.name || "",
-    description: poi.description || "",
-    category: poi.category || "",
-  };
-}
-
-function cancelPoiEdit() {
-  poiEditIndex.value = null;
-}
-
-function savePoiEdit() {
-  if (poiEditIndex.value === null || poiEditIndex.value === undefined) return;
-  emit("updatePoi", poiEditIndex.value, {
-    name: poiEditDraft.value.name,
-    description: poiEditDraft.value.description,
-    category: poiEditDraft.value.category,
-  });
-  poiEditIndex.value = null;
-}
-
-const optimizerPercent = computed(() => {
-  const ratio = props.optimizerTargetRatio ?? OPTIMIZER_DEFAULT_RATIO;
-  return Math.round(ratio * 100);
-});
-
-const hasOptimizerPreview = computed(() => {
-  return !!(props.optimizerPreview && props.optimizerPreview.segments?.length);
-});
-
-function handleOptimizerRatioInput(event) {
-  const value = Number(event.target.value);
-  if (!Number.isFinite(value)) return;
-  emit("update:optimizerTargetRatio", value / 100);
-}
-
-import { computed, ref, watch } from "vue";
-import ElevationChart from "./ElevationChart.vue";
-
-watch(
-  () => props.pois.length,
-  (nextLength) => {
-    if (poiEditIndex.value !== null && poiEditIndex.value >= nextLength) {
-      poiEditIndex.value = null;
-    }
-  }
-);
-
-const timeDisplay = computed(() => {
-  const mins = props.estimatedTimeMinutes;
-  if (mins <= 0) return "0 min";
-  if (mins < 60) return `${Math.round(mins)} min`;
-  const h = Math.floor(mins / 60);
-  const m = Math.round(mins % 60);
-  return m > 0 ? `${h} h ${m} min` : `${h} h`;
-});
+import { computed } from "vue";
+import TrackEditorInspectorElevation from "./editor/TrackEditorInspectorElevation.vue";
+import TrackEditorInspectorFragmentTools from "./editor/TrackEditorInspectorFragmentTools.vue";
+import TrackEditorInspectorOptimizer from "./editor/TrackEditorInspectorOptimizer.vue";
+import TrackEditorInspectorOverview from "./editor/TrackEditorInspectorOverview.vue";
+import TrackEditorInspectorPois from "./editor/TrackEditorInspectorPois.vue";
+import TrackEditorInspectorSegments from "./editor/TrackEditorInspectorSegments.vue";
+import TrackEditorInspectorSummary from "./editor/TrackEditorInspectorSummary.vue";
+import TrackEditorInspectorTrackActions from "./editor/TrackEditorInspectorTrackActions.vue";
 </script>
 
 <style scoped>

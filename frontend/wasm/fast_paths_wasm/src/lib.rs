@@ -1,6 +1,12 @@
 use fast_paths::{create_calculator, FastGraph32};
 use wasm_bindgen::prelude::*;
 
+fn decode_fast_graph(graph_bytes: &[u8]) -> Result<FastGraph32, JsValue> {
+    bincode::serde::decode_from_slice(graph_bytes, bincode::config::standard())
+        .map(|(graph, _)| graph)
+        .map_err(|e| JsValue::from_str(&format!("failed to deserialize graph: {e}")))
+}
+
 #[wasm_bindgen]
 pub struct FastPathsRouter {
     fast_graph: fast_paths::FastGraph,
@@ -11,8 +17,7 @@ pub struct FastPathsRouter {
 impl FastPathsRouter {
     #[wasm_bindgen(constructor)]
     pub fn new(graph_bytes: &[u8]) -> Result<FastPathsRouter, JsValue> {
-        let fg32: FastGraph32 = bincode::deserialize(graph_bytes)
-            .map_err(|e| JsValue::from_str(&format!("failed to deserialize graph: {e}")))?;
+        let fg32 = decode_fast_graph(graph_bytes)?;
         let fast_graph = fg32.convert_to_usize();
         let calculator = create_calculator(&fast_graph);
         Ok(FastPathsRouter {
@@ -42,8 +47,7 @@ impl FastPathsRouter {
 
 #[wasm_bindgen]
 pub fn validate_graph_bytes(graph_bytes: &[u8]) -> Result<bool, JsValue> {
-    let fg32: FastGraph32 = bincode::deserialize(graph_bytes)
-        .map_err(|e| JsValue::from_str(&format!("failed to deserialize graph: {e}")))?;
+    let fg32 = decode_fast_graph(graph_bytes)?;
     let _fast_graph = fg32.convert_to_usize();
     Ok(true)
 }

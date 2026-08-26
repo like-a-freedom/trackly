@@ -1,5 +1,9 @@
 <template>
-  <button class="search-button" @click="openSearch" title="Search tracks">
+  <button
+    class="search-button"
+    title="Search tracks"
+    @click="openSearch"
+  >
     <svg
       width="20"
       height="20"
@@ -8,8 +12,12 @@
       stroke="currentColor"
       stroke-width="2"
     >
-      <circle cx="11" cy="11" r="8"></circle>
-      <path d="M21 21l-4.35-4.35"></path>
+      <circle
+        cx="11"
+        cy="11"
+        r="8"
+      />
+      <path d="M21 21l-4.35-4.35" />
     </svg>
   </button>
 </template>

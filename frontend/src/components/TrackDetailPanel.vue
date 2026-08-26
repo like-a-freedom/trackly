@@ -14,12 +14,12 @@
     @dragstart.prevent
   >
     <!-- Panel Controls "Tab" - only when collapsed -->
-    <div class="panel-controls-tab" v-show="isCollapsed">
+    <div v-show="isCollapsed" class="panel-controls-tab">
       <button
         class="collapse-toggle-btn"
-        @click="toggleCollapse"
         title="Expand panel"
         aria-label="Expand panel"
+        @click="toggleCollapse"
       >
         <!-- Arrow pointing up for expand -->
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -31,8 +31,8 @@
     </div>
 
     <div
-      class="flyout-content"
       ref="flyoutContent"
+      class="flyout-content"
       @wheel="handleContentWheel"
       @touchstart.stop
       @touchmove="handleContentTouchMove"
@@ -43,7 +43,7 @@
       @dragstart.prevent
     >
       <!-- Collapsible content -->
-      <div class="collapsible-content" v-show="!isCollapsed">
+      <div v-show="!isCollapsed" class="collapsible-content">
         <!-- Track Header -->
         <div class="track-header">
           <!-- Name Edit Mode -->
@@ -62,6 +62,7 @@
               v-model="editedName"
               class="edit-name-input"
               placeholder="Enter track name..."
+              maxlength="255"
               @keydown.enter="saveName"
               @keydown.esc="cancelEditName"
               @mousedown.stop
@@ -70,7 +71,6 @@
               @dblclick.stop
               @selectstart.stop
               @dragstart.prevent
-              maxlength="255"
             />
             <div
               class="edit-name-actions"
@@ -81,7 +81,7 @@
               @selectstart.stop
               @dragstart.prevent
             >
-              <button @click="saveName" :disabled="savingName" class="save-btn">
+              <button :disabled="savingName" class="save-btn" @click="saveName">
                 <svg
                   width="16"
                   height="16"
@@ -90,14 +90,14 @@
                   stroke="currentColor"
                   stroke-width="2"
                 >
-                  <polyline points="20,6 9,17 4,12"></polyline>
+                  <polyline points="20,6 9,17 4,12" />
                 </svg>
                 {{ savingName ? "Saving..." : "Save" }}
               </button>
               <button
-                @click="cancelEditName"
                 :disabled="savingName"
                 class="cancel-btn"
+                @click="cancelEditName"
               >
                 <svg
                   width="16"
@@ -107,13 +107,15 @@
                   stroke="currentColor"
                   stroke-width="2"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
                 Cancel
               </button>
             </div>
-            <div v-if="nameError" class="edit-name-error">{{ nameError }}</div>
+            <div v-if="nameError" class="edit-name-error">
+              {{ nameError }}
+            </div>
           </div>
 
           <!-- Name Display Mode -->
@@ -123,8 +125,8 @@
               <button
                 v-if="isOwner"
                 class="edit-name-btn"
-                @click="startEditName"
                 title="Edit track name"
+                @click="startEditName"
               >
                 <svg
                   width="16"
@@ -136,10 +138,10 @@
                 >
                   <path
                     d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                  ></path>
+                  />
                   <path
                     d="m18.5 2.5 a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                  ></path>
+                  />
                 </svg>
               </button>
             </div>
@@ -150,10 +152,10 @@
               >
                 <button
                   class="share-track-btn"
-                  @click="shareTrack"
                   :disabled="copyingLink"
                   :title="copyingLink ? 'Copying...' : 'Copy shareable link'"
                   aria-label="Share track"
+                  @click="shareTrack"
                 >
                   <svg
                     width="16"
@@ -165,15 +167,14 @@
                   >
                     <path
                       d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.53 1.53"
-                    ></path>
+                    />
                     <path
                       d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.53-1.53"
-                    ></path>
+                    />
                   </svg>
                 </button>
                 <button
                   class="export-gpx-btn"
-                  @click="exportTrack"
                   :disabled="exportDisabled"
                   :title="
                     exportingTrack
@@ -183,6 +184,7 @@
                       : 'Export track as GPX file'
                   "
                   aria-label="Export GPX"
+                  @click="exportTrack"
                 >
                   <svg
                     width="16"
@@ -192,17 +194,17 @@
                     stroke="currentColor"
                     stroke-width="2"
                   >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7,10 12,15 17,10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7,10 12,15 17,10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
                 </button>
                 <button
                   v-if="isOwner"
                   class="edit-track-geometry-btn"
-                  @click="goToEditor"
                   title="Edit track geometry"
                   aria-label="Edit track geometry"
+                  @click="goToEditor"
                 >
                   <svg
                     width="14"
@@ -225,9 +227,9 @@
                 <button
                   v-if="isOwner"
                   class="delete-track-btn"
-                  @click="confirmDelete"
                   title="Delete track permanently"
                   aria-label="Delete track"
+                  @click="confirmDelete"
                 >
                   <svg
                     width="14"
@@ -247,16 +249,16 @@
                   </svg>
                 </button>
               </div>
-              <div class="divider" aria-hidden="true"></div>
+              <div class="divider" aria-hidden="true" />
               <div
                 class="action-group panel-actions"
                 aria-label="Panel layout controls"
               >
                 <button
                   class="collapse-toggle-btn"
-                  @click="toggleCollapse"
                   title="Collapse panel"
                   aria-label="Collapse panel"
+                  @click="toggleCollapse"
                 >
                   <svg
                     width="16"
@@ -271,9 +273,9 @@
                 </button>
                 <button
                   class="close-button"
-                  @click="handleClose"
                   title="Close panel"
                   aria-label="Close panel"
+                  @click="handleClose"
                 >
                   <svg
                     width="12"
@@ -330,9 +332,9 @@
               @dragstart.prevent
             >
               <button
-                @click="saveDescription"
                 :disabled="savingDescription"
                 class="save-btn"
+                @click="saveDescription"
               >
                 <svg
                   width="16"
@@ -342,14 +344,14 @@
                   stroke="currentColor"
                   stroke-width="2"
                 >
-                  <polyline points="20,6 9,17 4,12"></polyline>
+                  <polyline points="20,6 9,17 4,12" />
                 </svg>
                 {{ savingDescription ? "Saving..." : "Save" }}
               </button>
               <button
-                @click="cancelEditDescription"
                 :disabled="savingDescription"
                 class="cancel-btn"
+                @click="cancelEditDescription"
               >
                 <svg
                   width="16"
@@ -359,8 +361,8 @@
                   stroke="currentColor"
                   stroke-width="2"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
                 Cancel
               </button>
@@ -375,18 +377,18 @@
             v-else-if="track.description || isOwner"
             class="track-description-block"
             :class="{ editable: isOwner, empty: !track.description && isOwner }"
+            :tabindex="isOwner ? 0 : -1"
+            role="button"
             @click="isOwner && startEditDescription()"
             @keydown.enter.prevent="isOwner && startEditDescription()"
             @keydown.space.prevent="isOwner && startEditDescription()"
-            :tabindex="isOwner ? 0 : -1"
-            role="button"
           >
             <div class="description-content">
               <p
                 v-if="track.description"
                 class="track-description-text"
                 v-html="processedDescription"
-              ></p>
+              />
               <p v-else-if="isOwner" class="track-description-placeholder">
                 No description added yet
               </p>
@@ -394,10 +396,10 @@
             <button
               v-if="isOwner"
               class="edit-description-btn"
-              @click.stop="startEditDescription"
               :title="
                 track.description ? 'Edit description' : 'Add description'
               "
+              @click.stop="startEditDescription"
             >
               <svg
                 width="16"
@@ -409,10 +411,10 @@
               >
                 <path
                   d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                ></path>
+                />
                 <path
                   d="m18.5 2.5 a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                ></path>
+                />
               </svg>
             </button>
           </div>
@@ -420,8 +422,8 @@
 
         <!-- Categories -->
         <div
-          class="stats-section"
           v-if="isOwner || (track.categories && track.categories.length > 0)"
+          class="stats-section"
         >
           <div class="section-header-with-tooltip">
             <h3>Categories</h3>
@@ -441,9 +443,9 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </span>
           </div>
@@ -520,10 +522,10 @@
 
         <!-- Auto Classifications -->
         <div
-          class="stats-section"
           v-if="
             track.auto_classifications && track.auto_classifications.length > 0
           "
+          class="stats-section"
         >
           <div class="section-header-with-tooltip">
             <h3>Auto classifications</h3>
@@ -543,9 +545,9 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </span>
           </div>
@@ -589,12 +591,12 @@
               <span class="stat-value">{{ formattedDistance }}</span>
             </div>
             <div
-              class="stat-item"
               v-if="
                 track.duration_seconds !== undefined &&
                 track.duration_seconds !== null &&
                 track.duration_seconds > 0
               "
+              class="stat-item"
             >
               <span class="stat-label">Duration</span>
               <span class="stat-value">{{ formattedDuration }}</span>
@@ -615,40 +617,40 @@
             />
             <span>Distance markers</span>
           </label>
-          <p class="toggle-help" v-if="!isOwner">
+          <p v-if="!isOwner" class="toggle-help">
             Only the track owner can change overlay settings.
           </p>
         </div>
 
         <!-- Speed and Pace Section -->
-        <div class="stats-section" v-if="hasSpeedData">
+        <div v-if="hasSpeedData" class="stats-section">
           <h3>Statistics</h3>
           <div class="speed-pace-grid">
             <div
-              class="stat-item"
               v-if="
                 track.moving_avg_speed !== undefined &&
                 track.moving_avg_speed !== null
               "
+              class="stat-item"
             >
               <span class="stat-label">Average moving speed</span>
               <span class="stat-value">{{ formattedMovingAvgSpeed }}</span>
             </div>
             <div
-              class="stat-item"
               v-if="
                 track.moving_avg_pace !== undefined &&
                 track.moving_avg_pace !== null
               "
+              class="stat-item"
             >
               <span class="stat-label">Average moving pace</span>
               <span class="stat-value">{{ formattedMovingAvgPace }}</span>
             </div>
             <div
-              class="stat-item"
               v-if="
                 track.moving_time !== undefined && track.moving_time !== null
               "
+              class="stat-item"
             >
               <span class="stat-label">Moving time</span>
               <span class="stat-value">{{
@@ -656,8 +658,8 @@
               }}</span>
             </div>
             <div
-              class="stat-item"
               v-if="track.pause_time !== undefined && track.pause_time !== null"
+              class="stat-item"
             >
               <span class="stat-label">Pause time</span>
               <span class="stat-value">{{
@@ -665,22 +667,22 @@
               }}</span>
             </div>
             <div
-              class="stat-item"
               v-if="track.avg_hr !== undefined && track.avg_hr !== null"
+              class="stat-item"
             >
               <span class="stat-label">Average HR</span>
               <span class="stat-value">{{ Math.round(track.avg_hr) }} bpm</span>
             </div>
             <div
-              class="stat-item"
               v-if="track.hr_min !== undefined && track.hr_min !== null"
+              class="stat-item"
             >
               <span class="stat-label">Minimum HR</span>
               <span class="stat-value">{{ Math.round(track.hr_min) }} bpm</span>
             </div>
             <div
-              class="stat-item"
               v-if="track.hr_max !== undefined && track.hr_max !== null"
+              class="stat-item"
             >
               <span class="stat-label">Maximum HR</span>
               <span class="stat-value">{{ Math.round(track.hr_max) }} bpm</span>
@@ -689,7 +691,7 @@
         </div>
 
         <!-- Elevation Stats with Chart -->
-        <div class="stats-section" v-if="hasElevationOrHeartRateData">
+        <div v-if="hasElevationOrHeartRateData" class="stats-section">
           <div class="section-header">
             <h3>Elevation</h3>
             <div class="header-actions">
@@ -697,9 +699,9 @@
               <button
                 v-if="isOwner && hasElevationData"
                 class="force-update-btn"
-                @click="forceEnrichElevation"
                 :disabled="enrichingElevation"
                 title="Force update elevation data from external service"
+                @click="forceEnrichElevation"
               >
                 <svg
                   width="16"
@@ -719,8 +721,8 @@
               <button
                 v-if="isPollingForElevation"
                 class="stop-polling-btn-header"
-                @click="stopElevationPolling"
                 title="Stop automatic elevation data polling"
+                @click="stopElevationPolling"
               >
                 <svg
                   width="14"
@@ -730,12 +732,11 @@
                   stroke="currentColor"
                   stroke-width="2"
                 >
-                  <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
                 </svg>
               </button>
 
               <div
-                class="chart-toggles"
                 v-if="
                   hasElevationData ||
                   hasHeartRateData ||
@@ -743,6 +744,7 @@
                   hasPaceData ||
                   hasSlopeData
                 "
+                class="chart-toggles"
               >
                 <button
                   v-if="hasElevationData"
@@ -787,6 +789,8 @@
                   v-if="hasSlopeData && hasElevationData"
                   class="chart-toggle"
                   :class="{ active: chartMode === 'elevation-with-slope' }"
+                  title="Elevation profile with slope gradient overlay"
+                  data-testid="elevation-slope-toggle"
                   @click="
                     () => {
                       chartMode = 'elevation-with-slope';
@@ -795,8 +799,6 @@
                       );
                     }
                   "
-                  title="Elevation profile with slope gradient overlay"
-                  data-testid="elevation-slope-toggle"
                 >
                   Elevation + Slope
                 </button>
@@ -817,7 +819,6 @@
 
           <!-- Elevation Chart -->
           <div
-            class="chart-section"
             v-if="
               hasElevationData ||
               hasHeartRateData ||
@@ -825,26 +826,27 @@
               hasPaceData ||
               hasSlopeData
             "
+            class="chart-section"
           >
             <ElevationChart
               :key="`chart-${track.id}-${
                 track.elevation_enriched_at || track.updated_at || 'default'
               }-${chartMode}-${chartUpdateKey}`"
-              :elevationData="track.elevation_profile"
-              :heartRateData="track.hr_data"
-              :temperatureData="track.temp_data"
-              :slopeData="track.slope_segments"
-              :speedData="track.speed_data"
-              :paceData="track.pace_data"
-              :coordinateData="props.coordinateData"
-              :timeData="parsedTimeData"
-              :avgSpeed="track.avg_speed"
-              :movingAvgSpeed="track.moving_avg_speed"
-              :trackName="chartTitle"
-              :totalDistance="track.length_km"
-              :chartMode="chartMode"
-              :distanceUnit="getDistanceUnit()"
-              :elevationStats="{
+              :elevation-data="track.elevation_profile"
+              :heart-rate-data="track.hr_data"
+              :temperature-data="track.temp_data"
+              :slope-data="track.slope_segments"
+              :speed-data="track.speed_data"
+              :pace-data="track.pace_data"
+              :coordinate-data="props.coordinateData"
+              :time-data="parsedTimeData"
+              :avg-speed="track.avg_speed"
+              :moving-avg-speed="track.moving_avg_speed"
+              :track-name="chartTitle"
+              :total-distance="track.length_km"
+              :chart-mode="chartMode"
+              :distance-unit="getDistanceUnit()"
+              :elevation-stats="{
                 gain: track.elevation_gain,
                 loss: track.elevation_loss,
                 min: track.elevation_min,
@@ -865,13 +867,13 @@
           </div>
 
           <!-- Elevation Statistics -->
-          <div class="elevation-stats" v-if="hasElevationData">
+          <div v-if="hasElevationData" class="elevation-stats">
             <div
-              class="stat-item"
               v-if="
                 track.elevation_gain !== undefined &&
                 track.elevation_gain !== null
               "
+              class="stat-item"
             >
               <span class="stat-label">Total ascent</span>
               <span class="stat-value"
@@ -879,22 +881,22 @@
               >
             </div>
             <div
-              class="stat-item"
               v-if="
                 track.elevation_loss !== undefined &&
                 track.elevation_loss !== null
               "
+              class="stat-item"
             >
               <span class="stat-label">Total descent</span>
               <span class="stat-value"
                 >{{ Math.abs(track.elevation_loss).toFixed(0) }} m</span
               >
             </div>
-            <div class="stat-item" v-if="elevationGain">
+            <div v-if="elevationGain" class="stat-item">
               <span class="stat-label">Net elevation</span>
               <span class="stat-value">{{ elevationGain }} m</span>
             </div>
-            <div class="stat-item" v-if="track.elevation_dataset">
+            <div v-if="track.elevation_dataset" class="stat-item">
               <span class="stat-label">Data source</span>
               <span class="stat-value">{{
                 formatDataset(track.elevation_dataset)
@@ -905,15 +907,15 @@
 
         <!-- Slope Analysis Section -->
         <div
-          class="stats-section"
           v-if="hasSlopeData"
+          class="stats-section"
           data-testid="slope-section"
         >
           <h3 data-testid="slope-analysis-title">Slope Analysis</h3>
           <div class="slope-stats-grid" data-testid="slope-stats-grid">
             <div
-              class="stat-item"
               v-if="track.slope_max !== undefined && track.slope_max !== null"
+              class="stat-item"
               data-testid="max-uphill-slope"
             >
               <span class="stat-label">Max uphill slope</span>
@@ -922,16 +924,16 @@
               >
             </div>
             <div
-              class="stat-item"
               v-if="track.slope_min !== undefined && track.slope_min !== null"
+              class="stat-item"
               data-testid="max-downhill-slope"
             >
               <span class="stat-label">Max downhill slope</span>
               <span class="stat-value">{{ track.slope_min.toFixed(1) }}%</span>
             </div>
             <div
-              class="stat-item"
               v-if="track.slope_avg !== undefined && track.slope_avg !== null"
+              class="stat-item"
               data-testid="avg-slope"
             >
               <span class="stat-label">Avg slope</span>
@@ -941,8 +943,8 @@
               >
             </div>
             <div
-              class="stat-item"
               v-if="slopeDistributionStats.uphillPercent !== undefined"
+              class="stat-item"
               data-testid="uphill-distance"
             >
               <span class="stat-label">Uphill distance</span>
@@ -951,8 +953,8 @@
               >
             </div>
             <div
-              class="stat-item"
               v-if="slopeDistributionStats.steepUphillPercent !== undefined"
+              class="stat-item"
               data-testid="steep-uphill"
             >
               <span class="stat-label">Steep uphill (>8%)</span>
@@ -963,8 +965,8 @@
               >
             </div>
             <div
-              class="stat-item"
               v-if="slopeDistributionStats.steepDownhillPercent !== undefined"
+              class="stat-item"
               data-testid="steep-downhill"
             >
               <span class="stat-label">Steep downhill (&lt;-8%)</span>
@@ -981,19 +983,19 @@
         <div class="track-metadata">
           <h3>Track info</h3>
           <div class="metadata-grid">
-            <div class="metadata-item" v-if="track.recorded_at">
+            <div v-if="track.recorded_at" class="metadata-item">
               <span class="metadata-label">Recorded</span>
               <span class="metadata-value">{{
                 formatDateTime(track.recorded_at)
               }}</span>
             </div>
-            <div class="metadata-item" v-if="track.created_at">
+            <div v-if="track.created_at" class="metadata-item">
               <span class="metadata-label">Added</span>
               <span class="metadata-value">{{
                 formatDateTime(track.created_at)
               }}</span>
             </div>
-            <div class="metadata-item" v-if="track.updated_at">
+            <div v-if="track.updated_at" class="metadata-item">
               <span class="metadata-label">Modified</span>
               <span class="metadata-value">{{
                 formatDateTime(track.updated_at)
@@ -2453,9 +2455,8 @@ async function exportTrack() {
           : name;
       // Allow Unicode letters/numbers, spaces, hyphens, underscores and dots; remove other characters
       const cleaned = String(normalized)
-        .replace(/[^ -\u007F]/gu, "")
-        .replace(/[^\p{L}\p{N}\s\-_\.]+/gu, "")
-        .replace(/[\u200B-\u200D\uFEFF]/g, "");
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .replace(/[^\p{L}\p{N}\s_.-]+/gu, "");
       const collapsed = cleaned.trim().replace(/\s+/g, "_").replace(/_+/g, "_");
       const trimmed = collapsed.replace(/^\.+|\.+$/g, "");
       return trimmed || fallback;
@@ -2498,7 +2499,7 @@ async function exportTrack() {
       try {
         const alt = trackName
           ? trackName
-              .replace(/[^ -\uFFFF\p{L}\p{N}\s\-_\.]+/gu, "")
+              .replace(/[^\p{L}\p{N}\s_.-]+/gu, "")
               .trim()
               .replace(/\s+/g, "_")
           : "";
@@ -2511,10 +2512,10 @@ async function exportTrack() {
 
     // If filename is still empty use track-id; otherwise ensure it doesn't contain path separators or unsafe chars
     if (filename) {
-      const unsafe = /[\/<>:\"\\|?*\x00-\x1F]/;
+      const unsafe = /[<>:"/\\|?*\x00-\x1F]/;
       if (unsafe.test(filename)) {
         const cleaned2 = filename
-          .replace(/[\/<>:\"\\|?*\x00-\x1F]+/g, "")
+          .replace(/[<>:"/\\|?*\x00-\x1F]+/g, "")
           .replace(/\s+/g, "_");
         filename = cleaned2 || `track-${track.value.id}`;
       }
@@ -3540,7 +3541,7 @@ defineExpose({
   border-bottom: 1px solid #eee;
 }
 
-.stats-section:last-of_type {
+.stats-section:last-of-type {
   border-bottom: none;
 }
 

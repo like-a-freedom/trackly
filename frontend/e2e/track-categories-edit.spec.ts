@@ -38,7 +38,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
         },
       ]);
       // ensure frontend getSessionId returns the same test session id by setting localStorage
-      await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${sessionUuid}'); } catch(e){} })()`);
+      await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${sessionUuid}'); } catch (e) { void 0; } })()`);
       const page = await context.newPage();
       // Navigate to frontend so fetch has correct origin and cookies
       await page.goto(FRONTEND_URL);
@@ -153,7 +153,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
       },
     ]);
     // Set localStorage session id so frontend sends x-session-id header for ownership checks
-    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${ownerSessionToSet}'); } catch(e){} })()`);
+    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${ownerSessionToSet}'); } catch (e) { void 0; } })()`);
 
     await page.goto(`${FRONTEND_URL}/track/${trackId}`);
     await page.waitForLoadState('networkidle');
@@ -210,7 +210,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
       },
     ]);
     // Ensure frontend getSessionId() returns the same test session id by setting localStorage
-    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${TEST_SESSION_ID}'); } catch(e){} })()`);
+    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${TEST_SESSION_ID}'); } catch (e) { void 0; } })()`);
 
     await page.goto(`${FRONTEND_URL}/track/${trackId}`);
     await page.waitForLoadState('networkidle');
@@ -295,7 +295,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
         path: '/',
       },
     ]);
-    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${TEST_SESSION_ID}'); } catch(e){} })()`);
+    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${TEST_SESSION_ID}'); } catch (e) { void 0; } })()`);
 
     await page.goto(`${FRONTEND_URL}/track/${trackId}`);
     await page.waitForLoadState('networkidle');
@@ -326,7 +326,7 @@ test.describe('Track Categories Inline Editing with Multiselect', () => {
       },
     ]);
     // Ensure frontend getSessionId() returns the same test session id by setting localStorage
-    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${TEST_SESSION_ID}'); } catch(e){} })()`);
+    await context.addInitScript(`(() => { try { localStorage.setItem('trackly_session_id', '${TEST_SESSION_ID}'); } catch (e) { void 0; } })()`);
 
     await page.goto(`${FRONTEND_URL}/track/${trackId}`);
     await page.waitForLoadState('networkidle');

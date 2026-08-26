@@ -2,13 +2,19 @@
   <div class="auth-callback-container">
     <div class="auth-callback-card">
       <!-- Loading state -->
-      <div v-if="isLoading" class="callback-loading">
-        <div class="spinner"></div>
+      <div
+        v-if="isLoading"
+        class="callback-loading"
+      >
+        <div class="spinner" />
         <p>Completing sign in...</p>
       </div>
 
       <!-- Error state -->
-      <div v-else-if="error" class="callback-error">
+      <div
+        v-else-if="error"
+        class="callback-error"
+      >
         <div class="error-icon">
           <svg
             width="48"
@@ -18,18 +24,42 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="15" y1="9" x2="9" y2="15"></line>
-            <line x1="9" y1="9" x2="15" y2="15"></line>
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="15"
+              y1="9"
+              x2="9"
+              y2="15"
+            />
+            <line
+              x1="9"
+              y1="9"
+              x2="15"
+              y2="15"
+            />
           </svg>
         </div>
         <h2>Sign in failed</h2>
-        <p class="error-message">{{ error }}</p>
-        <button class="btn-primary" @click="goHome">Return to Home</button>
+        <p class="error-message">
+          {{ error }}
+        </p>
+        <button
+          class="btn-primary"
+          @click="goHome"
+        >
+          Return to Home
+        </button>
       </div>
 
       <!-- Success state (brief, before redirect) -->
-      <div v-else class="callback-success">
+      <div
+        v-else
+        class="callback-success"
+      >
         <div class="success-icon">
           <svg
             width="48"
@@ -39,12 +69,18 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="9,12 12,15 16,10"></polyline>
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <polyline points="9,12 12,15 16,10" />
           </svg>
         </div>
         <p>{{ statusMessage }}</p>
-        <p class="redirect-message">{{ secondaryMessage }}</p>
+        <p class="redirect-message">
+          {{ secondaryMessage }}
+        </p>
       </div>
     </div>
   </div>

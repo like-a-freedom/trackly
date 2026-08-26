@@ -46,7 +46,7 @@ test('upload flow: new file uploads, shows success and links to track', async ({
     for (let attempt = 1; attempt <= 5; attempt++) {
         try {
             await page.context().addCookies([{ name: 'session_id', value: TEST_SESSION, domain: 'localhost', path: '/' }]);
-            await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '11111111-1111-1111-1111-111111111111'); } catch (e) { } });
+            await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '11111111-1111-1111-1111-111111111111'); } catch (e) { void 0; } });
             await page.goto(FRONTEND);
             await page.waitForLoadState('domcontentloaded');
 

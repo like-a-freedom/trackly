@@ -6,10 +6,11 @@ This document defines the approved redesign direction for the track creation/edi
 
 The current editor already supports a rich feature set, but visually feels fragmented and utilitarian: the toolbar, map, and sidebar read as separate technical blocks instead of a coherent editing workspace. The redesign focuses first on modernizing the visual language and strengthening visual hierarchy, then on reducing sidebar overload and making the main tool controls feel integrated rather than bolted on.
 
-The approved direction is **A2 — structured floating editor**:
-- the **map stays dominant** as the primary canvas;
-- controls are distributed into **four clearly-scoped UI zones**;
+The approved direction is **A2.1 — overlay-only structured floating editor**:
+- the **map occupies the full editor viewport** as the primary canvas;
+- controls are distributed into **four clearly-scoped overlay zones**;
 - the interface keeps a light, contemporary floating-panel feel;
+- **no control surface may reduce the usable map area**;
 - the layout remains practical for a feature-rich route editor rather than becoming purely decorative.
 
 ## Goals
@@ -24,6 +25,7 @@ The approved direction is **A2 — structured floating editor**:
    - where editing details and actions are located.
 3. Reduce the sense of a **long overloaded sidebar**.
 4. Replace the current toolbar feel of “many utility buttons in a strip” with a more coherent navigation/control system.
+5. Ensure the map remains **physically full-screen within the editor shell**, with all controls rendered only as overlays.
 
 ### Secondary goals
 
@@ -69,6 +71,7 @@ The editor should feel:
    - The map is the dominant visual plane.
    - UI panels should sit above it as a coordinated system.
    - The user should feel they are editing on the map, not inside a form around a map.
+   - No panel may reserve permanent layout space that shrinks the map viewport.
 
 2. **Structured floating panels**
    - Panels should use translucent / elevated card styling.
@@ -89,7 +92,17 @@ The editor should feel:
 
 ## Approved layout model
 
-The redesigned editor is organized into **four primary zones**.
+The redesigned editor is organized into **four primary overlay zones**.
+
+### Overlay contract
+
+This redesign has one hard layout rule:
+
+1. The map must occupy the full editor viewport.
+2. Every control, sidebar, rail, inspector, banner, and deck must render **above** the map as an overlay.
+3. No editor panel may sit beside the map in a layout column or below it in a layout row if that reduces the map rectangle.
+4. Opening, closing, collapsing, or expanding editor panels may obscure parts of the map, but must not resize the map surface itself.
+5. Responsive behavior may change overlay placement, collapse patterns, and density, but may not revert to a non-overlay layout.
 
 ### 1. Left rail — mode and primary tools
 
@@ -106,7 +119,8 @@ The redesigned editor is organized into **four primary zones**.
 - consistent button sizing;
 - the active mode is visually prominent;
 - no verbose labels are required on desktop if tooltips are strong;
-- this rail replaces the current perception of the toolbar as the primary navigation system.
+- this rail replaces the current perception of the toolbar as the primary navigation system;
+- it must be anchored as a floating overlay on top of the map rather than living in a reserved side column.
 
 ### 2. Top context bar — track identity and live summary
 
@@ -122,7 +136,8 @@ The redesigned editor is organized into **four primary zones**.
 - should be compact and scan-friendly;
 - should avoid becoming a second toolbar;
 - should elevate the most important information only;
-- should give the editor a clear focal anchor at the top of the map.
+- should give the editor a clear focal anchor at the top of the map;
+- must remain a floating overlay and must not push the map downward.
 
 ### 3. Right inspector — selection/context-sensitive details
 
@@ -139,7 +154,8 @@ The redesigned editor is organized into **four primary zones**.
 - should be narrower and more focused than the current sidebar;
 - should not carry the full editor form;
 - should adapt based on selection/state instead of always showing everything;
-- should work as a “smart inspector,” not a static information dump.
+- should work as a “smart inspector,” not a static information dump;
+- on desktop it may remain visible by default, but only as an overlay card above the map.
 
 ### 4. Bottom deck — working panels and secondary editing modules
 
@@ -155,7 +171,8 @@ The redesigned editor is organized into **four primary zones**.
 - arranged as horizontally grouped cards on desktop;
 - visually lighter than a traditional dock, but clearly structured;
 - can collapse or stack on smaller screens;
-- supports prioritization so only the most relevant cards are visually emphasized.
+- supports prioritization so only the most relevant cards are visually emphasized;
+- must behave as a floating bottom overlay / sheet rather than a bottom layout row.
 
 ## Information architecture changes
 
@@ -247,27 +264,30 @@ The screen should no longer read top-to-bottom like a settings form.
 ### Responsive behavior
 
 #### Desktop
-- Full four-zone layout is active.
-- Bottom deck may span multiple cards horizontally.
-- Right inspector remains visible.
+- Full four-zone overlay layout is active.
+- Bottom deck may span multiple cards horizontally inside a floating bottom overlay.
+- Right inspector may remain visible by default as a compact overlay card.
 - All critical editing controls remain visible without opening additional sheets.
+- The map rectangle must remain unchanged when inspector or deck is shown.
 
 #### Tablet / narrow landscape
 - Left rail may reduce icon spacing.
-- Bottom deck may become a 2-row grid.
-- Right inspector may collapse into a compact panel or tabs.
+- Bottom deck may become a denser overlay panel or stacked overlay cards.
+- Right inspector may collapse into a compact overlay panel or tabs.
 - The following controls must still remain first-level visible: active mode, undo, redo, save, current track context.
 - Segment, metadata, chart, and contextual editing modules may stack, but must remain reachable without leaving the editor screen.
+- Overlay panels may cover more of the map, but may not shrink it.
 
 #### Mobile
 - The design should preserve the map-first structure.
 - Likely behavior:
-  - compact top context bar;
-  - left rail becomes bottom/edge compact tool strip or collapsible control group;
-  - right inspector merges into bottom sheet behavior;
-  - bottom deck cards become vertically stacked, collapsible modules.
+   - compact top context bar;
+   - left rail becomes bottom/edge compact tool strip or collapsible control group;
+   - right inspector merges into overlay drawer / bottom sheet behavior;
+   - bottom deck cards become vertically stacked, collapsible overlay modules.
 
 The mobile design should not attempt to preserve every desktop panel simultaneously.
+It must still keep every visible surface above the map instead of participating in document flow around it.
 
 ### Responsive priority rules
 
@@ -323,16 +343,19 @@ This component becomes the main composition shell for the redesign.
 - orchestrate the four zones;
 - manage placement of shared status/alerts;
 - pass data to the map, rail/top bar, inspector, and bottom deck regions;
-- remain the layout boundary between data logic and presentation.
+- remain the layout boundary between data logic and presentation;
+- own the single full-screen map stage and the overlay layer above it.
 
 **Likely changes:**
 - replace the current simple `toolbar + body(map + sidebar)` structure;
-- create a layered editor shell around the map;
+- create a single full-screen map stage with overlay surfaces around the map;
 - introduce new wrapper regions/classes for:
   - left rail,
   - top context bar,
   - right inspector,
   - bottom deck.
+
+The new shell should use a dedicated overlay layer with pointer-event management so hidden overlays do not block the map while visible overlays remain interactive.
 
 ### `frontend/src/components/TrackEditorToolbar.vue`
 
@@ -368,7 +391,8 @@ The map remains the interaction canvas.
 - visual integration with new floating layout;
 - support for better spacing/padding relative to overlays;
 - no major editing logic changes required;
-- any context menu or overlay styling should align with the new visual system.
+- any context menu or overlay styling should align with the new visual system;
+- map sizing must be decoupled from inspector/deck visibility so the canvas rectangle stays stable.
 
 ## Visual system guidance
 
@@ -405,6 +429,7 @@ The redesign must stop treating status banners as generic stacked strips detache
 3. Persistent warnings must remain visible until dismissed or resolved.
 4. Alerts must not push the map so far down that the editor loses its map-first feel.
 5. On mobile, top-level alerts may collapse into a pinned strip, but must remain visible without opening a secondary sheet.
+6. Alerts remain overlays inside the top context system and must not reserve separate document-flow space above the map.
 
 ## Migration strategy
 
@@ -412,7 +437,7 @@ The redesign should be implemented incrementally.
 
 ### Recommended order
 
-1. Introduce the new layout shell in `TrackEditorView.vue`.
+1. Introduce the new overlay-only layout shell in `TrackEditorView.vue`.
 2. Move the current toolbar responsibilities into grouped regions.
 3. Reorganize sidebar content into inspector + bottom deck structure.
 4. Restyle the map overlays/context menus to match the new system.
@@ -437,6 +462,7 @@ The redesign must preserve the existing editor behaviors covered by tests, espec
 
 Tests will likely need updates for:
 - changed DOM structure;
+- overlay geometry assertions ensuring panels do not resize the map;
 - moved controls;
 - new responsive containers;
 - updated test selectors.
@@ -448,29 +474,32 @@ The redesign should keep or add stable `data-testid` attributes for all critical
 The design is considered correct for planning if the implementation will produce all of the following:
 
 1. The editor no longer renders as one full-width crowded toolbar plus one monolithic overloaded sidebar.
-2. The layout exposes at least **three distinct control zones** outside the map: navigation/tools, context/status, and editing modules.
+2. On desktop, the layout exposes **all four approved overlay zones** outside the map: **left rail**, **top context bar**, **right inspector**, and **bottom deck**.
 3. The map remains the visually dominant surface in the default editing state.
-4. On desktop, the user can visually distinguish:
+4. The map occupies the full editor viewport, and no control region reduces its usable rectangle.
+5. On desktop, the user can visually distinguish:
    - navigation/tools,
    - track context/status,
    - context-sensitive details,
    - working editor modules.
-5. The following critical actions remain reachable at first level on desktop and mobile-adapted layouts:
+6. The following critical actions remain reachable at first level on desktop and mobile-adapted layouts:
    - mode switching,
    - undo,
    - redo,
    - save,
    - map editing interaction.
-6. Contextual controls for active fragment/POI/segment states remain reachable without leaving the editor screen.
-7. Existing critical editor flows remain functionally preserved:
+7. Opening or closing inspector/deck/alerts does not resize the map; it only changes overlay visibility above it.
+8. Contextual controls for active fragment/POI/segment states remain reachable without leaving the editor screen.
+9. Existing critical editor flows remain functionally preserved:
    - creating a track,
    - editing waypoints,
    - undo/redo,
    - saving,
    - segment operations,
    - chart/map interactions.
-8. On tablet and mobile layouts, secondary modules may collapse or stack, but critical actions remain available within at most **one additional interaction**.
-9. Stable `data-testid` coverage is preserved or updated for all critical controls touched by the redesign.
+10. On tablet and mobile layouts, secondary modules may collapse or stack, but critical actions remain available within at most **one additional interaction**.
+11. All four overlay zones render inside the overlay layer rather than in layout columns/rows around the map.
+12. Stable `data-testid` coverage is preserved or updated for all critical controls touched by the redesign.
 
 ## Planning notes
 

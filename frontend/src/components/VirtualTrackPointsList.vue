@@ -1,6 +1,13 @@
 <template>
-  <div class="virtual-track-points" ref="containerRef" @scroll="handleScroll">
-    <div class="virtual-scrollbar" :style="{ height: totalHeight + 'px' }">
+  <div
+    ref="containerRef"
+    class="virtual-track-points"
+    @scroll="handleScroll"
+  >
+    <div
+      class="virtual-scrollbar"
+      :style="{ height: totalHeight + 'px' }"
+    >
       <div 
         v-for="item in visibleItems" 
         :key="item.index"
@@ -13,10 +20,16 @@
             <span class="lat">{{ item.lat?.toFixed(6) || 'N/A' }}</span>
             <span class="lon">{{ item.lon?.toFixed(6) || 'N/A' }}</span>
           </div>
-          <div class="point-elevation" v-if="item.ele !== undefined && item.ele !== null">
+          <div
+            v-if="item.ele !== undefined && item.ele !== null"
+            class="point-elevation"
+          >
             {{ item.ele.toFixed(1) }}m
           </div>
-          <div class="point-time" v-if="item.time">
+          <div
+            v-if="item.time"
+            class="point-time"
+          >
             {{ formatTime(item.time) }}
           </div>
         </div>

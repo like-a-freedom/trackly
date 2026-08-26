@@ -1,5 +1,9 @@
 <template>
-  <div v-if="isVisible" class="search-overlay" @click.self="closeSearch">
+  <div
+    v-if="isVisible"
+    class="search-overlay"
+    @click.self="closeSearch"
+  >
     <div class="search-modal">
       <div class="search-input-container">
         <div class="search-icon">
@@ -11,8 +15,12 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="M21 21l-4.35-4.35"></path>
+            <circle
+              cx="11"
+              cy="11"
+              r="8"
+            />
+            <path d="M21 21l-4.35-4.35" />
           </svg>
         </div>
         <input
@@ -24,8 +32,12 @@
           @keydown.enter="performSearch"
           @keydown.escape="closeSearch"
           @input="onInputChange"
-        />
-        <button v-if="searchQuery" @click="clearSearch" class="clear-button">
+        >
+        <button
+          v-if="searchQuery"
+          class="clear-button"
+          @click="clearSearch"
+        >
           <svg
             width="16"
             height="16"
@@ -34,14 +46,27 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
+            <line
+              x1="18"
+              y1="6"
+              x2="6"
+              y2="18"
+            />
+            <line
+              x1="6"
+              y1="6"
+              x2="18"
+              y2="18"
+            />
           </svg>
         </button>
       </div>
 
-      <div v-if="isLoading" class="search-loading">
-        <div class="loading-spinner"></div>
+      <div
+        v-if="isLoading"
+        class="search-loading"
+      >
+        <div class="loading-spinner" />
         <span>Searching...</span>
       </div>
 
@@ -59,15 +84,23 @@
           @click="selectTrack(track)"
         >
           <div class="track-info">
-            <h3 class="track-name">{{ track.name }}</h3>
-            <p v-if="track.description" class="track-description">
+            <h3 class="track-name">
+              {{ track.name }}
+            </h3>
+            <p
+              v-if="track.description"
+              class="track-description"
+            >
               {{ track.description }}
             </p>
             <div class="track-meta">
               <span class="track-length">{{
                 formatDistance(track.length_km)
               }}</span>
-              <span v-if="track.categories.length > 0" class="track-categories">
+              <span
+                v-if="track.categories.length > 0"
+                class="track-categories"
+              >
                 {{ track.categories.map(capitalize).join(", ") }}
               </span>
             </div>
@@ -81,13 +114,16 @@
               stroke="currentColor"
               stroke-width="2"
             >
-              <polyline points="9,18 15,12 9,6"></polyline>
+              <polyline points="9,18 15,12 9,6" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div v-else-if="searchQuery && !isLoading" class="no-results">
+      <div
+        v-else-if="searchQuery && !isLoading"
+        class="no-results"
+      >
         <div class="no-results-icon">
           <svg
             width="48"
@@ -97,8 +133,12 @@
             stroke="currentColor"
             stroke-width="1"
           >
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="M21 21l-4.35-4.35"></path>
+            <circle
+              cx="11"
+              cy="11"
+              r="8"
+            />
+            <path d="M21 21l-4.35-4.35" />
           </svg>
         </div>
         <p>No tracks found. Please, refine your query.</p>

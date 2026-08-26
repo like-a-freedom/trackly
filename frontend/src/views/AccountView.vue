@@ -2,7 +2,11 @@
   <div class="account-page">
     <!-- Header with profile and settings -->
     <header class="account-header">
-      <button class="back-btn" @click="goBack" title="Back to map">
+      <button
+        class="back-btn"
+        title="Back to map"
+        @click="goBack"
+      >
         <svg
           width="20"
           height="20"
@@ -11,8 +15,8 @@
           stroke="currentColor"
           stroke-width="2"
         >
-          <path d="M19 12H5"></path>
-          <polyline points="12,19 5,12 12,5"></polyline>
+          <path d="M19 12H5" />
+          <polyline points="12,19 5,12 12,5" />
         </svg>
         <span>Back</span>
       </button>
@@ -24,7 +28,7 @@
             :src="user.avatar_url"
             :alt="user.name || 'User avatar'"
             referrerpolicy="no-referrer"
-          />
+          >
           <svg
             v-else
             width="20"
@@ -42,10 +46,10 @@
 
       <div class="header-actions">
         <button
-          class="settings-btn"
-          @click="toggleSettingsMenu"
-          title="Settings"
           ref="settingsButton"
+          class="settings-btn"
+          title="Settings"
+          @click="toggleSettingsMenu"
         >
           <svg
             width="20"
@@ -55,16 +59,27 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <circle cx="12" cy="12" r="3"></circle>
+            <circle
+              cx="12"
+              cy="12"
+              r="3"
+            />
             <path
               d="M12 1v6m0 6v6m10-7h-6M8 12H2m16.65-6.65l-4.24 4.24m-4.82 4.82L4.35 19.07M19.07 19.07l-4.24-4.24m-4.82-4.82L4.77 4.77"
-            ></path>
+            />
           </svg>
         </button>
 
         <!-- Settings dropdown menu -->
-        <div v-if="showSettingsMenu" class="settings-menu" ref="settingsMenu">
-          <button class="menu-item" @click="openNicknameModal">
+        <div
+          v-if="showSettingsMenu"
+          ref="settingsMenu"
+          class="settings-menu"
+        >
+          <button
+            class="menu-item"
+            @click="openNicknameModal"
+          >
             <svg
               width="16"
               height="16"
@@ -75,10 +90,10 @@
             >
               <path
                 d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-              ></path>
+              />
               <path
                 d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-              ></path>
+              />
             </svg>
             Edit Nickname
           </button>
@@ -94,15 +109,18 @@
               stroke="currentColor"
               stroke-width="2"
             >
-              <polyline points="3,6 5,6 21,6"></polyline>
+              <polyline points="3,6 5,6 21,6" />
               <path
                 d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-              ></path>
+              />
             </svg>
             Delete Account
           </button>
-          <div class="menu-separator"></div>
-          <button class="menu-item" @click="handleLogout">
+          <div class="menu-separator" />
+          <button
+            class="menu-item"
+            @click="handleLogout"
+          >
             <svg
               width="16"
               height="16"
@@ -111,9 +129,14 @@
               stroke="currentColor"
               stroke-width="2"
             >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16,17 21,12 16,7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16,17 21,12 16,7" />
+              <line
+                x1="21"
+                y1="12"
+                x2="9"
+                y2="12"
+              />
             </svg>
             Sign Out
           </button>
@@ -128,10 +151,16 @@
         class="modal-overlay"
         @click="closeNicknameModal"
       >
-        <div class="modal-content" @click.stop>
+        <div
+          class="modal-content"
+          @click.stop
+        >
           <div class="modal-header">
             <h3>Edit Nickname</h3>
-            <button class="modal-close" @click="closeNicknameModal">
+            <button
+              class="modal-close"
+              @click="closeNicknameModal"
+            >
               <svg
                 width="20"
                 height="20"
@@ -140,14 +169,27 @@
                 stroke="currentColor"
                 stroke-width="2"
               >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <line
+                  x1="18"
+                  y1="6"
+                  x2="6"
+                  y2="18"
+                />
+                <line
+                  x1="6"
+                  y1="6"
+                  x2="18"
+                  y2="18"
+                />
               </svg>
             </button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label for="nickname-input" class="form-label">Nickname</label>
+              <label
+                for="nickname-input"
+                class="form-label"
+              >Nickname</label>
               <input
                 id="nickname-input"
                 v-model="editNickname"
@@ -157,8 +199,13 @@
                 maxlength="50"
                 :disabled="savingNickname"
                 @keyup.enter="saveNickname"
-              />
-              <p v-if="nicknameError" class="form-error">{{ nicknameError }}</p>
+              >
+              <p
+                v-if="nicknameError"
+                class="form-error"
+              >
+                {{ nicknameError }}
+              </p>
               <p class="form-hint">
                 1-50 characters, alphanumeric with underscores and hyphens
               </p>
@@ -167,15 +214,15 @@
           <div class="modal-footer">
             <button
               class="btn-cancel"
-              @click="closeNicknameModal"
               :disabled="savingNickname"
+              @click="closeNicknameModal"
             >
               Cancel
             </button>
             <button
               class="btn-primary"
-              @click="saveNickname"
               :disabled="!nicknameChanged || savingNickname"
+              @click="saveNickname"
             >
               {{ savingNickname ? "Saving..." : "Save" }}
             </button>
@@ -185,13 +232,19 @@
     </Teleport>
 
     <!-- Loading state -->
-    <div v-if="isLoading" class="loading-container">
-      <div class="spinner"></div>
+    <div
+      v-if="isLoading"
+      class="loading-container"
+    >
+      <div class="spinner" />
       <p>Loading account...</p>
     </div>
 
     <!-- Account content -->
-    <div v-else class="account-content">
+    <div
+      v-else
+      class="account-content"
+    >
       <!-- My Tracks Section -->
       <section class="account-section tracks-section">
         <div class="section-header">
@@ -200,7 +253,10 @@
         </div>
 
         <!-- Search and Bulk Actions Bar -->
-        <div v-if="tracks.length > 0" class="tracks-toolbar">
+        <div
+          v-if="tracks.length > 0"
+          class="tracks-toolbar"
+        >
           <div class="search-box">
             <svg
               width="16"
@@ -210,15 +266,19 @@
               stroke="currentColor"
               stroke-width="2"
             >
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="M21 21l-4.35-4.35"></path>
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+              <path d="M21 21l-4.35-4.35" />
             </svg>
             <input
               v-model="searchQuery"
               type="text"
               placeholder="Search tracks..."
               class="search-input"
-            />
+            >
           </div>
           <div class="toolbar-actions">
             <label class="select-all-label">
@@ -227,14 +287,14 @@
                 :checked="allVisibleSelected"
                 :indeterminate="someSelected && !allVisibleSelected"
                 @change="toggleSelectAll"
-              />
+              >
               <span>Select all</span>
             </label>
             <button
               v-if="selectedTrackIds.length > 0"
               class="btn-bulk"
-              @click="bulkToggleVisibility"
               :disabled="bulkOperating"
+              @click="bulkToggleVisibility"
             >
               <svg
                 width="14"
@@ -244,16 +304,20 @@
                 stroke="currentColor"
                 stroke-width="2"
               >
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="3"
+                />
               </svg>
               Toggle visibility ({{ selectedTrackIds.length }})
             </button>
             <button
               v-if="selectedTrackIds.length > 0"
               class="btn-bulk btn-bulk-danger"
-              @click="bulkDeleteTracks"
               :disabled="bulkOperating"
+              @click="bulkDeleteTracks"
             >
               <svg
                 width="14"
@@ -263,22 +327,28 @@
                 stroke="currentColor"
                 stroke-width="2"
               >
-                <polyline points="3,6 5,6 21,6"></polyline>
+                <polyline points="3,6 5,6 21,6" />
                 <path
                   d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                ></path>
+                />
               </svg>
               Delete ({{ selectedTrackIds.length }})
             </button>
           </div>
         </div>
 
-        <div v-if="loadingTracks" class="tracks-loading">
-          <div class="spinner-small"></div>
+        <div
+          v-if="loadingTracks"
+          class="tracks-loading"
+        >
+          <div class="spinner-small" />
           <span>Loading tracks...</span>
         </div>
 
-        <div v-else-if="tracks.length === 0" class="tracks-empty">
+        <div
+          v-else-if="tracks.length === 0"
+          class="tracks-empty"
+        >
           <div class="empty-icon">
             <svg
               width="48"
@@ -290,29 +360,41 @@
             >
               <path
                 d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7"
-              ></path>
-              <path d="M9 20l6-3"></path>
-              <path d="M9 7l6-3"></path>
-              <path d="M15 4v13"></path>
+              />
+              <path d="M9 20l6-3" />
+              <path d="M9 7l6-3" />
+              <path d="M15 4v13" />
               <path
                 d="M15 17l5.447 2.724A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4"
-              ></path>
+              />
             </svg>
           </div>
           <p>You don't have any tracks yet</p>
-          <button class="btn-secondary" @click="goToUpload">
+          <button
+            class="btn-secondary"
+            @click="goToUpload"
+          >
             Upload a track
           </button>
         </div>
 
-        <div v-else-if="filteredTracks.length === 0" class="tracks-empty">
+        <div
+          v-else-if="filteredTracks.length === 0"
+          class="tracks-empty"
+        >
           <p>No tracks match your search</p>
-          <button class="btn-secondary" @click="searchQuery = ''">
+          <button
+            class="btn-secondary"
+            @click="searchQuery = ''"
+          >
             Clear search
           </button>
         </div>
 
-        <div v-else class="tracks-list-container">
+        <div
+          v-else
+          class="tracks-list-container"
+        >
           <div class="tracks-list">
             <div
               v-for="track in filteredTracks"
@@ -320,15 +402,23 @@
               class="track-card"
               :class="{ selected: selectedTrackIds.includes(track.id) }"
             >
-              <label class="track-checkbox" @click.stop>
+              <label
+                class="track-checkbox"
+                @click.stop
+              >
                 <input
                   type="checkbox"
                   :checked="selectedTrackIds.includes(track.id)"
                   @change="toggleTrackSelection(track.id)"
-                />
+                >
               </label>
-              <div class="track-info" @click="openTrack(track.id)">
-                <h4 class="track-name">{{ track.name || "Unnamed Track" }}</h4>
+              <div
+                class="track-info"
+                @click="openTrack(track.id)"
+              >
+                <h4 class="track-name">
+                  {{ track.name || "Unnamed Track" }}
+                </h4>
                 <div class="track-meta">
                   <span class="track-stat">
                     <svg
@@ -343,7 +433,10 @@
                     </svg>
                     {{ formatDistance(track.length_km) }}
                   </span>
-                  <span v-if="track.elevation_gain" class="track-stat">
+                  <span
+                    v-if="track.elevation_gain"
+                    class="track-stat"
+                  >
                     <svg
                       width="14"
                       height="14"
@@ -364,9 +457,9 @@
               <button
                 class="visibility-toggle"
                 :class="{ public: track.is_public }"
-                @click.stop="toggleTrackVisibility(track)"
                 :disabled="togglingVisibility === track.id"
                 :title="track.is_public ? 'Make private' : 'Make public'"
+                @click.stop="toggleTrackVisibility(track)"
               >
                 <svg
                   v-if="togglingVisibility === track.id"
@@ -398,8 +491,12 @@
                   >
                     <path
                       d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                    ></path>
-                    <circle cx="12" cy="12" r="3"></circle>
+                    />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="3"
+                    />
                   </svg>
                   <svg
                     v-else
@@ -412,8 +509,13 @@
                   >
                     <path
                       d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
-                    ></path>
-                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                    />
+                    <line
+                      x1="1"
+                      y1="1"
+                      x2="23"
+                      y2="23"
+                    />
                   </svg>
                 </template>
                 <span>{{ track.is_public ? "Public" : "Private" }}</span>
@@ -425,8 +527,8 @@
         <button
           v-if="hasMoreTracks"
           class="btn-load-more"
-          @click="loadMoreTracks"
           :disabled="loadingTracks"
+          @click="loadMoreTracks"
         >
           {{ loadingTracks ? "Loading..." : "Load more" }}
         </button>

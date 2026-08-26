@@ -1,76 +1,91 @@
 <template>
   <div style="display: contents;">
-  <!-- Combined Start/Finish marker for loop tracks -->
-  <LMarker
-    v-if="isLoop"
-    :lat-lng="startPosition"
-    @click="handleLoopClick"
-    @touchstart.stop
-    @touchmove.stop
-  >
-    <LIcon
-      :icon-url="loopIconUrl"
-      :icon-size="iconSize"
-      :icon-anchor="iconAnchor"
-      :class-name="'endpoint-marker endpoint-marker--loop'"
-    />
-    <LTooltip>
-      <div class="track-marker-tooltip">
-        <div class="track-marker-tooltip__title">Start / Finish</div>
-        <div v-if="startTime" class="track-marker-tooltip__subtitle">
-          {{ formatTime(startTime) }}
+    <!-- Combined Start/Finish marker for loop tracks -->
+    <LMarker
+      v-if="isLoop"
+      :lat-lng="startPosition"
+      @click="handleLoopClick"
+      @touchstart.stop
+      @touchmove.stop
+    >
+      <LIcon
+        :icon-url="loopIconUrl"
+        :icon-size="iconSize"
+        :icon-anchor="iconAnchor"
+        :class-name="'endpoint-marker endpoint-marker--loop'"
+      />
+      <LTooltip>
+        <div class="track-marker-tooltip">
+          <div class="track-marker-tooltip__title">
+            Start / Finish
+          </div>
+          <div
+            v-if="startTime"
+            class="track-marker-tooltip__subtitle"
+          >
+            {{ formatTime(startTime) }}
+          </div>
         </div>
-      </div>
-    </LTooltip>
-  </LMarker>
+      </LTooltip>
+    </LMarker>
   
-  <!-- Start marker (non-loop) -->
-  <LMarker
-    v-if="!isLoop"
-    :lat-lng="startPosition"
-    @click="handleStartClick"
-    @touchstart.stop
-    @touchmove.stop
-  >
-    <LIcon
-      :icon-url="startIconUrl"
-      :icon-size="iconSize"
-      :icon-anchor="iconAnchor"
-      :class-name="'endpoint-marker endpoint-marker--start'"
-    />
-    <LTooltip>
-      <div class="track-marker-tooltip">
-        <div class="track-marker-tooltip__title">Start</div>
-        <div v-if="startTime" class="track-marker-tooltip__subtitle">
-          {{ formatTime(startTime) }}
+    <!-- Start marker (non-loop) -->
+    <LMarker
+      v-if="!isLoop"
+      :lat-lng="startPosition"
+      @click="handleStartClick"
+      @touchstart.stop
+      @touchmove.stop
+    >
+      <LIcon
+        :icon-url="startIconUrl"
+        :icon-size="iconSize"
+        :icon-anchor="iconAnchor"
+        :class-name="'endpoint-marker endpoint-marker--start'"
+      />
+      <LTooltip>
+        <div class="track-marker-tooltip">
+          <div class="track-marker-tooltip__title">
+            Start
+          </div>
+          <div
+            v-if="startTime"
+            class="track-marker-tooltip__subtitle"
+          >
+            {{ formatTime(startTime) }}
+          </div>
         </div>
-      </div>
-    </LTooltip>
-  </LMarker>
+      </LTooltip>
+    </LMarker>
   
-  <!-- Finish marker (non-loop) -->
-  <LMarker
-    v-if="!isLoop"
-    :lat-lng="endPosition"
-    @click="handleFinishClick"
-    @touchstart.stop
-    @touchmove.stop
-  >
-    <LIcon
-      :icon-url="finishIconUrl"
-      :icon-size="iconSize"
-      :icon-anchor="iconAnchor"
-      :class-name="'endpoint-marker endpoint-marker--finish'"
-    />
-    <LTooltip>
-      <div class="track-marker-tooltip">
-        <div class="track-marker-tooltip__title">Finish</div>
-        <div v-if="endTime" class="track-marker-tooltip__subtitle">
-          {{ formatTime(endTime) }}
+    <!-- Finish marker (non-loop) -->
+    <LMarker
+      v-if="!isLoop"
+      :lat-lng="endPosition"
+      @click="handleFinishClick"
+      @touchstart.stop
+      @touchmove.stop
+    >
+      <LIcon
+        :icon-url="finishIconUrl"
+        :icon-size="iconSize"
+        :icon-anchor="iconAnchor"
+        :class-name="'endpoint-marker endpoint-marker--finish'"
+      />
+      <LTooltip>
+        <div class="track-marker-tooltip">
+          <div class="track-marker-tooltip__title">
+            Finish
+          </div>
+          <div
+            v-if="endTime"
+            class="track-marker-tooltip__subtitle"
+          >
+            {{ formatTime(endTime) }}
+          </div>
         </div>
-      </div>
-    </LTooltip>
-  </LMarker>
+      </LTooltip>
+    </LMarker>
   </div>
 </template>
 

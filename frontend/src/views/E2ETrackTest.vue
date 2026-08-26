@@ -6,8 +6,8 @@
       :bounds="trackBounds"
       :zoom="12"
       :center="center"
-      :markerLatLng="markerLatLng"
-      :autoPanOnChartHover="true"
+      :marker-lat-lng="markerLatLng"
+      :auto-pan-on-chart-hover="true"
     />
   </div>
 </template>

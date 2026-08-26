@@ -1,10 +1,23 @@
 <template>
-  <div class="elevation-chart-container" tabindex="0" ref="chartContainer" @touchstart="onTouchStart" @touchmove="onTouchMove" @touchend="onTouchEnd" @keydown="onKeyDown">
-    <Line v-if="chartData.datasets && chartData.datasets.length > 0" 
-          :key="`chart-${props.chartMode}`"
-          :data="chartData" 
-          :options="chartOptions" />
-    <div v-else-if="elevationStats.gain !== undefined || elevationStats.loss !== undefined" class="elevation-stats-display">
+  <div
+    ref="chartContainer"
+    class="elevation-chart-container"
+    tabindex="0"
+    @touchstart="onTouchStart"
+    @touchmove="onTouchMove"
+    @touchend="onTouchEnd"
+    @keydown="onKeyDown"
+  >
+    <Line
+      v-if="chartData.datasets && chartData.datasets.length > 0" 
+      :key="`chart-${props.chartMode}`"
+      :data="chartData" 
+      :options="chartOptions"
+    />
+    <div
+      v-else-if="elevationStats.gain !== undefined || elevationStats.loss !== undefined"
+      class="elevation-stats-display"
+    >
       <div class="stat-item">
         <span class="stat-label">Elevation Gain</span>
         <span class="stat-value">{{ (elevationStats.gain || 0).toFixed(0) }} m</span>
@@ -13,20 +26,31 @@
         <span class="stat-label">Elevation Loss</span>
         <span class="stat-value">{{ Math.abs(elevationStats.loss || 0).toFixed(0) }} m</span>
       </div>
-      <div class="stat-item" v-if="elevationStats.min !== undefined">
+      <div
+        v-if="elevationStats.min !== undefined"
+        class="stat-item"
+      >
         <span class="stat-label">Min Elevation</span>
         <span class="stat-value">{{ elevationStats.min.toFixed(0) }} m</span>
       </div>
-      <div class="stat-item" v-if="elevationStats.max !== undefined">
+      <div
+        v-if="elevationStats.max !== undefined"
+        class="stat-item"
+      >
         <span class="stat-label">Max Elevation</span>
         <span class="stat-value">{{ elevationStats.max.toFixed(0) }} m</span>
       </div>
-      <div class="stat-item" v-if="elevationStats.dataset">
+      <div
+        v-if="elevationStats.dataset"
+        class="stat-item"
+      >
         <span class="stat-label">Data Source</span>
         <span class="stat-value">{{ formatDataset(elevationStats.dataset) }}</span>
       </div>
     </div>
-    <p v-else>No elevation, pulse, or temperature data available for this track.</p>
+    <p v-else>
+      No elevation, pulse, or temperature data available for this track.
+    </p>
   </div>
 </template>
 

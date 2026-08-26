@@ -6,21 +6,21 @@
       :polylines="polylines"
       :zoom="zoom"
       :center="center"
-      :markerLatLng="markerLatLng"
+      :marker-lat-lng="markerLatLng"
       :url="url"
       :attribution="attribution"
-      :activeTrackId="activeTrackId"
-      :heatmapPoints="heatmapPoints"
-      :showHeatmap="showHeatmap"
-      :selectedTrackDetail="null"
-      @mapReady="onMapReady"
+      :active-track-id="activeTrackId"
+      :heatmap-points="heatmapPoints"
+      :show-heatmap="showHeatmap"
+      :selected-track-detail="null"
+      @map-ready="onMapReady"
       @update:center="handleCenterUpdate"
       @update:zoom="handleZoomUpdate"
       @update:bounds="onBoundsUpdate"
-      @trackClick="onTrackClick"
-      @trackMouseOver="onTrackMouseOver"
-      @trackMouseMove="onTrackMouseMove"
-      @trackMouseOut="onTrackMouseOut"
+      @track-click="onTrackClick"
+      @track-mouse-over="onTrackMouseOver"
+      @track-mouse-move="onTrackMouseMove"
+      @track-mouse-out="onTrackMouseOut"
       @open-search="openSearch"
       @filter-changed="onFilterChanged"
     >
@@ -39,12 +39,12 @@
           <div
             v-if="!uploadFormExpanded"
             class="upload-button-compact"
+            :class="{ 'drag-active': dragActive }"
+            title="Upload track file"
             @click="toggleUploadForm"
             @dragover.prevent="handleDragOver"
             @dragleave.prevent="handleDragLeave"
             @drop.prevent="handleDrop"
-            :class="{ 'drag-active': dragActive }"
-            title="Upload track file"
           >
             <svg class="upload-icon" viewBox="0 0 24 24" fill="currentColor">
               <path
@@ -60,9 +60,9 @@
               <span class="upload-form-title">Upload Track</span>
               <button
                 class="collapse-button"
-                @click="toggleUploadForm"
                 title="Collapse upload form"
                 type="button"
+                @click="toggleUploadForm"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path
@@ -72,10 +72,10 @@
               </button>
             </div>
             <UploadForm
+              :drag-active="dragActive"
               @upload="handleUpload"
               @uploaded="handleUploadCompleted"
-              :dragActive="dragActive"
-              @update:dragActive="dragActive = $event"
+              @update:drag-active="dragActive = $event"
             />
           </div>
         </div>
@@ -123,7 +123,7 @@
     </div>
 
     <TrackSearch
-      :isVisible="searchVisible"
+      :is-visible="searchVisible"
       @close="closeSearch"
       @track-selected="onTrackSelected"
     />
@@ -149,7 +149,7 @@ import { useRouter } from "vue-router";
 import TrackMap from "../components/TrackMap.vue";
 import TrackTooltip from "../components/TrackTooltip.vue";
 import UploadForm from "../components/UploadForm.vue";
-import Toast from "../components/Toast.vue";
+import Toast from "../components/ToastNotification.vue";
 import TrackSearch from "../components/TrackSearch.vue";
 import SearchButton from "../components/SearchButton.vue";
 import GeolocationButton from "../components/GeolocationButton.vue";

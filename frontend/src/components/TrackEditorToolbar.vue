@@ -11,7 +11,10 @@
         :data-testid="`mode-${m.id}`"
         @click="$emit('setMode', m.id)"
       >
-        <span class="toolbar-btn-icon" v-html="m.icon" />
+        <span
+          class="toolbar-btn-icon"
+          v-html="m.icon"
+        />
         <span class="toolbar-btn-label">{{ m.label }}</span>
       </button>
     </div>
@@ -45,16 +48,22 @@
 
     <!-- Routing toggle -->
     <div class="toolbar-group">
-      <label class="toolbar-toggle" title="Auto-routing">
+      <label
+        class="toolbar-toggle"
+        title="Auto-routing"
+      >
         <input
           type="checkbox"
           :checked="routingMode === 'auto'"
           data-testid="routing-toggle"
           @change="$emit('toggleRouting')"
-        />
+        >
         <span class="toggle-label">Auto</span>
       </label>
-      <label class="toolbar-select" title="Snap to road">
+      <label
+        class="toolbar-select"
+        title="Snap to road"
+      >
         <select
           class="toolbar-select-input"
           :value="snapToRoadMode"
@@ -66,7 +75,10 @@
           <option value="off">Snap: Off</option>
         </select>
       </label>
-      <label class="toolbar-select" title="Routing profile">
+      <label
+        class="toolbar-select"
+        title="Routing profile"
+      >
         <select
           class="toolbar-select-input"
           :value="routingProfile"
@@ -81,13 +93,17 @@
           <option value="driving">Driving</option>
         </select>
       </label>
-      <span v-if="graphLoading" class="toolbar-status">
+      <span
+        v-if="graphLoading"
+        class="toolbar-status"
+      >
         Loading graph...
         <span v-if="graphProgress > 0">{{ graphProgress }}%</span>
       </span>
-      <span v-else-if="graphError" class="toolbar-status error"
-        >Route unavailable</span
-      >
+      <span
+        v-else-if="graphError"
+        class="toolbar-status error"
+      >Route unavailable</span>
     </div>
 
     <div class="toolbar-divider" />
@@ -120,9 +136,18 @@
     <div class="toolbar-spacer" />
 
     <!-- Stats -->
-    <div class="toolbar-stats" data-testid="toolbar-stats">
-      <span class="stat-item" title="Distance"> 📏 {{ distanceDisplay }} </span>
-      <span class="stat-item" title="Estimated time">
+    <div
+      class="toolbar-stats"
+      data-testid="toolbar-stats"
+    >
+      <span
+        class="stat-item"
+        title="Distance"
+      > 📏 {{ distanceDisplay }} </span>
+      <span
+        class="stat-item"
+        title="Estimated time"
+      >
         ⏱ {{ timeDisplay }}
       </span>
       <span
@@ -132,7 +157,10 @@
       >
         ⚠️ {{ manualRoutingPercent }}% manual
       </span>
-      <span class="stat-item" title="Points"> 📍 {{ totalPoints }} </span>
+      <span
+        class="stat-item"
+        title="Points"
+      > 📍 {{ totalPoints }} </span>
     </div>
 
     <!-- Export dropdown -->
@@ -152,9 +180,22 @@
         class="export-dropdown"
         data-testid="export-dropdown"
       >
-        <button class="export-item" @click="handleExport('gpx')">🗺 GPX</button>
-        <button class="export-item" @click="handleExport('kml')">🌍 KML</button>
-        <button class="export-item" @click="handleExport('geojson')">
+        <button
+          class="export-item"
+          @click="handleExport('gpx')"
+        >
+          🗺 GPX
+        </button>
+        <button
+          class="export-item"
+          @click="handleExport('kml')"
+        >
+          🌍 KML
+        </button>
+        <button
+          class="export-item"
+          @click="handleExport('geojson')"
+        >
           📄 GeoJSON
         </button>
       </div>

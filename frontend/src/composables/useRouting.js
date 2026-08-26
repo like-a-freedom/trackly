@@ -110,7 +110,7 @@ async function fetchArrayBufferWithProgress(url, onProgress, startPct, endPct) {
     let received = 0;
     const chunks = [];
 
-    while (true) {
+    for (; ;) {
         const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
@@ -373,7 +373,7 @@ export function useRouting({ autoLoad = true } = {}) {
             if (typeof onNotAvailable === 'function') {
                 onNotAvailable(
                     graphError.value ||
-                        'Auto-routing is unavailable. Load the road graph or switch to manual mode.'
+                    'Auto-routing is unavailable. Open the toolbar and click "Reload" to load the road graph, or switch to manual mode.'
                 );
             }
             return null;
@@ -423,7 +423,7 @@ export function useRouting({ autoLoad = true } = {}) {
         if (totalMs > 50 || routeMs > 1) {
             console.warn(
                 `[Routing] Slow route: snap ${snapMs.toFixed(2)}ms, ` +
-                    `route ${routeMs.toFixed(2)}ms, total ${totalMs.toFixed(2)}ms`
+                `route ${routeMs.toFixed(2)}ms, total ${totalMs.toFixed(2)}ms`
             );
         }
 
