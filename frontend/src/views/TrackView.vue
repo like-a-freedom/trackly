@@ -162,6 +162,7 @@ import { getSessionId } from "../utils/session";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
 import { isLoopTrack } from "../utils/trackGeometry.js";
 import { extractSegments, calculateBounds } from "../utils/coordinates.js";
+import { getColorForId } from "../utils/trackColors.js";
 import { useHead } from "@vueuse/head";
 import {
   buildBoundaryMarkers,
@@ -176,30 +177,10 @@ defineOptions({
   name: "TrackView",
 });
 
-// Simple color generation function
-function getColorForId(id) {
-  if (!id) return "#3498db";
-
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
-  }
-
-  const colors = [
-    "#e74c3c",
-    "#3498db",
-    "#2ecc71",
-    "#f39c12",
-    "#9b59b6",
-    "#1abc9c",
-    "#34495e",
-    "#e67e22",
-    "#95a5a6",
-    "#f1c40f",
-  ];
-
-  return colors[Math.abs(hash) % colors.length];
-}
+// Color function: imported from utils/trackColors.js (stage 0.5c).
+// The canonical implementation lives in utils/trackColors.js and is
+// unit-tested there. The inline copy was removed because it diverged
+// from the canonical color palette.
 
 const router = useRouter();
 const route = useRoute();
