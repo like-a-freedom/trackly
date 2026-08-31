@@ -172,7 +172,13 @@ function updateMarkers() {
 // Helper to get map object
 function getMapObject() {
   if (!leafletMap?.value) return null;
-  return leafletMap.value.mapObject || leafletMap.value.leafletObject || null;
+  // Accept either a Vue Leaflet wrapper (has .mapObject / .leafletObject) or
+  // a real L.Map directly (has .getZoom). The real L.Map is the post-Stage-0.5b
+  // contract; the wrapper path is preserved for backward compatibility with
+  // any test or component that still injects the wrapper.
+  const v = leafletMap.value;
+  if (typeof v.getZoom === 'function') return v;
+  return v.mapObject || v.leafletObject || null;
 }
 
 // Watch for POI changes
@@ -186,32 +192,42 @@ watch(
   { deep: true }
 );
 
-// Watch for map becoming ready
+// Watch for map becoming ready (handles async injection after mount).
+// The onMounted block below handles the initial-value case; the watch handles
+// any later updates from the parent.
 watch(
   leafletMap,
   (newMap) => {
     if (newMap && !clusterGroup.value) {
       const map = getMapObject();
       if (map) {
-        initClusterGroup(map);
+        try {
+          initClusterGroup(map);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[PoiClusterGroup] init failed:', e?.message);
+        }
       }
     }
-  },
-  { immediate: true }
+  }
 );
 
-// Setup on mount
+// Setup on mount: try to get the map once. If the inject has not yet provided
+// a real L.Map (only the wrapper was injected), we fall through to the
+// short polling fallback for backwards compatibility with tests/parent
+// components that still inject the wrapper. The polling must not fire when
+// the resolved L.Map is present.
 let checkMapInterval = null;
 
 onMounted(() => {
-  // Try to get map immediately if already available
   const map = getMapObject();
   if (map && !clusterGroup.value) {
     initClusterGroup(map);
     return;
   }
-  
-  // Fallback: poll for map availability
+
+  // Fallback: poll for map availability (5s cap). This is the legacy path
+  // for the Vue Leaflet wrapper inject; Stage 0.5b deprecates it.
   checkMapInterval = setInterval(() => {
     const map = getMapObject();
     if (map && !clusterGroup.value) {
