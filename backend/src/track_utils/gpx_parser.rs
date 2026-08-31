@@ -811,7 +811,10 @@ mod tests {
 
     #[test]
     fn splits_large_gap_into_multiline() {
-        let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
+        // Hermetic: the parser reads TRACK_MAX_GAP_METERS from the environment,
+        // so pin it to the default 100km to make the test deterministic.
+        with_env_var("TRACK_MAX_GAP_METERS", "100000", || {
+            let gpx = r#"<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test">
     <trk><name>Gap Test</name><trkseg>
         <trkpt lat="0.0" lon="0.0"><ele>0.0</ele></trkpt>
@@ -823,22 +826,23 @@ mod tests {
     </trkseg></trk>
 </gpx>"#;
 
-        let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
-        assert_eq!(parsed.geom_geojson["type"], "MultiLineString");
+            let parsed = parse_gpx(gpx.as_bytes()).expect("parse success");
+            assert_eq!(parsed.geom_geojson["type"], "MultiLineString");
 
-        let segments = parsed
-            .geom_geojson
-            .get("coordinates")
-            .and_then(|c| c.as_array())
-            .expect("coordinates array");
-        assert_eq!(
-            segments.len(),
-            2,
-            "expected two segments after teleport split"
-        );
+            let segments = parsed
+                .geom_geojson
+                .get("coordinates")
+                .and_then(|c| c.as_array())
+                .expect("coordinates array");
+            assert_eq!(
+                segments.len(),
+                2,
+                "expected two segments after teleport split"
+            );
 
-        // Each leg ~55 km; total ~110 km, teleport ignored
-        assert!(parsed.length_km > 100.0 && parsed.length_km < 120.0);
+            // Each leg ~55 km; total ~110 km, teleport ignored
+            assert!(parsed.length_km > 100.0 && parsed.length_km < 120.0);
+        });
     }
 
     #[test]

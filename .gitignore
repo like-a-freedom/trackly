@@ -60,7 +60,7 @@ desktop.ini
 *.swo
 *.bak
 *.tmp
-db/
+/db/
 db_data/
 tracks/
 
