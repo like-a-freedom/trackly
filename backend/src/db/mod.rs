@@ -2,6 +2,7 @@
 // Split into focused submodules for better maintainability
 
 mod api_usage;
+mod pois;
 mod tracks;
 mod users;
 
@@ -27,4 +28,11 @@ pub use users::{
     get_user_by_google_sub, get_user_by_id, get_user_poi_count, get_user_track_count,
     list_user_tracks, migrate_session_pois, migrate_session_tracks, update_track_visibility,
     update_user_nickname, update_user_roles, upsert_user,
+};
+
+// Re-export POI-related functions
+pub use pois::{
+    bulk_link_to_track, count_all, create, delete, find_by_bbox, find_by_track_id,
+    find_by_track_with_distance, get, list_all, owner_session_id, unlink_from_track, update,
+    usage_count,
 };
