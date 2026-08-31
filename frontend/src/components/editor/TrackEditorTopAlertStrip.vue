@@ -43,7 +43,7 @@
     </div>
 
     <div
-      v-if="totalPoints < 2 && !showDraftBanner"
+      v-if="totalPoints < 2"
       class="top-alert top-alert--info"
       data-testid="top-alert-tips"
     >

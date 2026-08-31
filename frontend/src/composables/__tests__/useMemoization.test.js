@@ -131,7 +131,8 @@ describe('useMemoization', () => {
                     { cache }
                 ).value;
 
-                expect(memoizedValue).toBe(i);
+                // computeFn is (x) => x * 2, so the memoized value is i * 2.
+                expect(memoizedValue).toBe(i * 2);
             }
 
             expect(cache.cache.size).toBeLessThanOrEqual(3);

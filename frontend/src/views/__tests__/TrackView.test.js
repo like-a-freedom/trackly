@@ -382,12 +382,12 @@ describe('TrackView Auto-Scaling', () => {
         expect(typeof window.__e2e.fixAtIndex).toBe('function');
         expect(typeof window.__e2e.clearMarker).toBe('function');
 
-        // Hover at index 1 - should return true
-        const hoverResult = window.__e2e.hoverAtIndex(1);
+        // Hover at index 1 - should resolve to true (async E2E hook)
+        const hoverResult = await window.__e2e.hoverAtIndex(1);
         expect(hoverResult).toBe(true);
 
         // Fix it
-        const fixResult = window.__e2e.fixAtIndex(1);
+        const fixResult = await window.__e2e.fixAtIndex(1);
         expect(fixResult).toBe(true);
 
         // Clear marker
