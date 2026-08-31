@@ -4,9 +4,16 @@
 //! - Track handlers (CRUD, upload, export)
 //! - POI handlers
 //! - Auth handlers (login, logout, refresh)
+//! - Observability (map interactions, health)
+//! - Sitemap generation
 
 mod auth;
+mod observability;
+mod pois;
+mod rate_limit;
+mod sitemap;
 mod tracks;
+mod util;
 
 // Re-export auth handlers
 pub use auth::{
@@ -18,5 +25,14 @@ pub use auth::{
     update_track_visibility,
 };
 
-// Re-export all existing track/poi handlers
+// Re-export observability handlers
+pub use observability::{health, record_map_interaction};
+
+// Re-export sitemap handler
+pub use sitemap::sitemap;
+
+// Re-export all track handlers
 pub use tracks::*;
+
+// Re-export POI handlers
+pub use pois::*;

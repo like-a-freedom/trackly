@@ -1,5 +1,10 @@
 use crate::auth::OptionalAuthUser;
 use crate::db;
+use crate::handlers::rate_limit::{
+    export_rate_limit_seconds, last_export_attempt, record_session_export_attempt,
+    record_session_upload_attempt,
+};
+use crate::handlers::util::{check_track_ownership, handle_db_error};
 use crate::input_validation::{
     MAX_CATEGORIES, MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE, MAX_NAME_LENGTH,
     validate_file_size, validate_text_field,
@@ -20,60 +25,17 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::multipart::Multipart as AxumMultipart;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 const MAX_SIMPLIFY_POINTS: usize = 100_000;
-
-// Safe error handling - don't expose internal details
-fn handle_db_error(err: sqlx::Error) -> StatusCode {
-    error!(error = ?err, "database error occurred");
-    match err {
-        sqlx::Error::RowNotFound => StatusCode::NOT_FOUND,
-        sqlx::Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        _ => StatusCode::INTERNAL_SERVER_ERROR,
-    }
-}
-
-/// Check if the request has ownership of a track.
-///
-/// Ownership check priority:
-/// 1. If user is authenticated (JWT), check user_id matches track.user_id
-/// 2. Otherwise, check session_id matches track.session_id (anonymous ownership)
-///
-/// Returns Ok(()) if ownership is confirmed, Err(FORBIDDEN) otherwise.
-fn check_track_ownership(
-    track_user_id: Option<Uuid>,
-    track_session_id: Option<Uuid>,
-    auth_user: &OptionalAuthUser,
-    request_session_id: Option<Uuid>,
-) -> Result<(), StatusCode> {
-    // Authenticated user check - takes priority
-    if let Some(user) = auth_user.user() {
-        if track_user_id == Some(user.user_id) {
-            return Ok(());
-        }
-        // User is authenticated but doesn't own the track
-        return Err(StatusCode::FORBIDDEN);
-    }
-
-    // Anonymous session check
-    if let Some(req_session) = request_session_id
-        && track_session_id == Some(req_session)
-    {
-        return Ok(());
-    }
-
-    Err(StatusCode::FORBIDDEN)
-}
 
 pub async fn check_track_exist(
     State(pool): State<Arc<PgPool>>,
@@ -145,16 +107,6 @@ pub async fn check_track_exist(
     }
 }
 
-static LAST_UPLOAD: Lazy<Mutex<HashMap<String, u64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-
-// Configurable rate limiting
-static UPLOAD_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
-    std::env::var("UPLOAD_RATE_LIMIT_SECONDS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(10) // Default 10 seconds
-});
-
 fn normalize_session_id(raw: &str) -> Result<(Uuid, String), StatusCode> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -203,15 +155,6 @@ fn classify_ownership(track_session: Option<Uuid>, request_session: Option<Uuid>
     }
 }
 
-fn bucket_zoom_level(zoom: Option<f64>) -> &'static str {
-    match zoom {
-        Some(z) if z < 10.0 => "low",
-        Some(z) if z < 14.0 => "mid",
-        Some(_) => "high",
-        None => "mid",
-    }
-}
-
 fn detect_search_query_type(query: &str) -> &'static str {
     let lower = query.to_lowercase();
     if lower.contains("#") {
@@ -220,96 +163,6 @@ fn detect_search_query_type(query: &str) -> &'static str {
         "location"
     } else {
         "name"
-    }
-}
-
-fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
-    let mut map = LAST_UPLOAD.lock().map_err(|e| {
-        error!(error = ?e, "LAST_UPLOAD mutex poisoned");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    if let Some(&last) = map.get(session_key) {
-        // If the recorded last timestamp is in the future relative to the provided "now",
-        // treat it as stale and overwrite with current time to avoid spurious rate limits
-        // caused by tests running in parallel or clock skews in tests.
-        if last > now {
-            map.insert(session_key.to_string(), now);
-            return Ok(());
-        }
-
-        if now < last + *UPLOAD_RATE_LIMIT_SECONDS {
-            let retry_after = last + *UPLOAD_RATE_LIMIT_SECONDS - now;
-            warn!(
-                reason = "upload_rate_limited",
-                session_id = session_key,
-                retry_after_seconds = retry_after,
-                "upload_track rate limit hit"
-            );
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
-    }
-    info!(
-        session_id = session_key,
-        timestamp = now,
-        "recording upload attempt"
-    );
-    map.insert(session_key.to_string(), now);
-    Ok(())
-}
-
-// Configurable export rate limiting (mirrors upload rate limiting)
-static LAST_EXPORT: Lazy<Mutex<HashMap<String, u64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static EXPORT_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
-    std::env::var("EXPORT_RATE_LIMIT_SECONDS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(10) // Default 10 seconds
-});
-
-fn record_session_export_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
-    let mut map = LAST_EXPORT.lock().map_err(|e| {
-        error!(error = ?e, "LAST_EXPORT mutex poisoned");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    if let Some(&last) = map.get(session_key) {
-        // If the recorded last timestamp is in the future relative to the provided "now",
-        // treat it as stale and overwrite with current time to avoid spurious rate limits
-        // caused by tests running in parallel or clock skews in tests.
-        if last > now {
-            map.insert(session_key.to_string(), now);
-            return Ok(());
-        }
-
-        if now < last + *EXPORT_RATE_LIMIT_SECONDS {
-            let retry_after = last + *EXPORT_RATE_LIMIT_SECONDS - now;
-            warn!(
-                reason = "export_rate_limited",
-                session_id = session_key,
-                retry_after_seconds = retry_after,
-                "export_track rate limit hit"
-            );
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
-    }
-    info!(
-        session_id = session_key,
-        timestamp = now,
-        "recording export attempt"
-    );
-    map.insert(session_key.to_string(), now);
-    Ok(())
-}
-
-#[cfg(test)]
-fn reset_rate_limit_state() {
-    // Clear the LAST_UPLOAD and LAST_EXPORT maps for tests; if poisoned, log and skip the clear
-    match LAST_UPLOAD.lock() {
-        Ok(mut m) => m.clear(),
-        Err(e) => error!(error = ?e, "LAST_UPLOAD mutex poisoned - clear skipped"),
-    }
-    match LAST_EXPORT.lock() {
-        Ok(mut m) => m.clear(),
-        Err(e) => error!(error = ?e, "LAST_EXPORT mutex poisoned - clear skipped"),
     }
 }
 
@@ -867,66 +720,7 @@ pub async fn search_tracks(
     Ok(Json(tracks))
 }
 
-pub async fn record_map_interaction(
-    Json(event): Json<MapInteractionEvent>,
-) -> Result<StatusCode, StatusCode> {
-    let action_label = match event.action.as_str() {
-        "zoom" => "zoom",
-        "pan" => "pan",
-        "layer_switch" => "layer_switch",
-        _ => "other",
-    };
-    let zoom_bucket = bucket_zoom_level(event.zoom);
-    metrics::record_map_interaction(action_label, zoom_bucket);
-    metrics::record_session_activity(event.session_id, "map");
-    Ok(StatusCode::NO_CONTENT)
-}
-
-pub async fn health() -> &'static str {
-    debug!(endpoint = "health", "health check");
-    "ok"
-}
-
 /// Generate sitemap.xml from public tracks
-pub async fn sitemap(
-    State(pool): State<Arc<PgPool>>,
-) -> Result<axum::response::Response<axum::body::Body>, StatusCode> {
-    // Site URL from env var (e.g., https://example.com)
-    let site_url =
-        std::env::var("SITE_URL").unwrap_or_else(|_| "https://your-domain.example".to_string());
-
-    let entries = db::list_public_tracks_for_sitemap(&pool)
-        .await
-        .map_err(handle_db_error)?;
-
-    // Build sitemap XML
-    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    xml.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-    for e in entries {
-        xml.push_str("  <url>\n");
-        xml.push_str(&format!(
-            "    <loc>{}/track/{}</loc>\n",
-            site_url.trim_end_matches('/'),
-            e.id
-        ));
-        xml.push_str(&format!(
-            "    <lastmod>{}</lastmod>\n",
-            e.lastmod.to_rfc3339()
-        ));
-        xml.push_str("  </url>\n");
-    }
-    xml.push_str("</urlset>");
-
-    let response = axum::response::Response::builder()
-        .header("Content-Type", "application/xml")
-        .body(axum::body::Body::from(xml))
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(response)
-}
-
-/// Debug endpoint: spawn a background task that holds a BackgroundTaskGuard for `duration` seconds.
-/// Enabled only when `ENABLE_DEBUG_ENDPOINTS` env var is set to `1`.
 pub async fn debug_background_task(
     Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<axum::response::Json<serde_json::Value>, axum::http::StatusCode> {
@@ -982,18 +776,15 @@ pub async fn export_track_gpx(
     if record_session_export_attempt(&session_key, now).is_err() {
         // compute retry_after for header
         let retry_after = {
-            let map = LAST_EXPORT.lock().map_err(|e| {
-                error!(error = ?e, "LAST_EXPORT mutex poisoned");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
-            if let Some(&last) = map.get(&session_key) {
-                if now < last + *EXPORT_RATE_LIMIT_SECONDS {
-                    last + *EXPORT_RATE_LIMIT_SECONDS - now
+            let limit_seconds = export_rate_limit_seconds();
+            if let Some(last) = last_export_attempt(&session_key) {
+                if now < last + limit_seconds {
+                    last + limit_seconds - now
                 } else {
-                    *EXPORT_RATE_LIMIT_SECONDS
+                    limit_seconds
                 }
             } else {
-                *EXPORT_RATE_LIMIT_SECONDS
+                limit_seconds
             }
         };
 
@@ -1027,7 +818,7 @@ pub async fn export_track_gpx(
                 )
                 .header(
                     "X-Export-Rate-Limit-Seconds",
-                    format!("{}", *EXPORT_RATE_LIMIT_SECONDS),
+                    format!("{}", export_rate_limit_seconds()),
                 )
                 .header(
                     "Access-Control-Expose-Headers",
@@ -1318,42 +1109,6 @@ mod tests {
     fn normalize_session_id_rejects_invalid_uuid() {
         let err = normalize_session_id("not-a-uuid").unwrap_err();
         assert_eq!(err, StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn record_session_upload_allows_first_attempt() {
-        reset_rate_limit_state();
-        record_session_upload_attempt("session", 100).expect("first upload should pass");
-    }
-
-    #[test]
-    fn record_session_upload_blocks_fast_retries() {
-        reset_rate_limit_state();
-        record_session_upload_attempt("session", 200).expect("initial upload ok");
-
-        let err = record_session_upload_attempt("session", 205).expect_err("should rate limit");
-        assert_eq!(err, StatusCode::TOO_MANY_REQUESTS);
-
-        // After enough time passes, uploads are allowed again
-        record_session_upload_attempt("session", 212).expect("rate limit window expired");
-    }
-
-    #[test]
-    fn record_session_export_allows_first_attempt() {
-        reset_rate_limit_state();
-        record_session_export_attempt("session", 100).expect("first export should pass");
-    }
-
-    #[test]
-    fn record_session_export_blocks_fast_retries() {
-        reset_rate_limit_state();
-        record_session_export_attempt("session", 200).expect("initial export ok");
-
-        let err = record_session_export_attempt("session", 205).expect_err("should rate limit");
-        assert_eq!(err, StatusCode::TOO_MANY_REQUESTS);
-
-        // After enough time passes, exports are allowed again
-        record_session_export_attempt("session", 212).expect("rate limit window expired");
     }
 
     // Additional integration tests from tests/handlers.rs
@@ -1851,420 +1606,6 @@ pub async fn recalculate_track_slopes(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
-}
-
-// ============================================================================
-// POI Handlers
-// ============================================================================
-
-/// GET /pois - List POIs with optional filtering
-pub async fn get_pois(
-    State(pool): State<Arc<PgPool>>,
-    Query(params): Query<PoiQuery>,
-) -> Result<Json<PoiListResponse>, StatusCode> {
-    let limit = params.limit.unwrap_or(100).min(1000);
-    let offset = params.offset.unwrap_or(0);
-
-    // Build query based on filters
-    let pois = if let Some(bbox_str) = &params.bbox {
-        // Parse bbox: "minLon,minLat,maxLon,maxLat"
-        let bbox_parts: Vec<f64> = bbox_str.split(',').filter_map(|s| s.parse().ok()).collect();
-
-        if bbox_parts.len() != 4 {
-            error!("Invalid bbox format: {}", bbox_str);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-
-        sqlx::query_as::<_, Poi>(
-            r#"
-            SELECT 
-                id, name, description, category, elevation,
-                ST_AsGeoJSON(geom::geometry)::jsonb as geom,
-                session_id, created_at, updated_at
-            FROM pois
-            WHERE ST_Intersects(
-                geom::geometry, 
-                ST_MakeEnvelope($1, $2, $3, $4, 4326)
-            )
-            ORDER BY created_at DESC
-            LIMIT $5
-            OFFSET $6
-            "#,
-        )
-        .bind(bbox_parts[0])
-        .bind(bbox_parts[1])
-        .bind(bbox_parts[2])
-        .bind(bbox_parts[3])
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to fetch POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-    } else if let Some(track_id) = params.track_id {
-        // Get POIs for a specific track
-        sqlx::query_as::<_, Poi>(
-            r#"
-            SELECT 
-                p.id, p.name, p.description, p.category, p.elevation,
-                ST_AsGeoJSON(p.geom::geometry)::jsonb as geom,
-                p.session_id, p.created_at, p.updated_at
-            FROM pois p
-            JOIN track_pois tp ON p.id = tp.poi_id
-            WHERE tp.track_id = $1
-            ORDER BY tp.sequence_order
-            LIMIT $2
-            OFFSET $3
-            "#,
-        )
-        .bind(track_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to fetch track POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-    } else {
-        // Get all POIs (with limit)
-        sqlx::query_as::<_, Poi>(
-            r#"
-            SELECT 
-                id, name, description, category, elevation,
-                ST_AsGeoJSON(geom::geometry)::jsonb as geom,
-                session_id, created_at, updated_at
-            FROM pois
-            ORDER BY created_at DESC
-            LIMIT $1
-            OFFSET $2
-            "#,
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to fetch POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
-    };
-
-    let total = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM pois")
-        .fetch_one(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to count POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    Ok(Json(PoiListResponse { pois, total }))
-}
-
-/// GET /pois/:id - Get POI details
-pub async fn get_poi(
-    State(pool): State<Arc<PgPool>>,
-    Path(id): Path<i32>,
-) -> Result<Json<Poi>, StatusCode> {
-    let poi = sqlx::query_as::<_, Poi>(
-        r#"
-        SELECT 
-            id, name, description, category, elevation,
-            ST_AsGeoJSON(geom::geometry)::jsonb as geom,
-            session_id, created_at, updated_at
-        FROM pois
-        WHERE id = $1
-        "#,
-    )
-    .bind(id)
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to fetch POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
-
-    Ok(Json(poi))
-}
-
-/// PATCH /pois/:id - Update POI details
-pub async fn update_poi(
-    State(pool): State<Arc<PgPool>>,
-    Path(id): Path<i32>,
-    Json(request): Json<UpdatePoiRequest>,
-) -> Result<Json<Poi>, StatusCode> {
-    let has_changes =
-        request.name.is_some() || request.description.is_some() || request.category.is_some();
-    if !has_changes {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
-    if let Some(name) = request.name.as_deref() {
-        if name.trim().is_empty() {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        validate_text_field(name, MAX_NAME_LENGTH, "name")?;
-    }
-
-    if let Some(Some(desc)) = request.description.as_ref() {
-        validate_text_field(desc, MAX_DESCRIPTION_LENGTH, "description")?;
-    }
-
-    if let Some(Some(cat)) = request.category.as_ref() {
-        validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
-    }
-
-    let owner_session_id: Option<Uuid> = sqlx::query_scalar(
-        r#"
-        SELECT session_id
-        FROM pois
-        WHERE id = $1
-        "#,
-    )
-    .bind(id)
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to check POI ownership: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
-
-    if let Some(owner) = owner_session_id
-        && Some(owner) != request.session_id
-    {
-        return Err(StatusCode::FORBIDDEN);
-    }
-
-    let name_provided = request.name.is_some();
-    let desc_provided = request.description.is_some();
-    let cat_provided = request.category.is_some();
-
-    let name_value = request.name.as_ref().map(|v| v.trim().to_string());
-    let desc_value = request
-        .description
-        .clone()
-        .flatten()
-        .map(|v| v.trim().to_string());
-    let cat_value = request
-        .category
-        .clone()
-        .flatten()
-        .map(|v| v.trim().to_string());
-
-    let poi = sqlx::query_as::<_, Poi>(
-        r#"
-        UPDATE pois
-        SET
-            name = CASE WHEN $2 THEN $3 ELSE name END,
-            description = CASE WHEN $4 THEN $5 ELSE description END,
-            category = CASE WHEN $6 THEN $7 ELSE category END,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        RETURNING
-            id, name, description, category, elevation,
-            ST_AsGeoJSON(geom::geometry)::jsonb as geom,
-            session_id, created_at, updated_at
-        "#,
-    )
-    .bind(id)
-    .bind(name_provided)
-    .bind(name_value)
-    .bind(desc_provided)
-    .bind(desc_value)
-    .bind(cat_provided)
-    .bind(cat_value)
-    .fetch_one(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to update POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    info!("Updated POI {}", poi.id);
-    Ok(Json(poi))
-}
-
-/// GET /tracks/:track_id/pois - Get POIs for a track with distance info
-pub async fn get_track_pois(
-    State(pool): State<Arc<PgPool>>,
-    Path(track_id): Path<Uuid>,
-) -> Result<Json<Vec<PoiWithDistance>>, StatusCode> {
-    let rows = sqlx::query(
-        r#"
-        SELECT 
-            p.id, p.name, p.description, p.category, p.elevation,
-            ST_AsGeoJSON(p.geom::geometry)::jsonb as geom,
-            p.session_id, p.created_at, p.updated_at,
-            tp.distance_from_start_m, tp.sequence_order
-        FROM pois p
-        JOIN track_pois tp ON p.id = tp.poi_id
-        WHERE tp.track_id = $1
-        ORDER BY tp.sequence_order
-        "#,
-    )
-    .bind(track_id)
-    .fetch_all(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to fetch track POIs: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let pois: Vec<PoiWithDistance> = rows
-        .into_iter()
-        .map(|row| {
-            use sqlx::Row;
-            PoiWithDistance {
-                poi: Poi {
-                    id: row.get("id"),
-                    name: row.get("name"),
-                    description: row.get("description"),
-                    category: row.get("category"),
-                    elevation: row.get("elevation"),
-                    geom: row.get("geom"),
-                    session_id: row.get("session_id"),
-                    created_at: row.get("created_at"),
-                    updated_at: row.get("updated_at"),
-                },
-                distance_from_start_m: row.get("distance_from_start_m"),
-                sequence_order: row.get("sequence_order"),
-            }
-        })
-        .collect();
-
-    Ok(Json(pois))
-}
-
-/// POST /pois - Create manual POI
-pub async fn create_poi(
-    State(pool): State<Arc<PgPool>>,
-    Json(request): Json<CreatePoiRequest>,
-) -> Result<Json<Poi>, StatusCode> {
-    // Validate inputs
-    if request.name.trim().is_empty() {
-        error!("POI name cannot be empty");
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
-    validate_text_field(&request.name, MAX_NAME_LENGTH, "name")?;
-
-    if let Some(ref desc) = request.description {
-        validate_text_field(desc, MAX_DESCRIPTION_LENGTH, "description")?;
-    }
-
-    let poi = sqlx::query_as::<_, Poi>(
-        r#"
-        INSERT INTO pois (name, description, category, elevation, geom, session_id)
-        VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326)::geography, $7)
-        RETURNING 
-            id, name, description, category, elevation,
-            ST_AsGeoJSON(geom::geometry)::jsonb as geom,
-            session_id, created_at, updated_at
-        "#,
-    )
-    .bind(request.name.trim())
-    .bind(request.description)
-    .bind(request.category)
-    .bind(request.elevation)
-    .bind(request.lon)
-    .bind(request.lat)
-    .bind(request.session_id)
-    .fetch_one(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to create POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    info!("Created POI {} (id: {})", poi.name, poi.id);
-    metrics::record_poi_created("manual");
-    Ok(Json(poi))
-}
-
-/// DELETE /tracks/:track_id/pois/:poi_id - Unlink POI from track
-pub async fn unlink_track_poi(
-    State(pool): State<Arc<PgPool>>,
-    Path((track_id, poi_id)): Path<(Uuid, i32)>,
-) -> Result<StatusCode, StatusCode> {
-    let result = sqlx::query("DELETE FROM track_pois WHERE track_id = $1 AND poi_id = $2")
-        .bind(track_id)
-        .bind(poi_id)
-        .execute(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to unlink POI: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    if result.rows_affected() == 0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-
-    info!("Unlinked POI {} from track {}", poi_id, track_id);
-    metrics::record_poi_deleted("unlink_track");
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// DELETE /pois/:id - Delete POI (only if not used and user is owner)
-pub async fn delete_poi(
-    State(pool): State<Arc<PgPool>>,
-    Path(id): Path<i32>,
-    Json(request): Json<DeletePoiRequest>,
-) -> Result<StatusCode, StatusCode> {
-    // Check ownership and usage
-    let poi_info = sqlx::query(
-        r#"
-        SELECT 
-            session_id,
-            (SELECT COUNT(*) FROM track_pois WHERE poi_id = $1) as usage_count
-        FROM pois
-        WHERE id = $1
-        "#,
-    )
-    .bind(id)
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to check POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
-
-    use sqlx::Row;
-    let usage_count: i64 = poi_info.get("usage_count");
-    let owner_id: Option<Uuid> = poi_info.get("session_id");
-
-    // Only allow deletion if:
-    // 1. POI is not used in any track
-    // 2. User is the owner (session_id matches) or POI has no owner (auto-created)
-    if usage_count > 0 {
-        error!("Cannot delete POI {}: used in {} tracks", id, usage_count);
-        return Err(StatusCode::CONFLICT); // 409: POI is in use
-    }
-
-    if let Some(owner_session_id) = owner_id
-        && Some(owner_session_id) != request.session_id
-    {
-        error!("Cannot delete POI {}: not the owner", id);
-        return Err(StatusCode::FORBIDDEN); // 403: Not the owner
-    }
-
-    sqlx::query("DELETE FROM pois WHERE id = $1")
-        .bind(id)
-        .execute(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to delete POI: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    info!("Deleted POI {}", id);
-    metrics::record_poi_deleted("delete_poi");
-    Ok(StatusCode::NO_CONTENT)
 }
 
 // ============================================================================
