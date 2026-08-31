@@ -9,8 +9,14 @@ target/
 # macOS
 .DS_Store
 data/
-docs/
-AGENTS.md
+# Ignore build artifacts under docs/, but keep ADR / audit / plan dirs.
+/docs/*
+!/docs/adr/
+!/docs/audit/
+!/docs/superpowers/
+# Architecture plan keeps docs/adr (ADRs) and docs/audit (audits) and
+# docs/superpowers (skill plans) tracked; everything else under docs/ is ignored.
+
 .superpowers/
 skills/
 artifacts/

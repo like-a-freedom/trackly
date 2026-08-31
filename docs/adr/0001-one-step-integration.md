@@ -1,0 +1,3 @@
+# One-step integration: tag `master` as v0.4.0-integration, then merge `create-tracks` via `git merge --no-ff`
+
+The audit was conducted against `master` (`b84edb9`), which is the same as `users-auth` (`830641b`) plus 2 `.gitignore` housekeeping commits — verified by the `logs/HEAD` reflog: `830641b` → `5a896ff` (chore: updated .gitignore) → `b84edb9` (chore: updated gitignore). So merging `users-auth` into `master` is a no-op (its commits are already an ancestor of `master`); we tag `master` and merge only `create-tracks`. We choose this over a true octopus merge because the three branches do not share a common merge base that an octopus requires.
