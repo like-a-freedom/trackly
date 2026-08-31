@@ -32,7 +32,7 @@ test('owner can see delete button and delete track', async ({ page }) => {
 
     // Open the track page as owner
     await page.context().addCookies([{ name: 'session_id', value: OWNER_SESSION, domain: 'localhost', path: '/' }]);
-    await page.addInitScript(sid => { try { localStorage.setItem('trackly_session_id', sid); } catch (e) { } }, OWNER_SESSION);
+    await page.addInitScript(sid => { try { localStorage.setItem('trackly_session_id', sid); } catch (e) { void 0; } }, OWNER_SESSION);
 
     for (let i = 0; i < 10; i++) {
         const res = await page.evaluate(async (id) => {

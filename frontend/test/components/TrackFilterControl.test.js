@@ -18,6 +18,8 @@ describe('TrackFilterControl', () => {
         globalMaxElevationGain: 4000,
         globalMinSlope: 0,
         globalMaxSlope: 60,
+        hasElevationData: true,
+        hasSlopeData: true,
         hasTracksInViewport: true
     }
 

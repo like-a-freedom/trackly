@@ -1,4 +1,4 @@
-/// <reference path="../src/types/e2e.d.ts" />
+import "../src/types/e2e.d.ts"
 
 import { test, expect } from '@playwright/test';
 

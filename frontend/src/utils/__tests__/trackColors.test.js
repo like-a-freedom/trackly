@@ -176,7 +176,7 @@ describe('trackColors', () => {
                 'test-🚀',
                 'test-🎨',
                 'test-🌟',
-                'тест-id',
+                'test-id-ru',
                 '测试-id',
                 'テスト-id',
                 'परीक्षण-id',

@@ -1,11 +1,14 @@
 <template>
   <div class="auth-button-container">
     <!-- Authenticated: show user avatar button -->
-    <div v-if="isAuthenticated" class="user-menu">
+    <div
+      v-if="isAuthenticated"
+      class="user-menu"
+    >
       <button
         class="user-button"
-        @click="goToAccount"
         :title="user?.name || 'Account'"
+        @click="goToAccount"
       >
         <img
           v-if="user?.avatar_url"
@@ -13,9 +16,17 @@
           :alt="user?.name || 'User'"
           class="user-avatar"
           referrerpolicy="no-referrer"
-        />
-        <div v-else class="avatar-placeholder-small">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        >
+        <div
+          v-else
+          class="avatar-placeholder-small"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
             <path
               d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
             />
@@ -28,9 +39,9 @@
     <button
       v-else
       class="login-button"
-      @click="handleLogin"
       :disabled="isLoading"
       title="Sign in with Google"
+      @click="handleLogin"
     >
       <svg
         v-if="isLoading"
@@ -51,7 +62,12 @@
         />
       </svg>
       <!-- Google G icon -->
-      <svg v-else width="20" height="20" viewBox="0 0 24 24">
+      <svg
+        v-else
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+      >
         <path
           fill="#4285F4"
           d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

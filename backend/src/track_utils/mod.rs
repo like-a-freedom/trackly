@@ -33,8 +33,8 @@ pub use pace_filter::{
 };
 pub use simplification::{
     get_simplification_stats, get_tolerance_for_zoom, simplify_json_array,
-    simplify_profile_array_adaptive, simplify_profile_data, simplify_track,
-    simplify_track_for_zoom,
+    simplify_profile_array_adaptive, simplify_profile_data, simplify_segments_to_ratio,
+    simplify_track, simplify_track_for_zoom,
 };
 pub use slope::{
     SlopeMetrics, calculate_slope_metrics, can_calculate_slopes, recalculate_slope_metrics,

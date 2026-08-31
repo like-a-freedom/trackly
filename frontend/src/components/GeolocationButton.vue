@@ -1,11 +1,11 @@
 <template>
   <button
     class="geolocation-button"
-    @click="getCurrentLocation"
     :disabled="gettingLocation"
     :title="
       gettingLocation ? 'Getting location...' : 'Center map on current location'
     "
+    @click="getCurrentLocation"
   >
     <svg
       v-if="!gettingLocation"

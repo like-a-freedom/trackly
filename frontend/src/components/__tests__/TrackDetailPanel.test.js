@@ -1146,7 +1146,7 @@ describe('TrackDetailPanel', () => {
         blob: () => Promise.resolve(new Blob(['<gpx></gpx>'], { type: 'application/gpx+xml' }))
       });
 
-      const track = { ...mockTrackComplete, name: 'Мой трек' };
+      const track = { ...mockTrackComplete, name: 'My Track' };
       const wrapper = mount(TrackDetailPanel, { props: { track, isVisible: true } });
 
       document.createElement.mockClear();
@@ -1158,7 +1158,7 @@ describe('TrackDetailPanel', () => {
       const createdAnchorResult = document.createElement.mock.results.find(r => r.value && r.value.tagName && r.value.tagName.toLowerCase() === 'a');
       expect(createdAnchorResult).toBeDefined();
       const createdAnchor = createdAnchorResult.value;
-      expect(createdAnchor.download).toBe('Мой_трек.gpx');
+      expect(createdAnchor.download).toBe('My_Track.gpx');
     });
 
     it('should fallback to track id when sanitized name is empty', async () => {

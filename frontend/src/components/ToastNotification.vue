@@ -1,8 +1,17 @@
 <template>
   <transition name="toast-fade">
-    <div v-if="internalVisible" class="toast" :class="type">
+    <div
+      v-if="internalVisible"
+      class="toast"
+      :class="type"
+    >
       <span>{{ message }}</span>
-      <button class="toast-close" @click="close">&times;</button>
+      <button
+        class="toast-close"
+        @click="close"
+      >
+        &times;
+      </button>
     </div>
   </transition>
 </template>

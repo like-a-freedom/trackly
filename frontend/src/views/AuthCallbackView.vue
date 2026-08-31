@@ -2,13 +2,19 @@
   <div class="auth-callback-container">
     <div class="auth-callback-card">
       <!-- Loading state -->
-      <div v-if="isLoading" class="callback-loading">
-        <div class="spinner"></div>
+      <div
+        v-if="isLoading"
+        class="callback-loading"
+      >
+        <div class="spinner" />
         <p>Completing sign in...</p>
       </div>
 
       <!-- Error state -->
-      <div v-else-if="error" class="callback-error">
+      <div
+        v-else-if="error"
+        class="callback-error"
+      >
         <div class="error-icon">
           <svg
             width="48"
@@ -18,18 +24,42 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="15" y1="9" x2="9" y2="15"></line>
-            <line x1="9" y1="9" x2="15" y2="15"></line>
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <line
+              x1="15"
+              y1="9"
+              x2="9"
+              y2="15"
+            />
+            <line
+              x1="9"
+              y1="9"
+              x2="15"
+              y2="15"
+            />
           </svg>
         </div>
         <h2>Sign in failed</h2>
-        <p class="error-message">{{ error }}</p>
-        <button class="btn-primary" @click="goHome">Return to Home</button>
+        <p class="error-message">
+          {{ error }}
+        </p>
+        <button
+          class="btn-primary"
+          @click="goHome"
+        >
+          Return to Home
+        </button>
       </div>
 
       <!-- Success state (brief, before redirect) -->
-      <div v-else class="callback-success">
+      <div
+        v-else
+        class="callback-success"
+      >
         <div class="success-icon">
           <svg
             width="48"
@@ -39,12 +69,18 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="9,12 12,15 16,10"></polyline>
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <polyline points="9,12 12,15 16,10" />
           </svg>
         </div>
-        <p>Signed in successfully!</p>
-        <p class="redirect-message">Redirecting...</p>
+        <p>{{ statusMessage }}</p>
+        <p class="redirect-message">
+          {{ secondaryMessage }}
+        </p>
       </div>
     </div>
   </div>
@@ -54,6 +90,7 @@
 import { ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
+import { useConfirm } from "../composables/useConfirm";
 
 defineOptions({
   name: "AuthCallbackView",
@@ -61,10 +98,53 @@ defineOptions({
 
 const router = useRouter();
 const route = useRoute();
-const { handleCallback } = useAuth();
+const { handleCallback, migrateSessionTracks } = useAuth();
+const { showConfirm } = useConfirm();
 
 const isLoading = ref(true);
 const error = ref(null);
+const statusMessage = ref("Signed in successfully!");
+const secondaryMessage = ref("Redirecting...");
+
+async function handleSessionMigration() {
+  const pendingSessionId = sessionStorage.getItem(
+    "pending_migration_session_id"
+  );
+
+  if (!pendingSessionId) {
+    return;
+  }
+
+  const confirmed = await showConfirm({
+    title: "Link your tracks?",
+    message:
+      "We found tracks created before you signed in. Link them to your account so you can manage them from any device.",
+    confirmText: "Link tracks",
+    cancelText: "Skip",
+  });
+
+  sessionStorage.removeItem("pending_migration_session_id");
+
+  if (!confirmed) {
+    statusMessage.value = "Track linking skipped.";
+    return;
+  }
+
+  secondaryMessage.value = "Linking your tracks...";
+  const result = await migrateSessionTracks(pendingSessionId);
+  const tracksMigrated = result?.tracks_migrated ?? 0;
+  const poisMigrated = result?.pois_migrated ?? 0;
+
+  if (tracksMigrated > 0 || poisMigrated > 0) {
+    statusMessage.value = `Linked ${tracksMigrated} track${
+      tracksMigrated === 1 ? "" : "s"
+    } and ${poisMigrated} POI${poisMigrated === 1 ? "" : "s"}.`;
+  } else {
+    statusMessage.value = "No tracks were found to link.";
+  }
+
+  secondaryMessage.value = "Redirecting...";
+}
 
 async function processCallback() {
   const code = route.query.code;
@@ -89,6 +169,8 @@ async function processCallback() {
   try {
     await handleCallback(code, state);
     isLoading.value = false;
+
+    await handleSessionMigration();
 
     // Brief pause to show success, then redirect
     setTimeout(() => {

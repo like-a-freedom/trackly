@@ -1,18 +1,37 @@
 <template>
   <transition name="dialog-fade">
-    <div v-if="visible" class="dialog-overlay" @click="onOverlayClick">
-      <div class="dialog" @click.stop>
+    <div
+      v-if="visible"
+      class="dialog-overlay"
+      @click="onOverlayClick"
+    >
+      <div
+        class="dialog"
+        @click.stop
+      >
         <div class="dialog-content">
-          <h3 v-if="title" class="dialog-title">{{ title }}</h3>
-          <p class="dialog-message">{{ message }}</p>
+          <h3
+            v-if="title"
+            class="dialog-title"
+          >
+            {{ title }}
+          </h3>
+          <p class="dialog-message">
+            {{ message }}
+          </p>
         </div>
         <div class="dialog-actions">
-          <button class="dialog-btn dialog-btn-cancel" @click="onCancel">
+          <button
+            class="dialog-btn dialog-btn-cancel"
+            @click="onCancel"
+          >
             {{ cancelText }}
           </button>
-          <button class="dialog-btn dialog-btn-confirm" @click="onConfirm">
+          <button
+            class="dialog-btn dialog-btn-confirm"
+            @click="onConfirm"
+          >
             {{ confirmText }}
-            
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
-/// <reference path="../src/types/e2e.d.ts" />
+import "../src/types/e2e.d.ts"
 
-// @ts-ignore: Playwright test types may not be resolvable in the static analysis environment
+// @ts-expect-error: Playwright test types may not be resolvable in the static analysis environment
 import { test, expect } from '@playwright/test';
 
 test.describe('Auth Button UI', () => {
@@ -38,6 +38,7 @@ test.describe('Auth Button UI', () => {
     test('login button has correct icon-only style', async ({ page }) => {
         const loginButton = page.locator('button.login-button');
         await expect(loginButton).toBeVisible();
+        await expect(loginButton).toBeEnabled({ timeout: 10000 });
 
         // Check that SVG icon exists and is visible (Google icon)
         const googleIcon = loginButton.locator('svg');

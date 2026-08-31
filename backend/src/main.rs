@@ -8,8 +8,10 @@ use backend::{handlers, logging, metrics, services};
 use mimalloc::MiMalloc;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 use tracing::info;
 
 #[global_allocator]
@@ -97,6 +99,7 @@ async fn main() {
         .allow_methods([
             Method::GET,
             Method::POST,
+            Method::PUT,
             Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,
@@ -110,11 +113,17 @@ async fn main() {
         "CORS configured"
     );
 
+    let graph_dir = std::env::var("FAST_PATHS_GRAPH_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("data/graphs"));
+
     let app = Router::new()
         .route("/health", get(handlers::health))
         .route("/metrics", get(metrics::serve_metrics))
+        .nest_service("/graphs", ServeDir::new(graph_dir))
         .route("/api/tracks/upload", post(handlers::upload_track))
         .route("/api/tracks", get(handlers::list_tracks_geojson))
+        .route("/api/tracks/heatmap", get(handlers::list_tracks_heatmap))
         .route("/api/tracks", post(handlers::upload_track))
         .route("/api/tracks/exist", post(handlers::check_track_exist))
         .route("/api/tracks/search", get(handlers::search_tracks))
@@ -122,6 +131,10 @@ async fn main() {
         .route(
             "/api/tracks/{id}/simplified",
             get(handlers::get_track_simplified),
+        )
+        .route(
+            "/api/tracks/simplify-preview",
+            post(handlers::simplify_track_preview),
         )
         .route(
             "/api/tracks/{id}/description",
@@ -135,11 +148,16 @@ async fn main() {
             "/api/tracks/{id}/categories",
             axum::routing::patch(handlers::update_track_categories),
         )
+        .route(
+            "/api/tracks/{id}/distance-markers",
+            axum::routing::patch(handlers::update_track_distance_markers),
+        )
         .route("/api/tracks/{id}/export", get(handlers::export_track_gpx))
         .route(
             "/api/tracks/{id}/enrich-elevation",
             post(handlers::enrich_elevation),
         )
+        .route("/api/elevation/preview", post(handlers::preview_elevation))
         .route(
             "/api/tracks/{id}/slope-profile",
             get(handlers::get_track_slope_profile),
@@ -152,6 +170,19 @@ async fn main() {
             "/api/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
         )
+        // Track editor routes
+        .route(
+            "/api/tracks/create",
+            post(handlers::create_track_from_editor),
+        )
+        .route(
+            "/api/tracks/{id}/geometry",
+            axum::routing::put(handlers::update_track_geometry),
+        )
+        .route(
+            "/api/tracks/{id}/duplicate",
+            post(handlers::duplicate_track),
+        )
         .route(
             "/observability/map-interactions",
             post(handlers::record_map_interaction),
@@ -163,7 +194,9 @@ async fn main() {
         )
         .route(
             "/api/pois/{id}",
-            get(handlers::get_poi).delete(handlers::delete_poi),
+            get(handlers::get_poi)
+                .patch(handlers::update_poi)
+                .delete(handlers::delete_poi),
         )
         .route("/api/tracks/{track_id}/pois", get(handlers::get_track_pois))
         .route(

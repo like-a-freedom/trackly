@@ -1,9 +1,19 @@
 <template>
   <div id="app-container">
     <router-view v-slot="{ Component, route }">
-      <transition name="page" mode="out-in" appear>
-        <keep-alive :include="['HomeView', 'TrackView']" :max="3">
-          <component :is="Component" :key="getComponentKey(route)" />
+      <transition
+        name="page"
+        mode="out-in"
+        appear
+      >
+        <keep-alive
+          :include="['HomeView', 'TrackView']"
+          :max="3"
+        >
+          <component
+            :is="Component"
+            :key="getComponentKey(route)"
+          />
         </keep-alive>
       </transition>
     </router-view>

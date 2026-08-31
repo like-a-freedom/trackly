@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { nextTick, ref } from 'vue';
 import TrackView from '../TrackView.vue';
 
 // Disable debouncing to simplify timing in tests
@@ -346,7 +346,6 @@ describe('TrackView Auto-Scaling', () => {
             components: { TrackView },
             template: `<div><keep-alive><track-view v-if="show" id="test-track-id"/></keep-alive></div>`,
             setup() {
-                const { ref } = require('vue');
                 const show = ref(true);
                 return { show };
             }

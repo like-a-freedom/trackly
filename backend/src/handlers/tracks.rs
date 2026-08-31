@@ -10,6 +10,7 @@ use crate::services::gpx_export::GpxExportService;
 use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
 use crate::track_utils::{
     ElevationEnrichmentService, calculate_file_hash, extract_coordinates_from_geojson,
+    extract_segments_from_geojson, geojson_from_segments, simplify_segments_to_ratio,
 };
 use axum::http::header::REFERER;
 use axum::{
@@ -29,6 +30,8 @@ use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
+
+const MAX_SIMPLIFY_POINTS: usize = 100_000;
 
 // Safe error handling - don't expose internal details
 fn handle_db_error(err: sqlx::Error) -> StatusCode {
@@ -496,6 +499,22 @@ pub async fn list_tracks_geojson(
     Ok(Json(geojson))
 }
 
+pub async fn list_tracks_heatmap(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Query(mut params): Query<TrackGeoJsonQuery>,
+) -> Result<Json<TrackHeatmapResponse>, StatusCode> {
+    if let Some(user) = auth_user.user() {
+        params.owner_user_id = Some(user.user_id);
+    }
+
+    let points = db::list_tracks_heatmap(&pool, params.bbox.as_deref(), params.zoom, &params)
+        .await
+        .map_err(handle_db_error)?;
+
+    Ok(Json(TrackHeatmapResponse { points }))
+}
+
 pub async fn get_track(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
@@ -552,7 +571,9 @@ pub async fn get_track_simplified(
                 name: track.name,
                 description: track.description,
                 categories: track.categories,
+                distance_markers_enabled: track.distance_markers_enabled,
                 geom_geojson: track.geom_geojson,
+                segment_meta: track.segment_meta,
                 segment_gaps: track.segment_gaps,
                 pause_gaps: track.pause_gaps,
                 length_km: track.length_km,
@@ -611,6 +632,47 @@ pub async fn get_track_simplified(
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+/// POST /api/tracks/simplify-preview — Simplify editor geometry for optimizer preview.
+pub async fn simplify_track_preview(
+    Json(request): Json<TrackSimplifyPreviewRequest>,
+) -> Result<Json<TrackSimplifyPreviewResponse>, StatusCode> {
+    if !(0.0..=1.0).contains(&request.target_ratio) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let segments =
+        extract_segments_from_geojson(&request.geometry).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    if segments.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let total_points: usize = segments.iter().map(|s| s.len()).sum();
+    if !(2..=MAX_SIMPLIFY_POINTS).contains(&total_points) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let waypoint_ref = if request.waypoints.len() == segments.len() {
+        Some(request.waypoints.as_slice())
+    } else {
+        None
+    };
+
+    let (simplified_segments, simplified_waypoints, stats) =
+        simplify_segments_to_ratio(&segments, waypoint_ref, request.target_ratio);
+
+    let geometry = geojson_from_segments(&simplified_segments);
+
+    Ok(Json(TrackSimplifyPreviewResponse {
+        geometry,
+        waypoints: simplified_waypoints,
+        original_points: stats.original_points,
+        simplified_points: stats.simplified_points,
+        compression_ratio: stats.compression_ratio,
+        tolerance_used: stats.tolerance_used,
+    }))
 }
 
 pub async fn update_track_description(
@@ -748,6 +810,36 @@ pub async fn update_track_categories(
     }
 
     metrics::record_track_edit("categories");
+    metrics::record_session_activity(Some(payload.session_id), "edit");
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn update_track_distance_markers(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<Uuid>,
+    auth_user: OptionalAuthUser,
+    Json(payload): Json<UpdateTrackDistanceMarkersRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let track = db::get_track_detail(&pool, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let track = match track {
+        Some(t) => t,
+        None => return Err(StatusCode::NOT_FOUND),
+    };
+
+    check_track_ownership(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        Some(payload.session_id),
+    )?;
+
+    db::update_track_distance_markers(&pool, id, payload.distance_markers_enabled)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    metrics::record_track_edit("distance_markers");
     metrics::record_session_activity(Some(payload.session_id), "edit");
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1153,6 +1245,51 @@ pub async fn enrich_elevation(
     }))
 }
 
+/// POST /api/elevation/preview — Preview elevation profile for editor without saving.
+pub async fn preview_elevation(
+    Json(request): Json<ElevationPreviewRequest>,
+) -> Result<Json<ElevationPreviewResponse>, StatusCode> {
+    if request.coordinates.len() < 2 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if request.coordinates.len() > 5000 {
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    let mut coordinates = Vec::with_capacity(request.coordinates.len());
+    for coord in request.coordinates {
+        if coord[0] < -90.0 || coord[0] > 90.0 || coord[1] < -180.0 || coord[1] > 180.0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        coordinates.push((coord[0], coord[1]));
+    }
+
+    let enrichment_service = ElevationEnrichmentService::new();
+    let enrichment_result = enrichment_service
+        .enrich_track_elevation(coordinates)
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("disabled") {
+                StatusCode::SERVICE_UNAVAILABLE
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        })?;
+
+    let profile = enrichment_result.elevation_profile.unwrap_or_default();
+
+    Ok(Json(ElevationPreviewResponse {
+        elevation_profile: profile,
+        elevation_gain: enrichment_result.metrics.elevation_gain,
+        elevation_loss: enrichment_result.metrics.elevation_loss,
+        elevation_min: enrichment_result.metrics.elevation_min,
+        elevation_max: enrichment_result.metrics.elevation_max,
+        elevation_dataset: enrichment_result.dataset,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1262,8 +1399,10 @@ mod tests {
             name: "Adaptive Test".to_string(),
             description: None,
             categories: vec!["running".into()],
+            distance_markers_enabled: Some(true),
             auto_classifications: vec![],
             geom_geojson: serde_json::json!({"type":"LineString","coordinates": coords}),
+            segment_meta: None,
             length_km: 10.0,
             elevation_profile: Some(serde_json::json!(elevation)),
             hr_data: Some(serde_json::json!(hr)),
@@ -1851,6 +1990,104 @@ pub async fn get_poi(
     Ok(Json(poi))
 }
 
+/// PATCH /pois/:id - Update POI details
+pub async fn update_poi(
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<i32>,
+    Json(request): Json<UpdatePoiRequest>,
+) -> Result<Json<Poi>, StatusCode> {
+    let has_changes =
+        request.name.is_some() || request.description.is_some() || request.category.is_some();
+    if !has_changes {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    if let Some(name) = request.name.as_deref() {
+        if name.trim().is_empty() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        validate_text_field(name, MAX_NAME_LENGTH, "name")?;
+    }
+
+    if let Some(Some(desc)) = request.description.as_ref() {
+        validate_text_field(desc, MAX_DESCRIPTION_LENGTH, "description")?;
+    }
+
+    if let Some(Some(cat)) = request.category.as_ref() {
+        validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
+    }
+
+    let owner_session_id: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT session_id
+        FROM pois
+        WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to check POI ownership: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let Some(owner) = owner_session_id
+        && Some(owner) != request.session_id
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let name_provided = request.name.is_some();
+    let desc_provided = request.description.is_some();
+    let cat_provided = request.category.is_some();
+
+    let name_value = request.name.as_ref().map(|v| v.trim().to_string());
+    let desc_value = request
+        .description
+        .clone()
+        .flatten()
+        .map(|v| v.trim().to_string());
+    let cat_value = request
+        .category
+        .clone()
+        .flatten()
+        .map(|v| v.trim().to_string());
+
+    let poi = sqlx::query_as::<_, Poi>(
+        r#"
+        UPDATE pois
+        SET
+            name = CASE WHEN $2 THEN $3 ELSE name END,
+            description = CASE WHEN $4 THEN $5 ELSE description END,
+            category = CASE WHEN $6 THEN $7 ELSE category END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING
+            id, name, description, category, elevation,
+            ST_AsGeoJSON(geom::geometry)::jsonb as geom,
+            session_id, created_at, updated_at
+        "#,
+    )
+    .bind(id)
+    .bind(name_provided)
+    .bind(name_value)
+    .bind(desc_provided)
+    .bind(desc_value)
+    .bind(cat_provided)
+    .bind(cat_value)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| {
+        error!("Failed to update POI: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    info!("Updated POI {}", poi.id);
+    Ok(Json(poi))
+}
+
 /// GET /tracks/:track_id/pois - Get POIs for a track with distance info
 pub async fn get_track_pois(
     State(pool): State<Arc<PgPool>>,
@@ -2028,6 +2265,69 @@ pub async fn delete_poi(
     info!("Deleted POI {}", id);
     metrics::record_poi_deleted("delete_poi");
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Track Editor Handlers
+// ============================================================================
+
+/// POST /api/tracks/create — Create a new track from editor geometry.
+pub async fn create_track_from_editor(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Json(request): Json<crate::services::track_editor::CreateTrackFromEditorRequest>,
+) -> Result<(StatusCode, Json<TrackUploadResponse>), StatusCode> {
+    let user_id = auth_user.user().map(|u| u.user_id);
+    let service = crate::services::track_editor::TrackEditorService::new(pool);
+    let response = service.create_track(request, user_id).await?;
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// PUT /api/tracks/{id}/geometry — Update track geometry.
+pub async fn update_track_geometry(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Path(track_id): Path<Uuid>,
+    Json(request): Json<crate::services::track_editor::UpdateTrackGeometryRequest>,
+) -> Result<StatusCode, StatusCode> {
+    // Check ownership
+    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
+        .await
+        .map_err(handle_db_error)?;
+    check_track_ownership(
+        track_user_id,
+        track_session_id,
+        &auth_user,
+        request.session_id,
+    )?;
+
+    let service = crate::services::track_editor::TrackEditorService::new(pool);
+    service.update_geometry(track_id, request).await?;
+    Ok(StatusCode::OK)
+}
+
+/// POST /api/tracks/{id}/duplicate — Duplicate an existing track.
+pub async fn duplicate_track(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: OptionalAuthUser,
+    Path(source_id): Path<Uuid>,
+    Json(request): Json<crate::services::track_editor::DuplicateTrackRequest>,
+) -> Result<(StatusCode, Json<TrackUploadResponse>), StatusCode> {
+    // Check ownership of source track
+    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, source_id)
+        .await
+        .map_err(handle_db_error)?;
+    check_track_ownership(
+        track_user_id,
+        track_session_id,
+        &auth_user,
+        request.session_id,
+    )?;
+
+    let user_id = auth_user.user().map(|u| u.user_id);
+    let service = crate::services::track_editor::TrackEditorService::new(pool);
+    let response = service.duplicate_track(source_id, request, user_id).await?;
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
 #[cfg(test)]

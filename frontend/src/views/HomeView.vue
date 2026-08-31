@@ -6,19 +6,21 @@
       :polylines="polylines"
       :zoom="zoom"
       :center="center"
-      :markerLatLng="markerLatLng"
+      :marker-lat-lng="markerLatLng"
       :url="url"
       :attribution="attribution"
-      :activeTrackId="activeTrackId"
-      :selectedTrackDetail="null"
-      @mapReady="onMapReady"
+      :active-track-id="activeTrackId"
+      :heatmap-points="heatmapPoints"
+      :show-heatmap="showHeatmap"
+      :selected-track-detail="null"
+      @map-ready="onMapReady"
       @update:center="handleCenterUpdate"
       @update:zoom="handleZoomUpdate"
       @update:bounds="onBoundsUpdate"
-      @trackClick="onTrackClick"
-      @trackMouseOver="onTrackMouseOver"
-      @trackMouseMove="onTrackMouseMove"
-      @trackMouseOut="onTrackMouseOut"
+      @track-click="onTrackClick"
+      @track-mouse-over="onTrackMouseOver"
+      @track-mouse-move="onTrackMouseMove"
+      @track-mouse-out="onTrackMouseOut"
       @open-search="openSearch"
       @filter-changed="onFilterChanged"
     >
@@ -37,12 +39,12 @@
           <div
             v-if="!uploadFormExpanded"
             class="upload-button-compact"
+            :class="{ 'drag-active': dragActive }"
+            title="Upload track file"
             @click="toggleUploadForm"
             @dragover.prevent="handleDragOver"
             @dragleave.prevent="handleDragLeave"
             @drop.prevent="handleDrop"
-            :class="{ 'drag-active': dragActive }"
-            title="Upload track file"
           >
             <svg class="upload-icon" viewBox="0 0 24 24" fill="currentColor">
               <path
@@ -58,9 +60,9 @@
               <span class="upload-form-title">Upload Track</span>
               <button
                 class="collapse-button"
-                @click="toggleUploadForm"
                 title="Collapse upload form"
                 type="button"
+                @click="toggleUploadForm"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path
@@ -70,10 +72,10 @@
               </button>
             </div>
             <UploadForm
+              :drag-active="dragActive"
               @upload="handleUpload"
               @uploaded="handleUploadCompleted"
-              :dragActive="dragActive"
-              @update:dragActive="dragActive = $event"
+              @update:drag-active="dragActive = $event"
             />
           </div>
         </div>
@@ -92,13 +94,36 @@
       <GeolocationButton @location-found="onLocationFound" />
     </div>
 
+    <!-- Create track button — top right -->
+    <button
+      class="create-track-btn"
+      title="Create new track"
+      aria-label="Create new track"
+      @click="router.push({ name: 'TrackCreate' })"
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+      <span class="create-track-label">Create Track</span>
+    </button>
+
     <!-- Auth button - positioned in bottom left -->
     <div class="auth-button-overlay">
       <LoginButton />
     </div>
 
     <TrackSearch
-      :isVisible="searchVisible"
+      :is-visible="searchVisible"
       @close="closeSearch"
       @track-selected="onTrackSelected"
     />
@@ -124,7 +149,7 @@ import { useRouter } from "vue-router";
 import TrackMap from "../components/TrackMap.vue";
 import TrackTooltip from "../components/TrackTooltip.vue";
 import UploadForm from "../components/UploadForm.vue";
-import Toast from "../components/Toast.vue";
+import Toast from "../components/ToastNotification.vue";
 import TrackSearch from "../components/TrackSearch.vue";
 import SearchButton from "../components/SearchButton.vue";
 import GeolocationButton from "../components/GeolocationButton.vue";
@@ -178,14 +203,18 @@ const markerLatLng = ref(center.value);
 const bounds = ref(null);
 const mapInstance = ref(null); // Store map instance for invalidateSize on activation
 const dragActive = ref(false);
-const uploadFormExpanded = ref(false); // По умолчанию свернута
+const uploadFormExpanded = ref(false); // Collapsed by default
 const {
   polylines,
   fetchTracksInBounds,
+  fetchHeatmapInBounds,
+  clearHeatmap,
+  heatmapPoints,
   uploadTrack,
   error,
   updateTrackInPolylines,
 } = useTracks();
+const showHeatmap = ref(false);
 // Keep track of the latest filter state coming from TrackMap/TrackFilterControl
 const currentFilterState = ref(null);
 const tooltip = reactive({ visible: false, x: 0, y: 0, data: null });
@@ -257,6 +286,15 @@ const debouncedFetchTracks = useAdvancedDebounce(
       mode: "overview", // Use overview mode for track lists
     };
     fetchTracksInBounds(bounds, options);
+  },
+  500,
+  { leading: false, trailing: true, maxWait: 1000 }
+);
+
+const debouncedFetchHeatmap = useAdvancedDebounce(
+  (bounds, filterState) => {
+    if (!showHeatmap.value) return;
+    fetchHeatmapInBounds(bounds, buildHeatmapOptions(filterState));
   },
   500,
   { leading: false, trailing: true, maxWait: 1000 }
@@ -382,6 +420,9 @@ function onMapReady(e) {
     ownerSessionId: currentFilterState.value?.myTracks ? sessionId : undefined,
   };
   fetchTracksInBounds(bounds.value, options);
+  if (showHeatmap.value) {
+    fetchHeatmapInBounds(bounds.value, buildHeatmapOptions());
+  }
 }
 
 function onBoundsUpdate(newBounds) {
@@ -395,11 +436,13 @@ function onBoundsUpdate(newBounds) {
 
   // Use debounced function for API calls
   debouncedFetchTracks(newBounds);
+  debouncedFetchHeatmap(newBounds, currentFilterState.value);
 }
 
 // Called when filters change in TrackMap/TrackFilterControl (bubbled up)
 function onFilterChanged(newFilterState) {
   currentFilterState.value = newFilterState;
+  showHeatmap.value = !!newFilterState?.showHeatmap;
   // Immediately refresh tracks to reflect server-side filters like "My tracks"
   if (bounds.value) {
     const options = {
@@ -409,7 +452,31 @@ function onFilterChanged(newFilterState) {
       ownerSessionId: newFilterState?.myTracks ? sessionId : undefined,
     };
     fetchTracksInBounds(bounds.value, options);
+    if (showHeatmap.value) {
+      fetchHeatmapInBounds(bounds.value, {
+        ...buildHeatmapOptions(newFilterState),
+        forceRefresh: true,
+      });
+    } else {
+      clearHeatmap();
+    }
   }
+}
+
+function buildHeatmapOptions(filterState = currentFilterState.value) {
+  if (!filterState) {
+    return { zoom: zoom.value };
+  }
+
+  return {
+    zoom: zoom.value,
+    ownerSessionId: filterState.myTracks ? sessionId : undefined,
+    mine: !!filterState.myTracks,
+    categories: filterState.categories,
+    lengthRange: filterState.lengthRange,
+    elevationGainRange: filterState.elevationGainRange,
+    slopeRange: filterState.slopeRange,
+  };
 }
 
 async function onTrackClick(poly, event) {
@@ -490,7 +557,7 @@ async function handleUpload({ file, name, categories }) {
 
 function handleUploadCompleted() {
   refreshTracks();
-  // Не сворачиваем автоматически - пользователь сам решает
+  // Do not collapse automatically - user decides
 }
 
 function toggleUploadForm() {
@@ -500,7 +567,7 @@ function toggleUploadForm() {
 function handleDragOver(event) {
   event.preventDefault();
   dragActive.value = true;
-  // Форма уже развернута по умолчанию
+  // The form is already expanded by default
 }
 
 function handleDragLeave(event) {
@@ -511,7 +578,7 @@ function handleDragLeave(event) {
 function handleDrop(event) {
   event.preventDefault();
   dragActive.value = false;
-  // Форма уже развернута по умолчанию
+  // The form is already expanded by default
   // Forward the drop event to the UploadForm component if expanded
   // The UploadForm will handle the file processing
 }
@@ -775,6 +842,58 @@ body,
   pointer-events: auto; /* Re-enable pointer events for buttons */
 }
 
+/* Create Track button - top right */
+.create-track-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.create-track-btn:hover {
+  background: #1565c0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  transform: translateY(-1px);
+}
+
+.create-track-btn:active {
+  background: #0d47a1;
+  transform: translateY(0);
+}
+
+.create-track-btn svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .create-track-btn {
+    top: 12px;
+    right: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .create-track-label {
+    display: none; /* Icon only on mobile */
+  }
+}
+
 /* Auth button overlay - positioned in bottom left */
 .auth-button-overlay {
   position: fixed;
@@ -843,7 +962,7 @@ body,
 }
 
 .collapsible-upload.expanded {
-  /* Стили фона и теней теперь применяются к .upload-form-expanded */
+  /* Background and shadow styles are applied to .upload-form-expanded */
   border-radius: 8px;
 }
 

@@ -7,7 +7,7 @@ global.fetch = vi.fn()
 
 describe('Slope Functionality Integration Tests', () => {
     beforeEach(() => {
-        vi      // Test adaptive granularity with large datasets
+        // Test adaptive granularity with large datasets
         const oversizedData = Array.from({ length: 2000 }, (_, i) => ({
             x: i,
             y: Math.random() * 100
@@ -26,7 +26,10 @@ describe('Slope Functionality Integration Tests', () => {
                 const avgY = chunk.reduce((sum, p) => sum + p.y, 0) / chunk.length
                 downsampled.push({ x: avgX, y: avgY })
             }
-        } fetch.mockClear()
+        }
+
+        expect(downsampled.length).toBeLessThanOrEqual(maxPoints)
+        fetch.mockClear()
     })
 
     describe('Slope Profile API Integration', () => {

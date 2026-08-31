@@ -3,12 +3,12 @@
     <ConfirmDialog
       v-for="dialog in confirmDialogs"
       :key="dialog.id"
+      :ref="el => setDialogRef(dialog.id, el)"
       :title="dialog.title"
       :message="dialog.message"
       :confirm-text="dialog.confirmText"
       :cancel-text="dialog.cancelText"
       :close-on-overlay="dialog.closeOnOverlay"
-      :ref="el => setDialogRef(dialog.id, el)"
       @confirm="() => confirmDialog(dialog, true)"
       @cancel="() => confirmDialog(dialog, false)"
     />

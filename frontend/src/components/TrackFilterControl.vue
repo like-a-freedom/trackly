@@ -16,7 +16,12 @@
       @keydown.space.prevent="toggleOpen"
     >
       <!-- Funnel icon for filters (collapsed state) -->
-      <svg class="filter-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <svg
+        class="filter-icon"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+      >
         <path d="M3 5h18v2H3V5zm3 6h12v2H6v-2zm4 6h4v2h-4v-2z" />
       </svg>
     </div>
@@ -38,7 +43,14 @@
               aria-label="Toggle filter options"
               @click="showFilterOptions = !showFilterOptions"
             >
-              <svg class="options-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg
+                class="options-icon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
                 <path d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z" />
               </svg>
             </button>
@@ -49,7 +61,14 @@
               aria-label="Collapse filters"
               @click="toggleOpen"
             >
-              <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg
+                class="collapse-icon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
                 <!-- Same arrow as UploadForm and TrackDetailPanel -->
                 <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" />
               </svg>
@@ -58,7 +77,10 @@
         </div>
         
         <!-- Filter options dropdown -->
-        <div v-if="showFilterOptions" class="filter-options-panel">
+        <div
+          v-if="showFilterOptions"
+          class="filter-options-panel"
+        >
           <div class="options-header">
             <span class="options-title">Show filters</span>
           </div>
@@ -69,8 +91,11 @@
                 v-model="showCategories"
                 type="checkbox"
                 class="option-checkbox"
-              />
-              <label for="show-categories" class="checkbox-label">Categories</label>
+              >
+              <label
+                for="show-categories"
+                class="checkbox-label"
+              >Categories</label>
             </div>
             <div class="checkbox-item">
               <input
@@ -78,8 +103,11 @@
                 v-model="showLength"
                 type="checkbox"
                 class="option-checkbox"
-              />
-              <label for="show-length" class="checkbox-label">Track length</label>
+              >
+              <label
+                for="show-length"
+                class="checkbox-label"
+              >Track length</label>
             </div>
             <div class="checkbox-item">
               <input
@@ -88,10 +116,17 @@
                 type="checkbox"
                 class="option-checkbox"
                 :disabled="!hasElevationData"
-              />
-              <label for="show-elevation" class="checkbox-label" :class="{ disabled: !hasElevationData }">
+              >
+              <label
+                for="show-elevation"
+                class="checkbox-label"
+                :class="{ disabled: !hasElevationData }"
+              >
                 Elevation gain
-                <span v-if="!hasElevationData" class="disabled-hint">(no data)</span>
+                <span
+                  v-if="!hasElevationData"
+                  class="disabled-hint"
+                >(no data)</span>
               </label>
             </div>
             <div class="checkbox-item">
@@ -101,13 +136,31 @@
                 type="checkbox"
                 class="option-checkbox"
                 :disabled="!hasSlopeData"
-              />
-              <label for="show-slope" class="checkbox-label" :class="{ disabled: !hasSlopeData }">
+              >
+              <label
+                for="show-slope"
+                class="checkbox-label"
+                :class="{ disabled: !hasSlopeData }"
+              >
                 Slope
-                <span v-if="!hasSlopeData" class="disabled-hint">(no data)</span>
+                <span
+                  v-if="!hasSlopeData"
+                  class="disabled-hint"
+                >(no data)</span>
               </label>
             </div>
-
+            <div class="checkbox-item">
+              <input
+                id="show-heatmap"
+                v-model="showHeatmap"
+                type="checkbox"
+                class="option-checkbox"
+              >
+              <label
+                for="show-heatmap"
+                class="checkbox-label"
+              >Heatmap layer</label>
+            </div>
           </div>
         </div>
         <!-- Show filters when there are tracks in the area -->
@@ -121,16 +174,27 @@
                 v-model="showMyTracks"
                 type="checkbox"
                 class="option-checkbox"
-              />
-              <label for="show-my-tracks" class="checkbox-label">My tracks</label>
+              >
+              <label
+                for="show-my-tracks"
+                class="checkbox-label"
+              >My tracks</label>
             </div>
           </div>
 
           <!-- Other filters shown only when there are actual tracks in viewport -->
           <template v-if="hasTracksInViewport">
-            <div v-if="showCategories" class="filter-section">
+            <div
+              v-if="showCategories"
+              class="filter-section"
+            >
               <label>Categories</label>
-              <div class="category-checkboxes" @touchstart.stop @touchmove.stop @touchend.stop>
+              <div
+                class="category-checkboxes"
+                @touchstart.stop
+                @touchmove.stop
+                @touchend.stop
+              >
                 <div 
                   v-for="category in stableCategories" 
                   :key="category" 
@@ -142,15 +206,21 @@
                     type="checkbox"
                     :value="category"
                     class="category-checkbox"
-                  />
-                  <label :for="`category-${category}`" class="checkbox-label">
-                      {{ capitalize(category) }}
+                  >
+                  <label
+                    :for="`category-${category}`"
+                    class="checkbox-label"
+                  >
+                    {{ capitalize(category) }}
                   </label>
                 </div>
               </div>
             </div>
 
-            <div v-if="showLength" class="filter-section">
+            <div
+              v-if="showLength"
+              class="filter-section"
+            >
               <label>Track length (km):</label>
               <Slider
                 v-model="lengthRange"
@@ -163,7 +233,10 @@
                 :range="true"
               />
             </div>
-            <div v-if="showElevation && hasElevationData" class="filter-section">
+            <div
+              v-if="showElevation && hasElevationData"
+              class="filter-section"
+            >
               <label>Elevation gain (m):</label>
               <Slider
                 v-model="elevationGainRange"
@@ -176,7 +249,10 @@
                 :range="true"
               />
             </div>
-            <div v-if="showSlope && hasSlopeData" class="filter-section">
+            <div
+              v-if="showSlope && hasSlopeData"
+              class="filter-section"
+            >
               <label>Slope (%):</label>
               <Slider
                 v-model="slopeRange"
@@ -190,13 +266,20 @@
               />
             </div>
             <div class="filter-actions">
-              <button @click="resetFilters">Reset</button>
+              <button @click="resetFilters">
+                Reset
+              </button>
             </div>
           </template>
           
           <!-- Show message when My tracks is active but no tracks found -->
-          <div v-else-if="showMyTracks" class="no-tracks-placeholder">
-            <div class="placeholder-icon">🔍</div>
+          <div
+            v-else-if="showMyTracks"
+            class="no-tracks-placeholder"
+          >
+            <div class="placeholder-icon">
+              🔍
+            </div>
             <div class="placeholder-text">
               <h3>No matching tracks</h3>
               <p>Try disabling "My tracks" filter</p>
@@ -205,8 +288,13 @@
         </template>
 
         <!-- Show placeholder when no tracks in area -->
-        <div v-else class="no-tracks-placeholder">
-          <div class="placeholder-icon">📍</div>
+        <div
+          v-else
+          class="no-tracks-placeholder"
+        >
+          <div class="placeholder-icon">
+            📍
+          </div>
           <div class="placeholder-text">
             <h3>No tracks in this area yet</h3>
             <p>Wanna add one?</p>
@@ -215,7 +303,6 @@
       </div>
     </transition>
   </div>
-  
 </template>
 
 <script setup>
@@ -412,6 +499,7 @@ const showCategories = ref(true);
 const showLength = ref(true);
 const showElevation = ref(true);
 const showSlope = ref(true);
+const showHeatmap = ref(false);
 // New option: show only tracks owned by current session
 const showMyTracks = ref(false);
 
@@ -442,6 +530,7 @@ onMounted(() => {
       showLength.value = options.showLength ?? true;
       showElevation.value = options.showElevation ?? true;
       showSlope.value = options.showSlope ?? true;
+      showHeatmap.value = options.showHeatmap ?? false;
       // Load the "my tracks" visibility option if present
       showMyTracks.value = options.showMyTracks ?? false;
     }
@@ -487,6 +576,9 @@ onMounted(() => {
       }
       if (typeof savedFilters.myTracks === 'boolean') {
         showMyTracks.value = savedFilters.myTracks;
+      }
+      if (typeof savedFilters.showHeatmap === 'boolean') {
+        showHeatmap.value = savedFilters.showHeatmap;
       }
     } catch (e) {
       console.error('Failed to parse filter state from localStorage:', e);
@@ -534,6 +626,7 @@ onMounted(() => {
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   });
 });
 
@@ -542,13 +635,14 @@ watch(isOpen, (val) => {
 });
 
 // Save filter visibility options
-watch([showCategories, showLength, showElevation, showSlope], () => {
+watch([showCategories, showLength, showElevation, showSlope, showHeatmap, showMyTracks], () => {
   try {
     localStorage.setItem(LOCAL_FILTER_OPTIONS_KEY, JSON.stringify({
       showCategories: showCategories.value,
       showLength: showLength.value,
       showElevation: showElevation.value,
       showSlope: showSlope.value,
+      showHeatmap: showHeatmap.value,
       showMyTracks: showMyTracks.value,
     }));
   } catch {}
@@ -570,6 +664,7 @@ watch(() => props.categories, (newCategories) => {
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   });
 });
 
@@ -594,7 +689,7 @@ watch(
   }
 );
 
-watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTracks], ([cats, lengthRange, elevationGainRange, slopeRange, myTracks], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange, oldMyTracks]) => {
+watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTracks, showHeatmap], ([cats, lengthRange, elevationGainRange, slopeRange, myTracks, heatmapVisible], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange, oldMyTracks, oldHeatmapVisible]) => {
   // Emit validated values (filtered to what's available in current viewport)
   const validCategories = props.categories ? cats.filter(cat => props.categories.includes(cat)) : cats;
   let validLengthRange = lengthRange;
@@ -643,6 +738,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
     elevationGainRange: validElevationGainRange,
     slopeRange: validSlopeRange,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   });
   
   // Always persist user's actual choice (not the clamped values)
@@ -653,6 +749,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
       elevationGainRange: elevationGainRange,
       slopeRange: slopeRange,
       myTracks: showMyTracks.value,
+      showHeatmap: showHeatmap.value,
     }));
   }
 }, { deep: true });
@@ -672,6 +769,7 @@ function resetFilters() {
     elevationGainRange: elevationGainRange.value,
     slopeRange: slopeRange.value,
     myTracks: showMyTracks.value,
+    showHeatmap: showHeatmap.value,
   }));
   // Also persist options (visibility checkbox state)
   try {
@@ -680,6 +778,7 @@ function resetFilters() {
       showLength: showLength.value,
       showElevation: showElevation.value,
       showSlope: showSlope.value,
+      showHeatmap: showHeatmap.value,
       showMyTracks: showMyTracks.value,
     }));
   } catch (e) {

@@ -30,7 +30,7 @@ test('upload form shows duplicate and navigates to existing track', async ({ pag
     // Set a deterministic session id so ownership is consistent (not strictly necessary for duplicate detection)
     const SESSION = '11111111-1111-1111-1111-111111111111';
     await page.context().addCookies([{ name: 'session_id', value: SESSION, domain: 'localhost', path: '/' }]);
-    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '11111111-1111-1111-1111-111111111111'); } catch (e) { } });
+    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '11111111-1111-1111-1111-111111111111'); } catch (e) { void 0; } });
 
     // First ensure the exact fixture content exists on the backend by uploading it via the browser fetch (owner session)
     const fixtureContent = fs.readFileSync(FIXTURE, 'utf8');

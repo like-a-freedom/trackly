@@ -97,7 +97,7 @@ test('non-owner cannot see owner controls (delete/edit)', async ({ page }) => {
 
     // Visit as non-owner (different session id)
     await page.context().addCookies([{ name: 'session_id', value: OTHER_SESSION, domain: 'localhost', path: '/' }]);
-    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '22222222-2222-2222-2222-222222222222'); } catch (e) { } });
+    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '22222222-2222-2222-2222-222222222222'); } catch (e) { void 0; } });
 
     await page.goto(`${FRONTEND}/track/${createdId}`);
     await page.waitForLoadState('networkidle');

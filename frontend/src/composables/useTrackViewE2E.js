@@ -14,17 +14,29 @@ export function useTrackViewE2E({
 }) {
   // Only initialize in non-production modes
   if (import.meta.env.MODE === 'production') {
-    return { cleanup: () => {} };
+    return { cleanup: () => { } };
   }
 
   const initE2E = () => {
     window.__e2e = window.__e2e || {};
 
     // Simulate hovering at a chart index
-    window.__e2e.hoverAtIndex = (index, opts = {}) => {
+    window.__e2e.hoverAtIndex = async (index, opts = {}) => {
       try {
         const idx = Number(index);
-        if (!Number.isFinite(idx) || !coordinateData.value || coordinateData.value.length === 0) return false;
+        if (!Number.isFinite(idx)) return false;
+
+        // Wait for coordinateData to be populated (avoid races with async loading)
+        const start = Date.now();
+        while (!coordinateData.value || coordinateData.value.length === 0) {
+          if (Date.now() - start > 2000) {
+            console.debug('E2E hoverAtIndex: timed out waiting for coordinateData');
+            return false; // timeout
+          }
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 50));
+        }
+
         const i = Math.max(0, Math.min(idx, coordinateData.value.length - 1));
         const latlng = coordinateData.value[i];
         const payload = {
@@ -35,6 +47,37 @@ export function useTrackViewE2E({
           isFixed: !!(opts && opts.isFixed)
         };
         handleChartPointHover(payload);
+
+        // Wait for TrackMap to process highlight (avoid races when map is still animating)
+        const s = Date.now();
+        while (Date.now() - s < 2000) {
+          if (window.__e2e && window.__e2e.lastHighlightedColor != null) break;
+          if (window.__e2e && window.__e2e.lastGapLineExists) break;
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 50));
+        }
+
+        // If highlight didn't happen, try forcing a highlight via map helper (if available)
+        if ((!window.__e2e || !window.__e2e.lastHighlightedColor) && window.__e2e && typeof window.__e2e.forceHighlightSegment === 'function') {
+          try {
+            console.debug('E2E hoverAtIndex: attempting forceHighlightSegment');
+            const [lat, lng] = latlng || [];
+            window.__e2e.forceHighlightSegment(lat, lng, payload.segmentIndex || 0);
+            const s2 = Date.now();
+            while (Date.now() - s2 < 1000) {
+              if (window.__e2e && window.__e2e.lastHighlightedColor != null) break;
+              if (window.__e2e && window.__e2e.lastGapLineExists) break;
+              // eslint-disable-next-line no-await-in-loop
+              await new Promise((r) => setTimeout(r, 50));
+            }
+            if (!window.__e2e || !window.__e2e.lastHighlightedColor) {
+              console.debug('E2E hoverAtIndex: forceHighlightSegment did not produce highlight');
+            }
+          } catch (e) {
+            console.debug('E2E hoverAtIndex: forceHighlightSegment failed', e);
+          }
+        }
+
         return true;
       } catch (e) {
         console.warn('E2E hoverAtIndex failed:', e);
@@ -60,7 +103,7 @@ export function useTrackViewE2E({
         if (opts && typeof opts.index !== 'undefined') payload.index = opts.index;
         handleChartPointHover(payload);
         if (opts && typeof opts.segmentIndex !== 'undefined' && markerLatLng?.value) {
-          try { markerLatLng.value.segmentIndex = opts.segmentIndex; } catch (e) {}
+          try { markerLatLng.value.segmentIndex = opts.segmentIndex; } catch (e) { }
         }
         return true;
       } catch (e) {
@@ -118,6 +161,10 @@ export function useTrackViewE2E({
         return 0;
       }
     };
+
+    // Ensure E2E observability defaults are present early so tests don't race on missing keys
+    window.__e2e.lastHighlightedColor = window.__e2e.lastHighlightedColor ?? null;
+    window.__e2e.lastGapLineExists = window.__e2e.lastGapLineExists ?? false;
 
     window.__e2e.getLastHoverPayload = () => {
       try {

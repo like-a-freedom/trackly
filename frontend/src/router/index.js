@@ -2,15 +2,27 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import TrackView from '../views/TrackView.vue'
 
-// Lazy-loaded auth views
+// Lazy-loaded views
 const AccountView = () => import('../views/AccountView.vue')
 const AuthCallbackView = () => import('../views/AuthCallbackView.vue')
+const TrackEditorView = () => import('../views/TrackEditorView.vue')
 
 const routes = [
   {
     path: '/',
     name: 'Home',
     component: HomeView
+  },
+  {
+    path: '/tracks/new',
+    name: 'TrackCreate',
+    component: TrackEditorView
+  },
+  {
+    path: '/tracks/:id/edit',
+    name: 'TrackEdit',
+    component: TrackEditorView,
+    props: true
   },
   {
     path: '/track/:id',

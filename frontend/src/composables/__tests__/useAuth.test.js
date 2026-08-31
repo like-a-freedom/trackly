@@ -324,7 +324,7 @@ describe('useAuth composable', () => {
                 })
                 .mockResolvedValueOnce({
                     ok: true,
-                    json: async () => ({ migrated_count: 5 })
+                    json: async () => ({ tracks_migrated: 5, pois_migrated: 2 })
                 });
 
             const { refresh, migrateSessionTracks } = useAuth();
@@ -332,7 +332,8 @@ describe('useAuth composable', () => {
 
             const result = await migrateSessionTracks('session-123');
 
-            expect(result.migrated_count).toBe(5);
+            expect(result.tracks_migrated).toBe(5);
+            expect(result.pois_migrated).toBe(2);
             expect(mockFetch).toHaveBeenLastCalledWith('/api/auth/migrate-session-tracks', {
                 method: 'POST',
                 headers: {
@@ -347,7 +348,8 @@ describe('useAuth composable', () => {
             const { migrateSessionTracks } = useAuth();
             const result = await migrateSessionTracks('session-123');
 
-            expect(result.migrated_count).toBe(0);
+            expect(result.tracks_migrated).toBe(0);
+            expect(result.pois_migrated).toBe(0);
         });
     });
 

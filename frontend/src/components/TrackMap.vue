@@ -12,7 +12,7 @@
     @zoomstart="onZoomStart"
     @zoomend="onZoomEnd"
   >
-    <l-tile-layer :url="url" :attribution="attribution"></l-tile-layer>
+    <l-tile-layer :url="url" :attribution="attribution" />
     <template
       v-if="mapIsReady && shouldRenderGeoJson && displayMode === 'tracks'"
     >
@@ -37,22 +37,24 @@
       v-if="!props.selectedTrackDetail"
       class="map-filter-control"
       :categories="allCategories"
-      :minLength="minTrackLength"
-      :maxLength="maxTrackLength"
-      :minElevationGain="minElevationGain"
-      :maxElevationGain="maxElevationGain"
-      :minSlope="minSlope"
-      :maxSlope="maxSlope"
-      :globalCategories="globalCategories"
-      :globalMinLength="globalMinTrackLength"
-      :globalMaxLength="globalMaxTrackLength"
-      :globalMinElevationGain="globalMinElevationGain"
-      :globalMaxElevationGain="globalMaxElevationGain"
-      :globalMinSlope="globalMinSlope"
-      :globalMaxSlope="globalMaxSlope"
-      :hasElevationData="hasElevationData"
-      :hasSlopeData="hasSlopeData"
-      :hasTracksInViewport="!!(props.polylines && props.polylines.length > 0)"
+      :min-length="minTrackLength"
+      :max-length="maxTrackLength"
+      :min-elevation-gain="minElevationGain"
+      :max-elevation-gain="maxElevationGain"
+      :min-slope="minSlope"
+      :max-slope="maxSlope"
+      :global-categories="globalCategories"
+      :global-min-length="globalMinTrackLength"
+      :global-max-length="globalMaxTrackLength"
+      :global-min-elevation-gain="globalMinElevationGain"
+      :global-max-elevation-gain="globalMaxElevationGain"
+      :global-min-slope="globalMinSlope"
+      :global-max-slope="globalMaxSlope"
+      :has-elevation-data="hasElevationData"
+      :has-slope-data="hasSlopeData"
+      :has-tracks-in-viewport="
+        !!(props.polylines && props.polylines.length > 0)
+      "
       @update:filter="onFilterChange"
     />
 
@@ -61,11 +63,11 @@
       v-if="markerLatLng && markerLatLng.latlng && !isPanningOrZooming"
       :lat-lng="markerLatLng.latlng"
       :radius="markerLatLng.isFixed ? 8 : 7"
-      :fillColor="
+      :fill-color="
         markerLatLng.isFixed ? getMarkerFillColor(markerLatLng) : 'white'
       "
       :color="getMarkerStrokeColor(markerLatLng)"
-      :fillOpacity="markerLatLng.isFixed ? 0.3 : 1"
+      :fill-opacity="markerLatLng.isFixed ? 0.3 : 1"
       :weight="markerLatLng.isFixed ? 3 : 2.5"
       :pane="'markerPane'"
       class="chart-hover-marker"
@@ -133,7 +135,7 @@
       </LTooltip>
     </LCircleMarker>
 
-    <slot></slot>
+    <slot />
   </l-map>
 </template>
 
@@ -157,6 +159,7 @@ import {
   provide,
 } from "vue";
 import L, { latLngBounds } from "leaflet";
+import "leaflet.heat";
 import {
   getDetailPanelFitBoundsOptions,
   POLYLINE_WEIGHT_ACTIVE,
@@ -195,6 +198,14 @@ const props = defineProps({
   attribution: String,
   activeTrackId: [String, Number, null],
   selectedTrackDetail: Object,
+  heatmapPoints: {
+    type: Array,
+    default: () => [],
+  },
+  showHeatmap: {
+    type: Boolean,
+    default: false,
+  },
   markerLatLng: {
     type: Object,
     default: null,
@@ -224,12 +235,15 @@ const leafletMap = ref(null);
 // Provide leaflet map instance to child components in slot
 provide("leafletMap", leafletMap);
 
-const bounds = ref(null);
+const mapBounds = ref(null);
 const mapKey = ref(0);
 const layerKey = ref(0); // For forcing GeoJSON layer re-renders when filter changes
 const mapIsReady = ref(false);
 const trackZoomAnimating = ref(false);
 const isTransitioning = ref(false); // Prevents filter changes during detail view transitions
+const heatLayer = ref(null);
+const heatmapMaxWeight = ref(0);
+const HEATMAP_PANE = "heatmapPane";
 
 // Track clustering functionality
 const clustering = useTrackClustering();
@@ -299,7 +313,8 @@ const e2eHooks = useTrackMapE2E({
   isPanningOrZooming,
   mapIsReady,
   trackZoomAnimating,
-  props
+  props,
+  highlightSegmentForMarker,
 });
 
 function clearAnimationTimeout() {
@@ -487,7 +502,7 @@ const allCategories = computed(() => {
 
 // Use stable default range with reasonable bounds that don't change with viewport
 // This prevents the filter slider from jumping when user scrolls to different areas
-// min/max длины только по видимым трекам (props.polylines)
+// min/max lengths only for visible tracks (props.polylines)
 const minTrackLength = computed(() => {
   const polylines = props.polylines || [];
   const lengths = polylines
@@ -664,7 +679,85 @@ const filterState = ref({
   lengthRange: [0, 0],
   elevationGainRange: [0, 2000],
   slopeRange: [0, 20],
+  showHeatmap: false,
 });
+
+function ensureHeatmapPane(map) {
+  if (!map.getPane(HEATMAP_PANE)) {
+    map.createPane(HEATMAP_PANE);
+    const pane = map.getPane(HEATMAP_PANE);
+    if (pane) {
+      pane.style.zIndex = "350";
+      pane.style.pointerEvents = "none";
+    }
+  }
+}
+
+function buildHeatmapLatLngs() {
+  if (!Array.isArray(props.heatmapPoints)) return [];
+  return props.heatmapPoints
+    .map((point) => {
+      if (!point) return null;
+      const lat = typeof point.lat === "number" ? point.lat : null;
+      const lon = typeof point.lon === "number" ? point.lon : null;
+      if (lat === null || lon === null) return null;
+      const weight =
+        typeof point.weight === "number" && !Number.isNaN(point.weight)
+          ? Math.max(0, point.weight)
+          : 0;
+      return [lat, lon, weight];
+    })
+    .filter((point) => point !== null);
+}
+
+function removeHeatmapLayer(map) {
+  if (heatLayer.value && map) {
+    map.removeLayer(heatLayer.value);
+  }
+  heatLayer.value = null;
+  heatmapMaxWeight.value = 0;
+}
+
+function updateHeatmapLayer() {
+  if (!mapIsReady.value || isUnmounting.value) return;
+  const map = getMapObject("heatmap");
+  if (!map) return;
+
+  if (!props.showHeatmap) {
+    removeHeatmapLayer(map);
+    return;
+  }
+
+  const latlngs = buildHeatmapLatLngs();
+  if (latlngs.length === 0) {
+    removeHeatmapLayer(map);
+    return;
+  }
+
+  ensureHeatmapPane(map);
+  const maxWeight = Math.max(...latlngs.map((point) => point[2] || 0), 1);
+  const shouldRecreate =
+    !heatLayer.value || heatmapMaxWeight.value !== maxWeight;
+  if (shouldRecreate && heatLayer.value) {
+    map.removeLayer(heatLayer.value);
+    heatLayer.value = null;
+  }
+
+  if (!heatLayer.value) {
+    heatLayer.value = L.heatLayer(latlngs, {
+      radius: 18,
+      blur: 22,
+      minOpacity: 0.25,
+      maxZoom: 17,
+      max: maxWeight,
+      pane: HEATMAP_PANE,
+    });
+    heatLayer.value.addTo(map);
+    heatmapMaxWeight.value = maxWeight;
+  } else {
+    heatLayer.value.setLatLngs(latlngs);
+  }
+}
 
 // Convert polylines to GeoJSON format (no filtering here - use native Leaflet filter)
 const geojsonData = computed(() => {
@@ -780,7 +873,7 @@ function geoJsonFilter(feature, layer) {
       // Debug logging for slope filtering
       if (
         feature.properties?.name &&
-        feature.properties.name.includes("алма")
+        feature.properties.name.toLowerCase().includes("alma")
       ) {
         console.log(
           `Track "${feature.properties.name}": slope[${slopeMin}, ${slopeMax}], filter[${slopeFilterMin}, ${slopeFilterMax}], match: ${slopeMatch}`
@@ -1261,6 +1354,8 @@ async function onMapReady(e) {
     mapState.value.userChangedZoomOrCenter = false;
     mapIsReady.value = true;
 
+    updateHeatmapLayer();
+
     // Initialize stable bounds for track visibility calculation
     stableBounds.value = map.getBounds();
 
@@ -1459,6 +1554,12 @@ function clearSegmentHighlight(map) {
       map.removeLayer(markerGapLine.value);
       markerGapLine.value = null;
     }
+    if (window.__e2e) {
+      try {
+        window.__e2e.lastGapLineExists = false;
+        window.__e2e.lastHighlightedColor = null;
+      } catch (e) {}
+    }
   } catch (e) {
     console.warn("[TrackMap] Error clearing segment highlight:", e);
     hoveredSegmentPolyline.value = null;
@@ -1477,8 +1578,19 @@ function highlightSegmentForMarker(markerData) {
     !markerData.latlng ||
     isPanningOrZooming.value ||
     isZoomAnimating.value
-  )
+  ) {
+    // If the map is still animating/panning, schedule a short retry in E2E/dev mode
+    try {
+      if (window.__e2e) {
+        setTimeout(() => {
+          try {
+            highlightSegmentForMarker(markerData);
+          } catch (e) {}
+        }, 150);
+      }
+    } catch (e) {}
     return;
+  }
 
   // Need selected track to locate segments
   const sel = props.selectedTrackDetail;
@@ -1487,12 +1599,41 @@ function highlightSegmentForMarker(markerData) {
   const poly = (props.polylines || []).find(
     (p) => p.properties && p.properties.id === sel.id
   );
-  if (!poly) return;
+  if (!poly) {
+    // Poly not available yet - schedule retry in E2E/dev mode
+    try {
+      if (window.__e2e) {
+        setTimeout(() => highlightSegmentForMarker(markerData), 150);
+      }
+    } catch (e) {}
+    return;
+  }
 
   // Determine segments array format
-  const segments = poly.segments || (poly.latlngs ? [poly.latlngs] : []);
+  const rawLatlngs = poly.latlngs || [];
+  const isNestedSegments =
+    Array.isArray(rawLatlngs) &&
+    rawLatlngs.length > 0 &&
+    Array.isArray(rawLatlngs[0]) &&
+    (Array.isArray(rawLatlngs[0][0]) ||
+      (rawLatlngs[0][0] && typeof rawLatlngs[0][0] === "object"));
+  const segments =
+    poly.segments ||
+    (rawLatlngs.length > 0
+      ? isNestedSegments
+        ? rawLatlngs
+        : [rawLatlngs]
+      : []);
   const segIdx = markerData.segmentIndex || 0;
-  if (!segments[segIdx] || segments[segIdx].length === 0) return;
+  if (!segments[segIdx] || segments[segIdx].length === 0) {
+    // Segments not ready - schedule retry for E2E/dev
+    try {
+      if (window.__e2e) {
+        setTimeout(() => highlightSegmentForMarker(markerData), 150);
+      }
+    } catch (e) {}
+    return;
+  }
 
   const segCoords = segments[segIdx];
 
@@ -1501,6 +1642,21 @@ function highlightSegmentForMarker(markerData) {
     // Prefer using the original track color (if available) so we don't visually change the track color
     const trackColor =
       poly.properties?.color || getMarkerStrokeColor({ segmentIndex: segIdx });
+
+    // Expose E2E observability early so tests can assert highlighting deterministically
+    if (window.__e2e) {
+      try {
+        window.__e2e.lastHighlightedColor = trackColor;
+      } catch (e) {}
+    }
+    // Debug: log when highlight is requested (helps e2e diagnostics)
+    try {
+      console.debug("[TrackMap][E2E] highlight requested", {
+        trackId: sel?.id,
+        segmentIndex: segIdx,
+        trackColor,
+      });
+    } catch (e) {}
 
     // If the track has only a single segment and we have a live map, prefer to emphasize the existing layer
     // by increasing weight/opacity rather than overlaying a new colored polyline — this preserves the
@@ -1511,7 +1667,7 @@ function highlightSegmentForMarker(markerData) {
       try {
         let foundLayer = null;
         // Search for the GeoJSON layer by feature id
-        map.eachLayer &&
+        if (map.eachLayer) {
           map.eachLayer((layer) => {
             if (
               !foundLayer &&
@@ -1523,6 +1679,7 @@ function highlightSegmentForMarker(markerData) {
               foundLayer = layer;
             }
           });
+        }
 
         if (foundLayer && typeof foundLayer.setStyle === "function") {
           // Save original style so it can be restored later
@@ -1536,9 +1693,12 @@ function highlightSegmentForMarker(markerData) {
                 ? foundLayer.options.opacity
                 : getFeatureOpacity(foundLayer.feature),
           };
-
-          // Apply emphasis without changing the stroke color
           try {
+            console.log("[TrackMap][E2E] using foundLayer for highlight", {
+              foundLayerId: foundLayer.feature?.properties?.id,
+              originalColor: highlightedLayerOrigStyle.value.color,
+            });
+
             foundLayer.setStyle({
               weight:
                 (highlightedLayerOrigStyle.value.weight ||
@@ -1548,7 +1708,7 @@ function highlightSegmentForMarker(markerData) {
 
             highlightedLayer.value = foundLayer;
 
-            if (import.meta.env.MODE !== "production" && window.__e2e) {
+            if (window.__e2e) {
               try {
                 window.__e2e.lastHighlightedColor =
                   highlightedLayerOrigStyle.value.color || trackColor;
@@ -1581,7 +1741,7 @@ function highlightSegmentForMarker(markerData) {
         });
 
         // Expose E2E observability for tests (non-production only)
-        if (import.meta.env.MODE !== "production" && window.__e2e) {
+        if (window.__e2e) {
           try {
             window.__e2e.lastHighlightedColor = trackColor;
           } catch (e) {}
@@ -1597,7 +1757,7 @@ function highlightSegmentForMarker(markerData) {
             className: "chart-gap-line",
           });
 
-          if (import.meta.env.MODE !== "production" && window.__e2e) {
+          if (window.__e2e) {
             try {
               window.__e2e.lastGapLineExists = true;
             } catch (e) {}
@@ -1650,15 +1810,20 @@ function highlightSegmentForMarker(markerData) {
 
 function findNearestPointOnCoords(point, coords) {
   if (!point || !coords || coords.length === 0) return null;
-  const [plat, plng] = point;
+  const pointArray = Array.isArray(point) ? point : [point.lat, point.lng];
+  const [plat, plng] = pointArray;
+  if (!Number.isFinite(plat) || !Number.isFinite(plng)) return null;
   let best = null;
   let bestDist = Infinity;
   for (let i = 0; i < coords.length; i++) {
-    const [lat, lng] = coords[i];
+    const coord = coords[i];
+    const coordArray = Array.isArray(coord) ? coord : [coord.lat, coord.lng];
+    const [lat, lng] = coordArray;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     const d = (lat - plat) * (lat - plat) + (lng - plng) * (lng - plng);
     if (d < bestDist) {
       bestDist = d;
-      best = coords[i];
+      best = coordArray;
     }
   }
   return best;
@@ -2024,9 +2189,9 @@ async function handleTrackSelected(newDetail) {
         );
       }
 
-      bounds.value = null;
+      mapBounds.value = null;
       await nextTick();
-      bounds.value = latLngBounds(selectedPolyline.latlngs);
+      mapBounds.value = latLngBounds(selectedPolyline.latlngs);
     }
   } catch (error) {
     console.error("[TrackMap] Error in handleTrackSelected:", error, {
@@ -2046,7 +2211,7 @@ async function handleTrackDeselected() {
     // Clean up any hover polylines before flying back
     removeMarkerPolyline(map);
 
-    bounds.value = null;
+    mapBounds.value = null;
 
     let center = mapState.value.preSelection.center;
     let zoom = mapState.value.preSelection.zoom;
@@ -2259,6 +2424,14 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => [props.showHeatmap, props.heatmapPoints],
+  () => {
+    updateHeatmapLayer();
+  },
+  { deep: true }
+);
+
 // Cleanup function for component unmounting
 function cleanup() {
   clearBoundsTimeout();
@@ -2279,6 +2452,7 @@ function cleanup() {
   const map = getMapObject("cleanup");
   if (map) {
     removeMarkerPolyline(map);
+    removeHeatmapLayer(map);
   }
 
   // Clear tracks watch timeout

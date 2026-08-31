@@ -1,4 +1,4 @@
-/// <reference path="../src/types/e2e.d.ts" />
+import "../src/types/e2e.d.ts"
 
 import { test, expect } from '@playwright/test';
 import { setupTestTracks } from './setup-real-tracks';
@@ -11,7 +11,7 @@ test.beforeAll(async () => {
 
 test('export: client reads cooldown header and starts cooldown', async ({ page }) => {
     const trackId = testTracks['test-track-e2e'];
-    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', 'e2e-test-session'); } catch (e) { } });
+    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', 'e2e-test-session'); } catch (e) { void 0; } });
     await page.goto(`/track/${trackId}`);
 
     const exportBtn = page.locator('.export-gpx-btn');
@@ -42,7 +42,7 @@ test('export: client reads cooldown header and starts cooldown', async ({ page }
 
 test('export: client handles 429 responses (shows toast and starts cooldown)', async ({ page }) => {
     const trackId = testTracks['test-track-e2e'];
-    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', 'e2e-test-session'); } catch (e) { } });
+    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', 'e2e-test-session'); } catch (e) { void 0; } });
     await page.goto(`/track/${trackId}`);
 
     const exportBtn = page.locator('.export-gpx-btn');

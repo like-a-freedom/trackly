@@ -1,7 +1,10 @@
 <template>
   <!-- This component manages Leaflet polyline decorator programmatically -->
   <!-- No visible DOM elements needed - uses Leaflet's layer system -->
-  <div class="track-direction-layer" style="display: none;"></div>
+  <div
+    class="track-direction-layer"
+    style="display: none;"
+  />
 </template>
 
 <script setup>

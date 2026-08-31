@@ -4,6 +4,8 @@ dev/
 .agents/prompts
 .github/instructions/
 .github/prompts/
+.superpowers/
+target/
 # macOS
 .DS_Store
 data/

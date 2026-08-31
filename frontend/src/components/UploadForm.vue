@@ -1,6 +1,17 @@
 <template>
   <div>
-    <form class="upload-form" @submit.prevent="handleUpload" @dragover.prevent="setDragActive(true)" @dragleave.prevent="setDragActive(false)" @drop.prevent="onDrop" @mousedown.stop @mouseup.stop @click.stop @dblclick.stop @selectstart.stop>
+    <form
+      class="upload-form"
+      @submit.prevent="handleUpload"
+      @dragover.prevent="setDragActive(true)"
+      @dragleave.prevent="setDragActive(false)"
+      @drop.prevent="onDrop"
+      @mousedown.stop
+      @mouseup.stop
+      @click.stop
+      @dblclick.stop
+      @selectstart.stop
+    >
       <label
         for="track-upload"
         class="upload-label drop-area"
@@ -13,15 +24,15 @@
           type="file"
           accept=".gpx,.kml"
           class="upload-input"
-          @change="onFileChange"
           style="display: none;"
-        />
+          @change="onFileChange"
+        >
       </label>
       <template v-if="selectedFile && !trackExists">
         <input
           id="track-name-input"
-          class="track-name-input"
           v-model="trackName"
+          class="track-name-input"
           type="text"
           placeholder="Track name"
           autocomplete="off"
@@ -31,7 +42,7 @@
           @dblclick.stop
           @selectstart.stop
           @dragstart.prevent
-        />
+        >
         <Multiselect
           v-model="trackCategories"
           mode="tags"
@@ -54,64 +65,114 @@
         />
       </template>
       <transition name="fade-slide">
-        <div v-if="trackExists" class="upload-warning upload-warning-centered">
+        <div
+          v-if="trackExists"
+          class="upload-warning upload-warning-centered"
+        >
           <span>Track already exists</span>
           <button 
             v-if="existingTrackId"
-            @click="navigateToExistingTrack" 
-            class="track-link-btn"
+            class="track-link-btn" 
             title="View existing track"
             aria-label="View existing track"
+            @click="navigateToExistingTrack"
           >
             Show track
           </button>
         </div>
       </transition>
       <transition name="fade-slide">
-        <div v-if="!trackExists && warning" :class="['upload-warning', { 'upload-warning-centered': warning && warning.includes('exists') }]">
+        <div
+          v-if="!trackExists && warning"
+          :class="['upload-warning', { 'upload-warning-centered': warning && warning.includes('exists') }]"
+        >
           {{ warning }}
         </div>
       </transition>
       <transition name="fade-slide">
-        <div v-if="selectedFile && !trackExists && trackCategories.length === 0 && !warning && !checkingExists" class="upload-warning">
+        <div
+          v-if="selectedFile && !trackExists && trackCategories.length === 0 && !warning && !checkingExists"
+          class="upload-warning"
+        >
           Please select at least one category.
         </div>
       </transition>
       <transition name="fade-slide">
-        <div v-if="uploadSuccess" class="upload-success upload-success-harmonized">
+        <div
+          v-if="uploadSuccess"
+          class="upload-success upload-success-harmonized"
+        >
           <span class="success-text">Track uploaded successfully!</span>
-          <div v-if="uploadedTrackData" class="success-actions">
+          <div
+            v-if="uploadedTrackData"
+            class="success-actions"
+          >
             <button 
-              @click="navigateToTrack" 
-              class="track-link-btn"
+              class="track-link-btn" 
               title="View uploaded track"
               aria-label="View track"
+              @click="navigateToTrack"
             >
               Show track
             </button>
             <button 
-              @click="copyTrackUrl" 
-              class="copy-link-btn"
+              class="copy-link-btn" 
               :disabled="copyingLink"
               :title="copyingLink ? 'Copying...' : linkCopied ? 'Link copied!' : 'Copy track link'"
               aria-label="Copy track link"
+              @click="copyTrackUrl"
             >
-              <svg v-if="!copyingLink && !linkCopied" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.53 1.53"></path>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.53-1.53"></path>
+              <svg
+                v-if="!copyingLink && !linkCopied"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.53 1.53" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.53-1.53" />
               </svg>
-              <svg v-else-if="linkCopied" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20,6 9,17 4,12"></polyline>
+              <svg
+                v-else-if="linkCopied"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="20,6 9,17 4,12" />
               </svg>
-              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"></path>
+              <svg
+                v-else
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="3"
+                />
+                <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24" />
               </svg>
             </button>
           </div>
         </div>
       </transition>
-      <button v-if="selectedFile" type="submit" class="upload-btn" :disabled="!selectedFile || trackExists || checkingExists || trackCategories.length === 0">Upload</button>
+      <button
+        v-if="selectedFile"
+        type="submit"
+        class="upload-btn"
+        :disabled="!selectedFile || trackExists || checkingExists || trackCategories.length === 0"
+      >
+        Upload
+      </button>
     </form>
   </div>
 </template>

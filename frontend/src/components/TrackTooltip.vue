@@ -1,20 +1,71 @@
 <template>
-  <div v-if="visible && data" class="custom-tooltip" :style="{ left: x + 'px', top: y + 'px', position: 'fixed', zIndex: 2000 }">
+  <div
+    v-if="visible && data"
+    class="custom-tooltip"
+    :style="{ left: x + 'px', top: y + 'px', position: 'fixed', zIndex: 2000 }"
+  >
     <div class="upload-form">
-      <div v-if="data.name" class="upload-label name">{{ data.name }}</div>
-      <div v-if="data.description" class="upload-label description">{{ data.description }}</div>
-      <div v-if="data.length_km" class="upload-label">Distance: {{ data.length_km.toFixed(2) }} km</div>
-      <div v-if="data.recorded_at" class="upload-label meta">Recorded: {{ formatDateTime(data.recorded_at) }}</div>
-      <div v-if="data.created_at" class="upload-label meta">Added: {{ formatDateTime(data.created_at) }}</div>
-      <div v-if="data.updated_at" class="upload-label meta">Updated: {{ formatDateTime(data.updated_at) }}</div>
-      <div v-if="data.elevation_gain">
-        <div v-if="data.elevation_gain" class="upload-label">Elevation gain: {{ Math.round(data.elevation_gain) }} m</div>
-        <div v-if="data.elevation_dataset" class="upload-label">Data source: {{ formatDataset(data.elevation_dataset) }}</div>
+      <div
+        v-if="data.name"
+        class="upload-label name"
+      >
+        {{ data.name }}
       </div>
-      <div v-if="data.categories && data.categories.length" class="upload-label categories-section">
+      <div
+        v-if="data.description"
+        class="upload-label description"
+      >
+        {{ data.description }}
+      </div>
+      <div
+        v-if="data.length_km"
+        class="upload-label"
+      >
+        Distance: {{ data.length_km.toFixed(2) }} km
+      </div>
+      <div
+        v-if="data.recorded_at"
+        class="upload-label meta"
+      >
+        Recorded: {{ formatDateTime(data.recorded_at) }}
+      </div>
+      <div
+        v-if="data.created_at"
+        class="upload-label meta"
+      >
+        Added: {{ formatDateTime(data.created_at) }}
+      </div>
+      <div
+        v-if="data.updated_at"
+        class="upload-label meta"
+      >
+        Updated: {{ formatDateTime(data.updated_at) }}
+      </div>
+      <div v-if="data.elevation_gain">
+        <div
+          v-if="data.elevation_gain"
+          class="upload-label"
+        >
+          Elevation gain: {{ Math.round(data.elevation_gain) }} m
+        </div>
+        <div
+          v-if="data.elevation_dataset"
+          class="upload-label"
+        >
+          Data source: {{ formatDataset(data.elevation_dataset) }}
+        </div>
+      </div>
+      <div
+        v-if="data.categories && data.categories.length"
+        class="upload-label categories-section"
+      >
         Categories:
         <span class="category-tags">
-          <span v-for="cat in data.categories" :key="cat" class="category-tag">{{ capitalize(cat) }}</span>
+          <span
+            v-for="cat in data.categories"
+            :key="cat"
+            class="category-tag"
+          >{{ capitalize(cat) }}</span>
         </span>
       </div>
     </div>

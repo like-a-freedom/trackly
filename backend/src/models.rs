@@ -68,7 +68,9 @@ pub struct TrackDetail {
     pub name: String,
     pub description: Option<String>,
     pub categories: Vec<String>,
+    pub distance_markers_enabled: Option<bool>,
     pub geom_geojson: serde_json::Value, // Store geometry as GeoJSON for API
+    pub segment_meta: Option<serde_json::Value>, // Per-segment metadata (name, color)
     pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
     pub pause_gaps: Option<Vec<GapInfo>>, // Time-based gaps on continuous tracks
     pub length_km: f64,
@@ -115,9 +117,11 @@ pub struct TrackSimplified {
     pub name: String,
     pub description: Option<String>,
     pub categories: Vec<String>,
-    pub geom_geojson: serde_json::Value,    // Simplified geometry
+    pub distance_markers_enabled: Option<bool>,
+    pub geom_geojson: serde_json::Value, // Simplified geometry
+    pub segment_meta: Option<serde_json::Value>, // Per-segment metadata (name, color)
     pub segment_gaps: Option<Vec<GapInfo>>, // Teleport gaps between segments
-    pub pause_gaps: Option<Vec<GapInfo>>,   // Time-based gaps on continuous tracks
+    pub pause_gaps: Option<Vec<GapInfo>>, // Time-based gaps on continuous tracks
     pub length_km: f64,
     // Include data profiles for charts (but geometry will be simplified)
     pub elevation_profile: Option<serde_json::Value>,
@@ -169,6 +173,18 @@ pub struct TrackGeoJsonCollection {
     #[serde(rename = "type")]
     pub type_field: String,
     pub features: Vec<TrackGeoJsonFeature>,
+}
+
+#[derive(Serialize)]
+pub struct HeatmapPoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub weight: i32,
+}
+
+#[derive(Serialize)]
+pub struct TrackHeatmapResponse {
+    pub points: Vec<HeatmapPoint>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -297,6 +313,12 @@ pub struct UpdateTrackCategoriesRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct UpdateTrackDistanceMarkersRequest {
+    pub distance_markers_enabled: bool,
+    pub session_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct TrackSearchQuery {
     pub query: String,
 }
@@ -312,6 +334,24 @@ pub struct MapInteractionEvent {
 pub struct TrackSimplificationQuery {
     pub zoom: Option<f64>,
     pub mode: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TrackSimplifyPreviewRequest {
+    pub geometry: serde_json::Value,
+    #[serde(default)]
+    pub waypoints: Vec<Vec<usize>>,
+    pub target_ratio: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TrackSimplifyPreviewResponse {
+    pub geometry: serde_json::Value,
+    pub waypoints: Vec<Vec<usize>>,
+    pub original_points: usize,
+    pub simplified_points: usize,
+    pub compression_ratio: f64,
+    pub tolerance_used: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -341,6 +381,21 @@ pub struct EnrichElevationResponse {
     pub elevation_max: Option<f32>,
     pub elevation_dataset: Option<String>,
     pub enriched_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ElevationPreviewRequest {
+    pub coordinates: Vec<[f64; 2]>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ElevationPreviewResponse {
+    pub elevation_profile: Vec<f64>,
+    pub elevation_gain: Option<f32>,
+    pub elevation_loss: Option<f32>,
+    pub elevation_min: Option<f32>,
+    pub elevation_max: Option<f32>,
+    pub elevation_dataset: String,
 }
 
 /// Track data needed for elevation enrichment
@@ -550,6 +605,15 @@ pub struct CreatePoiRequest {
     pub elevation: Option<f32>,
     pub lat: f64,
     pub lon: f64,
+    pub session_id: Option<Uuid>,
+}
+
+/// Request to update an existing POI
+#[derive(Debug, Deserialize)]
+pub struct UpdatePoiRequest {
+    pub name: Option<String>,
+    pub description: Option<Option<String>>,
+    pub category: Option<Option<String>>,
     pub session_id: Option<Uuid>,
 }
 

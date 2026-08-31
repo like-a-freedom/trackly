@@ -12,18 +12,32 @@
     />
     <LTooltip v-if="showTooltip">
       <div class="poi-tooltip">
-        <div class="poi-name">{{ poi.poi?.name || poi.name }}</div>
-        <div v-if="poi.poi?.description || poi.description" class="poi-description">
+        <div class="poi-name">
+          {{ poi.poi?.name || poi.name }}
+        </div>
+        <div
+          v-if="poi.poi?.description || poi.description"
+          class="poi-description"
+        >
           {{ poi.poi?.description || poi.description }}
         </div>
         <div class="poi-meta">
-          <span v-if="poi.poi?.category || poi.category" class="poi-category">
+          <span
+            v-if="poi.poi?.category || poi.category"
+            class="poi-category"
+          >
             {{ capitalize(poi.poi?.category || poi.category) }}
           </span>
-          <span v-if="poi.poi?.elevation || poi.elevation" class="poi-elevation">
+          <span
+            v-if="poi.poi?.elevation || poi.elevation"
+            class="poi-elevation"
+          >
             {{ formatElevation(poi.poi?.elevation || poi.elevation) }}
           </span>
-          <span v-if="poi.distance_from_start_m !== null && poi.distance_from_start_m !== undefined" class="poi-distance">
+          <span
+            v-if="poi.distance_from_start_m !== null && poi.distance_from_start_m !== undefined"
+            class="poi-distance"
+          >
             {{ formatDistance(poi.distance_from_start_m) }}
           </span>
         </div>

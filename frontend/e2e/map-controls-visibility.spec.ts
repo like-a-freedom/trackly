@@ -1,6 +1,6 @@
-/// <reference path="../src/types/e2e.d.ts" />
+import "../src/types/e2e.d.ts"
 
-// @ts-ignore: Playwright test types may not be resolvable in the static analysis environment
+// @ts-expect-error: Playwright test types may not be resolvable in the static analysis environment
 import { test, expect } from '@playwright/test';
 
 test.describe('Map Controls Icon Visibility', () => {
@@ -39,7 +39,8 @@ test.describe('Map Controls Icon Visibility', () => {
         await expect(searchButton).toBeEnabled();
 
         // Click should open search modal
-        await searchButton.click();
+        await page.waitForFunction(() => !!(window.__e2e?.isMapIdle?.()), { timeout: 3000 });
+        await searchButton.click({ force: true });
         await expect(page.locator('.search-modal')).toBeVisible({ timeout: 2000 });
     });
 

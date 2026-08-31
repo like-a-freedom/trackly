@@ -9,3 +9,11 @@ import router from './router'
 const head = createHead()
 
 createApp(App).use(router).use(head).mount('#app')
+
+if ('serviceWorker' in navigator) {
+	window.addEventListener('load', () => {
+		navigator.serviceWorker.register('/sw.js').catch((error) => {
+			console.warn('[ServiceWorker] Registration failed', error);
+		});
+	});
+}

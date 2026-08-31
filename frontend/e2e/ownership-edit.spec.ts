@@ -32,7 +32,7 @@ test('owner can edit description; non-owner cannot', async ({ page }) => {
 
     // Visit as owner and edit description
     await page.context().addCookies([{ name: 'session_id', value: OWNER_SESSION, domain: 'localhost', path: '/' }]);
-    await page.addInitScript(sid => { try { localStorage.setItem('trackly_session_id', sid); } catch (e) { } }, OWNER_SESSION);
+    await page.addInitScript(sid => { try { localStorage.setItem('trackly_session_id', sid); } catch (e) { void 0; } }, OWNER_SESSION);
 
     // Wait for backend to have the new track available and associated with the owner session
     for (let i = 0; i < 10; i++) {
@@ -65,7 +65,7 @@ test('owner can edit description; non-owner cannot', async ({ page }) => {
 
     // Now view as non-owner and ensure edit button not visible
     await page.context().addCookies([{ name: 'session_id', value: OTHER_SESSION, domain: 'localhost', path: '/' }]);
-    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '22222222-2222-2222-2222-222222222222'); } catch (e) { } });
+    await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', '22222222-2222-2222-2222-222222222222'); } catch (e) { void 0; } });
     await page.goto(`${FRONTEND}/track/${createdId}`);
     await page.waitForLoadState('networkidle');
 

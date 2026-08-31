@@ -4,6 +4,11 @@
 
 use crate::track_utils::geometry::haversine_distance;
 
+type SegmentPoints = Vec<(f64, f64)>;
+type SegmentWaypoints = Vec<usize>;
+type Segments = Vec<SegmentPoints>;
+type Waypoints = Vec<SegmentWaypoints>;
+
 /// Simplify a track using Douglas-Peucker algorithm
 /// Returns simplified track with fewer points while preserving shape
 pub fn simplify_track(points: &[(f64, f64)], tolerance_m: f64) -> Vec<(f64, f64)> {
@@ -334,6 +339,193 @@ pub fn simplify_profile_array_adaptive(
     simplify_json_array(json_value, original_track_length, simplified_track_length)
 }
 
+fn normalize_waypoints(waypoints: &[usize], segment_len: usize) -> Vec<usize> {
+    if segment_len == 0 {
+        return Vec::new();
+    }
+
+    let mut normalized: Vec<usize> = waypoints
+        .iter()
+        .copied()
+        .filter(|idx| *idx < segment_len)
+        .collect();
+
+    normalized.push(0);
+    if segment_len > 1 {
+        normalized.push(segment_len - 1);
+    }
+
+    normalized.sort_unstable();
+    normalized.dedup();
+
+    if normalized.len() == 1 && segment_len > 1 {
+        normalized.push(segment_len - 1);
+    }
+
+    normalized
+}
+
+fn simplify_segment_with_waypoints(
+    points: &[(f64, f64)],
+    waypoints: &[usize],
+    tolerance: f64,
+) -> (Vec<(f64, f64)>, Vec<usize>) {
+    if points.len() <= 2 {
+        let normalized = normalize_waypoints(waypoints, points.len());
+        return (points.to_vec(), normalized);
+    }
+
+    let normalized = normalize_waypoints(waypoints, points.len());
+    if normalized.len() < 2 {
+        return (points.to_vec(), normalized);
+    }
+
+    let mut simplified_points: Vec<(f64, f64)> = Vec::new();
+    let mut simplified_waypoints: Vec<usize> = Vec::new();
+
+    for window in normalized.windows(2) {
+        let start = window[0];
+        let end = window[1];
+        if start >= end || end >= points.len() {
+            continue;
+        }
+        let slice = &points[start..=end];
+        let simplified_slice = simplify_track(slice, tolerance);
+        let start_index = simplified_points.len();
+
+        if simplified_points.is_empty() {
+            simplified_points.extend_from_slice(&simplified_slice);
+        } else if simplified_slice.len() > 1 {
+            simplified_points.extend_from_slice(&simplified_slice[1..]);
+        }
+
+        simplified_waypoints.push(start_index);
+        if !simplified_points.is_empty() {
+            simplified_waypoints.push(simplified_points.len() - 1);
+        }
+    }
+
+    simplified_waypoints.sort_unstable();
+    simplified_waypoints.dedup();
+
+    (simplified_points, simplified_waypoints)
+}
+
+fn simplify_segments_with_tolerance(
+    segments: &[SegmentPoints],
+    waypoints: Option<&[SegmentWaypoints]>,
+    tolerance: f64,
+) -> (Segments, Waypoints, usize) {
+    let mut simplified_segments: Segments = Vec::with_capacity(segments.len());
+    let mut simplified_waypoints: Waypoints = Vec::with_capacity(segments.len());
+    let mut total_points = 0usize;
+
+    for (idx, segment) in segments.iter().enumerate() {
+        let waypoint_list = waypoints.and_then(|wps| wps.get(idx));
+        let (points, wps) = simplify_segment_with_waypoints(
+            segment,
+            waypoint_list.map(Vec::as_slice).unwrap_or(&[]),
+            tolerance,
+        );
+        total_points += points.len();
+        simplified_segments.push(points);
+        simplified_waypoints.push(wps);
+    }
+
+    (simplified_segments, simplified_waypoints, total_points)
+}
+
+/// Simplify segments with a target ratio while preserving waypoints.
+/// Returns simplified segments, waypoints, and stats for the applied tolerance.
+pub fn simplify_segments_to_ratio(
+    segments: &[SegmentPoints],
+    waypoints: Option<&[SegmentWaypoints]>,
+    target_ratio: f64,
+) -> (Segments, Waypoints, SimplificationStats) {
+    let original_points: usize = segments.iter().map(|s| s.len()).sum();
+
+    if original_points <= 2 {
+        let (points, wps, simplified_points) =
+            simplify_segments_with_tolerance(segments, waypoints, 0.0);
+        let stats = SimplificationStats {
+            original_points,
+            simplified_points,
+            compression_ratio: if original_points > 0 {
+                simplified_points as f64 / original_points as f64
+            } else {
+                0.0
+            },
+            tolerance_used: 0.0,
+        };
+        return (points, wps, stats);
+    }
+
+    let ratio = target_ratio.clamp(0.01, 1.0);
+    let mut min_points = 0usize;
+    for seg in segments {
+        min_points += if seg.len() >= 2 { 2 } else { seg.len() };
+    }
+
+    let target_points = ((original_points as f64) * ratio).round() as usize;
+    let target_points = target_points.max(min_points).min(original_points);
+
+    if target_points >= original_points {
+        let (points, wps, simplified_points) =
+            simplify_segments_with_tolerance(segments, waypoints, 0.0);
+        let stats = SimplificationStats {
+            original_points,
+            simplified_points,
+            compression_ratio: if original_points > 0 {
+                simplified_points as f64 / original_points as f64
+            } else {
+                0.0
+            },
+            tolerance_used: 0.0,
+        };
+        return (points, wps, stats);
+    }
+
+    let max_distance = segments
+        .iter()
+        .filter(|s| s.len() >= 2)
+        .map(|s| haversine_distance(s[0], s[s.len() - 1]))
+        .fold(0.0, f64::max);
+
+    let mut low = 0.0;
+    let mut high = max_distance.max(1000.0);
+    let mut best_segments = segments.to_vec();
+    let mut best_waypoints = waypoints
+        .map(|wps| wps.to_vec())
+        .unwrap_or_else(|| vec![Vec::new(); segments.len()]);
+    let mut best_points = original_points;
+    let mut best_tolerance = 0.0;
+
+    for _ in 0..12 {
+        let mid = (low + high) / 2.0;
+        let (simplified_segments, simplified_waypoints, count) =
+            simplify_segments_with_tolerance(segments, waypoints, mid);
+
+        if count > target_points {
+            low = mid;
+        } else {
+            high = mid;
+            best_segments = simplified_segments;
+            best_waypoints = simplified_waypoints;
+            best_points = count;
+            best_tolerance = mid;
+        }
+    }
+
+    let stats = SimplificationStats {
+        original_points,
+        simplified_points: best_points,
+        compression_ratio: best_points as f64 / original_points as f64,
+        tolerance_used: best_tolerance,
+    };
+
+    (best_segments, best_waypoints, stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -513,5 +705,30 @@ mod tests {
             min_required
         );
         assert!(simplified.len() < points.len()); // still simplified
+    }
+
+    #[test]
+    fn test_simplify_segments_to_ratio_preserves_waypoints() {
+        let points: Vec<(f64, f64)> = (0..10).map(|i| (55.0 + i as f64 * 0.0001, 37.0)).collect();
+        let segments = vec![points.clone()];
+        let waypoints = vec![vec![0, 5, 9]];
+
+        let (simplified, simplified_waypoints, stats) =
+            simplify_segments_to_ratio(&segments, Some(&waypoints), 0.5);
+
+        assert_eq!(simplified.len(), 1);
+        assert_eq!(simplified_waypoints.len(), 1);
+        assert!(stats.original_points > 0);
+        assert!(stats.simplified_points > 0);
+        assert!(stats.compression_ratio <= 1.0);
+
+        let wp_coords: Vec<(f64, f64)> = simplified_waypoints[0]
+            .iter()
+            .map(|idx| simplified[0][*idx])
+            .collect();
+
+        assert!(wp_coords.contains(&points[0]));
+        assert!(wp_coords.contains(&points[5]));
+        assert!(wp_coords.contains(&points[9]));
     }
 }

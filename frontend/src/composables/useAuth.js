@@ -217,13 +217,6 @@ export function useAuth() {
             sessionStorage.removeItem('oauth_state');
             sessionStorage.removeItem('pkce_code_verifier');
 
-            // Migrate session tracks if needed
-            const pendingSessionId = sessionStorage.getItem('pending_migration_session_id');
-            if (pendingSessionId) {
-                await migrateSessionTracks(pendingSessionId);
-                sessionStorage.removeItem('pending_migration_session_id');
-            }
-
             return true;
         } catch (e) {
             authError.value = e.message || 'Login failed';
@@ -358,7 +351,9 @@ export function useAuth() {
      * Migrate anonymous session tracks to user account
      */
     async function migrateSessionTracks(sessionId) {
-        if (!accessToken.value || !sessionId) return { migrated_count: 0 };
+        if (!accessToken.value || !sessionId) {
+            return { tracks_migrated: 0, pois_migrated: 0 };
+        }
 
         try {
             const response = await fetch(`${API_BASE}/api/auth/migrate-session-tracks`, {
@@ -372,13 +367,17 @@ export function useAuth() {
 
             if (!response.ok) {
                 console.error('Track migration failed');
-                return { migrated_count: 0 };
+                return { tracks_migrated: 0, pois_migrated: 0 };
             }
 
-            return await response.json();
+            const data = await response.json();
+            return {
+                tracks_migrated: Number(data.tracks_migrated ?? data.migrated_count ?? 0),
+                pois_migrated: Number(data.pois_migrated ?? 0)
+            };
         } catch (e) {
             console.error('Track migration error:', e);
-            return { migrated_count: 0 };
+            return { tracks_migrated: 0, pois_migrated: 0 };
         }
     }
 
