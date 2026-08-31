@@ -1,0 +1,3 @@
+# UseConfirm: add `confirm` as alias of `showConfirm` (stage 0.5a)
+
+`AccountView.vue:451` destructures `confirm` from `useConfirm()` (undefined in the current exports) and then calls it at lines 659 and 722, causing `TypeError: confirm is not a function` at runtime when the user clicks "Delete Tracks" or "Delete Account". Renaming `showConfirm` to `confirm` would break the 2 working call sites in `TrackDetailPanel.vue:1041` and `ConfirmDialogProvider.vue:21,23`. We add `confirm` as an alias pointing to `showConfirm` so both work, and document the dual-name pattern. New code should use `showConfirm` (canonical).

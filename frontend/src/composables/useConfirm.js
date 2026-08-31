@@ -30,6 +30,7 @@ export function useConfirm() {
     return {
         confirmDialogs,
         showConfirm,
+        confirm: showConfirm,   // alias for AccountView.vue:451,659,722 (stage 0.5a)
         confirmDialog
     };
 }
