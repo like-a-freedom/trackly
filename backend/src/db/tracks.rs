@@ -1627,6 +1627,7 @@ pub async fn get_track_ownership(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::AppError;
     use crate::models::TrackGeoJsonQuery;
     use serde_json::json;
 
@@ -2129,7 +2130,7 @@ mod tests {
             Json(payload),
         )
         .await;
-        assert!(matches!(res, Err(StatusCode::FORBIDDEN)));
+        assert!(matches!(res, Err(AppError::Forbidden)));
 
         // Update with owner session
         let payload_ok = Req {
@@ -2234,7 +2235,7 @@ mod tests {
             Json(payload),
         )
         .await;
-        assert!(matches!(res, Err(StatusCode::BAD_REQUEST)));
+        assert!(matches!(res, Err(AppError::BadRequest(_))));
 
         // Attempt update with only whitespace categories
         let payload2 = Req {
@@ -2248,7 +2249,7 @@ mod tests {
             Json(payload2),
         )
         .await;
-        assert!(matches!(res2, Err(StatusCode::BAD_REQUEST)));
+        assert!(matches!(res2, Err(AppError::BadRequest(_))));
     }
 
     #[tokio::test]

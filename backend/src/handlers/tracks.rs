@@ -1,5 +1,6 @@
 use crate::auth::OptionalAuthUser;
 use crate::db;
+use crate::error::{AppError, Result};
 use crate::handlers::rate_limit::{
     export_rate_limit_seconds, last_export_attempt, record_session_export_attempt,
     record_session_upload_attempt,
@@ -40,7 +41,7 @@ const MAX_SIMPLIFY_POINTS: usize = 100_000;
 pub async fn check_track_exist(
     State(pool): State<Arc<PgPool>>,
     mut multipart: AxumMultipart,
-) -> Result<Json<TrackExistResponse>, StatusCode> {
+) -> Result<Json<TrackExistResponse>> {
     let mut file_bytes = None;
     let mut file_name = None;
     // Gracefully handle multipart errors: if any error occurs, treat as no file provided
@@ -107,21 +108,21 @@ pub async fn check_track_exist(
     }
 }
 
-fn normalize_session_id(raw: &str) -> Result<(Uuid, String), StatusCode> {
+fn normalize_session_id(raw: &str) -> Result<(Uuid, String)> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         warn!(
             reason = "empty_session_id",
             "session_id field is empty after trimming"
         );
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     match Uuid::parse_str(trimmed) {
         Ok(uuid) => Ok((uuid, trimmed.to_string())),
         Err(e) => {
             warn!(reason = "invalid_session_id", session_id = %trimmed, error = ?e, "failed to parse session_id");
-            Err(StatusCode::BAD_REQUEST)
+            Err(AppError::BadRequest("invalid session_id".into()))
         }
     }
 }
@@ -169,7 +170,7 @@ fn detect_search_query_type(query: &str) -> &'static str {
 pub async fn upload_track(
     State(pool): State<Arc<PgPool>>,
     mut multipart: AxumMultipart,
-) -> Result<Json<TrackUploadResponse>, StatusCode> {
+) -> Result<Json<TrackUploadResponse>> {
     info!(endpoint = "upload_track", "request received");
     let mut name = None;
     let mut description = None;
@@ -180,7 +181,7 @@ pub async fn upload_track(
 
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         warn!(error = ?e, "multipart read failed");
-        StatusCode::INTERNAL_SERVER_ERROR
+        AppError::from(StatusCode::INTERNAL_SERVER_ERROR)
     })? {
         debug!(field_name = ?field.name(), "upload_track: received multipart field");
         if let Some(field_name) = field.name() {
@@ -188,7 +189,7 @@ pub async fn upload_track(
                 "name" => {
                     let name_text = field.text().await.map_err(|e| {
                         warn!(error = ?e, field = "name", "failed to read text field");
-                        StatusCode::BAD_REQUEST
+                        AppError::from(StatusCode::BAD_REQUEST)
                     })?;
                     validate_text_field(&name_text, MAX_NAME_LENGTH, "name")?;
                     name = Some(name_text);
@@ -196,7 +197,7 @@ pub async fn upload_track(
                 "description" => {
                     let desc_text = field.text().await.map_err(|e| {
                         warn!(error = ?e, field = "description", "failed to read text field");
-                        StatusCode::BAD_REQUEST
+                        AppError::from(StatusCode::BAD_REQUEST)
                     })?;
                     validate_text_field(&desc_text, MAX_DESCRIPTION_LENGTH, "description")?;
                     description = Some(desc_text);
@@ -204,7 +205,7 @@ pub async fn upload_track(
                 "categories" => {
                     let cats = field.text().await.map_err(|e| {
                         warn!(error = ?e, field = "categories", "failed to read text field");
-                        StatusCode::BAD_REQUEST
+                        AppError::from(StatusCode::BAD_REQUEST)
                     })?;
                     validate_text_field(&cats, MAX_FIELD_SIZE, "categories")?;
                     // filter out empty segments like "" in case of trailing commas
@@ -219,7 +220,7 @@ pub async fn upload_track(
                             "upload_track request without categories"
                         );
                         metrics::record_track_upload_failure("validation");
-                        return Err(StatusCode::BAD_REQUEST);
+                        return Err(AppError::BadRequest("invalid request".into()));
                     }
                     if categories.len() > MAX_CATEGORIES {
                         warn!(
@@ -227,7 +228,7 @@ pub async fn upload_track(
                             max = MAX_CATEGORIES,
                             "too many categories"
                         );
-                        return Err(StatusCode::BAD_REQUEST);
+                        return Err(AppError::BadRequest("invalid request".into()));
                     }
                     for cat in &categories {
                         validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
@@ -236,7 +237,7 @@ pub async fn upload_track(
                 "session_id" => {
                     let sid_raw = field.text().await.map_err(|e| {
                         warn!(error = ?e, field = "session_id", "failed to read text field");
-                        StatusCode::BAD_REQUEST
+                        AppError::from(StatusCode::BAD_REQUEST)
                     })?;
                     let (parsed_session_id, normalized_session) = normalize_session_id(&sid_raw)?;
                     session_id = Some(parsed_session_id);
@@ -259,7 +260,7 @@ pub async fn upload_track(
                     let bytes = field.bytes().await.map_err(|e| {
                         warn!(error = ?e, field = "file", "failed to read file bytes");
                         metrics::record_track_upload_failure("read_error");
-                        StatusCode::PAYLOAD_TOO_LARGE
+                        AppError::from(StatusCode::PAYLOAD_TOO_LARGE)
                     })?;
 
                     validate_file_size(bytes.len())?;
@@ -275,7 +276,7 @@ pub async fn upload_track(
         None => {
             warn!(reason = "missing_file", "upload_track request without file");
             metrics::record_track_upload_failure("validation");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("invalid request".into()));
         }
     };
     let file_name = match file_name {
@@ -286,7 +287,7 @@ pub async fn upload_track(
                 "upload_track request missing file name"
             );
             metrics::record_track_upload_failure("validation");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("invalid request".into()));
         }
     };
 
@@ -299,7 +300,7 @@ pub async fn upload_track(
     if categories.is_empty() {
         error!("No categories provided");
         metrics::record_track_upload_failure("validation");
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
     if categories.len() > MAX_CATEGORIES {
         error!(
@@ -307,7 +308,7 @@ pub async fn upload_track(
             categories.len(),
             MAX_CATEGORIES
         );
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
     for cat in &categories {
         validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
@@ -334,7 +335,7 @@ pub async fn list_tracks_geojson(
     State(pool): State<Arc<PgPool>>,
     auth_user: OptionalAuthUser,
     Query(mut params): Query<TrackGeoJsonQuery>,
-) -> Result<Json<TrackGeoJsonCollection>, StatusCode> {
+) -> Result<Json<TrackGeoJsonCollection>> {
     // Inject user_id from auth context if authenticated
     if let Some(user) = auth_user.user() {
         params.owner_user_id = Some(user.user_id);
@@ -356,7 +357,7 @@ pub async fn list_tracks_heatmap(
     State(pool): State<Arc<PgPool>>,
     auth_user: OptionalAuthUser,
     Query(mut params): Query<TrackGeoJsonQuery>,
-) -> Result<Json<TrackHeatmapResponse>, StatusCode> {
+) -> Result<Json<TrackHeatmapResponse>> {
     if let Some(user) = auth_user.user() {
         params.owner_user_id = Some(user.user_id);
     }
@@ -373,7 +374,7 @@ pub async fn get_track(
     Path(id): Path<Uuid>,
     Query(params): Query<TrackSimplificationQuery>,
     headers: HeaderMap,
-) -> Result<Json<TrackDetail>, StatusCode> {
+) -> Result<Json<TrackDetail>> {
     debug!(track_id = %id, zoom = ?params.zoom, mode = ?params.mode, endpoint = "get_track", "request received");
 
     // Use adaptive track detail if zoom/mode params are provided
@@ -394,11 +395,11 @@ pub async fn get_track(
         }
         Ok(None) => {
             debug!(track_id = %id, endpoint = "get_track", "track not found");
-            Err(StatusCode::NOT_FOUND)
+            Err(AppError::NotFound)
         }
         Err(e) => {
             error!(error = ?e, endpoint = "get_track", "db error");
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(AppError::Internal(anyhow::anyhow!("internal error")))
         }
     }
 }
@@ -408,7 +409,7 @@ pub async fn get_track_simplified(
     Path(id): Path<Uuid>,
     Query(params): Query<TrackSimplificationQuery>,
     headers: HeaderMap,
-) -> Result<Json<TrackSimplified>, StatusCode> {
+) -> Result<Json<TrackSimplified>> {
     debug!(track_id = %id, zoom = ?params.zoom, mode = ?params.mode, endpoint = "get_track_simplified", "request received");
 
     match db::get_track_detail_adaptive(&pool, id, params.zoom, params.mode.as_deref()).await {
@@ -478,11 +479,11 @@ pub async fn get_track_simplified(
         }
         Ok(None) => {
             debug!(track_id = %id, endpoint = "get_track_simplified", "track not found");
-            Err(StatusCode::NOT_FOUND)
+            Err(AppError::NotFound)
         }
         Err(e) => {
             error!(error = ?e, endpoint = "get_track_simplified", "db error");
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(AppError::Internal(anyhow::anyhow!("internal error")))
         }
     }
 }
@@ -490,21 +491,20 @@ pub async fn get_track_simplified(
 /// POST /api/tracks/simplify-preview — Simplify editor geometry for optimizer preview.
 pub async fn simplify_track_preview(
     Json(request): Json<TrackSimplifyPreviewRequest>,
-) -> Result<Json<TrackSimplifyPreviewResponse>, StatusCode> {
+) -> Result<Json<TrackSimplifyPreviewResponse>> {
     if !(0.0..=1.0).contains(&request.target_ratio) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
-    let segments =
-        extract_segments_from_geojson(&request.geometry).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let segments = extract_segments_from_geojson(&request.geometry)?;
 
     if segments.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     let total_points: usize = segments.iter().map(|s| s.len()).sum();
     if !(2..=MAX_SIMPLIFY_POINTS).contains(&total_points) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     let waypoint_ref = if request.waypoints.len() == segments.len() {
@@ -533,14 +533,14 @@ pub async fn update_track_description(
     Path(id): Path<Uuid>,
     auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackDescriptionRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode> {
     // Check that track exists
     let track = db::get_track_detail(&pool, id)
         .await
         .map_err(handle_db_error)?;
     let track = match track {
         Some(t) => t,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => return Err(AppError::NotFound),
     };
 
     // Check ownership (user_id for authenticated users, session_id for anonymous)
@@ -551,9 +551,7 @@ pub async fn update_track_description(
         Some(payload.session_id),
     )?;
 
-    db::update_track_description(&pool, id, &payload.description)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db::update_track_description(&pool, id, &payload.description).await?;
     metrics::record_track_edit("description");
     metrics::record_session_activity(Some(payload.session_id), "edit");
     Ok(StatusCode::NO_CONTENT)
@@ -564,19 +562,17 @@ pub async fn update_track_name(
     Path(id): Path<Uuid>,
     auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackNameRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode> {
     // Validate name length (1-255 characters)
     if payload.name.trim().is_empty() || payload.name.len() > 255 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     // Check that track exists
-    let track = db::get_track_detail(&pool, id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let track = db::get_track_detail(&pool, id).await?;
     let track = match track {
         Some(t) => t,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => return Err(AppError::NotFound),
     };
 
     // Check ownership (user_id for authenticated users, session_id for anonymous)
@@ -587,9 +583,7 @@ pub async fn update_track_name(
         Some(payload.session_id),
     )?;
 
-    db::update_track_name(&pool, id, payload.name.trim())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db::update_track_name(&pool, id, payload.name.trim()).await?;
     metrics::record_track_edit("name");
     metrics::record_session_activity(Some(payload.session_id), "edit");
     Ok(StatusCode::NO_CONTENT)
@@ -600,14 +594,12 @@ pub async fn update_track_categories(
     Path(id): Path<Uuid>,
     auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackCategoriesRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode> {
     // Check that track exists
-    let track = db::get_track_detail(&pool, id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let track = db::get_track_detail(&pool, id).await?;
     let track = match track {
         Some(t) => t,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => return Err(AppError::NotFound),
     };
 
     // Check ownership (user_id for authenticated users, session_id for anonymous)
@@ -628,11 +620,11 @@ pub async fn update_track_categories(
 
     // Require at least one category (same rule as upload)
     if categories.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     if categories.len() > MAX_CATEGORIES {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
     for cat in &categories {
         validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
@@ -644,9 +636,7 @@ pub async fn update_track_categories(
     let added: Vec<String> = new_set.difference(&prev_set).cloned().collect();
     let removed: Vec<String> = prev_set.difference(&new_set).cloned().collect();
 
-    db::update_track_categories(&pool, id, &categories)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db::update_track_categories(&pool, id, &categories).await?;
 
     // Metrics: record each assigned category (as at upload)
     for cat in &categories {
@@ -672,13 +662,11 @@ pub async fn update_track_distance_markers(
     Path(id): Path<Uuid>,
     auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackDistanceMarkersRequest>,
-) -> Result<StatusCode, StatusCode> {
-    let track = db::get_track_detail(&pool, id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<StatusCode> {
+    let track = db::get_track_detail(&pool, id).await?;
     let track = match track {
         Some(t) => t,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => return Err(AppError::NotFound),
     };
 
     check_track_ownership(
@@ -688,9 +676,7 @@ pub async fn update_track_distance_markers(
         Some(payload.session_id),
     )?;
 
-    db::update_track_distance_markers(&pool, id, payload.distance_markers_enabled)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db::update_track_distance_markers(&pool, id, payload.distance_markers_enabled).await?;
 
     metrics::record_track_edit("distance_markers");
     metrics::record_session_activity(Some(payload.session_id), "edit");
@@ -701,7 +687,7 @@ pub async fn search_tracks(
     State(pool): State<Arc<PgPool>>,
     Query(params): Query<TrackSearchQuery>,
     headers: HeaderMap,
-) -> Result<Json<Vec<TrackSearchResult>>, StatusCode> {
+) -> Result<Json<Vec<TrackSearchResult>>> {
     if params.query.trim().is_empty() {
         return Ok(Json(vec![]));
     }
@@ -709,7 +695,7 @@ pub async fn search_tracks(
     let session_id = parse_session_header(&headers);
     let tracks = db::search_tracks(&pool, &params.query).await.map_err(|e| {
         error!(error = ?e, endpoint = "search_tracks", "db error searching tracks");
-        StatusCode::INTERNAL_SERVER_ERROR
+        AppError::from(StatusCode::INTERNAL_SERVER_ERROR)
     })?;
 
     let result_type = if tracks.is_empty() { "zero" } else { "success" };
@@ -723,10 +709,10 @@ pub async fn search_tracks(
 /// Generate sitemap.xml from public tracks
 pub async fn debug_background_task(
     Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> Result<axum::response::Json<serde_json::Value>, axum::http::StatusCode> {
+) -> Result<axum::response::Json<serde_json::Value>> {
     // Guard: only enabled when env var explicitly set
     if std::env::var("ENABLE_DEBUG_ENDPOINTS").ok().as_deref() != Some("1") {
-        return Err(axum::http::StatusCode::NOT_FOUND);
+        return Err(AppError::NotFound);
     }
 
     let duration_secs = params
@@ -750,7 +736,7 @@ pub async fn export_track_gpx(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
     headers: HeaderMap,
-) -> Result<axum::response::Response<axum::body::Body>, StatusCode> {
+) -> Result<axum::response::Response<axum::body::Body>> {
     debug!(track_id = %id, endpoint = "export_track_gpx", "request received");
     let start = Instant::now();
     let session_id = parse_session_header(&headers);
@@ -795,8 +781,7 @@ pub async fn export_track_gpx(
                 "Access-Control-Expose-Headers",
                 "X-Export-Rate-Limit-Seconds, Retry-After",
             )
-            .body(axum::body::Body::empty())
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .body(axum::body::Body::empty())?;
 
         return Ok(resp);
     }
@@ -824,8 +809,7 @@ pub async fn export_track_gpx(
                     "Access-Control-Expose-Headers",
                     "X-Export-Rate-Limit-Seconds, Retry-After",
                 )
-                .body(axum::body::Body::from(gpx_content))
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                .body(axum::body::Body::from(gpx_content))?;
 
             metrics::observe_track_export_duration("gpx", start.elapsed().as_secs_f64());
             metrics::record_track_export("gpx");
@@ -835,11 +819,11 @@ pub async fn export_track_gpx(
         }
         Ok(None) => {
             error!(?id, "[export_track_gpx] track not found");
-            Err(StatusCode::NOT_FOUND)
+            Err(AppError::NotFound)
         }
         Err(e) => {
             error!(?e, "[export_track_gpx] db error");
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(AppError::Internal(anyhow::anyhow!("internal error")))
         }
     }
 }
@@ -849,13 +833,11 @@ pub async fn delete_track(
     Path(id): Path<Uuid>,
     auth_user: OptionalAuthUser,
     Json(payload): Json<UpdateTrackNameRequest>, // reuse session_id field pattern
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode> {
     // Fetch track
-    let track = db::get_track_detail(&pool, id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let track = db::get_track_detail(&pool, id).await?;
     let Some(track) = track else {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::NotFound);
     };
 
     // Check ownership (user_id for authenticated users, session_id for anonymous)
@@ -867,11 +849,9 @@ pub async fn delete_track(
     )?;
 
     // Delete
-    let affected = db::delete_track(&pool, id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let affected = db::delete_track(&pool, id).await?;
     if affected == 0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::NotFound);
     }
     metrics::record_track_deleted("success");
     Ok(StatusCode::NO_CONTENT)
@@ -883,13 +863,13 @@ pub async fn enrich_elevation(
     Path(id): Path<Uuid>,
     auth_user: OptionalAuthUser,
     Json(payload): Json<EnrichElevationRequest>,
-) -> Result<Json<EnrichElevationResponse>, StatusCode> {
+) -> Result<Json<EnrichElevationResponse>> {
     // Get track by id
     let track = db::get_track_by_id(&pool, id)
         .await
         .map_err(|e| {
             error!(track_id = %id, error = ?e, endpoint = "enrich_elevation", "failed to get track");
-            StatusCode::INTERNAL_SERVER_ERROR
+            AppError::from(StatusCode::INTERNAL_SERVER_ERROR)
         })?
         .ok_or_else(|| {
             warn!(track_id = %id, endpoint = "enrich_elevation", "track not found");
@@ -931,11 +911,11 @@ pub async fn enrich_elevation(
         Ok(coords) if !coords.is_empty() => coords,
         Ok(_) => {
             warn!(track_id = %id, endpoint = "enrich_elevation", reason = "no_coordinates", "cannot enrich track without coordinates");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("invalid request".into()));
         }
         Err(e) => {
             warn!(track_id = %id, error = ?e, endpoint = "enrich_elevation", reason = "invalid_geojson", "failed to extract coordinates");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("invalid request".into()));
         }
     };
 
@@ -949,7 +929,7 @@ pub async fn enrich_elevation(
         Ok(result) => result,
         Err(e) => {
             error!("Failed to enrich elevation for track {}: {}", id, e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(AppError::Internal(anyhow::anyhow!("internal error")));
         }
     };
 
@@ -972,7 +952,7 @@ pub async fn enrich_elevation(
     .await
     {
         error!(track_id = %id, error = ?e, endpoint = "enrich_elevation", "failed to update elevation data");
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        return Err(AppError::Internal(anyhow::anyhow!("internal error")));
     }
 
     // Calculate and update slope data
@@ -1039,19 +1019,19 @@ pub async fn enrich_elevation(
 /// POST /api/elevation/preview — Preview elevation profile for editor without saving.
 pub async fn preview_elevation(
     Json(request): Json<ElevationPreviewRequest>,
-) -> Result<Json<ElevationPreviewResponse>, StatusCode> {
+) -> Result<Json<ElevationPreviewResponse>> {
     if request.coordinates.len() < 2 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     if request.coordinates.len() > 5000 {
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        return Err(AppError::BadRequest("payload too large".into()));
     }
 
     let mut coordinates = Vec::with_capacity(request.coordinates.len());
     for coord in request.coordinates {
         if coord[0] < -90.0 || coord[0] > 90.0 || coord[1] < -180.0 || coord[1] > 180.0 {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("invalid request".into()));
         }
         coordinates.push((coord[0], coord[1]));
     }
@@ -1102,13 +1082,13 @@ mod tests {
     #[test]
     fn normalize_session_id_rejects_empty_field() {
         let err = normalize_session_id("   ").unwrap_err();
-        assert_eq!(err, StatusCode::BAD_REQUEST);
+        assert!(matches!(err, AppError::BadRequest(_)));
     }
 
     #[test]
     fn normalize_session_id_rejects_invalid_uuid() {
         let err = normalize_session_id("not-a-uuid").unwrap_err();
-        assert_eq!(err, StatusCode::BAD_REQUEST);
+        assert!(matches!(err, AppError::BadRequest(_)));
     }
 
     // Additional integration tests from tests/handlers.rs
@@ -1421,14 +1401,11 @@ mod tests {
 pub async fn get_track_slope_profile(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse> {
     // Get track with slope data
-    let track = match db::get_track_detail_adaptive(&pool, id, None, None)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    {
+    let track = match db::get_track_detail_adaptive(&pool, id, None, None).await? {
         Some(track) => track,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => return Err(AppError::NotFound),
     };
 
     // Check if slope data is available
@@ -1447,7 +1424,7 @@ pub async fn get_track_slope_profile(
         Ok(segments) => segments,
         Err(e) => {
             tracing::error!("Failed to parse slope segments for track {}: {}", id, e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(AppError::Internal(anyhow::anyhow!("internal error")));
         }
     };
 
@@ -1488,27 +1465,24 @@ pub async fn recalculate_track_slopes(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateTrackNameRequest>, // Reuse existing struct for session_id
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse> {
     use crate::track_utils::slope::recalculate_slope_metrics;
 
     // Get track with geometry and elevation data
-    let track = match db::get_track_detail_adaptive(&pool, id, None, None)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    {
+    let track = match db::get_track_detail_adaptive(&pool, id, None, None).await? {
         Some(track) => track,
-        None => return Err(StatusCode::NOT_FOUND),
+        None => return Err(AppError::NotFound),
     };
 
     // Check session ownership (reuse existing auth logic)
     if track.session_id != Some(request.session_id) {
-        return Err(StatusCode::FORBIDDEN);
+        return Err(AppError::Forbidden);
     }
 
     // Extract coordinates from geometry
     let geom_str = match track.geom_geojson.get("coordinates") {
         Some(coords) => coords.to_string(),
-        None => return Err(StatusCode::BAD_REQUEST),
+        None => return Err(AppError::BadRequest("invalid request".into())),
     };
 
     // Parse coordinates - for LineString GeoJSON format
@@ -1523,7 +1497,7 @@ pub async fn recalculate_track_slopes(
                 }
             })
             .collect(),
-        Err(_) => return Err(StatusCode::BAD_REQUEST),
+        Err(_) => return Err(AppError::BadRequest("invalid coordinates".into())),
     };
 
     if coordinates.len() < 2 {
@@ -1603,7 +1577,7 @@ pub async fn recalculate_track_slopes(
         Err(e) => {
             tracing::error!("Failed to update track slopes: {}", e);
             metrics::observe_slope_recalc("db_error", slope_duration);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(AppError::Internal(anyhow::anyhow!("internal error")))
         }
     }
 }
@@ -1617,7 +1591,7 @@ pub async fn create_track_from_editor(
     State(pool): State<Arc<PgPool>>,
     auth_user: OptionalAuthUser,
     Json(request): Json<crate::services::track_editor::CreateTrackFromEditorRequest>,
-) -> Result<(StatusCode, Json<TrackUploadResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<TrackUploadResponse>)> {
     let user_id = auth_user.user().map(|u| u.user_id);
     let service = crate::services::track_editor::TrackEditorService::new(pool);
     let response = service.create_track(request, user_id).await?;
@@ -1630,7 +1604,7 @@ pub async fn update_track_geometry(
     auth_user: OptionalAuthUser,
     Path(track_id): Path<Uuid>,
     Json(request): Json<crate::services::track_editor::UpdateTrackGeometryRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode> {
     // Check ownership
     let (track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
         .await
@@ -1653,7 +1627,7 @@ pub async fn duplicate_track(
     auth_user: OptionalAuthUser,
     Path(source_id): Path<Uuid>,
     Json(request): Json<crate::services::track_editor::DuplicateTrackRequest>,
-) -> Result<(StatusCode, Json<TrackUploadResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<TrackUploadResponse>)> {
     // Check ownership of source track
     let (track_session_id, track_user_id) = db::get_track_ownership(&pool, source_id)
         .await
@@ -2052,13 +2026,6 @@ mod track_crud_tests {
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("Elevation enriched successfully"));
         assert!(json.contains(&track_id.to_string()));
-    }
-
-    #[test]
-    fn test_handle_db_error_not_found() {
-        let error = sqlx::Error::RowNotFound;
-        let status = handle_db_error(error);
-        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
     #[test]

@@ -3,6 +3,7 @@
 //! Stage 1a: stub — POI handlers lifted from `handlers/tracks.rs` with the same
 //! raw SQL and error mapping. Stage 1c replaces the bodies to call `db::pois`.
 
+use crate::error::{AppError, Result};
 use crate::input_validation::{
     MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH, validate_text_field,
 };
@@ -24,7 +25,7 @@ use uuid::Uuid;
 pub async fn get_pois(
     State(pool): State<Arc<PgPool>>,
     Query(params): Query<PoiQuery>,
-) -> Result<Json<PoiListResponse>, StatusCode> {
+) -> Result<Json<PoiListResponse>> {
     let limit = params.limit.unwrap_or(100).min(1000);
     let offset = params.offset.unwrap_or(0);
 
@@ -35,7 +36,7 @@ pub async fn get_pois(
 
         if bbox_parts.len() != 4 {
             error!("Invalid bbox format: {}", bbox_str);
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("invalid request".into()));
         }
 
         sqlx::query_as::<_, Poi>(
@@ -61,11 +62,7 @@ pub async fn get_pois(
         .bind(limit)
         .bind(offset)
         .fetch_all(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to fetch POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
+        .await?
     } else if let Some(track_id) = params.track_id {
         // Get POIs for a specific track
         sqlx::query_as::<_, Poi>(
@@ -86,11 +83,7 @@ pub async fn get_pois(
         .bind(limit)
         .bind(offset)
         .fetch_all(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to fetch track POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
+        .await?
     } else {
         // Get all POIs (with limit)
         sqlx::query_as::<_, Poi>(
@@ -108,29 +101,18 @@ pub async fn get_pois(
         .bind(limit)
         .bind(offset)
         .fetch_all(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to fetch POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?
+        .await?
     };
 
     let total = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM pois")
         .fetch_one(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to count POIs: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .await?;
 
     Ok(Json(PoiListResponse { pois, total }))
 }
 
 /// GET /pois/:id - Get POI details
-pub async fn get_poi(
-    State(pool): State<Arc<PgPool>>,
-    Path(id): Path<i32>,
-) -> Result<Json<Poi>, StatusCode> {
+pub async fn get_poi(State(pool): State<Arc<PgPool>>, Path(id): Path<i32>) -> Result<Json<Poi>> {
     let poi = sqlx::query_as::<_, Poi>(
         r#"
         SELECT 
@@ -143,12 +125,8 @@ pub async fn get_poi(
     )
     .bind(id)
     .fetch_optional(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to fetch POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .await?
+    .ok_or(AppError::NotFound)?;
 
     Ok(Json(poi))
 }
@@ -158,16 +136,16 @@ pub async fn update_poi(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<i32>,
     Json(request): Json<UpdatePoiRequest>,
-) -> Result<Json<Poi>, StatusCode> {
+) -> Result<Json<Poi>> {
     let has_changes =
         request.name.is_some() || request.description.is_some() || request.category.is_some();
     if !has_changes {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     if let Some(name) = request.name.as_deref() {
         if name.trim().is_empty() {
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("invalid request".into()));
         }
         validate_text_field(name, MAX_NAME_LENGTH, "name")?;
     }
@@ -189,17 +167,13 @@ pub async fn update_poi(
     )
     .bind(id)
     .fetch_optional(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to check POI ownership: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .await?
+    .ok_or(AppError::NotFound)?;
 
     if let Some(owner) = owner_session_id
         && Some(owner) != request.session_id
     {
-        return Err(StatusCode::FORBIDDEN);
+        return Err(AppError::Forbidden);
     }
 
     let name_provided = request.name.is_some();
@@ -241,11 +215,7 @@ pub async fn update_poi(
     .bind(cat_provided)
     .bind(cat_value)
     .fetch_one(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to update POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    .await?;
 
     info!("Updated POI {}", poi.id);
     Ok(Json(poi))
@@ -255,7 +225,7 @@ pub async fn update_poi(
 pub async fn get_track_pois(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<Uuid>,
-) -> Result<Json<Vec<PoiWithDistance>>, StatusCode> {
+) -> Result<Json<Vec<PoiWithDistance>>> {
     let rows = sqlx::query(
         r#"
         SELECT 
@@ -271,11 +241,7 @@ pub async fn get_track_pois(
     )
     .bind(track_id)
     .fetch_all(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to fetch track POIs: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    .await?;
 
     let pois: Vec<PoiWithDistance> = rows
         .into_iter()
@@ -306,11 +272,11 @@ pub async fn get_track_pois(
 pub async fn create_poi(
     State(pool): State<Arc<PgPool>>,
     Json(request): Json<CreatePoiRequest>,
-) -> Result<Json<Poi>, StatusCode> {
+) -> Result<Json<Poi>> {
     // Validate inputs
     if request.name.trim().is_empty() {
         error!("POI name cannot be empty");
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("invalid request".into()));
     }
 
     validate_text_field(&request.name, MAX_NAME_LENGTH, "name")?;
@@ -337,11 +303,7 @@ pub async fn create_poi(
     .bind(request.lat)
     .bind(request.session_id)
     .fetch_one(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to create POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    .await?;
 
     info!("Created POI {} (id: {})", poi.name, poi.id);
     metrics::record_poi_created("manual");
@@ -352,19 +314,15 @@ pub async fn create_poi(
 pub async fn unlink_track_poi(
     State(pool): State<Arc<PgPool>>,
     Path((track_id, poi_id)): Path<(Uuid, i32)>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode> {
     let result = sqlx::query("DELETE FROM track_pois WHERE track_id = $1 AND poi_id = $2")
         .bind(track_id)
         .bind(poi_id)
         .execute(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to unlink POI: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .await?;
 
     if result.rows_affected() == 0 {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(AppError::NotFound);
     }
 
     info!("Unlinked POI {} from track {}", poi_id, track_id);
@@ -377,7 +335,7 @@ pub async fn delete_poi(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<i32>,
     Json(request): Json<DeletePoiRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode> {
     // Check ownership and usage
     let poi_info = sqlx::query(
         r#"
@@ -390,12 +348,8 @@ pub async fn delete_poi(
     )
     .bind(id)
     .fetch_optional(&*pool)
-    .await
-    .map_err(|e| {
-        error!("Failed to check POI: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .await?
+    .ok_or(AppError::NotFound)?;
 
     use sqlx::Row;
     let usage_count: i64 = poi_info.get("usage_count");
@@ -406,24 +360,20 @@ pub async fn delete_poi(
     // 2. User is the owner (session_id matches) or POI has no owner (auto-created)
     if usage_count > 0 {
         error!("Cannot delete POI {}: used in {} tracks", id, usage_count);
-        return Err(StatusCode::CONFLICT); // 409: POI is in use
+        return Err(AppError::Conflict("POI is in use".into()));
     }
 
     if let Some(owner_session_id) = owner_id
         && Some(owner_session_id) != request.session_id
     {
         error!("Cannot delete POI {}: not the owner", id);
-        return Err(StatusCode::FORBIDDEN); // 403: Not the owner
+        return Err(AppError::Forbidden); // 403: Not the owner
     }
 
     sqlx::query("DELETE FROM pois WHERE id = $1")
         .bind(id)
         .execute(&*pool)
-        .await
-        .map_err(|e| {
-            error!("Failed to delete POI: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .await?;
 
     info!("Deleted POI {}", id);
     metrics::record_poi_deleted("delete_poi");

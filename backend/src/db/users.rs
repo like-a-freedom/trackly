@@ -7,7 +7,8 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::auth::{AuthError, OAuthUser};
+use crate::auth::OAuthUser;
+use crate::error::{AppError, Result};
 
 /// User entity from database.
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -42,10 +43,7 @@ impl User {
 /// Otherwise, creates a new user.
 ///
 /// Returns the user and whether they were newly created.
-pub async fn upsert_user(
-    pool: &Arc<PgPool>,
-    oauth_user: &OAuthUser,
-) -> Result<(User, bool), AuthError> {
+pub async fn upsert_user(pool: &Arc<PgPool>, oauth_user: &OAuthUser) -> Result<(User, bool)> {
     // Try to find existing user
     let existing = get_user_by_google_sub(pool, &oauth_user.google_sub).await?;
 
@@ -117,7 +115,7 @@ pub async fn upsert_user(
 }
 
 /// Get a user by their ID.
-pub async fn get_user_by_id(pool: &Arc<PgPool>, user_id: Uuid) -> Result<Option<User>, AuthError> {
+pub async fn get_user_by_id(pool: &Arc<PgPool>, user_id: Uuid) -> Result<Option<User>> {
     let user: Option<User> = sqlx::query_as(
         r#"
         SELECT
@@ -143,10 +141,7 @@ pub async fn get_user_by_id(pool: &Arc<PgPool>, user_id: Uuid) -> Result<Option<
 }
 
 /// Get a user by their Google subject ID.
-pub async fn get_user_by_google_sub(
-    pool: &Arc<PgPool>,
-    google_sub: &str,
-) -> Result<Option<User>, AuthError> {
+pub async fn get_user_by_google_sub(pool: &Arc<PgPool>, google_sub: &str) -> Result<Option<User>> {
     let user: Option<User> = sqlx::query_as(
         r#"
         SELECT
@@ -172,7 +167,7 @@ pub async fn get_user_by_google_sub(
 }
 
 /// Get a user by their email address.
-pub async fn get_user_by_email(pool: &Arc<PgPool>, email: &str) -> Result<Option<User>, AuthError> {
+pub async fn get_user_by_email(pool: &Arc<PgPool>, email: &str) -> Result<Option<User>> {
     let user: Option<User> = sqlx::query_as(
         r#"
         SELECT
@@ -202,7 +197,7 @@ pub async fn update_user_nickname(
     pool: &Arc<PgPool>,
     user_id: Uuid,
     nickname: Option<&str>,
-) -> Result<User, AuthError> {
+) -> Result<User> {
     let user: User = sqlx::query_as(
         r#"
         UPDATE users
@@ -226,8 +221,8 @@ pub async fn update_user_nickname(
     .fetch_one(&**pool)
     .await
     .map_err(|e| match e {
-        sqlx::Error::RowNotFound => AuthError::UserNotFound,
-        _ => AuthError::from(e),
+        sqlx::Error::RowNotFound => AppError::NotFound,
+        _ => AppError::from(e),
     })?;
 
     Ok(user)
@@ -238,7 +233,7 @@ pub async fn update_user_roles(
     pool: &Arc<PgPool>,
     user_id: Uuid,
     roles: &[String],
-) -> Result<User, AuthError> {
+) -> Result<User> {
     let user: User = sqlx::query_as(
         r#"
         UPDATE users
@@ -262,15 +257,15 @@ pub async fn update_user_roles(
     .fetch_one(&**pool)
     .await
     .map_err(|e| match e {
-        sqlx::Error::RowNotFound => AuthError::UserNotFound,
-        _ => AuthError::from(e),
+        sqlx::Error::RowNotFound => AppError::NotFound,
+        _ => AppError::from(e),
     })?;
 
     Ok(user)
 }
 
 /// Count total users in the system.
-pub async fn count_users(pool: &Arc<PgPool>) -> Result<i64, AuthError> {
+pub async fn count_users(pool: &Arc<PgPool>) -> Result<i64> {
     let count: i64 = sqlx::query_scalar(r#"SELECT COUNT(*)::bigint FROM users"#)
         .fetch_one(&**pool)
         .await?;
@@ -288,7 +283,7 @@ pub async fn migrate_session_tracks(
     pool: &Arc<PgPool>,
     user_id: Uuid,
     session_id: Uuid,
-) -> Result<u64, AuthError> {
+) -> Result<u64> {
     // Update tracks that have this session_id but no user_id
     let result = sqlx::query(
         r#"
@@ -321,7 +316,7 @@ pub async fn migrate_session_pois(
     pool: &Arc<PgPool>,
     user_id: Uuid,
     session_id: Uuid,
-) -> Result<u64, AuthError> {
+) -> Result<u64> {
     let result = sqlx::query(
         r#"
         UPDATE pois
@@ -349,7 +344,7 @@ pub async fn migrate_session_pois(
 }
 
 /// Get count of user's tracks.
-pub async fn get_user_track_count(pool: &Arc<PgPool>, user_id: Uuid) -> Result<i64, AuthError> {
+pub async fn get_user_track_count(pool: &Arc<PgPool>, user_id: Uuid) -> Result<i64> {
     let count: i64 =
         sqlx::query_scalar(r#"SELECT COUNT(*)::bigint FROM tracks WHERE user_id = $1"#)
             .bind(user_id)
@@ -360,7 +355,7 @@ pub async fn get_user_track_count(pool: &Arc<PgPool>, user_id: Uuid) -> Result<i
 }
 
 /// Get count of user's POIs.
-pub async fn get_user_poi_count(pool: &Arc<PgPool>, user_id: Uuid) -> Result<i64, AuthError> {
+pub async fn get_user_poi_count(pool: &Arc<PgPool>, user_id: Uuid) -> Result<i64> {
     let count: i64 = sqlx::query_scalar(r#"SELECT COUNT(*)::bigint FROM pois WHERE user_id = $1"#)
         .bind(user_id)
         .fetch_one(&**pool)
@@ -387,10 +382,7 @@ pub struct DeleteAccountResult {
     pub tokens_deleted: u64,
 }
 
-pub async fn delete_user_account(
-    pool: &Arc<PgPool>,
-    user_id: Uuid,
-) -> Result<DeleteAccountResult, AuthError> {
+pub async fn delete_user_account(pool: &Arc<PgPool>, user_id: Uuid) -> Result<DeleteAccountResult> {
     // Start transaction
     let mut tx = pool.begin().await?;
 
@@ -435,7 +427,7 @@ pub async fn delete_user_account(
 
     if user_result.rows_affected() == 0 {
         tx.rollback().await?;
-        return Err(AuthError::UserNotFound);
+        return Err(AppError::NotFound);
     }
 
     // Commit transaction
@@ -481,7 +473,7 @@ pub async fn list_user_tracks(
     order: Option<&str>,
     limit: i64,
     offset: i64,
-) -> Result<(Vec<UserTrackSummary>, i64), AuthError> {
+) -> Result<(Vec<UserTrackSummary>, i64)> {
     // Build sort clause
     let sort_column = match sort {
         Some("name") => "name",
@@ -547,7 +539,7 @@ pub async fn update_track_visibility(
     track_id: Uuid,
     user_id: Uuid,
     is_public: bool,
-) -> Result<bool, AuthError> {
+) -> Result<bool> {
     let result = sqlx::query(
         r#"
         UPDATE tracks
@@ -570,11 +562,11 @@ pub async fn update_track_visibility(
                 .await?;
 
         if !exists {
-            return Err(AuthError::InvalidInput("Track not found".into()));
+            return Err(AppError::Validation("Track not found".into()));
         }
 
         // Track exists but user doesn't own it
-        return Err(AuthError::Forbidden);
+        return Err(AppError::Forbidden);
     }
 
     tracing::info!(
@@ -602,7 +594,7 @@ pub async fn bulk_toggle_track_visibility(
     pool: &Arc<PgPool>,
     user_id: Uuid,
     track_ids: &[Uuid],
-) -> Result<Vec<BulkVisibilityResult>, AuthError> {
+) -> Result<Vec<BulkVisibilityResult>> {
     if track_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -639,7 +631,7 @@ pub async fn bulk_delete_tracks(
     pool: &Arc<PgPool>,
     user_id: Uuid,
     track_ids: &[Uuid],
-) -> Result<Vec<Uuid>, AuthError> {
+) -> Result<Vec<Uuid>> {
     if track_ids.is_empty() {
         return Ok(Vec::new());
     }

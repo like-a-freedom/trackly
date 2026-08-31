@@ -31,6 +31,7 @@ use crate::auth::{
     revoke_all_user_tokens, revoke_refresh_token, rotate_refresh_token, validate_refresh_token,
 };
 use crate::db::{self, User};
+use crate::error::{AppError, Result};
 use crate::metrics;
 
 /// Response for OAuth login initiation.
@@ -104,9 +105,9 @@ pub struct OAuthConfigResponse {
 /// Returns public OAuth configuration (client_id, redirect_uri) for the frontend
 /// to construct the authorization URL.
 /// Returns 503 Service Unavailable if auth is not configured.
-pub async fn oauth_config() -> Result<Json<OAuthConfigResponse>, AuthError> {
+pub async fn oauth_config() -> Result<Json<OAuthConfigResponse>> {
     if !is_auth_configured() {
-        return Err(AuthError::AuthNotConfigured);
+        return Err(AppError::from(AuthError::AuthNotConfigured));
     }
     let config = get_config();
     Ok(Json(OAuthConfigResponse {
@@ -120,9 +121,9 @@ pub async fn oauth_config() -> Result<Json<OAuthConfigResponse>, AuthError> {
 /// GET /auth/google/login
 ///
 /// Returns the OAuth authorization URL to redirect the user to.
-pub async fn google_login() -> Result<Json<LoginResponse>, AuthError> {
+pub async fn google_login() -> Result<Json<LoginResponse>> {
     if !is_auth_configured() {
-        return Err(AuthError::AuthNotConfigured);
+        return Err(AppError::from(AuthError::AuthNotConfigured));
     }
     let auth_url = generate_authorization_url()?;
 
@@ -143,9 +144,9 @@ pub async fn google_callback(
     State(pool): State<Arc<PgPool>>,
     headers: HeaderMap,
     Json(request): Json<CallbackRequest>,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse> {
     if !is_auth_configured() {
-        return Err(AuthError::AuthNotConfigured);
+        return Err(AppError::from(AuthError::AuthNotConfigured));
     }
     let client_ip = extract_client_ip_from_headers(&headers); // Option<String>
 
@@ -161,7 +162,7 @@ pub async fn google_callback(
         .await?;
         metrics::record_auth_rate_limit("login");
         metrics::record_auth_login_attempt("google", false);
-        return Err(AuthError::RateLimited);
+        return Err(AppError::from(AuthError::RateLimited));
     }
 
     // Exchange code for user info
@@ -185,7 +186,7 @@ pub async fn google_callback(
             metrics::record_auth_login_attempt("google", false);
             // Check suspicious activity even for failed attempts
             check_suspicious_activity(&pool, client_ip.as_deref(), None, false).await?;
-            return Err(e);
+            return Err(AppError::from(e));
         }
     };
 
@@ -275,9 +276,9 @@ pub async fn google_callback(
 pub async fn refresh_token(
     State(pool): State<Arc<PgPool>>,
     headers: HeaderMap,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse> {
     if !is_auth_configured() {
-        return Err(AuthError::AuthNotConfigured);
+        return Err(AppError::from(AuthError::AuthNotConfigured));
     }
     let start = std::time::Instant::now();
 
@@ -303,17 +304,17 @@ pub async fn refresh_token(
         Err(AuthError::TokenExpired) => {
             metrics::observe_auth_token_validation("expired", start.elapsed().as_secs_f64());
             metrics::record_auth_token_refresh("expired");
-            return Err(AuthError::TokenExpired);
+            return Err(AppError::from(AuthError::TokenExpired));
         }
         Err(AuthError::RefreshTokenRevoked) | Err(AuthError::TokenFamilyRevoked) => {
             metrics::observe_auth_token_validation("invalid", start.elapsed().as_secs_f64());
             metrics::record_auth_token_refresh("revoked");
-            return Err(AuthError::RefreshTokenRevoked);
+            return Err(AppError::from(AuthError::RefreshTokenRevoked));
         }
         Err(e) => {
             metrics::observe_auth_token_validation("invalid", start.elapsed().as_secs_f64());
             metrics::record_auth_token_refresh("invalid");
-            return Err(e);
+            return Err(AppError::from(e));
         }
     };
 
@@ -324,7 +325,7 @@ pub async fn refresh_token(
     // Get user info for new access token
     let user = db::get_user_by_id(&pool, token.user_id)
         .await?
-        .ok_or(AuthError::UserNotFound)?;
+        .ok_or(AppError::from(AuthError::UserNotFound))?;
 
     let token_user = TokenUser {
         user_id: user.id,
@@ -387,7 +388,7 @@ pub async fn logout(
     State(pool): State<Arc<PgPool>>,
     auth_user: OptionalAuthUser,
     headers: HeaderMap,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse> {
     // Extract refresh token from cookie (optional, user might not have one)
     if let Some(refresh_token) = extract_refresh_token_from_cookie(&headers) {
         // Revoke the specific refresh token
@@ -430,7 +431,7 @@ pub async fn logout(
 pub async fn logout_all(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse> {
     revoke_all_user_tokens(&pool, auth_user.user_id).await?;
 
     info!(user_id = %auth_user.user_id, "User logged out from all devices");
@@ -465,10 +466,10 @@ pub async fn logout_all(
 pub async fn get_current_user(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
-) -> Result<Json<UserResponse>, AuthError> {
+) -> Result<Json<UserResponse>> {
     let user = db::get_user_by_id(&pool, auth_user.user_id)
         .await?
-        .ok_or(AuthError::UserNotFound)?;
+        .ok_or(AppError::from(AuthError::UserNotFound))?;
 
     Ok(Json(user.into()))
 }
@@ -485,16 +486,18 @@ pub async fn update_nickname(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
     Json(request): Json<UpdateNicknameRequest>,
-) -> Result<Json<UserResponse>, AuthError> {
+) -> Result<Json<UserResponse>> {
     // Validate nickname
     if let Some(ref nickname) = request.nickname {
         if nickname.len() > 50 {
-            return Err(AuthError::InvalidInput(
+            return Err(AppError::from(AuthError::InvalidInput(
                 "Nickname too long (max 50 chars)".into(),
-            ));
+            )));
         }
         if nickname.trim().is_empty() {
-            return Err(AuthError::InvalidInput("Nickname cannot be empty".into()));
+            return Err(AppError::from(AuthError::InvalidInput(
+                "Nickname cannot be empty".into(),
+            )));
         }
     }
 
@@ -526,11 +529,13 @@ pub async fn migrate_session_tracks(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
     Json(request): Json<MigrateSessionRequest>,
-) -> Result<Json<MigrateSessionResponse>, AuthError> {
+) -> Result<Json<MigrateSessionResponse>> {
     // Parse session_id
     let session_id = uuid::Uuid::parse_str(&request.session_id).map_err(|_| {
         metrics::record_auth_session_migration("failed");
-        AuthError::InvalidInput("Invalid session_id format (expected UUID)".into())
+        AppError::from(AuthError::InvalidInput(
+            "Invalid session_id format (expected UUID)".into(),
+        ))
     })?;
 
     // Migrate tracks
@@ -571,7 +576,7 @@ pub struct DeleteAccountResponse {
 pub async fn delete_account(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse> {
     let result = match db::delete_user_account(&pool, auth_user.user_id).await {
         Ok(r) => {
             metrics::record_auth_account_deletion("success");
@@ -647,7 +652,7 @@ pub async fn list_account_tracks(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
     Query(params): Query<UserTracksQuery>,
-) -> Result<Json<UserTracksResponse>, AuthError> {
+) -> Result<Json<UserTracksResponse>> {
     let limit = params.limit.unwrap_or(20).min(100);
     let offset = params.offset.unwrap_or(0);
 
@@ -685,7 +690,7 @@ pub async fn update_track_visibility(
     Path(track_id): Path<uuid::Uuid>,
     auth_user: AuthUser,
     Json(request): Json<UpdateVisibilityRequest>,
-) -> Result<Json<serde_json::Value>, AuthError> {
+) -> Result<Json<serde_json::Value>> {
     db::update_track_visibility(&pool, track_id, auth_user.user_id, request.is_public).await?;
 
     info!(
@@ -767,7 +772,7 @@ pub async fn bulk_toggle_visibility(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
     Json(request): Json<BulkTrackRequest>,
-) -> Result<Json<BulkVisibilityResponse>, AuthError> {
+) -> Result<Json<BulkVisibilityResponse>> {
     if request.track_ids.is_empty() {
         return Ok(Json(BulkVisibilityResponse {
             updated: Vec::new(),
@@ -776,9 +781,9 @@ pub async fn bulk_toggle_visibility(
     }
 
     if request.track_ids.len() > 100 {
-        return Err(AuthError::InvalidInput(
+        return Err(AppError::from(AuthError::InvalidInput(
             "Maximum 100 tracks per bulk operation".into(),
-        ));
+        )));
     }
 
     let updated =
@@ -811,7 +816,7 @@ pub async fn bulk_delete_tracks(
     State(pool): State<Arc<PgPool>>,
     auth_user: AuthUser,
     Json(request): Json<BulkTrackRequest>,
-) -> Result<Json<BulkDeleteResponse>, AuthError> {
+) -> Result<Json<BulkDeleteResponse>> {
     if request.track_ids.is_empty() {
         return Ok(Json(BulkDeleteResponse {
             deleted: Vec::new(),
@@ -820,9 +825,9 @@ pub async fn bulk_delete_tracks(
     }
 
     if request.track_ids.len() > 100 {
-        return Err(AuthError::InvalidInput(
+        return Err(AppError::from(AuthError::InvalidInput(
             "Maximum 100 tracks per bulk operation".into(),
-        ));
+        )));
     }
 
     let deleted = db::bulk_delete_tracks(&pool, auth_user.user_id, &request.track_ids).await?;

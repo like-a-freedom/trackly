@@ -1,13 +1,12 @@
 //! Observability handlers: map interaction metrics and health checks.
 
+use crate::error::Result;
 use crate::metrics;
 use crate::models::MapInteractionEvent;
 use axum::{Json, http::StatusCode};
 use tracing::debug;
 
-pub async fn record_map_interaction(
-    Json(event): Json<MapInteractionEvent>,
-) -> Result<StatusCode, StatusCode> {
+pub async fn record_map_interaction(Json(event): Json<MapInteractionEvent>) -> Result<StatusCode> {
     let action_label = match event.action.as_str() {
         "zoom" => "zoom",
         "pan" => "pan",

@@ -1,18 +1,16 @@
 //! Shared handler helpers: ownership checks and DB error mapping.
 
 use crate::auth::OptionalAuthUser;
+use crate::error::AppError;
 use axum::http::StatusCode;
-use tracing::error;
 use uuid::Uuid;
 
-/// Map a database error to a safe, generic HTTP status code.
+/// Map a database error to a safe, generic `AppError`.
 /// Internal details are never exposed to the client.
-pub fn handle_db_error(err: sqlx::Error) -> StatusCode {
-    error!(error = ?err, "database error occurred");
+pub fn handle_db_error(err: sqlx::Error) -> AppError {
     match err {
-        sqlx::Error::RowNotFound => StatusCode::NOT_FOUND,
-        sqlx::Error::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        _ => StatusCode::INTERNAL_SERVER_ERROR,
+        sqlx::Error::RowNotFound => AppError::NotFound,
+        _ => AppError::Database(err),
     }
 }
 
@@ -133,7 +131,6 @@ mod tests {
     #[test]
     fn test_handle_db_error_not_found() {
         let error = sqlx::Error::RowNotFound;
-        let status = handle_db_error(error);
-        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(matches!(handle_db_error(error), AppError::NotFound));
     }
 }
