@@ -88,16 +88,16 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
                     "rtept" => {
                         (lat, lon) = extract_coordinates(e);
                     }
-                    "time" => {
-                        // If inside <metadata>, prefer this as recorded_at
+                    "time"
                         if element_stack.len() >= 2
                             && element_stack[element_stack.len() - 2] == "metadata"
-                            && !found_metadata_time
-                        {
-                            capture_text = true;
-                            text_target = Some("metadata_time".to_string());
-                        }
+                            && !found_metadata_time =>
+                    {
+                        // If inside <metadata>, prefer this as recorded_at
+                        capture_text = true;
+                        text_target = Some("metadata_time".to_string());
                     }
+                    "time" => {}
                     _ => {}
                 }
             }

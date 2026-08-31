@@ -241,21 +241,19 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                     );
                 }
             }
-            Kml::Element(element) => {
-                if element.name == "Track" {
-                    extract_track_data(
-                        element,
-                        points,
-                        elevations,
-                        time_data,
-                        last_elevation,
-                        total_elevation_gain,
-                        total_elevation_loss,
-                    );
-                }
-                // For other elements, recursively process children if they are known KML elements
-                // But since Element is for unknown, we skip for now
+            Kml::Element(element) if element.name == "Track" => {
+                extract_track_data(
+                    element,
+                    points,
+                    elevations,
+                    time_data,
+                    last_elevation,
+                    total_elevation_gain,
+                    total_elevation_loss,
+                );
             }
+            // For other elements, recursively process children if they are known KML elements
+            // But since Element is for unknown, we skip for now
             _ => {}
         }
     }
