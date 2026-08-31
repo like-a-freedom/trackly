@@ -120,23 +120,23 @@ mod tests {
     </trkseg>
   </trk>
 </gpx>"#;
-        let res = parse_gpx(gpx_with_hr.as_bytes());
-        assert!(res.is_ok(), "Parsing GPX with HR failed: {:?}", res.err());
-        let parsed_data = res.unwrap();
-        assert_eq!(parsed_data.geom_geojson["type"], "LineString");
-        assert!(parsed_data.length_km > 0.0);
-        assert!(parsed_data.elevation_profile.is_some());
-        assert!(parsed_data.hr_data.is_some(), "hr_data should be Some");
-        let hr_values = parsed_data.hr_data.unwrap();
-        assert_eq!(hr_values.len(), 3);
-        assert_eq!(hr_values[0], Some(100));
-        assert_eq!(hr_values[1], Some(110));
-        assert_eq!(hr_values[2], Some(120));
-        assert!(parsed_data.avg_hr.is_some(), "avg_hr should be Some");
-        assert_eq!(parsed_data.avg_hr.unwrap(), 110); // (100+110+120)/3 = 110
-        assert!(parsed_data.elevation_gain.is_some());
-        assert!(parsed_data.elevation_loss.is_some());
-        assert!(!parsed_data.hash.is_empty());
+            let res = parse_gpx(gpx_with_hr.as_bytes());
+            assert!(res.is_ok(), "Parsing GPX with HR failed: {:?}", res.err());
+            let parsed_data = res.unwrap();
+            assert_eq!(parsed_data.geom_geojson["type"], "LineString");
+            assert!(parsed_data.length_km > 0.0);
+            assert!(parsed_data.elevation_profile.is_some());
+            assert!(parsed_data.hr_data.is_some(), "hr_data should be Some");
+            let hr_values = parsed_data.hr_data.unwrap();
+            assert_eq!(hr_values.len(), 3);
+            assert_eq!(hr_values[0], Some(100));
+            assert_eq!(hr_values[1], Some(110));
+            assert_eq!(hr_values[2], Some(120));
+            assert!(parsed_data.avg_hr.is_some(), "avg_hr should be Some");
+            assert_eq!(parsed_data.avg_hr.unwrap(), 110); // (100+110+120)/3 = 110
+            assert!(parsed_data.elevation_gain.is_some());
+            assert!(parsed_data.elevation_loss.is_some());
+            assert!(!parsed_data.hash.is_empty());
         });
     }
 
