@@ -208,47 +208,17 @@ watch(
   }
 );
 
-// Setup on mount: try to get the map once. If the inject has not yet provided
-// a real L.Map (only the wrapper was injected), we fall through to the
-// short polling fallback for backwards compatibility with tests/parent
-// components that still inject the wrapper. The polling must not fire when
-// the resolved L.Map is present.
-let checkMapInterval = null;
-
+// Setup on mount: the parent (TrackMap.vue) provides the resolved L.Map via
+// shallowRef in the @ready handler. No polling fallback is needed.
 onMounted(() => {
   const map = getMapObject();
   if (map && !clusterGroup.value) {
     initClusterGroup(map);
-    return;
   }
-
-  // Fallback: poll for map availability (5s cap). This is the legacy path
-  // for the Vue Leaflet wrapper inject; Stage 0.5b deprecates it.
-  checkMapInterval = setInterval(() => {
-    const map = getMapObject();
-    if (map && !clusterGroup.value) {
-      initClusterGroup(map);
-      clearInterval(checkMapInterval);
-      checkMapInterval = null;
-    }
-  }, 100);
-  
-  // Clear interval after 5s to prevent memory leaks
-  setTimeout(() => {
-    if (checkMapInterval) {
-      clearInterval(checkMapInterval);
-      checkMapInterval = null;
-    }
-  }, 5000);
 });
 
 // Cleanup on unmount
 onUnmounted(() => {
-  if (checkMapInterval) {
-    clearInterval(checkMapInterval);
-    checkMapInterval = null;
-  }
-  
   const map = getMapObject();
   if (clusterGroup.value && map) {
     map.removeLayer(clusterGroup.value);

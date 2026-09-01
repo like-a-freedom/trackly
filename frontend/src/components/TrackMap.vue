@@ -150,6 +150,7 @@ import {
 } from "@vue-leaflet/vue-leaflet";
 import {
   ref,
+  shallowRef,
   onMounted,
   onUnmounted,
   computed,
@@ -231,9 +232,10 @@ const emit = defineEmits([
 
 // State management for map and animations
 const leafletMap = ref(null);
+const leafletInstance = shallowRef(null); // resolved L.Map from @ready
 
-// Provide leaflet map instance to child components in slot
-provide("leafletMap", leafletMap);
+// Provide the resolved L.Map (not the Vue Leaflet wrapper ref) to children
+provide("leafletMap", leafletInstance);
 
 const mapBounds = ref(null);
 const mapKey = ref(0);
@@ -1301,6 +1303,9 @@ async function onMapReady(e) {
       emit("mapReady", e);
       return;
     }
+
+    // Store the resolved L.Map for child components (PoiClusterGroup, etc.)
+    leafletInstance.value = map;
 
     // Handle pending restoration
     if (mapState.value.pendingRestoreCenterZoom && !props.selectedTrackDetail) {

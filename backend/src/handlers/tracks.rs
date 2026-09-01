@@ -13,7 +13,7 @@ use crate::input_validation::{
 use crate::metrics;
 use crate::models::*;
 use crate::services::gpx_export;
-use crate::services::track_upload::TrackUploadRequest;
+use crate::track_upload::{self as upload_svc, UploadRequest};
 use crate::track_utils::{
     ElevationEnrichmentService, extract_coordinates_from_geojson, extract_segments_from_geojson,
     geojson_from_segments, simplify_segments_to_ratio,
@@ -244,7 +244,7 @@ pub async fn upload_track(
         validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
     }
 
-    let request = TrackUploadRequest {
+    let request = UploadRequest {
         name,
         description,
         categories,
@@ -253,7 +253,7 @@ pub async fn upload_track(
         file_bytes,
     };
 
-    let response = crate::services::track_upload::upload_track(&pool, request).await?;
+    let response = upload_svc::upload(&pool, request).await?;
     metrics::record_track_uploaded("anonymous");
     metrics::record_session_activity(session_id, "upload");
     info!(endpoint = "upload_track", track_id = %response.id, "track uploaded");
@@ -1573,7 +1573,7 @@ mod track_crud_tests {
         use bytes::Bytes;
 
         // Valid request
-        let valid_request = TrackUploadRequest {
+        let valid_request = UploadRequest {
             name: Some("Test".to_string()),
             description: Some("Description".to_string()),
             categories: vec!["running".to_string()],
@@ -1592,7 +1592,7 @@ mod track_crud_tests {
         use bytes::Bytes;
 
         // Request with minimal fields
-        let request = TrackUploadRequest {
+        let request = UploadRequest {
             name: None,
             description: None,
             categories: vec![],

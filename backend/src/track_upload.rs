@@ -19,7 +19,7 @@ use std::time::Instant;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-pub struct TrackUploadRequest {
+pub struct UploadRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub categories: Vec<String>,
@@ -29,9 +29,9 @@ pub struct TrackUploadRequest {
 }
 
 #[tracing::instrument(skip(pool, request), fields(endpoint = "upload_track_service", file_name = %request.file_name))]
-pub async fn upload_track(
+pub async fn upload(
     pool: &Arc<PgPool>,
-    request: TrackUploadRequest,
+    request: UploadRequest,
 ) -> Result<TrackUploadResponse, StatusCode> {
     let pipeline_start = Instant::now();
     validate_request(&request)?;
@@ -150,8 +150,7 @@ pub async fn upload_track(
     })
 }
 
-fn validate_request(request: &TrackUploadRequest) -> Result<(), StatusCode> {
-    // Require at least one category
+fn validate_request(request: &UploadRequest) -> Result<(), StatusCode> {
     if request.categories.is_empty() {
         warn!(endpoint = "upload_track_service", "no categories selected");
         return Err(StatusCode::BAD_REQUEST);
@@ -383,5 +382,22 @@ async fn process_waypoints(pool: &Arc<PgPool>, track_id: Uuid, waypoints: Vec<Pa
             endpoint = "upload_track_service",
             "processing POIs took longer than expected"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upload_request_fields_compile() {
+        let _req = UploadRequest {
+            name: None,
+            description: None,
+            categories: vec!["hiking".into()],
+            session_id: None,
+            file_name: "test.gpx".into(),
+            file_bytes: Bytes::from_static(b"<gpx></gpx>"),
+        };
     }
 }
