@@ -19,22 +19,6 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() {
-    // Handle health check flag
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && args[1] == "--health-check" {
-        // Simple health check - try to connect to the health endpoint
-        match tokio::net::TcpStream::connect("127.0.0.1:8080").await {
-            Ok(_) => {
-                println!("Health check passed");
-                std::process::exit(0);
-            }
-            Err(_) => {
-                eprintln!("Health check failed");
-                std::process::exit(1);
-            }
-        }
-    }
-
     // Load environment variables from `.env` during local development
     // dotenvy will silently ignore if no .env file exists.
     dotenvy::dotenv().ok();

@@ -681,8 +681,6 @@ pub fn initialize_metrics_baseline() {
     let _ = TRACK_EDITS_TOTAL.with_label_values(&["description"]);
     let _ = TRACK_EDITS_TOTAL.with_label_values(&["categories"]);
     let _ = TRACK_EXPORTS_TOTAL.with_label_values(&["gpx"]);
-    let _ = TRACK_EXPORTS_TOTAL.with_label_values(&["kml"]);
-    let _ = TRACK_EXPORTS_TOTAL.with_label_values(&["fit"]);
     let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["zoom", "low"]);
     let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["zoom", "mid"]);
     let _ = MAP_INTERACTIONS_TOTAL.with_label_values(&["zoom", "high"]);
@@ -706,8 +704,6 @@ pub fn initialize_metrics_baseline() {
     // Auth metrics (NFR-MAINT-003)
     let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["google", "success"]);
     let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["google", "failed"]);
-    let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["github", "success"]);
-    let _ = AUTH_LOGIN_ATTEMPTS_TOTAL.with_label_values(&["github", "failed"]);
     let _ = AUTH_TOKEN_REFRESHES_TOTAL.with_label_values(&["success"]);
     let _ = AUTH_TOKEN_REFRESHES_TOTAL.with_label_values(&["expired"]);
     let _ = AUTH_TOKEN_REFRESHES_TOTAL.with_label_values(&["invalid"]);
@@ -717,7 +713,6 @@ pub fn initialize_metrics_baseline() {
     let _ = AUTH_TOKEN_VALIDATION_DURATION_SECONDS.with_label_values(&["invalid"]);
     AUTH_ACTIVE_SESSIONS_TOTAL.set(0);
     let _ = AUTH_USER_REGISTRATIONS_TOTAL.with_label_values(&["google"]);
-    let _ = AUTH_USER_REGISTRATIONS_TOTAL.with_label_values(&["github"]);
     let _ = AUTH_ACCOUNT_DELETIONS_TOTAL.with_label_values(&["success"]);
     let _ = AUTH_ACCOUNT_DELETIONS_TOTAL.with_label_values(&["failed"]);
     let _ = AUTH_SESSION_MIGRATIONS_TOTAL.with_label_values(&["success"]);
