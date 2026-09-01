@@ -538,7 +538,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
 
     let recorded_at = recorded_at.and_then(|t| parse_gpx_time(&t));
 
-    let final_elevation_gain = if !points.is_empty() {
+    let _final_elevation_gain = if !points.is_empty() {
         let gain = if total_elevation_gain > 0.0 {
             total_elevation_gain
         } else {
@@ -557,7 +557,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         info!("GPX has no elevation data - no points found");
         None
     };
-    let final_elevation_loss = if !points.is_empty() {
+    let _final_elevation_loss = if !points.is_empty() {
         let loss = if total_elevation_loss > 0.0 {
             total_elevation_loss
         } else {
@@ -690,19 +690,9 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     // Calculate avg_speed (average speed over total duration)
     let avg_speed = crate::track_utils::metrics::avg_speed_kmh(length_km, duration_seconds);
 
-    // Perform automatic track classification
-    use crate::track_classifier::{TrackMetrics, classify_track};
-    let metrics = TrackMetrics {
-        length_km,
-        avg_speed,
-        moving_avg_speed,
-        elevation_gain: final_elevation_gain,
-        elevation_loss: final_elevation_loss,
-        moving_time,
-        duration_seconds,
-    };
-    let classifications = classify_track(&metrics);
-    let auto_classifications: Vec<String> = classifications.iter().map(|c| c.to_string()).collect();
+    // Auto-classification removed (ADR 0014): the column is kept in the schema
+    // for backward compatibility but is no longer populated.
+    let auto_classifications: Vec<String> = Vec::new();
 
     // Calculate new elevation metrics using the elevation module
     let track_points_with_elevation: Vec<(f64, f64, Option<f64>)> = points
@@ -733,13 +723,13 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
             use crate::track_utils::pace_filter::filter_pace_data;
             debug!(
                 "Applying adaptive pace filtering with {} classifications",
-                classifications.len()
+                auto_classifications.len()
             );
             filter_pace_data(
                 &pace_data_points,
                 &speed_data_points,
                 &time_diff_data,
-                &classifications,
+                &[],  // auto_classifications removed (ADR 0014)
             )
         } else {
             pace_data_points

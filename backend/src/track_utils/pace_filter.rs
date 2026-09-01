@@ -1,6 +1,20 @@
 /// Adaptive pace filtering module for trackly
 /// Filters pace spikes and anomalies based on track activity type and context
-use crate::track_classifier::TrackClassification;
+/// Track classification types (simplified, moved from deleted track_classifier.rs)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TrackClassification {
+    Marathon,
+    HalfMarathon,
+    LongRun,
+    Interval,
+    Fartlek,
+    TempoRun,
+    AerobicRun,
+    RecoveryRun,
+    Trail,
+    Hiking,
+    Walk,
+}
 use tracing::debug;
 
 /// Configuration for pace filtering parameters
@@ -658,10 +672,10 @@ mod tests {
         let speed_data = parsed_data.speed_data.unwrap();
         assert_eq!(speed_data.len(), 4);
 
-        // Verify classifications were used for filtering
+        // Auto-classification removed (ADR 0014): column kept for schema compat
         assert!(
-            !parsed_data.auto_classifications.is_empty(),
-            "Auto classifications should be present"
+            parsed_data.auto_classifications.is_empty(),
+            "Auto classifications should be empty after ADR 0014"
         );
     }
 

@@ -311,12 +311,12 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         format!("{:x}", hasher.finalize())
     };
 
-    let final_elevation_gain = if !points.is_empty() {
+    let _final_elevation_gain = if !points.is_empty() {
         Some(total_elevation_gain)
     } else {
         None
     };
-    let final_elevation_loss = if !points.is_empty() {
+    let _final_elevation_loss = if !points.is_empty() {
         Some(total_elevation_loss)
     } else {
         None
@@ -333,19 +333,8 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         None
     };
 
-    // Perform automatic track classification
-    use crate::track_classifier::{TrackMetrics, classify_track};
-    let metrics = TrackMetrics {
-        length_km,
-        avg_speed: None,
-        moving_avg_speed: None,
-        elevation_gain: final_elevation_gain,
-        elevation_loss: final_elevation_loss,
-        moving_time: None,
-        duration_seconds: None,
-    };
-    let classifications = classify_track(&metrics);
-    let auto_classifications: Vec<String> = classifications.iter().map(|c| c.to_string()).collect();
+    // Auto-classification removed (ADR 0014)
+    let auto_classifications: Vec<String> = Vec::new();
 
     // Calculate new elevation metrics using the elevation module
     let track_points_with_elevation: Vec<(f64, f64, Option<f64>)> = points
