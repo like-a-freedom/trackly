@@ -5,6 +5,7 @@ mod queries;
 
 pub use crud::*;
 pub use editor::*;
+#[allow(unused_imports)]
 pub use gap_metadata::*;
 pub use queries::*;
 
