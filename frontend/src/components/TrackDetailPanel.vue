@@ -1039,6 +1039,7 @@ import {
   useTracks,
 } from "../composables/useTracks";
 import { useUnits } from "../composables/useUnits";
+import { events } from "../events";
 import { useMemoizedComputed } from "../composables/useMemoization";
 import { clearCacheByPattern } from "../composables/useMemoization";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
@@ -1148,7 +1149,7 @@ onUnmounted(() => {
     exportCooldownInterval = null;
   }
   // Remove stop polling listener
-  window.removeEventListener("stop-elevation-polling", stopElevationPolling);
+  events.off("stop-elevation-polling", stopElevationPolling);
 });
 
 onDeactivated(() => {
@@ -1157,7 +1158,7 @@ onDeactivated(() => {
 
 // Listen for signal from parent (TrackView) to stop polling when deactivating
 onMounted(() => {
-  window.addEventListener("stop-elevation-polling", stopElevationPolling);
+  events.on("stop-elevation-polling", stopElevationPolling);
 });
 
 // Reset panel state when track changes
@@ -1575,23 +1576,19 @@ async function pollForElevationData(trackId) {
       };
 
       // Dispatch global event for other components
-      window.dispatchEvent(
-        new CustomEvent("track-elevation-updated", {
-          detail: {
-            trackId: effectiveTrackId,
-            elevation_gain: updatedTrack.elevation_gain,
-            elevation_loss: updatedTrack.elevation_loss,
-            elevation_min: updatedTrack.elevation_min,
-            elevation_max: updatedTrack.elevation_max,
-            elevation_dataset: updatedTrack.elevation_dataset,
-            elevation_profile: updatedTrack.elevation_profile,
-            elevation_enriched_at: updatedTrack.elevation_enriched_at,
-            slope_min: updatedTrack.slope_min,
-            slope_max: updatedTrack.slope_max,
-            slope_segments: updatedTrack.slope_segments,
-          },
-        })
-      );
+      events.emit("track-elevation-updated", {
+        trackId: effectiveTrackId,
+        elevation_gain: updatedTrack.elevation_gain,
+        elevation_loss: updatedTrack.elevation_loss,
+        elevation_min: updatedTrack.elevation_min,
+        elevation_max: updatedTrack.elevation_max,
+        elevation_dataset: updatedTrack.elevation_dataset,
+        elevation_profile: updatedTrack.elevation_profile,
+        elevation_enriched_at: updatedTrack.elevation_enriched_at,
+        slope_min: updatedTrack.slope_min,
+        slope_max: updatedTrack.slope_max,
+        slope_segments: updatedTrack.slope_segments,
+      });
 
       // Force reactivity with nextTick
       await nextTick();
@@ -2216,9 +2213,7 @@ async function confirmDelete() {
       // Emit locally
       emit("deleted", deletedId);
       // Also dispatch global event so views (e.g., HomeView) can react if this panel is on another route
-      window.dispatchEvent(
-        new CustomEvent("track-deleted", { detail: { id: deletedId } })
-      );
+      events.emit("track-deleted", { id: deletedId });
       emit("close");
     } else if (res.status === 403) {
       showToast("You are not allowed to delete this track.", "error");
@@ -2257,14 +2252,10 @@ async function saveName() {
     emit("name-updated", editedName.value.trim());
 
     // Dispatch global event for other components (like HomeView tooltip)
-    window.dispatchEvent(
-      new CustomEvent("track-name-updated", {
-        detail: {
-          trackId: track.value.id,
-          newName: editedName.value.trim(),
-        },
-      })
-    );
+    events.emit("track-name-updated", {
+      trackId: track.value.id,
+      newName: editedName.value.trim(),
+    });
 
     isEditingName.value = false;
   } catch (err) {
@@ -2316,14 +2307,10 @@ async function saveDescription() {
     emit("description-updated", editedDescription.value);
 
     // Dispatch global event for other components (like HomeView tooltip)
-    window.dispatchEvent(
-      new CustomEvent("track-description-updated", {
-        detail: {
-          trackId: track.value.id,
-          newDescription: editedDescription.value,
-        },
-      })
-    );
+    events.emit("track-description-updated", {
+      trackId: track.value.id,
+      newDescription: editedDescription.value,
+    });
 
     isEditingDescription.value = false;
   } catch (err) {
@@ -2699,19 +2686,15 @@ async function forceEnrichElevation() {
     }
 
     // Dispatch global event to update other components (like tooltip)
-    window.dispatchEvent(
-      new CustomEvent("track-elevation-updated", {
-        detail: {
-          trackId: track.value.id,
-          elevation_gain: track.value.elevation_gain,
-          elevation_loss: track.value.elevation_loss,
-          elevation_min: track.value.elevation_min,
-          elevation_max: track.value.elevation_max,
-          elevation_dataset: track.value.elevation_dataset,
-          elevation_profile: track.value.elevation_profile,
-        },
-      })
-    );
+    events.emit("track-elevation-updated", {
+        trackId: track.value.id,
+        elevation_gain: track.value.elevation_gain,
+        elevation_loss: track.value.elevation_loss,
+        elevation_min: track.value.elevation_min,
+        elevation_max: track.value.elevation_max,
+        elevation_dataset: track.value.elevation_dataset,
+        elevation_profile: track.value.elevation_profile,
+    });
 
     showToast("Elevation data updated successfully!", "success");
   } catch (error) {

@@ -6,6 +6,7 @@
 import { ref, watch, onMounted, onUnmounted, getCurrentInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAdvancedDebounce } from './useAdvancedDebounce.js';
+import { events } from '../events.js';
 
 /**
  * URL parameter validation functions
@@ -212,13 +213,11 @@ export function useMapUrlState(options = {}) {
             const urlParams = parseUrlParams();
             if (urlParams.hasValidParams) {
               // Emit event for components to react to URL changes
-              window.dispatchEvent(new CustomEvent('mapUrlStateChanged', {
-                detail: {
-                  zoom: urlParams.zoom,
-                  center: urlParams.center,
-                  source: 'url'
-                }
-              }));
+              events.emit('mapUrlStateChanged', {
+                zoom: urlParams.zoom,
+                center: urlParams.center,
+                source: 'url'
+              });
             }
           }
         },
@@ -264,12 +263,12 @@ export function useMapUrlStateListener() {
   const listeners = ref([]);
 
   function addListener(callback) {
-    const handler = (event) => callback(event.detail);
+    const handler = (event) => callback(event);
     listeners.value.push(handler);
-    window.addEventListener('mapUrlStateChanged', handler);
+    events.on('mapUrlStateChanged', handler);
 
     return () => {
-      window.removeEventListener('mapUrlStateChanged', handler);
+      events.off('mapUrlStateChanged', handler);
       const index = listeners.value.indexOf(handler);
       if (index > -1) {
         listeners.value.splice(index, 1);
@@ -280,7 +279,7 @@ export function useMapUrlStateListener() {
   onUnmounted(() => {
     // Cleanup all listeners
     listeners.value.forEach(handler => {
-      window.removeEventListener('mapUrlStateChanged', handler);
+      events.off('mapUrlStateChanged', handler);
     });
     listeners.value.length = 0;
   });

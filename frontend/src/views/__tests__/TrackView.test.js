@@ -339,8 +339,9 @@ describe('TrackView Auto-Scaling', () => {
     });
 
     it('dispatches stop-elevation-polling on deactivation (keep-alive)', async () => {
-        // Spy on window.dispatchEvent
-        const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+        // Spy on events module
+        const { events } = await import('../../events');
+        const emitSpy = vi.spyOn(events, 'emit');
 
         const Parent = {
             components: { TrackView },
@@ -366,9 +367,9 @@ describe('TrackView Auto-Scaling', () => {
         parentWrapper.vm.show = false;
         await nextTick();
 
-        // Expect that TrackView dispatched stop-elevation-polling
-        expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'stop-elevation-polling' }));
-        dispatchSpy.mockRestore();
+        // Expect that TrackView emitted stop-elevation-polling via events module
+        expect(emitSpy).toHaveBeenCalledWith('stop-elevation-polling');
+        emitSpy.mockRestore();
         parentWrapper.unmount();
     });
 

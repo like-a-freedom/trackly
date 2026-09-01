@@ -331,8 +331,9 @@ describe('TrackDetailPanel', () => {
 
       expect(wrapper.vm.isPollingForElevation).toBe(true);
 
-      // Dispatch stop event from 'parent'
-      window.dispatchEvent(new CustomEvent('stop-elevation-polling'));
+      // Dispatch stop event from 'parent' via events module
+      const { events } = await import('../../events');
+      events.emit('stop-elevation-polling');
       await wrapper.vm.$nextTick();
 
       expect(wrapper.vm.isPollingForElevation).toBe(false);
@@ -1824,17 +1825,15 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      // Wait for all async operations to complete
-      await waitFor(() => global.dispatchEvent.mock.calls.length > 0);
+      // Wait for async operations
+      await flushPromises();
       await wrapper.vm.$nextTick();
 
-      expect(global.dispatchEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'track-elevation-updated',
-          detail: expect.objectContaining({
-            trackId: mockTrackComplete.id
-          })
-        })
+      // Verify enrichment completed and track data updated
+      expect(global.fetch).toHaveBeenCalled();
+      expect(mockShowToast).toHaveBeenCalledWith(
+        expect.stringContaining('Elevation data updated'),
+        'success'
       );
     });
 

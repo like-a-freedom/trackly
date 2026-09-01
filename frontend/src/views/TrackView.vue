@@ -156,6 +156,7 @@ import { useToast } from "../composables/useToast";
 import { useAuth } from "../composables/useAuth";
 import { useTracks } from "../composables/useTracks";
 import { usePois } from "../composables/usePois";
+import { events } from "../events";
 import { useSearchState } from "../composables/useSearchState";
 import { useTrackViewE2E } from "../composables/useTrackViewE2E";
 import { getSessionId } from "../utils/session";
@@ -1028,7 +1029,7 @@ onDeactivated(() => {
 
   // Stop elevation polling in TrackDetailPanel by marking it as not for current track
   // This prevents continued polling when navigating away from TrackView
-  window.dispatchEvent(new CustomEvent("stop-elevation-polling"));
+  events.emit("stop-elevation-polling");
 });
 
 // Handle route changes for keep-alive

@@ -81,9 +81,10 @@ describe('TrackDetailPanel delete behaviour', () => {
             props: { track, isOwner: true, sessionId: '00000000-0000-0000-0000-000000000000' }
         });
 
-        // Spy on global event dispatch
+        // Spy on events module
+        const { events } = await import('../../events');
         const eventSpy = vi.fn();
-        window.addEventListener('track-deleted', eventSpy);
+        events.on('track-deleted', eventSpy);
 
         const btn = wrapper.find('.delete-track-btn');
         expect(btn.exists()).toBe(true);
@@ -99,9 +100,7 @@ describe('TrackDetailPanel delete behaviour', () => {
 
         // Global event dispatched
         expect(eventSpy).toHaveBeenCalledTimes(1);
-        const evt = eventSpy.mock.calls[0][0];
-        expect(evt).toBeInstanceOf(CustomEvent);
-        expect(evt.detail.id).toBe(track.id);
+        expect(eventSpy).toHaveBeenCalledWith({ id: track.id });
     });
 
     it('does not emit deleted if user cancels confirmation', async () => {

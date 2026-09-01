@@ -158,6 +158,7 @@ import { useTracks } from "../composables/useTracks";
 import { useToast } from "../composables/useToast";
 import { useSearchState } from "../composables/useSearchState";
 import { useMapUrlState } from "../composables/useMapUrlState";
+import { events } from "../events";
 import { getSessionId } from "../utils/session";
 import {
   useAdvancedDebounce,
@@ -763,27 +764,21 @@ function handleUrlStateChange(event) {
 }
 
 onMounted(() => {
-  window.addEventListener("track-deleted", handleTrackDeleted);
-  window.addEventListener("track-name-updated", handleTrackNameUpdated);
-  window.addEventListener(
-    "track-description-updated",
-    handleTrackDescriptionUpdated
-  );
+  events.on("track-deleted", handleTrackDeleted);
+  events.on("track-name-updated", handleTrackNameUpdated);
+  events.on("track-description-updated", handleTrackDescriptionUpdated);
   window.addEventListener("beforeunload", handleBeforeUnload);
 
   // Listen for URL state changes (browser back/forward, direct URL changes)
-  window.addEventListener("mapUrlStateChanged", handleUrlStateChange);
+  events.on("mapUrlStateChanged", handleUrlStateChange);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("track-deleted", handleTrackDeleted);
-  window.removeEventListener("track-name-updated", handleTrackNameUpdated);
-  window.removeEventListener(
-    "track-description-updated",
-    handleTrackDescriptionUpdated
-  );
+  events.off("track-deleted", handleTrackDeleted);
+  events.off("track-name-updated", handleTrackNameUpdated);
+  events.off("track-description-updated", handleTrackDescriptionUpdated);
   window.removeEventListener("beforeunload", handleBeforeUnload);
-  window.removeEventListener("mapUrlStateChanged", handleUrlStateChange);
+  events.off("mapUrlStateChanged", handleUrlStateChange);
   // Save final position before unmounting (immediate, no debouncing needed)
   saveMapPosition(center.value, zoom.value);
 });
