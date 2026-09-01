@@ -1,6 +1,6 @@
 /// Adaptive pace filtering module for trackly
 /// Filters pace spikes and anomalies based on track activity type and context
-/// Track classification types (simplified, moved from deleted track_classifier.rs)
+/// Track classification types (retained from deleted track_classifier.rs)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TrackClassification {
     Marathon,

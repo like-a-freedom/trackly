@@ -1,6 +1,5 @@
 import { ref, computed, readonly } from 'vue';
 import { getSessionId } from '../utils/session';
-import { generatePkce, generateState, parseJwt } from '../auth/pkce.js';
 import {
     startLogin as oauthStartLogin,
     handleCallback as oauthHandleCallback,

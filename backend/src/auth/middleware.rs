@@ -131,15 +131,6 @@ where
     }
 }
 
-/// Extract client IP address from request.
-///
-/// Checks X-Forwarded-For header first (for proxied requests),
-/// Require a specific role.
-////// Check if the user can access a resource.
-///
-/// Access is allowed if:
-/// - The resource is public (is_public = true)
-/// - The user owns the resource
 #[cfg(test)]
 mod tests {
     use super::*;

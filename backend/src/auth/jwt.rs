@@ -127,10 +127,7 @@ pub fn validate_access_token(token: &str) -> Result<Claims, AuthError> {
 }
 
 /// Extract user_id from a validated JWT token string.
-pub fn extract_user_id(token: &str) -> Result<Uuid, AuthError> {
-    let claims = validate_access_token(token)?;
-    claims.user_id()
-}
+
 
 #[cfg(test)]
 mod tests {
