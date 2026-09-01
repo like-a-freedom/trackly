@@ -18,6 +18,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
       - run: cargo clippy -- -D warnings
+      - name: Check for orphan symbols
+        run: ./.github/scripts/check-orphans.sh
       - run: cargo test
       - run: cargo audit
 
