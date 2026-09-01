@@ -41,6 +41,7 @@ export function useTracks() {
     const heatmapCache = new Map();
     const CACHE_TTL = 30000; // 30 seconds
     const HEATMAP_CACHE_TTL = 30000; // 30 seconds
+    const BBOX_CACHE_MAX_SIZE = 100;
 
     function getCachedTracks(bboxString) {
         const cached = bboxCache.get(bboxString);
@@ -48,6 +49,14 @@ export function useTracks() {
             return cached.data;
         }
         return null;
+    }
+
+    function evictIfNeeded(cache) {
+        if (cache.size > BBOX_CACHE_MAX_SIZE) {
+            // Delete oldest entry (first key in insertion order)
+            const oldest = cache.keys().next().value;
+            if (oldest !== undefined) cache.delete(oldest);
+        }
     }
 
     function setCachedTracks(bboxString, data) {
@@ -62,6 +71,7 @@ export function useTracks() {
                 bboxCache.delete(key);
             }
         }
+        evictIfNeeded(bboxCache);
     }
 
     function getCachedHeatmap(cacheKey) {
@@ -83,6 +93,7 @@ export function useTracks() {
                 heatmapCache.delete(key);
             }
         }
+        evictIfNeeded(heatmapCache);
     }
 
     function normalizeCategories(categories) {
