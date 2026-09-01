@@ -183,4 +183,5 @@ mod tests {
 
         assert!(!regular_user.is_admin());
         assert!(admin_user.is_admin());
-    }}
+    }
+}

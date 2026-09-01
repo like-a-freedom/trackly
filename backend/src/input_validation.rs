@@ -56,5 +56,4 @@ pub fn sanitize_input(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 }

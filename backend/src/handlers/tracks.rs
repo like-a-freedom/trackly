@@ -15,8 +15,8 @@ use crate::models::*;
 use crate::services::gpx_export;
 use crate::services::track_upload::TrackUploadRequest;
 use crate::track_utils::{
-    ElevationEnrichmentService, extract_coordinates_from_geojson,
-    extract_segments_from_geojson, geojson_from_segments, simplify_segments_to_ratio,
+    ElevationEnrichmentService, extract_coordinates_from_geojson, extract_segments_from_geojson,
+    geojson_from_segments, simplify_segments_to_ratio,
 };
 use axum::http::header::REFERER;
 use axum::{

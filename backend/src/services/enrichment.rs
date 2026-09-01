@@ -83,8 +83,11 @@ pub async fn run_enrichment(
     // 3. Slope calculation
     if let Some(profile) = &enrichment_result.elevation_profile {
         let slope_start = Instant::now();
-        let slope_result =
-            crate::track_utils::slope::recalculate_slope_metrics(&coordinates, profile, &format!("Track {track_id}"));
+        let slope_result = crate::track_utils::slope::recalculate_slope_metrics(
+            &coordinates,
+            profile,
+            &format!("Track {track_id}"),
+        );
         let slope_duration = slope_start.elapsed().as_secs_f64();
 
         if let Err(e) = db::update_track_slope(
@@ -134,7 +137,10 @@ mod tests {
 
     #[test]
     fn outcome_variants_are_distinct() {
-        let a = EnrichmentOutcome::Success { gain: None, loss: None };
+        let a = EnrichmentOutcome::Success {
+            gain: None,
+            loss: None,
+        };
         let b = EnrichmentOutcome::FailedRemote;
         let c = EnrichmentOutcome::FailedUpdateDb;
         let d = EnrichmentOutcome::FailedSlope;

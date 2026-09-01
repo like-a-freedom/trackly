@@ -226,7 +226,8 @@ pub async fn update_user_nickname(
     })?;
 
     Ok(user)
-}/// Associate existing anonymous tracks with a user.
+}
+/// Associate existing anonymous tracks with a user.
 ///
 /// This is used after OAuth login to claim tracks that were created
 /// with a session_id but no user_id.

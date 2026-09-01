@@ -729,7 +729,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                 &pace_data_points,
                 &speed_data_points,
                 &time_diff_data,
-                &[],  // auto_classifications removed (ADR 0014)
+                &[], // auto_classifications removed (ADR 0014)
             )
         } else {
             pace_data_points
