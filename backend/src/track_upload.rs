@@ -1,9 +1,9 @@
 use crate::{
     db,
+    error::{AppError, Result},
     input_validation::{
-        MAX_CATEGORIES, MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_FIELD_SIZE,
-        MAX_NAME_LENGTH, sanitize_input, validate_file_extension, validate_file_size,
-        validate_text_field,
+        MAX_FIELD_SIZE, sanitize_input, validate_file_extension, validate_file_size,
+        validate_text_field, validate_track_fields,
     },
     metrics,
     models::{ParsedTrackData, ParsedWaypoint, TrackUploadResponse},
@@ -11,7 +11,6 @@ use crate::{
     services::enrichment_queue,
     track_utils::{self, extract_coordinates_from_geojson, parse_gpx, parse_gpx_minimal},
 };
-use axum::http::StatusCode;
 use bytes::Bytes;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -29,10 +28,7 @@ pub struct UploadRequest {
 }
 
 #[tracing::instrument(skip(pool, request), fields(endpoint = "upload_track_service", file_name = %request.file_name))]
-pub async fn upload(
-    pool: &Arc<PgPool>,
-    request: UploadRequest,
-) -> Result<TrackUploadResponse, StatusCode> {
+pub async fn upload(pool: &Arc<PgPool>, request: UploadRequest) -> Result<TrackUploadResponse> {
     let pipeline_start = Instant::now();
     validate_request(&request)?;
     validate_file_size(request.file_bytes.len())?;
@@ -124,7 +120,7 @@ pub async fn upload(
     .await
     .map_err(|e| {
         error!(?e, "[upload_track_service] failed to insert track");
-        StatusCode::INTERNAL_SERVER_ERROR
+        AppError::Internal(e.into())
     })?;
 
     metrics::observe_track_length_km("anonymous", parsed_data.length_km);
@@ -150,33 +146,18 @@ pub async fn upload(
     })
 }
 
-fn validate_request(request: &UploadRequest) -> Result<(), StatusCode> {
+fn validate_request(request: &UploadRequest) -> Result<()> {
     if request.categories.is_empty() {
         warn!(endpoint = "upload_track_service", "no categories selected");
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(AppError::BadRequest("no categories selected".into()));
     }
 
-    if let Some(name) = &request.name {
-        validate_text_field(name, MAX_NAME_LENGTH, "name")?;
-    }
-    if let Some(description) = &request.description {
-        validate_text_field(description, MAX_DESCRIPTION_LENGTH, "description")?;
-    }
     validate_text_field(&request.categories.join(","), MAX_FIELD_SIZE, "categories")?;
-
-    if request.categories.len() > MAX_CATEGORIES {
-        warn!(
-            endpoint = "upload_track_service",
-            categories = request.categories.len(),
-            max = MAX_CATEGORIES,
-            "too many categories"
-        );
-        return Err(StatusCode::BAD_REQUEST);
-    }
-
-    for category in &request.categories {
-        validate_text_field(category, MAX_CATEGORY_LENGTH, "category")?;
-    }
+    validate_track_fields(
+        request.name.as_deref(),
+        request.description.as_deref(),
+        &request.categories,
+    )?;
 
     Ok(())
 }
@@ -185,7 +166,7 @@ async fn parse_and_check_duplicates(
     pool: &Arc<PgPool>,
     file_bytes: &Bytes,
     extension: &str,
-) -> Result<ParsedTrackData, StatusCode> {
+) -> Result<ParsedTrackData> {
     match extension {
         "gpx" => {
             let minimal_start = Instant::now();
@@ -196,7 +177,7 @@ async fn parse_and_check_duplicates(
                     stage = "gpx_minimal",
                     "failed to parse gpx"
                 );
-                StatusCode::UNPROCESSABLE_ENTITY
+                AppError::BadRequest("invalid gpx file".into())
             })?;
             metrics::observe_track_parse_duration(
                 "gpx_minimal",
@@ -204,21 +185,14 @@ async fn parse_and_check_duplicates(
             );
 
             let dedup_db_start = Instant::now();
-            if db::track_exists(pool, &minimal.hash)
-                .await
-                .map_err(|e| {
-                    error!(?e, "[upload_track_service] db error on dedup");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?
-                .is_some()
-            {
+            if db::track_exists(pool, &minimal.hash).await?.is_some() {
                 metrics::record_track_deduplicated("gpx_hash_match");
                 warn!(
                     hash = %minimal.hash,
                     endpoint = "upload_track_service",
                     "duplicate track detected by hash"
                 );
-                return Err(StatusCode::CONFLICT);
+                return Err(AppError::Conflict("duplicate track detected".into()));
             }
             let dedup_elapsed = dedup_db_start.elapsed().as_secs_f64();
             metrics::observe_db_query("track_exists", dedup_elapsed);
@@ -236,7 +210,7 @@ async fn parse_and_check_duplicates(
                     stage = "gpx_full",
                     "failed to parse gpx"
                 );
-                StatusCode::UNPROCESSABLE_ENTITY
+                AppError::BadRequest("invalid gpx file".into())
             })?;
             let full_elapsed = full_parse_start.elapsed().as_secs_f64();
             metrics::observe_track_parse_duration("gpx_full", full_elapsed);
@@ -257,7 +231,7 @@ async fn parse_and_check_duplicates(
                     stage = "kml_full",
                     "failed to parse kml"
                 );
-                StatusCode::UNPROCESSABLE_ENTITY
+                AppError::BadRequest("invalid kml file".into())
             })?;
             let kml_full_elapsed = kml_parse_start.elapsed().as_secs_f64();
             metrics::observe_track_parse_duration("kml_full", kml_full_elapsed);
@@ -269,21 +243,14 @@ async fn parse_and_check_duplicates(
             }
 
             let dedup_db_start = Instant::now();
-            if db::track_exists(pool, &parsed.hash)
-                .await
-                .map_err(|e| {
-                    error!(?e, "[upload_track_service] db error on dedup");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?
-                .is_some()
-            {
+            if db::track_exists(pool, &parsed.hash).await?.is_some() {
                 metrics::record_track_deduplicated("kml_hash_match");
                 warn!(
                     hash = %parsed.hash,
                     endpoint = "upload_track_service",
                     "duplicate track detected by hash"
                 );
-                return Err(StatusCode::CONFLICT);
+                return Err(AppError::Conflict("duplicate track detected".into()));
             }
             metrics::observe_db_query("track_exists", dedup_db_start.elapsed().as_secs_f64());
 
@@ -294,7 +261,7 @@ async fn parse_and_check_duplicates(
                 endpoint = "upload_track_service",
                 extension, "unsupported file type"
             );
-            Err(StatusCode::BAD_REQUEST)
+            Err(AppError::BadRequest("unsupported file type".into()))
         }
     }
 }

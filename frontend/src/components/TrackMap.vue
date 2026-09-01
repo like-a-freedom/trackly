@@ -159,7 +159,6 @@ import {
   getCurrentInstance,
   provide,
 } from "vue";
-import { latLngBounds } from "leaflet";
 import "leaflet.heat";
 import {
   getDetailPanelFitBoundsOptions,
@@ -253,6 +252,10 @@ const leafletInstance = shallowRef(null); // resolved L.Map from @ready
 
 // Provide the resolved L.Map (not the Vue Leaflet wrapper ref) to children
 provide("leafletMap", leafletInstance);
+
+// Provide the adapter seam so child components (PoiClusterGroup, etc.) can
+// interact with the map through the adapter instead of using L.* directly.
+provide("mapAdapter", leafletAdapter);
 
 const mapBounds = ref(null);
 const mapKey = ref(0);
@@ -635,7 +638,7 @@ function initializeClustering(map) {
     clusterAdapter.addTo(map);
 
     // Set initial zoom level for clustering
-    clustering.updateZoomLevel(map.getZoom());
+    clustering.updateZoomLevel(leafletAdapter.getZoom());
 
     // Perform initial clustering update with delay to ensure map is ready
     setTimeout(() => { updateClustering(); }, 100);
@@ -691,11 +694,8 @@ async function onMapReady(e) {
     }
 
     // Update current state
-    mapState.value.lastKnownGood.zoom = map.getZoom();
-    mapState.value.lastKnownGood.center = [
-      map.getCenter().lat,
-      map.getCenter().lng,
-    ];
+    mapState.value.lastKnownGood.zoom = leafletAdapter.getZoom();
+    mapState.value.lastKnownGood.center = leafletAdapter.getCenter();
 
     // Move attribution control to bottom-left to avoid collision with panel toggle
     leafletAdapter.repositionAttribution("bottomleft");
@@ -714,7 +714,7 @@ async function onMapReady(e) {
     updateHeatmapLayer();
 
     // Initialize stable bounds for track visibility calculation
-    stableBounds.value = map.getBounds();
+    stableBounds.value = leafletAdapter.getBounds();
 
     // Initialize clustering
     initializeClustering(map);
@@ -747,7 +747,7 @@ async function onMapReady(e) {
           "bounds:",
           props.bounds
         );
-        map.fitBounds(props.bounds, options);
+        leafletAdapter.fitBounds(props.bounds, options);
       } catch (error) {
         console.error("[TrackMap] Error applying initial bounds:", error);
       }
@@ -758,9 +758,10 @@ async function onMapReady(e) {
       });
     }
 
-    // Enhance fitBounds for selected track detail
-    const origFitBounds = map.fitBounds.bind(map);
-    map.fitBounds = function (boundsArg, options = {}) {
+    // Enhance fitBounds on the adapter so all downstream callers automatically
+    // receive the detail-panel padding when a track detail is selected.
+    const origAdapterFitBounds = leafletAdapter.fitBounds.bind(leafletAdapter);
+    leafletAdapter.fitBounds = function (boundsArg, options = {}) {
       if (
         props.selectedTrackDetail &&
         !options.paddingBottomRight &&
@@ -768,7 +769,7 @@ async function onMapReady(e) {
       ) {
         options = { ...options, ...getDetailPanelFitBoundsOptions() };
       }
-      return origFitBounds(boundsArg, options);
+      return origAdapterFitBounds(boundsArg, options);
     };
   } catch (error) {
     console.error("[TrackMap] Error in onMapReady logic:", error, {
@@ -908,7 +909,7 @@ watch(
             ? getDetailPanelFitBoundsOptions()
             : { padding: [20, 20] };
           console.log("[TrackMap] Fitting bounds with options:", options);
-          map.fitBounds(newBounds, options);
+          leafletAdapter.fitBounds(newBounds, options);
         } catch (error) {
           console.error("[TrackMap] Error fitting bounds:", error);
         }
@@ -971,7 +972,7 @@ onUnmounted(() => {
   if (map) {
     // Stop any ongoing map animations
     try {
-      map.stop(); // Stop all animations
+      leafletAdapter.stop(); // Stop all animations
     } catch (error) {
       console.warn("[TrackMap] Error stopping map animations:", error);
     }

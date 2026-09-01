@@ -124,67 +124,6 @@ export function useAdvancedDebounce(func, delay, options = {}) {
     return debounced;
 }
 
-// Reactive debounce for Vue refs
-export function useReactiveDebounce(source, delay, options = {}) {
-    const debouncedValue = ref(source.value);
-    const isDebouncing = ref(false);
-
-    const debounced = useAdvancedDebounce((value) => {
-        debouncedValue.value = value;
-        isDebouncing.value = false;
-    }, delay, options);
-
-    const stopWatcher = watch(source, (newValue) => {
-        isDebouncing.value = true;
-        debounced(newValue);
-    }, { immediate: false });
-
-    // Only register lifecycle cleanup when called from a component setup context
-    if (getCurrentInstance()) {
-        onUnmounted(() => {
-            debounced.cancel();
-            stopWatcher();
-        });
-    }
-
-    return {
-        debouncedValue,
-        isDebouncing,
-        cancel: debounced.cancel,
-        flush: debounced.flush
-    };
-}
-
-// Specialized debounce for map operations
-export function useMapDebounce() {
-    const zoomDebounce = useAdvancedDebounce((zoomLevel, callback) => {
-        callback(zoomLevel);
-    }, 300, { leading: false, trailing: true });
-
-    const boundsDebounce = useAdvancedDebounce((bounds, callback) => {
-        callback(bounds);
-    }, 150, { leading: false, trailing: true, maxWait: 500 });
-
-    const searchDebounce = useAdvancedDebounce((query, callback) => {
-        callback(query);
-    }, 400, { leading: false, trailing: true });
-
-    // Register cleanup only when inside a component setup context
-    if (getCurrentInstance()) {
-        onUnmounted(() => {
-            zoomDebounce.cancel();
-            boundsDebounce.cancel();
-            searchDebounce.cancel();
-        });
-    }
-
-    return {
-        zoomDebounce,
-        boundsDebounce,
-        searchDebounce
-    };
-}
-
 // Throttle for high-frequency events (mouse move, scroll)
 export function useThrottle(func, limit) {
     let inThrottle = false;

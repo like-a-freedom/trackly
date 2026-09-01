@@ -209,6 +209,86 @@ pub struct TrackGeoJsonQuery {
     pub mine: Option<bool>,
 }
 
+/// Common interface for track filter parameters shared across list, geojson, and heatmap queries.
+pub trait TrackFilterParams {
+    fn categories(&self) -> Option<&Vec<String>>;
+    fn min_length(&self) -> Option<f64>;
+    fn max_length(&self) -> Option<f64>;
+    fn elevation_gain_min(&self) -> Option<f32>;
+    fn elevation_gain_max(&self) -> Option<f32>;
+    fn slope_min(&self) -> Option<f32>;
+    fn slope_max(&self) -> Option<f32>;
+    fn owner_session_id(&self) -> Option<Uuid>;
+    fn owner_user_id(&self) -> Option<Uuid>;
+    fn mine(&self) -> Option<bool>;
+}
+
+impl TrackFilterParams for TrackListQuery {
+    fn categories(&self) -> Option<&Vec<String>> {
+        self.categories.as_ref()
+    }
+    fn min_length(&self) -> Option<f64> {
+        self.min_length
+    }
+    fn max_length(&self) -> Option<f64> {
+        self.max_length
+    }
+    fn elevation_gain_min(&self) -> Option<f32> {
+        self.elevation_gain_min
+    }
+    fn elevation_gain_max(&self) -> Option<f32> {
+        self.elevation_gain_max
+    }
+    fn slope_min(&self) -> Option<f32> {
+        self.slope_min
+    }
+    fn slope_max(&self) -> Option<f32> {
+        self.slope_max
+    }
+    fn owner_session_id(&self) -> Option<Uuid> {
+        self.owner_session_id
+    }
+    fn owner_user_id(&self) -> Option<Uuid> {
+        self.owner_user_id
+    }
+    fn mine(&self) -> Option<bool> {
+        self.mine
+    }
+}
+
+impl TrackFilterParams for TrackGeoJsonQuery {
+    fn categories(&self) -> Option<&Vec<String>> {
+        self.categories.as_ref()
+    }
+    fn min_length(&self) -> Option<f64> {
+        self.min_length
+    }
+    fn max_length(&self) -> Option<f64> {
+        self.max_length
+    }
+    fn elevation_gain_min(&self) -> Option<f32> {
+        self.elevation_gain_min
+    }
+    fn elevation_gain_max(&self) -> Option<f32> {
+        self.elevation_gain_max
+    }
+    fn slope_min(&self) -> Option<f32> {
+        self.slope_min
+    }
+    fn slope_max(&self) -> Option<f32> {
+        self.slope_max
+    }
+    fn owner_session_id(&self) -> Option<Uuid> {
+        self.owner_session_id
+    }
+    fn owner_user_id(&self) -> Option<Uuid> {
+        self.owner_user_id
+    }
+    fn mine(&self) -> Option<bool> {
+        self.mine
+    }
+}
+
 // Custom deserializer to handle both comma-separated string and array formats
 fn deserialize_categories<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
 where

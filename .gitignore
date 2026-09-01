@@ -62,7 +62,7 @@ desktop.ini
 *.tmp
 /db/
 db_data/
-tracks/
+/tracks/
 
 Session.vim
 .cproject

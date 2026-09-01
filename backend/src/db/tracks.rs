@@ -73,70 +73,86 @@ fn sanitize_description(text: Option<&str>) -> Option<String> {
     text.map(|raw| ammonia::clean(raw).to_string())
 }
 
-fn build_list_tracks_query(params: &crate::models::TrackListQuery) -> QueryBuilder<'_, Postgres> {
+/// Append shared ownership and attribute filter WHERE clauses to a query builder.
+///
+/// `col_prefix` is used for table-qualified column names (e.g. `"t."` for heatmap queries).
+fn build_track_filter_sql<'a>(
+    qb: &mut QueryBuilder<'a, Postgres>,
+    filters: &'a dyn crate::models::TrackFilterParams,
+    col_prefix: &str,
+) {
+    // Determine ownership filter based on parameters
+    // Priority: owner_user_id > owner_session_id
+    let mine = filters.mine().unwrap_or(false);
+
+    if mine {
+        // Filter by authenticated user or session
+        if let Some(user_id) = filters.owner_user_id() {
+            qb.push(format!(" WHERE {col_prefix}user_id = "));
+            qb.push_bind(user_id);
+        } else if let Some(session_id) = filters.owner_session_id() {
+            qb.push(format!(" WHERE {col_prefix}session_id = "));
+            qb.push_bind(session_id);
+        } else {
+            // No ownership context, show public only
+            qb.push(format!(" WHERE {col_prefix}is_public = TRUE"));
+        }
+    } else if let Some(user_id) = filters.owner_user_id() {
+        // Show user's tracks (private + public) + other public tracks
+        qb.push(format!(" WHERE ({col_prefix}user_id = "));
+        qb.push_bind(user_id);
+        qb.push(format!(" OR {col_prefix}is_public = TRUE)"));
+    } else if let Some(session_id) = filters.owner_session_id() {
+        // Show session's tracks (private + public) + other public tracks
+        qb.push(format!(" WHERE ({col_prefix}session_id = "));
+        qb.push_bind(session_id);
+        qb.push(format!(" OR {col_prefix}is_public = TRUE)"));
+    } else {
+        // Default: only public tracks
+        qb.push(format!(" WHERE {col_prefix}is_public = TRUE"));
+    }
+
+    if let Some(cats) = filters.categories()
+        && !cats.is_empty()
+    {
+        qb.push(format!(" AND {col_prefix}categories && "));
+        qb.push_bind(cats);
+    }
+
+    if let Some(min) = filters.min_length() {
+        qb.push(format!(" AND {col_prefix}length_km >= "));
+        qb.push_bind(min);
+    }
+    if let Some(max) = filters.max_length() {
+        qb.push(format!(" AND {col_prefix}length_km <= "));
+        qb.push_bind(max);
+    }
+    if let Some(min) = filters.elevation_gain_min() {
+        qb.push(format!(" AND {col_prefix}elevation_gain >= "));
+        qb.push_bind(min);
+    }
+    if let Some(max) = filters.elevation_gain_max() {
+        qb.push(format!(" AND {col_prefix}elevation_gain <= "));
+        qb.push_bind(max);
+    }
+    if let Some(min) = filters.slope_min() {
+        qb.push(format!(" AND {col_prefix}slope_min >= "));
+        qb.push_bind(min);
+    }
+    if let Some(max) = filters.slope_max() {
+        qb.push(format!(" AND {col_prefix}slope_max <= "));
+        qb.push_bind(max);
+    }
+}
+
+fn build_list_tracks_query(
+    params: &dyn crate::models::TrackFilterParams,
+) -> QueryBuilder<'_, Postgres> {
     let mut builder = QueryBuilder::<Postgres>::new(
         "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks",
     );
 
-    // Determine ownership filter based on parameters
-    // Priority: owner_user_id > owner_session_id
-    let mine = params.mine.unwrap_or(false);
-
-    if mine {
-        // Filter by authenticated user or session
-        if let Some(user_id) = params.owner_user_id {
-            builder.push(" WHERE user_id = ");
-            builder.push_bind(user_id);
-        } else if let Some(session_id) = params.owner_session_id {
-            builder.push(" WHERE session_id = ");
-            builder.push_bind(session_id);
-        } else {
-            // No ownership context, show public only
-            builder.push(" WHERE is_public = TRUE");
-        }
-    } else if let Some(user_id) = params.owner_user_id {
-        // Show user's tracks (private + public) + other public tracks
-        builder.push(" WHERE (user_id = ");
-        builder.push_bind(user_id);
-        builder.push(" OR is_public = TRUE)");
-    } else if let Some(session_id) = params.owner_session_id {
-        // Show session's tracks (private + public) + other public tracks
-        builder.push(" WHERE (session_id = ");
-        builder.push_bind(session_id);
-        builder.push(" OR is_public = TRUE)");
-    } else {
-        // Default: only public tracks
-        builder.push(" WHERE is_public = TRUE");
-    }
-
-    if let Some(cats) = params.categories.as_ref().filter(|c| !c.is_empty()) {
-        builder.push(" AND categories && ");
-        builder.push_bind(cats);
-    }
-    if let Some(min) = params.min_length {
-        builder.push(" AND length_km >= ");
-        builder.push_bind(min);
-    }
-    if let Some(max) = params.max_length {
-        builder.push(" AND length_km <= ");
-        builder.push_bind(max);
-    }
-    if let Some(min) = params.elevation_gain_min {
-        builder.push(" AND elevation_gain >= ");
-        builder.push_bind(min);
-    }
-    if let Some(max) = params.elevation_gain_max {
-        builder.push(" AND elevation_gain <= ");
-        builder.push_bind(max);
-    }
-    if let Some(min) = params.slope_min {
-        builder.push(" AND slope_min >= ");
-        builder.push_bind(min);
-    }
-    if let Some(max) = params.slope_max {
-        builder.push(" AND slope_max <= ");
-        builder.push_bind(max);
-    }
+    build_track_filter_sql(&mut builder, params, "");
 
     builder
 }
@@ -759,73 +775,7 @@ pub async fn list_tracks_geojson(
 
     builder.push(" FROM tracks");
 
-    // Determine ownership filter based on parameters
-    // Priority: owner_user_id > owner_session_id
-    let mine = filter_params.mine.unwrap_or(false);
-
-    if mine {
-        // Filter by authenticated user or session
-        if let Some(user_id) = filter_params.owner_user_id {
-            builder.push(" WHERE user_id = ");
-            builder.push_bind(user_id);
-        } else if let Some(session_id) = filter_params.owner_session_id {
-            builder.push(" WHERE session_id = ");
-            builder.push_bind(session_id);
-        } else {
-            // No ownership context, show public only
-            builder.push(" WHERE is_public = TRUE");
-        }
-    } else if let Some(user_id) = filter_params.owner_user_id {
-        // Show user's tracks (private + public) + other public tracks
-        builder.push(" WHERE (user_id = ");
-        builder.push_bind(user_id);
-        builder.push(" OR is_public = TRUE)");
-    } else if let Some(session_id) = filter_params.owner_session_id {
-        // Show session's tracks (private + public) + other public tracks
-        builder.push(" WHERE (session_id = ");
-        builder.push_bind(session_id);
-        builder.push(" OR is_public = TRUE)");
-    } else {
-        // Default: only public tracks
-        builder.push(" WHERE is_public = TRUE");
-    }
-
-    if let Some(categories) = &filter_params.categories
-        && !categories.is_empty()
-    {
-        builder.push(" AND categories && ");
-        builder.push_bind(categories);
-    }
-
-    if let Some(min) = filter_params.min_length {
-        builder.push(" AND length_km >= ");
-        builder.push_bind(min);
-    }
-
-    if let Some(max) = filter_params.max_length {
-        builder.push(" AND length_km <= ");
-        builder.push_bind(max);
-    }
-
-    if let Some(min) = filter_params.elevation_gain_min {
-        builder.push(" AND elevation_gain >= ");
-        builder.push_bind(min);
-    }
-
-    if let Some(max) = filter_params.elevation_gain_max {
-        builder.push(" AND elevation_gain <= ");
-        builder.push_bind(max);
-    }
-
-    if let Some(min) = filter_params.slope_min {
-        builder.push(" AND slope_min >= ");
-        builder.push_bind(min);
-    }
-
-    if let Some(max) = filter_params.slope_max {
-        builder.push(" AND slope_max <= ");
-        builder.push_bind(max);
-    }
+    build_track_filter_sql(&mut builder, filter_params, "");
 
     if let Some(bbox_str) = bbox {
         let parts: Vec<&str> = bbox_str.split(',').collect();
@@ -1023,7 +973,6 @@ pub async fn list_tracks_heatmap(
 
     let zoom_level = zoom.unwrap_or(12.0);
     let grid_size = heatmap_grid_size_degrees(zoom_level);
-    let mine = filter_params.mine.unwrap_or(false);
 
     let mut builder = QueryBuilder::<Postgres>::new("WITH bbox AS (SELECT ST_MakeEnvelope(");
     builder.push_bind(coords[0]);
@@ -1035,64 +984,7 @@ pub async fn list_tracks_heatmap(
     builder.push_bind(coords[3]);
     builder.push(", 4326) AS geom), filtered AS (SELECT t.geom FROM tracks t, bbox b");
 
-    if mine {
-        if let Some(user_id) = filter_params.owner_user_id {
-            builder.push(" WHERE t.user_id = ");
-            builder.push_bind(user_id);
-        } else if let Some(session_id) = filter_params.owner_session_id {
-            builder.push(" WHERE t.session_id = ");
-            builder.push_bind(session_id);
-        } else {
-            builder.push(" WHERE t.is_public = TRUE");
-        }
-    } else if let Some(user_id) = filter_params.owner_user_id {
-        builder.push(" WHERE (t.user_id = ");
-        builder.push_bind(user_id);
-        builder.push(" OR t.is_public = TRUE)");
-    } else if let Some(session_id) = filter_params.owner_session_id {
-        builder.push(" WHERE (t.session_id = ");
-        builder.push_bind(session_id);
-        builder.push(" OR t.is_public = TRUE)");
-    } else {
-        builder.push(" WHERE t.is_public = TRUE");
-    }
-
-    if let Some(categories) = &filter_params.categories
-        && !categories.is_empty()
-    {
-        builder.push(" AND t.categories && ");
-        builder.push_bind(categories);
-    }
-
-    if let Some(min) = filter_params.min_length {
-        builder.push(" AND t.length_km >= ");
-        builder.push_bind(min);
-    }
-
-    if let Some(max) = filter_params.max_length {
-        builder.push(" AND t.length_km <= ");
-        builder.push_bind(max);
-    }
-
-    if let Some(min) = filter_params.elevation_gain_min {
-        builder.push(" AND t.elevation_gain >= ");
-        builder.push_bind(min);
-    }
-
-    if let Some(max) = filter_params.elevation_gain_max {
-        builder.push(" AND t.elevation_gain <= ");
-        builder.push_bind(max);
-    }
-
-    if let Some(min) = filter_params.slope_min {
-        builder.push(" AND t.slope_min >= ");
-        builder.push_bind(min);
-    }
-
-    if let Some(max) = filter_params.slope_max {
-        builder.push(" AND t.slope_max <= ");
-        builder.push_bind(max);
-    }
+    build_track_filter_sql(&mut builder, filter_params, "t.");
 
     builder.push(" AND ST_Intersects(t.geom, b.geom))");
     builder.push(", points AS (SELECT (ST_DumpPoints(ST_Intersection(t.geom, b.geom))).geom AS pt FROM filtered t, bbox b)");

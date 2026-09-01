@@ -9,9 +9,11 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tracing::{error, info, warn};
 
+#[allow(dead_code)]
 static LAST_UPLOAD: Lazy<Mutex<HashMap<String, u64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 // Configurable rate limiting
+#[allow(dead_code)]
 static UPLOAD_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
     std::env::var("UPLOAD_RATE_LIMIT_SECONDS")
         .ok()
@@ -19,6 +21,7 @@ static UPLOAD_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
         .unwrap_or(10) // Default 10 seconds
 });
 
+#[allow(dead_code)]
 pub fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
     let mut map = LAST_UPLOAD.lock().map_err(|e| {
         error!(error = ?e, "LAST_UPLOAD mutex poisoned");
@@ -54,7 +57,9 @@ pub fn record_session_upload_attempt(session_key: &str, now: u64) -> Result<(), 
 }
 
 // Configurable export rate limiting (mirrors upload rate limiting)
+#[allow(dead_code)]
 static LAST_EXPORT: Lazy<Mutex<HashMap<String, u64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+#[allow(dead_code)]
 static EXPORT_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
     std::env::var("EXPORT_RATE_LIMIT_SECONDS")
         .ok()
@@ -62,6 +67,7 @@ static EXPORT_RATE_LIMIT_SECONDS: Lazy<u64> = Lazy::new(|| {
         .unwrap_or(10) // Default 10 seconds
 });
 
+#[allow(dead_code)]
 pub fn record_session_export_attempt(session_key: &str, now: u64) -> Result<(), StatusCode> {
     let mut map = LAST_EXPORT.lock().map_err(|e| {
         error!(error = ?e, "LAST_EXPORT mutex poisoned");
@@ -97,11 +103,13 @@ pub fn record_session_export_attempt(session_key: &str, now: u64) -> Result<(), 
 }
 
 /// The rate limit window for exports, in seconds.
+#[allow(dead_code)]
 pub fn export_rate_limit_seconds() -> u64 {
     *EXPORT_RATE_LIMIT_SECONDS
 }
 
 /// The last recorded export attempt for a session, if any.
+#[allow(dead_code)]
 pub fn last_export_attempt(session_key: &str) -> Option<u64> {
     LAST_EXPORT
         .lock()

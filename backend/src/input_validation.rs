@@ -37,6 +37,34 @@ pub fn validate_text_field(text: &str, max_len: usize, field_name: &str) -> Resu
     Ok(())
 }
 
+/// Validate shared track fields: name, description, and categories.
+///
+/// This is the common validation logic shared between file upload and editor creation paths.
+pub fn validate_track_fields(
+    name: Option<&str>,
+    description: Option<&str>,
+    categories: &[String],
+) -> Result<(), StatusCode> {
+    if let Some(name) = name {
+        validate_text_field(name, MAX_NAME_LENGTH, "name")?;
+    }
+    if let Some(description) = description {
+        validate_text_field(description, MAX_DESCRIPTION_LENGTH, "description")?;
+    }
+    if categories.len() > MAX_CATEGORIES {
+        error!(
+            categories = categories.len(),
+            max = MAX_CATEGORIES,
+            "too many categories"
+        );
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    for category in categories {
+        validate_text_field(category, MAX_CATEGORY_LENGTH, "category")?;
+    }
+    Ok(())
+}
+
 pub fn validate_file_extension(filename: &str) -> Result<String, StatusCode> {
     let ext = filename.split('.').next_back().unwrap_or("").to_lowercase();
     if !ALLOWED_EXTENSIONS.contains(&ext.as_str()) {

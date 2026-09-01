@@ -31,7 +31,9 @@ const props = defineProps({
 
 const emit = defineEmits(['poi-click']);
 
-// Inject the map from parent TrackMap component
+// Inject the map adapter from parent TrackMap component.
+// Falls back to legacy 'leafletMap' inject for backward compatibility.
+const mapAdapter = inject('mapAdapter', null);
 const leafletMap = inject('leafletMap', null);
 
 // Cluster group reference
@@ -117,7 +119,11 @@ function createTooltipContent(poi) {
 // Initialize cluster group
 function initClusterGroup(map) {
   if (clusterGroup.value) {
-    map.removeLayer(clusterGroup.value);
+    if (mapAdapter) {
+      mapAdapter.removeLayer(clusterGroup.value);
+    } else {
+      map.removeLayer(clusterGroup.value);
+    }
   }
 
   clusterGroup.value = L.markerClusterGroup({
@@ -130,7 +136,11 @@ function initClusterGroup(map) {
     iconCreateFunction: createClusterIcon,
   });
 
-  map.addLayer(clusterGroup.value);
+  if (mapAdapter) {
+    mapAdapter.addLayer(clusterGroup.value);
+  } else {
+    map.addLayer(clusterGroup.value);
+  }
   updateMarkers();
 }
 
@@ -165,8 +175,12 @@ function updateMarkers() {
   console.log(`[PoiClusterGroup] Added ${props.pois.length} POIs to cluster group`);
 }
 
-// Helper to get map object
+// Helper to get map object — prefer the adapter seam, fall back to legacy inject
 function getMapObject() {
+  if (mapAdapter) {
+    const m = mapAdapter.getMap();
+    if (m) return m;
+  }
   if (!leafletMap?.value) return null;
   // Accept either a Vue Leaflet wrapper (has .mapObject / .leafletObject) or
   // a real L.Map directly (has .getZoom). The real L.Map is the post-Stage-0.5b
@@ -219,9 +233,15 @@ onMounted(() => {
 
 // Cleanup on unmount
 onUnmounted(() => {
-  const map = getMapObject();
-  if (clusterGroup.value && map) {
-    map.removeLayer(clusterGroup.value);
+  if (clusterGroup.value) {
+    if (mapAdapter) {
+      mapAdapter.removeLayer(clusterGroup.value);
+    } else {
+      const map = getMapObject();
+      if (map) {
+        map.removeLayer(clusterGroup.value);
+      }
+    }
     clusterGroup.value = null;
   }
 });

@@ -1,14 +1,11 @@
 use crate::{
     db,
-    input_validation::{
-        MAX_CATEGORIES, MAX_CATEGORY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH,
-        validate_text_field,
-    },
+    error::{AppError, Result},
+    input_validation::validate_track_fields,
     metrics,
     models::TrackUploadResponse,
     track_utils::{extract_segments_from_geojson, geojson_from_segments, length_km_for_segments},
 };
-use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -98,7 +95,7 @@ impl TrackEditorService {
         &self,
         request: CreateTrackFromEditorRequest,
         user_id: Option<Uuid>,
-    ) -> Result<TrackUploadResponse, StatusCode> {
+    ) -> Result<TrackUploadResponse> {
         let start = Instant::now();
 
         // Validate inputs
@@ -116,7 +113,7 @@ impl TrackEditorService {
         } else {
             Some(serde_json::to_value(&request.waypoints).map_err(|e| {
                 error!(?e, "failed to serialize waypoints");
-                StatusCode::INTERNAL_SERVER_ERROR
+                AppError::Internal(e.into())
             })?)
         };
 
@@ -144,7 +141,7 @@ impl TrackEditorService {
         .await
         .map_err(|e| {
             error!(?e, "failed to insert track from editor");
-            StatusCode::INTERNAL_SERVER_ERROR
+            AppError::Internal(e.into())
         })?;
 
         metrics::observe_track_length_km("editor", length_km);
@@ -170,7 +167,7 @@ impl TrackEditorService {
         &self,
         track_id: Uuid,
         request: UpdateTrackGeometryRequest,
-    ) -> Result<(), StatusCode> {
+    ) -> Result<()> {
         let start = Instant::now();
 
         let (geojson, length_km) = self.validate_geometry(&request.geometry)?;
@@ -181,7 +178,7 @@ impl TrackEditorService {
         } else {
             Some(serde_json::to_value(&request.waypoints).map_err(|e| {
                 error!(?e, "failed to serialize waypoints");
-                StatusCode::INTERNAL_SERVER_ERROR
+                AppError::Internal(e.into())
             })?)
         };
 
@@ -199,7 +196,7 @@ impl TrackEditorService {
         .await
         .map_err(|e| {
             error!(?e, "failed to update track geometry");
-            StatusCode::INTERNAL_SERVER_ERROR
+            AppError::Internal(e.into())
         })?;
 
         info!(track_id = %track_id, length_km, elapsed_ms = start.elapsed().as_millis(), "track geometry updated");
@@ -214,7 +211,7 @@ impl TrackEditorService {
         source_id: Uuid,
         request: DuplicateTrackRequest,
         user_id: Option<Uuid>,
-    ) -> Result<TrackUploadResponse, StatusCode> {
+    ) -> Result<TrackUploadResponse> {
         let new_id = db::duplicate_track(
             &self.pool,
             source_id,
@@ -226,8 +223,8 @@ impl TrackEditorService {
         .map_err(|e| {
             error!(?e, "failed to duplicate track");
             match e {
-                sqlx::Error::RowNotFound => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
+                sqlx::Error::RowNotFound => AppError::NotFound,
+                other => AppError::Database(other),
             }
         })?;
 
@@ -239,39 +236,28 @@ impl TrackEditorService {
         })
     }
 
-    fn validate_create_request(
-        &self,
-        request: &CreateTrackFromEditorRequest,
-    ) -> Result<(), StatusCode> {
+    fn validate_create_request(&self, request: &CreateTrackFromEditorRequest) -> Result<()> {
         // Name is required
         if request.name.trim().is_empty() {
             warn!("track name is empty");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("track name is required".into()));
         }
-        validate_text_field(&request.name, MAX_NAME_LENGTH, "name")?;
-
-        if let Some(desc) = &request.description {
-            validate_text_field(desc, MAX_DESCRIPTION_LENGTH, "description")?;
-        }
-
-        if request.categories.len() > MAX_CATEGORIES {
-            warn!(count = request.categories.len(), "too many categories");
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        for cat in &request.categories {
-            validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
-        }
+        validate_track_fields(
+            Some(&request.name),
+            request.description.as_deref(),
+            &request.categories,
+        )?;
 
         if request.waypoints.len() > MAX_WAYPOINTS {
             warn!(count = request.waypoints.len(), "too many waypoints");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("too many waypoints".into()));
         }
 
         // Validate waypoint coordinates
         for wp in &request.waypoints {
             if !is_valid_coordinate(wp.lat, wp.lon) {
                 warn!(lat = wp.lat, lon = wp.lon, "invalid waypoint coordinate");
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(AppError::BadRequest("invalid waypoint coordinate".into()));
             }
         }
 
@@ -280,10 +266,7 @@ impl TrackEditorService {
         Ok(())
     }
 
-    fn validate_segment_meta(
-        &self,
-        segment_meta: &Option<serde_json::Value>,
-    ) -> Result<(), StatusCode> {
+    fn validate_segment_meta(&self, segment_meta: &Option<serde_json::Value>) -> Result<()> {
         let Some(value) = segment_meta else {
             return Ok(());
         };
@@ -293,12 +276,12 @@ impl TrackEditorService {
                 reason = "segment_meta_not_array",
                 "segment_meta must be array"
             );
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("segment_meta must be array".into()));
         };
 
         if list.len() > MAX_SEGMENTS {
             warn!(count = list.len(), "too many segment meta entries");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("too many segment meta entries".into()));
         }
 
         for entry in list {
@@ -307,7 +290,9 @@ impl TrackEditorService {
                     reason = "segment_meta_not_object",
                     "segment_meta entry must be object"
                 );
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(AppError::BadRequest(
+                    "segment_meta entry must be object".into(),
+                ));
             };
 
             if let Some(name) = obj.get("name").and_then(|v| v.as_str())
@@ -318,7 +303,7 @@ impl TrackEditorService {
                     len = name.len(),
                     "segment name too long"
                 );
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(AppError::BadRequest("segment name too long".into()));
             }
 
             if let Some(color) = obj.get("color").and_then(|v| v.as_str())
@@ -328,57 +313,60 @@ impl TrackEditorService {
                     reason = "segment_color_invalid",
                     color, "segment color invalid"
                 );
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(AppError::BadRequest("invalid segment color".into()));
             }
         }
 
         Ok(())
     }
 
-    fn validate_geometry(
-        &self,
-        geometry: &serde_json::Value,
-    ) -> Result<(serde_json::Value, f64), StatusCode> {
+    fn validate_geometry(&self, geometry: &serde_json::Value) -> Result<(serde_json::Value, f64)> {
         let geom_type = geometry
             .get("type")
             .and_then(|t| t.as_str())
             .ok_or_else(|| {
                 warn!("geometry missing type field");
-                StatusCode::BAD_REQUEST
+                AppError::BadRequest("geometry missing type field".into())
             })?;
 
         match geom_type {
             "LineString" | "MultiLineString" => {}
             other => {
                 warn!(geom_type = other, "unsupported geometry type");
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(AppError::BadRequest(format!(
+                    "unsupported geometry type: {other}"
+                )));
             }
         }
 
         let segments = extract_segments_from_geojson(geometry).map_err(|e| {
             warn!(error = %e, "failed to extract segments from geometry");
-            StatusCode::BAD_REQUEST
+            AppError::BadRequest(format!("invalid geometry: {e}"))
         })?;
 
         if segments.is_empty() {
             warn!("geometry has no segments");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("geometry has no segments".into()));
         }
 
         // Validate total point count
         let total_points: usize = segments.iter().map(|s| s.len()).sum();
         if total_points < 2 {
             warn!(total_points, "track must have at least 2 points");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest(
+                "track must have at least 2 points".into(),
+            ));
         }
         if total_points > MAX_TRACK_POINTS {
             warn!(total_points, "track exceeds maximum point count");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest(
+                "track exceeds maximum point count".into(),
+            ));
         }
 
         if segments.len() > MAX_SEGMENTS {
             warn!(count = segments.len(), "too many segments");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(AppError::BadRequest("too many segments".into()));
         }
 
         // Validate each segment has at least 2 points
@@ -389,13 +377,17 @@ impl TrackEditorService {
                     points = seg.len(),
                     "segment must have at least 2 points"
                 );
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(AppError::BadRequest(format!(
+                    "segment {i} must have at least 2 points"
+                )));
             }
             // Validate coordinate ranges
             for &(lat, lon) in seg {
                 if !is_valid_coordinate(lat, lon) {
                     warn!(lat, lon, "invalid coordinate in geometry");
-                    return Err(StatusCode::BAD_REQUEST);
+                    return Err(AppError::BadRequest(
+                        "invalid coordinate in geometry".into(),
+                    ));
                 }
             }
         }
