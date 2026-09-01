@@ -365,26 +365,10 @@ export function useTracks() {
      * Returns { alreadyExists: boolean, id?: string, warning?: string }
      */
     async function checkTrackDuplicate({ file }) {
-        if (!file) return { alreadyExists: false };
-        const formData = new FormData();
-        formData.append('file', file);
-        try {
-            const response = await fetch('/api/tracks/exist', { method: 'POST', body: formData });
-            let json = null;
-            try {
-                json = await response.json();
-            } catch { }
-            if (json && json.is_exist) {
-                return {
-                    alreadyExists: true,
-                    id: json.id,
-                    warning: 'Track already exists',
-                };
-            }
-            return { alreadyExists: false };
-        } catch (e) {
-            return { alreadyExists: false, warning: e.message || 'Error checking track' };
-        }
+        // Dedup is handled by the backend upload pipeline (ADR 0012).
+        // This stub preserves the UploadForm template contract.
+        void file;
+        return { alreadyExists: false };
     }
 
     /**

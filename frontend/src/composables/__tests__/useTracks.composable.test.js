@@ -398,75 +398,19 @@ describe('useTracks composable', () => {
     });
 
     describe('checkTrackDuplicate', () => {
-        it('should check if track exists', async () => {
+        it('should always return alreadyExists: false (stub, dedup is backend-side)', async () => {
             const mockFile = new File(['gpx content'], 'track.gpx');
-
-            fetchMock.mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({
-                    is_exist: true,
-                    id: 'existing-track-id'
-                })
-            });
 
             const { checkTrackDuplicate } = useTracks();
             const result = await checkTrackDuplicate({ file: mockFile });
-
-            expect(result).toEqual({
-                alreadyExists: true,
-                id: 'existing-track-id',
-                warning: 'Track already exists'
-            });
-        });
-
-        it('should return false when track does not exist', async () => {
-            const mockFile = new File(['gpx content'], 'track.gpx');
-
-            fetchMock.mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({ is_exist: false })
-            });
-
-            const { checkTrackDuplicate } = useTracks();
-            const result = await checkTrackDuplicate({ file: mockFile });
-
-            expect(result).toEqual({ alreadyExists: false });
-        });
-
-        it('should handle null file', async () => {
-            const { checkTrackDuplicate } = useTracks();
-            const result = await checkTrackDuplicate({ file: null });
 
             expect(result).toEqual({ alreadyExists: false });
             expect(fetchMock).not.toHaveBeenCalled();
         });
 
-        it('should handle error checking duplicate', async () => {
-            const mockFile = new File(['gpx content'], 'track.gpx');
-
-            fetchMock.mockRejectedValueOnce(new Error('Network error'));
-
+        it('should handle null file', async () => {
             const { checkTrackDuplicate } = useTracks();
-            const result = await checkTrackDuplicate({ file: mockFile });
-
-            expect(result).toEqual({
-                alreadyExists: false,
-                warning: 'Network error'
-            });
-        });
-
-        it('should handle invalid JSON response', async () => {
-            const mockFile = new File(['gpx content'], 'track.gpx');
-
-            fetchMock.mockResolvedValueOnce({
-                ok: true,
-                json: async () => {
-                    throw new Error('Invalid JSON');
-                }
-            });
-
-            const { checkTrackDuplicate } = useTracks();
-            const result = await checkTrackDuplicate({ file: mockFile });
+            const result = await checkTrackDuplicate({ file: null });
 
             expect(result).toEqual({ alreadyExists: false });
         });

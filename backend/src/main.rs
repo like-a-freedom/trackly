@@ -125,7 +125,6 @@ async fn main() {
         .route("/api/tracks", get(handlers::list_tracks_geojson))
         .route("/api/tracks/heatmap", get(handlers::list_tracks_heatmap))
         .route("/api/tracks", post(handlers::upload_track))
-        .route("/api/tracks/exist", post(handlers::check_track_exist))
         .route("/api/tracks/search", get(handlers::search_tracks))
         .route("/api/tracks/{id}", get(handlers::get_track))
         .route(

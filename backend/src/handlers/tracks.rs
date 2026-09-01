@@ -15,7 +15,7 @@ use crate::models::*;
 use crate::services::gpx_export;
 use crate::services::track_upload::TrackUploadRequest;
 use crate::track_utils::{
-    ElevationEnrichmentService, calculate_file_hash, extract_coordinates_from_geojson,
+    ElevationEnrichmentService, extract_coordinates_from_geojson,
     extract_segments_from_geojson, geojson_from_segments, simplify_segments_to_ratio,
 };
 use axum::http::header::REFERER;
@@ -37,76 +37,6 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 const MAX_SIMPLIFY_POINTS: usize = 100_000;
-
-pub async fn check_track_exist(
-    State(pool): State<Arc<PgPool>>,
-    mut multipart: AxumMultipart,
-) -> Result<Json<TrackExistResponse>> {
-    let mut file_bytes = None;
-    let mut file_name = None;
-    // Gracefully handle multipart errors: if any error occurs, treat as no file provided
-    while let Some(field_result) = multipart.next_field().await.transpose() {
-        let field = match field_result {
-            Ok(f) => f,
-            Err(_) => {
-                // Malformed multipart, treat as no file
-                return Ok(Json(TrackExistResponse {
-                    is_exist: false,
-                    id: None,
-                }));
-            }
-        };
-        if let Some("file") = field.name() {
-            file_name = field.file_name().map(|s| s.to_string());
-            file_bytes = match field.bytes().await {
-                Ok(bytes) => Some(bytes),
-                Err(_) => {
-                    // Malformed file part, treat as no file
-                    return Ok(Json(TrackExistResponse {
-                        is_exist: false,
-                        id: None,
-                    }));
-                }
-            };
-        }
-    }
-    let file_bytes = match file_bytes {
-        Some(b) => b,
-        None => {
-            return Ok(Json(TrackExistResponse {
-                is_exist: false,
-                id: None,
-            }));
-        }
-    };
-    let _file_name = match file_name {
-        Some(f) => f,
-        None => {
-            return Ok(Json(TrackExistResponse {
-                is_exist: false,
-                id: None,
-            }));
-        }
-    };
-    // Fast hash calculation without full parsing
-    // This is much faster for large files (27MB GPX with 94k points: <1s vs 26s)
-    let hash = calculate_file_hash(&file_bytes);
-
-    let id = db::track_exists(&pool, &hash)
-        .await
-        .map_err(handle_db_error)?;
-    if let Some(id) = id {
-        Ok(Json(TrackExistResponse {
-            is_exist: true,
-            id: Some(id),
-        }))
-    } else {
-        Ok(Json(TrackExistResponse {
-            is_exist: false,
-            id: None,
-        }))
-    }
-}
 
 fn normalize_session_id(raw: &str) -> Result<(Uuid, String)> {
     let trimmed = raw.trim();
