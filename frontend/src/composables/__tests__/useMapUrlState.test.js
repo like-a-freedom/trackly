@@ -42,9 +42,6 @@ describe('useMapUrlState', () => {
 
     // Reset route query
     mockRoute.query = {};
-
-    // Mock window.dispatchEvent
-    vi.stubGlobal('dispatchEvent', vi.fn());
   });
 
   afterEach(() => {

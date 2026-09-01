@@ -40,6 +40,11 @@ export const useTracksStore = defineStore('tracks', {
 
         setCachedHeatmap(cacheKey, data) {
             this.bboxCache.set(`heatmap_${cacheKey}`, { data, timestamp: Date.now() });
+            // Evict oldest entry if cache exceeds 100 entries
+            if (this.bboxCache.size > 100) {
+                const oldest = this.bboxCache.keys().next().value;
+                if (oldest !== undefined) this.bboxCache.delete(oldest);
+            }
         },
 
         clearHeatmap() {

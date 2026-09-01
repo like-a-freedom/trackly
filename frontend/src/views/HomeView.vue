@@ -711,21 +711,21 @@ function removeTrackLocally(id) {
 
 // Track update handling
 function handleTrackNameUpdated(event) {
-  const { trackId, newName } = event.detail || {};
+  const { trackId, newName } = event || {};
   if (trackId && newName) {
     updateTrackInPolylines(trackId, { name: newName });
   }
 }
 
 function handleTrackDescriptionUpdated(event) {
-  const { trackId, newDescription } = event.detail || {};
+  const { trackId, newDescription } = event || {};
   if (trackId) {
     updateTrackInPolylines(trackId, { description: newDescription });
   }
 }
 
 function handleTrackDeleted(event) {
-  const id = event.detail?.id;
+  const id = event?.id;
   removeTrackLocally(id);
   // Optionally refetch for consistency (cheap because bbox filtered)
   refreshTracks();
@@ -743,7 +743,7 @@ function handleBeforeUnload() {
 
 // Handle URL state changes from browser navigation or direct URL changes
 function handleUrlStateChange(event) {
-  const { zoom: newZoom, center: newCenter, source } = event.detail;
+  const { zoom: newZoom, center: newCenter, source } = event;
 
   if (source === "url" && !mapUrlState.isUpdatingFromUrl.value) {
     // Update local state from URL change (browser back/forward, direct navigation)

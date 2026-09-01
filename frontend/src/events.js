@@ -4,7 +4,6 @@
  *
  * @typedef {{ id: string }} TrackDeleted
  * @typedef {{ id: string, name: string }} TrackNameUpdated
- * @typedef {{ categories: string[] }} TrackCategoriesUpdated
  * @typedef {{}} StopElevationPolling
  * @typedef {{ state: object }} MapUrlStateChanged
  */
