@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { nextTick } from 'vue';
-import { useTracks } from '../useTracks';
+import { createPinia, setActivePinia } from 'pinia';
+import { useTracks, resetTracksCaches } from '../useTracks';
 
 // Mock session utility
 vi.mock('../../utils/session', () => ({
@@ -16,6 +17,10 @@ describe('useTracks composable', () => {
     let fetchMock;
 
     beforeEach(() => {
+        // Fresh Pinia for each test to avoid state leakage
+        setActivePinia(createPinia());
+        // Clear module-scope caches between tests
+        resetTracksCaches();
         // Reset fetch mock
         fetchMock = vi.fn();
         global.fetch = fetchMock;

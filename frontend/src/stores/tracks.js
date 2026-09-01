@@ -1,56 +1,17 @@
 import { defineStore } from 'pinia';
 import { getColorForId } from '../utils/trackColors';
 import { geoJsonLineToLeaflet } from '../utils/coordinates';
+import { validateSpeedData } from '../utils/format';
 
 export const useTracksStore = defineStore('tracks', {
     state: () => ({
         polylines: [],
         tracksCollection: { type: 'FeatureCollection', features: [] },
         heatmapPoints: [],
-        error: null,
-        bboxCache: new Map()
+        error: null
     }),
 
     actions: {
-        getCachedTracks(bboxString) {
-            const cached = this.bboxCache.get(bboxString);
-            if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-                return cached.data;
-            }
-            if (cached) this.bboxCache.delete(bboxString);
-            return null;
-        },
-
-        setCachedTracks(bboxString, data) {
-            this.bboxCache.set(bboxString, { data, timestamp: Date.now() });
-            if (this.bboxCache.size > 100) {
-                const oldest = this.bboxCache.keys().next().value;
-                this.bboxCache.delete(oldest);
-            }
-        },
-
-        getCachedHeatmap(cacheKey) {
-            const cached = this.bboxCache.get(`heatmap_${cacheKey}`);
-            if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-                return cached.data;
-            }
-            if (cached) this.bboxCache.delete(`heatmap_${cacheKey}`);
-            return null;
-        },
-
-        setCachedHeatmap(cacheKey, data) {
-            this.bboxCache.set(`heatmap_${cacheKey}`, { data, timestamp: Date.now() });
-            // Evict oldest entry if cache exceeds 100 entries
-            if (this.bboxCache.size > 100) {
-                const oldest = this.bboxCache.keys().next().value;
-                if (oldest !== undefined) this.bboxCache.delete(oldest);
-            }
-        },
-
-        clearHeatmap() {
-            this.heatmapPoints = [];
-        },
-
         updatePolylines(data) {
             if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
                 this.tracksCollection = data;
@@ -101,12 +62,10 @@ export const useTracksStore = defineStore('tracks', {
             if (!trackData || typeof trackData !== 'object') return null;
             const processed = { ...trackData };
             if (processed.avg_speed !== undefined) {
-                const v = Number(processed.avg_speed);
-                processed.avg_speed = isNaN(v) || v < 0 ? null : v;
+                processed.avg_speed = validateSpeedData(processed.avg_speed);
             }
             if (processed.max_speed !== undefined) {
-                const v = Number(processed.max_speed);
-                processed.max_speed = isNaN(v) || v < 0 ? null : v;
+                processed.max_speed = validateSpeedData(processed.max_speed);
             }
             if (processed.length_km !== undefined) {
                 if (typeof processed.length_km !== 'number' || isNaN(processed.length_km) || processed.length_km < 0) {
