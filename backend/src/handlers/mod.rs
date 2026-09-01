@@ -10,7 +10,6 @@
 mod auth;
 mod observability;
 mod pois;
-mod rate_limit;
 mod sitemap;
 mod tracks;
 mod util;
