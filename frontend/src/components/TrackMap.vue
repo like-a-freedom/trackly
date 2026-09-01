@@ -159,7 +159,7 @@ import {
   getCurrentInstance,
   provide,
 } from "vue";
-import L, { latLngBounds } from "leaflet";
+import { latLngBounds } from "leaflet";
 import "leaflet.heat";
 import {
   getDetailPanelFitBoundsOptions,
@@ -182,6 +182,11 @@ import { formatPace, formatTime } from "../utils/format.js";
 // Import clustering styles
 import "../styles/track-clustering.css";
 
+// Map adapters
+import { createLeafletAdapter } from "../map/LeafletAdapter.js";
+import { createClusterAdapter } from "../map/ClusterAdapter.js";
+import { createE2EAdapter } from "../map/E2EAdapter.js";
+
 // Constants
 const ANIMATION_DURATION_MS = 1100;
 const HIGHLIGHT_PANE_Z_INDEX = 750;
@@ -189,6 +194,12 @@ const FAKE_BOUNDS = [
   [0, 0],
   [0, 0],
 ];
+
+// Adapter instances — encapsulate Leaflet, clustering, and E2E concerns
+const leafletAdapter = createLeafletAdapter();
+const e2eAdapter = createE2EAdapter({
+  production: import.meta.env.MODE === "production",
+});
 
 const props = defineProps({
   polylines: Array,
@@ -265,6 +276,9 @@ const clusteringConfig = computed(() => ({
   // Animation duration
   animateAddingMarkers: true,
 }));
+
+// Cluster adapter — wraps MarkerClusterGroup lifecycle
+const clusterAdapter = createClusterAdapter(clusteringConfig.value);
 
 // Centralized map state management
 const mapState = ref({
@@ -684,10 +698,9 @@ const filterState = ref({
   showHeatmap: false,
 });
 
-function ensureHeatmapPane(map) {
-  if (!map.getPane(HEATMAP_PANE)) {
-    map.createPane(HEATMAP_PANE);
-    const pane = map.getPane(HEATMAP_PANE);
+function ensureHeatmapPane() {
+  if (!leafletAdapter.getPane(HEATMAP_PANE)) {
+    const pane = leafletAdapter.createPane(HEATMAP_PANE);
     if (pane) {
       pane.style.zIndex = "350";
       pane.style.pointerEvents = "none";
@@ -712,9 +725,9 @@ function buildHeatmapLatLngs() {
     .filter((point) => point !== null);
 }
 
-function removeHeatmapLayer(map) {
-  if (heatLayer.value && map) {
-    map.removeLayer(heatLayer.value);
+function removeHeatmapLayer() {
+  if (heatLayer.value) {
+    leafletAdapter.removeLayer(heatLayer.value);
   }
   heatLayer.value = null;
   heatmapMaxWeight.value = 0;
@@ -726,27 +739,27 @@ function updateHeatmapLayer() {
   if (!map) return;
 
   if (!props.showHeatmap) {
-    removeHeatmapLayer(map);
+    removeHeatmapLayer();
     return;
   }
 
   const latlngs = buildHeatmapLatLngs();
   if (latlngs.length === 0) {
-    removeHeatmapLayer(map);
+    removeHeatmapLayer();
     return;
   }
 
-  ensureHeatmapPane(map);
+  ensureHeatmapPane();
   const maxWeight = Math.max(...latlngs.map((point) => point[2] || 0), 1);
   const shouldRecreate =
     !heatLayer.value || heatmapMaxWeight.value !== maxWeight;
   if (shouldRecreate && heatLayer.value) {
-    map.removeLayer(heatLayer.value);
+    leafletAdapter.removeLayer(heatLayer.value);
     heatLayer.value = null;
   }
 
   if (!heatLayer.value) {
-    heatLayer.value = L.heatLayer(latlngs, {
+    heatLayer.value = leafletAdapter.createHeatLayer(latlngs, {
       radius: 18,
       blur: 22,
       minOpacity: 0.25,
@@ -754,7 +767,9 @@ function updateHeatmapLayer() {
       max: maxWeight,
       pane: HEATMAP_PANE,
     });
-    heatLayer.value.addTo(map);
+    if (heatLayer.value) {
+      leafletAdapter.addLayer(heatLayer.value);
+    }
     heatmapMaxWeight.value = maxWeight;
   } else {
     heatLayer.value.setLatLngs(latlngs);
@@ -1307,6 +1322,9 @@ async function onMapReady(e) {
     // Store the resolved L.Map for child components (PoiClusterGroup, etc.)
     leafletInstance.value = map;
 
+    // Bind the Leaflet adapter to the live map
+    leafletAdapter.setMap(map);
+
     // Handle pending restoration
     if (mapState.value.pendingRestoreCenterZoom && !props.selectedTrackDetail) {
       const preSelection = mapState.value.preSelection;
@@ -1342,11 +1360,7 @@ async function onMapReady(e) {
     ];
 
     // Move attribution control to bottom-left to avoid collision with panel toggle
-    if (map.attributionControl) {
-      map.removeControl(map.attributionControl);
-      map.attributionControl.setPosition("bottomleft");
-      map.addControl(map.attributionControl);
-    }
+    leafletAdapter.repositionAttribution("bottomleft");
 
     // Also update preSelection values if no track is selected
     if (!props.selectedTrackDetail) {
@@ -1371,6 +1385,13 @@ async function onMapReady(e) {
 
     // Initialize E2E hooks for testing
     e2eHooks.initE2E(map);
+
+    // Expose map instance via E2E adapter for cross-tool access
+    e2eAdapter.expose({
+      _lastMapInstance: map,
+      lastGapLineExists: false,
+      lastHighlightedColor: null,
+    });
 
     // Apply bounds if they were set before map was ready
     if (
@@ -1426,41 +1447,26 @@ async function onMapReady(e) {
  */
 function initializeClustering(map) {
   try {
-    // Initialize cluster group with custom configuration
-    const clusterGroup = clustering.initializeClusterGroup(
-      clusteringConfig.value
-    );
+    // Initialize cluster group via adapter
+    const clusterGroup = clusterAdapter.initialize(clusteringConfig.value);
 
-    // Set up cluster event handlers with error handling
-    clusterGroup.on("clusterclick", (e) => {
-      try {
-        onClusterClick(e);
-      } catch (error) {
-        console.error("[TrackMap] Error in cluster click handler:", error);
-      }
+    // Wire up cluster events through the adapter
+    clusterAdapter.on("clusterclick", (e) => {
+      try { onClusterClick(e); }
+      catch (error) { console.error("[TrackMap] Error in cluster click handler:", error); }
     });
-
-    // Set up individual marker event handlers within clusters
-    clusterGroup.on("click", (e) => {
-      try {
-        onClusterMarkerClick(e);
-      } catch (error) {
-        console.error("[TrackMap] Error in marker click handler:", error);
-      }
+    clusterAdapter.on("click", (e) => {
+      try { onClusterMarkerClick(e); }
+      catch (error) { console.error("[TrackMap] Error in marker click handler:", error); }
     });
-
-    clusterGroup.on("mouseover", (e) => {
+    clusterAdapter.on("mouseover", (e) => {
       const marker = e.layer || e.target;
-      if (
-        marker.trackData &&
-        !marker.getAllChildMarkers &&
-        !isZoomAnimating.value
-      ) {
+      if (marker.trackData && !marker.getAllChildMarkers && !isZoomAnimating.value) {
         showMarkerPolyline(marker.trackData, map, marker);
         emit("trackMouseOver", marker.trackData, e.originalEvent || e);
       }
     });
-    clusterGroup.on("mouseout", (e) => {
+    clusterAdapter.on("mouseout", (e) => {
       const marker = e.layer || e.target;
       if (marker.trackData && !marker.getAllChildMarkers) {
         removeMarkerPolyline(map);
@@ -1468,16 +1474,14 @@ function initializeClustering(map) {
       }
     });
 
-    // Add cluster group to map
-    map.addLayer(clusterGroup);
+    // Add cluster group to map via adapter
+    clusterAdapter.addTo(map);
 
     // Set initial zoom level for clustering
     clustering.updateZoomLevel(map.getZoom());
 
     // Perform initial clustering update with delay to ensure map is ready
-    setTimeout(() => {
-      updateClustering();
-    }, 100);
+    setTimeout(() => { updateClustering(); }, 100);
   } catch (error) {
     console.error("[TrackMap] Error initializing clustering:", error);
   }
@@ -1522,13 +1526,16 @@ function showMarkerPolyline(track, map, marker) {
       marker.setOpacity(0); // Hide marker
       hoveredMarker.value = marker;
     }
-    hoveredMarkerPolyline.value = L.polyline(track.latlngs, {
+    hoveredMarkerPolyline.value = leafletAdapter.createPolyline(track.latlngs, {
       color: track.color || "#3388ff",
       weight: POLYLINE_WEIGHT_ACTIVE,
       opacity: POLYLINE_OPACITY_ACTIVE,
       pane: "overlayPane",
       interactive: false,
-    }).addTo(map);
+    });
+    if (hoveredMarkerPolyline.value) {
+      leafletAdapter.addLayer(hoveredMarkerPolyline.value);
+    }
   } catch (error) {
     console.warn("[TrackMap] Error adding hover polyline:", error);
     // Clean up on error
@@ -1737,7 +1744,7 @@ function highlightSegmentForMarker(markerData) {
     // If we didn't apply style on an existing layer (multi-segment or layer not found), fall back to overlay polyline
     if (!highlightedLayer.value) {
       if (!map) {
-        hoveredSegmentPolyline.value = L.polyline(segCoords, {
+        hoveredSegmentPolyline.value = leafletAdapter.createPolyline(segCoords, {
           color: trackColor,
           weight: (POLYLINE_WEIGHT_ACTIVE || 6) + 2,
           opacity: 1,
@@ -1754,7 +1761,7 @@ function highlightSegmentForMarker(markerData) {
 
         const nearest = findNearestPointOnCoords(markerData.latlng, segCoords);
         if (nearest) {
-          markerGapLine.value = L.polyline([markerData.latlng, nearest], {
+          markerGapLine.value = leafletAdapter.createPolyline([markerData.latlng, nearest], {
             color: trackColor,
             weight: 1.5,
             opacity: 0.6,
@@ -1772,14 +1779,17 @@ function highlightSegmentForMarker(markerData) {
         return;
       }
 
-      hoveredSegmentPolyline.value = L.polyline(segCoords, {
+      hoveredSegmentPolyline.value = leafletAdapter.createPolyline(segCoords, {
         color: trackColor,
         weight: (POLYLINE_WEIGHT_ACTIVE || 6) + 2,
         opacity: 1,
         pane: "overlayPane",
         interactive: false,
         className: "chart-hover-segment",
-      }).addTo(map);
+      });
+      if (hoveredSegmentPolyline.value) {
+        leafletAdapter.addLayer(hoveredSegmentPolyline.value);
+      }
 
       // Expose highlight color for E2E in map-enabled environments
       if (import.meta.env.MODE !== "production" && window.__e2e) {
@@ -1791,14 +1801,17 @@ function highlightSegmentForMarker(markerData) {
       // Draw gap line from marker to nearest point on segment
       const nearest = findNearestPointOnCoords(markerData.latlng, segCoords);
       if (nearest) {
-        markerGapLine.value = L.polyline([markerData.latlng, nearest], {
+        markerGapLine.value = leafletAdapter.createPolyline([markerData.latlng, nearest], {
           color: trackColor,
           weight: 1.5,
           opacity: 0.6,
           pane: "overlayPane",
           interactive: false,
           className: "chart-gap-line",
-        }).addTo(map);
+        });
+        if (markerGapLine.value) {
+          leafletAdapter.addLayer(markerGapLine.value);
+        }
 
         if (import.meta.env.MODE !== "production" && window.__e2e) {
           try {
@@ -2457,8 +2470,8 @@ function cleanup() {
   const map = getMapObject("cleanup");
   if (map) {
     removeMarkerPolyline(map);
-    removeHeatmapLayer(map);
   }
+  removeHeatmapLayer();
 
   // Clear tracks watch timeout
   if (tracksWatchTimeout) {
@@ -2470,6 +2483,7 @@ function cleanup() {
   if (clustering.clusterGroup.value) {
     clustering.cleanup();
   }
+  clusterAdapter.cleanup();
 }
 
 // Cleanup on unmount
@@ -2492,6 +2506,9 @@ onUnmounted(() => {
     removeMarkerPolyline(map);
   }
 
+  // Unbind the Leaflet adapter
+  leafletAdapter.setMap(null);
+
   // Clear any pending zoom-related timeouts immediately
   clearAnimationTimeout();
   clearClusteringUpdateTimeout();
@@ -2500,6 +2517,7 @@ onUnmounted(() => {
 
   // Cleanup E2E hooks
   e2eHooks.cleanup();
+  e2eAdapter.cleanup();
 });
 
 defineExpose({ leafletMap });
