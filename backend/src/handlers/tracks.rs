@@ -921,99 +921,45 @@ pub async fn enrich_elevation(
 
     info!(track_id = %id, points = coordinates.len(), endpoint = "enrich_elevation", "starting elevation enrichment");
 
-    // Enrich elevation data
-    let enrichment_result = match enrichment_service
-        .enrich_track_elevation(coordinates.clone())
-        .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            error!("Failed to enrich elevation for track {}: {}", id, e);
-            return Err(AppError::Internal(anyhow::anyhow!("internal error")));
+    // Enrich elevation — single canonical path (ADR 0009)
+    let outcome = crate::services::enrichment::run_enrichment(&pool, id, coordinates).await;
+
+    match outcome {
+        crate::services::enrichment::EnrichmentOutcome::Success { gain, loss } => {
+            metrics::record_session_activity(Some(payload.session_id), "enrich");
+            Ok(Json(EnrichElevationResponse {
+                id,
+                message: "Track elevation enriched successfully".to_string(),
+                elevation_gain: gain,
+                elevation_loss: loss,
+                elevation_min: track.elevation_min,
+                elevation_max: track.elevation_max,
+                elevation_dataset: track.elevation_dataset,
+                enriched_at: Some(chrono::Utc::now().naive_utc()),
+            }))
         }
-    };
-
-    // Update track in database
-    if let Err(e) = db::update_track_elevation(
-        &pool,
-        id,
-        db::UpdateElevationParams {
-            elevation_gain: enrichment_result.metrics.elevation_gain,
-            elevation_loss: enrichment_result.metrics.elevation_loss,
-            elevation_min: enrichment_result.metrics.elevation_min,
-            elevation_max: enrichment_result.metrics.elevation_max,
-            elevation_enriched: true,
-            elevation_enriched_at: Some(enrichment_result.enriched_at.naive_utc()),
-            elevation_dataset: Some(enrichment_result.dataset.clone()),
-            elevation_profile: enrichment_result.elevation_profile.clone(),
-            elevation_api_calls: enrichment_result.api_calls_used,
-        },
-    )
-    .await
-    {
-        error!(track_id = %id, error = ?e, endpoint = "enrich_elevation", "failed to update elevation data");
-        return Err(AppError::Internal(anyhow::anyhow!("internal error")));
-    }
-
-    // Calculate and update slope data
-    if let Some(elevation_profile) = &enrichment_result.elevation_profile {
-        use crate::track_utils::slope::recalculate_slope_metrics;
-
-        // Use universal slope calculation function
-        let slope_start = Instant::now();
-        let slope_result =
-            recalculate_slope_metrics(&coordinates, elevation_profile, &format!("Track {}", id));
-        let slope_duration = slope_start.elapsed().as_secs_f64();
-
-        // Update track with slope data
-        if let Err(e) = db::update_track_slope(
-            &pool,
-            id,
-            db::UpdateSlopeParams {
-                slope_min: slope_result.slope_min,
-                slope_max: slope_result.slope_max,
-                slope_avg: slope_result.slope_avg,
-                slope_histogram: slope_result.slope_histogram,
-                slope_segments: slope_result.slope_segments,
-            },
-        )
-        .await
-        {
-            error!(track_id = %id, error = ?e, endpoint = "enrich_elevation", "failed to update slope data");
-            metrics::observe_slope_recalc("db_error", slope_duration);
-        } else {
-            metrics::observe_slope_recalc("success", slope_duration);
-            info!(
-                track_id = %id,
-                slope_min = slope_result.slope_min.unwrap_or(0.0),
-                slope_max = slope_result.slope_max.unwrap_or(0.0),
-                slope_avg = slope_result.slope_avg.unwrap_or(0.0),
-                endpoint = "enrich_elevation",
-                "slope metrics updated"
-            );
+        crate::services::enrichment::EnrichmentOutcome::FailedRemote => {
+            metrics::record_session_activity(Some(payload.session_id), "enrich");
+            Err(AppError::Internal(anyhow::anyhow!("internal error")))
+        }
+        crate::services::enrichment::EnrichmentOutcome::FailedUpdateDb => {
+            metrics::record_session_activity(Some(payload.session_id), "enrich");
+            Err(AppError::Internal(anyhow::anyhow!("internal error")))
+        }
+        crate::services::enrichment::EnrichmentOutcome::FailedSlope => {
+            metrics::record_session_activity(Some(payload.session_id), "enrich");
+            Ok(Json(EnrichElevationResponse {
+                id,
+                message: "Elevation enriched but slope calculation failed".to_string(),
+                elevation_gain: None,
+                elevation_loss: None,
+                elevation_min: track.elevation_min,
+                elevation_max: track.elevation_max,
+                elevation_dataset: track.elevation_dataset,
+                enriched_at: Some(chrono::Utc::now().naive_utc()),
+            }))
         }
     }
-
-    info!(
-        track_id = %id,
-        gain_m = enrichment_result.metrics.elevation_gain.unwrap_or(0.0),
-        loss_m = enrichment_result.metrics.elevation_loss.unwrap_or(0.0),
-        endpoint = "enrich_elevation",
-        "elevation enrichment completed"
-    );
-
-    metrics::record_session_activity(Some(payload.session_id), "enrich");
-
-    Ok(Json(EnrichElevationResponse {
-        id,
-        message: "Track elevation enriched successfully".to_string(),
-        elevation_gain: enrichment_result.metrics.elevation_gain,
-        elevation_loss: enrichment_result.metrics.elevation_loss,
-        elevation_min: enrichment_result.metrics.elevation_min,
-        elevation_max: enrichment_result.metrics.elevation_max,
-        elevation_dataset: Some(enrichment_result.dataset),
-        enriched_at: Some(enrichment_result.enriched_at.naive_utc()),
-    }))
 }
 
 /// POST /api/elevation/preview — Preview elevation profile for editor without saving.
