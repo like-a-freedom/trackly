@@ -1223,12 +1223,6 @@ pub fn observe_auth_token_validation(result: &str, duration_seconds: f64) {
         .with_label_values(&[result_label])
         .observe(duration_seconds);
 }
-
-/// Set the active sessions gauge
-pub fn set_auth_active_sessions(count: i64) {
-    AUTH_ACTIVE_SESSIONS_TOTAL.set(count);
-}
-
 /// Increment the active sessions gauge
 pub fn inc_auth_active_sessions() {
     AUTH_ACTIVE_SESSIONS_TOTAL.inc();

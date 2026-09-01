@@ -76,14 +76,6 @@ pub struct OAuthUser {
     pub picture: Option<String>,
 }
 
-/// OAuth callback request (from frontend).
-#[derive(Debug, Deserialize)]
-pub struct OAuthCallbackRequest {
-    pub code: String,
-    pub state: String,
-    pub pkce_verifier: String,
-}
-
 /// Google userinfo response.
 #[derive(Debug, Deserialize)]
 struct GoogleUserInfo {
@@ -396,21 +388,6 @@ mod tests {
         assert!(json.contains("accounts.google.com"));
         assert!(json.contains("random_state_123"));
         assert!(json.contains("random_verifier_456"));
-    }
-
-    #[test]
-    fn test_oauth_callback_request_deserialization() {
-        let json = r#"{
-            "code": "test_code_123",
-            "state": "test_state_456",
-            "pkce_verifier": "test_verifier_789"
-        }"#;
-
-        let request: OAuthCallbackRequest = serde_json::from_str(json).unwrap();
-
-        assert_eq!(request.code, "test_code_123");
-        assert_eq!(request.state, "test_state_456");
-        assert_eq!(request.pkce_verifier, "test_verifier_789");
     }
 
     #[test]

@@ -219,26 +219,6 @@ pub async fn rotate_refresh_token(
 
     Ok(new_token)
 }
-
-/// Clean up expired refresh tokens (should be run periodically).
-pub async fn cleanup_expired_tokens(pool: &Arc<PgPool>) -> Result<u64, AuthError> {
-    let result = sqlx::query(
-        r#"
-        DELETE FROM user_refresh_tokens
-        WHERE expires_at < NOW() OR revoked_at < NOW() - INTERVAL '7 days'
-        "#,
-    )
-    .execute(&**pool)
-    .await?;
-
-    let deleted = result.rows_affected();
-    if deleted > 0 {
-        tracing::info!(deleted = deleted, "Cleaned up expired refresh tokens");
-    }
-
-    Ok(deleted)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

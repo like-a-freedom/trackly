@@ -134,86 +134,12 @@ where
 /// Extract client IP address from request.
 ///
 /// Checks X-Forwarded-For header first (for proxied requests),
-/// then falls back to the connection info.
-pub fn extract_client_ip(parts: &Parts) -> String {
-    // Check X-Forwarded-For header
-    if let Some(forwarded) = parts.headers.get("X-Forwarded-For")
-        && let Ok(value) = forwarded.to_str()
-        && let Some(ip) = value.split(',').next()
-    {
-        return ip.trim().to_string();
-    }
-
-    // Check X-Real-IP header
-    if let Some(real_ip) = parts.headers.get("X-Real-IP")
-        && let Ok(value) = real_ip.to_str()
-    {
-        return value.trim().to_string();
-    }
-
-    // Fallback to unknown
-    "unknown".to_string()
-}
-
 /// Require a specific role.
-///
-/// Use after `AuthUser` extractor to enforce role-based access.
-pub fn require_role(user: &AuthUser, role: &str) -> Result<(), AuthError> {
-    if user.has_role(role) {
-        Ok(())
-    } else {
-        Err(AuthError::Forbidden)
-    }
-}
-
-/// Require admin role.
-pub fn require_admin(user: &AuthUser) -> Result<(), AuthError> {
-    require_role(user, "admin")
-}
-
-/// Check if the user owns a resource.
-pub fn require_owner(user: &AuthUser, owner_id: Option<Uuid>) -> Result<(), AuthError> {
-    match owner_id {
-        Some(id) if id == user.user_id => Ok(()),
-        Some(_) => Err(AuthError::Forbidden),
-        None => Err(AuthError::Forbidden), // Resource has no owner
-    }
-}
-
-/// Check if the user can access a resource.
+////// Check if the user can access a resource.
 ///
 /// Access is allowed if:
 /// - The resource is public (is_public = true)
 /// - The user owns the resource
-/// - The user is an admin
-pub fn can_access_resource(
-    user: Option<&AuthUser>,
-    owner_id: Option<Uuid>,
-    is_public: bool,
-) -> bool {
-    // Public resources are accessible to everyone
-    if is_public {
-        return true;
-    }
-
-    // Must be authenticated to access private resources
-    let user = match user {
-        Some(u) => u,
-        None => return false,
-    };
-
-    // Admins can access everything
-    if user.is_admin() {
-        return true;
-    }
-
-    // Check ownership
-    match owner_id {
-        Some(id) => id == user.user_id,
-        None => false, // Anonymous private resource - only admin
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,45 +183,4 @@ mod tests {
 
         assert!(!regular_user.is_admin());
         assert!(admin_user.is_admin());
-    }
-
-    #[test]
-    fn test_can_access_resource() {
-        let user_id = Uuid::new_v4();
-        let other_user_id = Uuid::new_v4();
-
-        let mut user = make_test_user(vec!["user".to_string()]);
-        user.user_id = user_id;
-
-        let mut admin = make_test_user(vec!["admin".to_string()]);
-        admin.user_id = other_user_id;
-
-        // Public resource - accessible to everyone
-        assert!(can_access_resource(None, Some(user_id), true));
-        assert!(can_access_resource(Some(&user), Some(other_user_id), true));
-
-        // Private resource - owner can access
-        assert!(can_access_resource(Some(&user), Some(user_id), false));
-
-        // Private resource - non-owner cannot access
-        assert!(!can_access_resource(
-            Some(&user),
-            Some(other_user_id),
-            false
-        ));
-
-        // Private resource - unauthenticated cannot access
-        assert!(!can_access_resource(None, Some(user_id), false));
-
-        // Admin can access any private resource
-        assert!(can_access_resource(Some(&admin), Some(user_id), false));
-    }
-
-    #[test]
-    fn test_require_role() {
-        let user = make_test_user(vec!["user".to_string()]);
-
-        assert!(require_role(&user, "user").is_ok());
-        assert!(require_role(&user, "admin").is_err());
-    }
-}
+    }}

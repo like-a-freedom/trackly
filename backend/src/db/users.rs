@@ -226,54 +226,7 @@ pub async fn update_user_nickname(
     })?;
 
     Ok(user)
-}
-
-/// Update a user's roles (admin only).
-pub async fn update_user_roles(
-    pool: &Arc<PgPool>,
-    user_id: Uuid,
-    roles: &[String],
-) -> Result<User> {
-    let user: User = sqlx::query_as(
-        r#"
-        UPDATE users
-        SET roles = $1, updated_at = NOW()
-        WHERE user_id = $2
-        RETURNING
-            user_id AS id,
-            google_sub,
-            email,
-            name,
-            nickname,
-            avatar_url,
-            roles,
-            created_at,
-            updated_at,
-            last_login_at
-        "#,
-    )
-    .bind(roles)
-    .bind(user_id)
-    .fetch_one(&**pool)
-    .await
-    .map_err(|e| match e {
-        sqlx::Error::RowNotFound => AppError::NotFound,
-        _ => AppError::from(e),
-    })?;
-
-    Ok(user)
-}
-
-/// Count total users in the system.
-pub async fn count_users(pool: &Arc<PgPool>) -> Result<i64> {
-    let count: i64 = sqlx::query_scalar(r#"SELECT COUNT(*)::bigint FROM users"#)
-        .fetch_one(&**pool)
-        .await?;
-
-    Ok(count)
-}
-
-/// Associate existing anonymous tracks with a user.
+}/// Associate existing anonymous tracks with a user.
 ///
 /// This is used after OAuth login to claim tracks that were created
 /// with a session_id but no user_id.
@@ -342,28 +295,6 @@ pub async fn migrate_session_pois(
 
     Ok(migrated)
 }
-
-/// Get count of user's tracks.
-pub async fn get_user_track_count(pool: &Arc<PgPool>, user_id: Uuid) -> Result<i64> {
-    let count: i64 =
-        sqlx::query_scalar(r#"SELECT COUNT(*)::bigint FROM tracks WHERE user_id = $1"#)
-            .bind(user_id)
-            .fetch_one(&**pool)
-            .await?;
-
-    Ok(count)
-}
-
-/// Get count of user's POIs.
-pub async fn get_user_poi_count(pool: &Arc<PgPool>, user_id: Uuid) -> Result<i64> {
-    let count: i64 = sqlx::query_scalar(r#"SELECT COUNT(*)::bigint FROM pois WHERE user_id = $1"#)
-        .bind(user_id)
-        .fetch_one(&**pool)
-        .await?;
-
-    Ok(count)
-}
-
 /// Delete a user account and all associated data.
 ///
 /// Implements FR-DELETE-001: Account Deletion Flow
