@@ -31,7 +31,6 @@ pub struct InsertTrackParams<'a> {
     pub name: &'a str,
     pub description: Option<String>,
     pub categories: &'a [&'a str],
-    pub auto_classifications: &'a [String],
     pub geom_geojson: &'a serde_json::Value,
     pub length_km: f64,
     pub elevation_profile_json: Option<serde_json::Value>,
@@ -165,7 +164,6 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         name,
         description,
         categories,
-        auto_classifications,
         geom_geojson,
         length_km,
         elevation_profile_json,
@@ -204,14 +202,14 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     sqlx::query(
         r#"
         INSERT INTO tracks (
-            id, name, description, categories, auto_classifications, geom, length_km, elevation_profile,
+            id, name, description, categories, geom, length_km, elevation_profile,
             elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, elevation_api_calls, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, hr_data, temp_data, time_data, duration_seconds,
             hash, recorded_at, created_at, session_id, is_public, speed_data, pace_data
         )
         VALUES (
-            $1, $2, $3, $4, $5, ST_SetSRID(ST_GeomFromGeoJSON($6), 4326), $7, $8,
-            $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
-            $34, $35, DEFAULT, $36, $37, $38, $39
+            $1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6, $7,
+            $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
+            $33, $34, DEFAULT, $35, $36, $37, $38
         )
     "#,
     )
@@ -219,7 +217,6 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     .bind(name)
     .bind(sanitized_description)
     .bind(categories)
-    .bind(auto_classifications)
     .bind(geom_geojson)
     .bind(length_km)
     .bind(elevation_profile_json)
@@ -327,7 +324,7 @@ pub async fn get_track_detail(
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
+        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -348,9 +345,6 @@ pub async fn get_track_detail(
             description: row.try_get("description")?,
             categories: row.try_get("categories")?,
             distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
-            auto_classifications: row
-                .try_get("auto_classifications")
-                .unwrap_or_else(|_| Vec::new()),
             geom_geojson: row.try_get::<serde_json::Value, _>("geom_geojson")?,
             segment_meta: row.try_get("segment_meta").ok(),
             segment_gaps,
@@ -416,7 +410,7 @@ pub async fn get_track_detail_adaptive(
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, auto_classifications, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
+        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -522,9 +516,6 @@ pub async fn get_track_detail_adaptive(
                 .try_get("categories")
                 .expect("Failed to get categories: categories column missing or wrong type"),
             distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
-            auto_classifications: row
-                .try_get("auto_classifications")
-                .unwrap_or_else(|_| Vec::new()),
             geom_geojson,
             segment_meta: row.try_get("segment_meta").ok(),
             segment_gaps,
@@ -1437,7 +1428,7 @@ pub async fn duplicate_track(
     let result = sqlx::query(
         r#"
         INSERT INTO tracks (
-            id, name, description, categories, auto_classifications,
+            id, name, description, categories,
             geom, length_km, elevation_profile,
             elevation_gain, elevation_loss, elevation_min, elevation_max,
             elevation_enriched, elevation_enriched_at, elevation_dataset,
@@ -1449,7 +1440,7 @@ pub async fn duplicate_track(
             speed_data, pace_data, waypoints, source
         )
         SELECT
-            $1, COALESCE($4, name || ' (copy)'), description, categories, auto_classifications,
+            $1, COALESCE($4, name || ' (copy)'), description, categories,
             geom, length_km, elevation_profile,
             elevation_gain, elevation_loss, elevation_min, elevation_max,
             elevation_enriched, elevation_enriched_at, elevation_dataset,
@@ -1654,7 +1645,7 @@ mod tests {
             name,
             description: Some("desc".to_string()),
             categories: &cats[..],
-            auto_classifications: &["run".to_string()],
+
             geom_geojson: &geom_geojson,
             length_km: 1.0,
             elevation_profile_json: None,
@@ -1737,7 +1728,7 @@ mod tests {
             name: "Owner Track",
             description: Some("desc".to_string()),
             categories: &cats[..],
-            auto_classifications: &["run".to_string()],
+
             geom_geojson: &geom_geojson,
             length_km: 1.0,
             elevation_profile_json: None,
@@ -1842,7 +1833,7 @@ mod tests {
             name: "Owner Track Empty",
             description: Some("desc".to_string()),
             categories: &cats[..],
-            auto_classifications: &["run".to_string()],
+
             geom_geojson: &geom_geojson,
             length_km: 1.0,
             elevation_profile_json: None,
@@ -1971,7 +1962,7 @@ mod tests {
             name,
             description: Some("desc".to_string()),
             categories: &cats[..],
-            auto_classifications: &["aerobic_run".to_string()],
+
             geom_geojson: &geom_geojson,
             length_km: 1.0,
             elevation_profile_json: None,
@@ -2048,7 +2039,7 @@ mod tests {
             name,
             description: Some("Track with timestamps".to_string()),
             categories: &cats[..],
-            auto_classifications: &["aerobic_run".to_string()],
+
             geom_geojson: &geom_geojson,
             length_km: 1.0,
             elevation_profile_json: None,
@@ -2132,7 +2123,7 @@ mod tests {
             name: "Test Running Track",
             description: Some("A great running route".to_string()),
             categories: &["running"],
-            auto_classifications: &["running".to_string()],
+
             geom_geojson: &test_geom,
             length_km: 5.0,
             elevation_profile_json: None,
@@ -2217,7 +2208,7 @@ mod tests {
             name: "Mountain Bike Trail",
             description: Some("Challenging MOUNTAIN bike route".to_string()),
             categories: &["cycling"],
-            auto_classifications: &["cycling".to_string()],
+
             geom_geojson: &test_geom,
             length_km: 10.0,
             elevation_profile_json: None,

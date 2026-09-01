@@ -106,7 +106,6 @@ pub struct TrackDetail {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     pub session_id: Option<Uuid>, // Add session_id for owner check
     pub user_id: Option<Uuid>,    // User ID for authenticated ownership
-    pub auto_classifications: Vec<String>, // Automatically determined track classifications
     pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
     pub pace_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
 }
@@ -155,7 +154,6 @@ pub struct TrackSimplified {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     pub session_id: Option<Uuid>,
-    pub auto_classifications: Vec<String>,
     pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
     pub pace_data: Option<serde_json::Value>,  // Store as JSON for compatibility with DB jsonb
 }
@@ -368,7 +366,6 @@ pub struct ParsedTrackData {
     pub duration_seconds: Option<i32>,
     pub hash: String,
     pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub auto_classifications: Vec<String>, // Result of automatic track classification
     pub speed_data: Option<Vec<Option<f64>>>, // Point-by-point speed data (km/h)
     pub pace_data: Option<Vec<Option<f64>>>, // Point-by-point pace data (min/km)
     pub waypoints: Vec<ParsedWaypoint>,    // Waypoints/POIs from GPX file

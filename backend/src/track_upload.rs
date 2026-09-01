@@ -82,7 +82,6 @@ pub async fn upload(pool: &Arc<PgPool>, request: UploadRequest) -> Result<TrackU
         name: &sanitized_name,
         description: sanitized_description.clone(),
         categories: &category_refs,
-        auto_classifications: &parsed_data.auto_classifications,
         geom_geojson: &parsed_data.geom_geojson,
         length_km: parsed_data.length_km,
         elevation_profile_json,

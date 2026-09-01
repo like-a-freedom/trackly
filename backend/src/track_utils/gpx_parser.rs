@@ -13,7 +13,7 @@ use quick_xml::Reader;
 use quick_xml::events::BytesStart;
 use quick_xml::events::Event;
 use sha2::{Digest, Sha256};
-use tracing::{debug, info};
+use tracing::info;
 
 /// Extracts lat/lon attributes from a GPX element (trkpt, rtept, wpt)
 fn extract_coordinates(e: &BytesStart) -> (Option<f64>, Option<f64>) {
@@ -690,10 +690,6 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     // Calculate avg_speed (average speed over total duration)
     let avg_speed = crate::track_utils::metrics::avg_speed_kmh(length_km, duration_seconds);
 
-    // Auto-classification removed (ADR 0014): the column is kept in the schema
-    // for backward compatibility but is no longer populated.
-    let auto_classifications: Vec<String> = Vec::new();
-
     // Calculate new elevation metrics using the elevation module
     let track_points_with_elevation: Vec<(f64, f64, Option<f64>)> = points
         .iter()
@@ -721,15 +717,11 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let filtered_pace_data =
         if !pace_data_points.is_empty() && pace_data_points.iter().any(|p| p.is_some()) {
             use crate::track_utils::pace_filter::filter_pace_data;
-            debug!(
-                "Applying adaptive pace filtering with {} classifications",
-                auto_classifications.len()
-            );
             filter_pace_data(
                 &pace_data_points,
                 &speed_data_points,
                 &time_diff_data,
-                &[], // auto_classifications removed (ADR 0014)
+                &[],
             )
         } else {
             pace_data_points
@@ -783,7 +775,6 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         duration_seconds, // Calculated duration
         hash: calculate_hash(bytes),
         recorded_at,
-        auto_classifications,         // Add automatic classifications
         speed_data: final_speed_data, // Add calculated speed data
         pace_data: final_pace_data,   // Add calculated pace data
         waypoints,                    // Add parsed waypoints

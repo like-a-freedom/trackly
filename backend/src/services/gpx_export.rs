@@ -151,7 +151,6 @@ mod tests {
             description: Some("Test Description".to_string()),
             categories: vec!["running".to_string()],
             distance_markers_enabled: Some(true),
-            auto_classifications: vec![],
             geom_geojson: json!({
                 "type": "LineString",
                 "coordinates": [[37.6176, 55.7558], [37.6177, 55.7559]]

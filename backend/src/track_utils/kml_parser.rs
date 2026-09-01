@@ -333,9 +333,6 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         None
     };
 
-    // Auto-classification removed (ADR 0014)
-    let auto_classifications: Vec<String> = Vec::new();
-
     // Calculate new elevation metrics using the elevation module
     let track_points_with_elevation: Vec<(f64, f64, Option<f64>)> = points
         .iter()
@@ -388,7 +385,6 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         duration_seconds: None,
         hash,
         recorded_at: None,
-        auto_classifications,  // Add automatic classifications
         speed_data: None,      // KML typically doesn't contain speed data
         pace_data: None,       // KML typically doesn't contain pace data
         waypoints: Vec::new(), // KML waypoints support can be added later

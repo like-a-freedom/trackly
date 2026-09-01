@@ -672,11 +672,6 @@ mod tests {
         let speed_data = parsed_data.speed_data.unwrap();
         assert_eq!(speed_data.len(), 4);
 
-        // Auto-classification removed (ADR 0014): column kept for schema compat
-        assert!(
-            parsed_data.auto_classifications.is_empty(),
-            "Auto classifications should be empty after ADR 0014"
-        );
     }
 
     #[test]
