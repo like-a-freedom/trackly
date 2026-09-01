@@ -46,6 +46,25 @@ pub fn check_track_ownership(
     Err(StatusCode::FORBIDDEN)
 }
 
+/// Verify that the caller owns the track (async convenience wrapper).
+///
+/// Fetches ownership from the database, then delegates to
+/// [`check_track_ownership`]. Returns `Ok(())` on success or
+/// `Err(AppError::Forbidden)` on failure.
+pub async fn verify_track_owner(
+    pool: &std::sync::Arc<sqlx::PgPool>,
+    track_id: uuid::Uuid,
+    auth_user: &OptionalAuthUser,
+    session_id: Option<uuid::Uuid>,
+) -> Result<(), AppError> {
+    let (track_session_id, track_user_id) = crate::db::get_track_ownership(pool, track_id)
+        .await
+        .map_err(handle_db_error)?;
+    check_track_ownership(track_user_id, track_session_id, auth_user, session_id)
+        .map_err(|_| AppError::Forbidden)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
