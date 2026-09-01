@@ -22,7 +22,7 @@ use tracing::info;
 use crate::auth::{AuthError, AuthUser, OptionalAuthUser};
 use crate::db;
 use crate::error::{AppError, Result};
-use crate::handlers::util::check_track_ownership;
+use crate::handlers::util::verify_track_owner;
 use crate::metrics;
 
 // ─── Update handlers ────────────────────────────────────────────────────────
@@ -37,17 +37,7 @@ pub async fn update_track_description(
     Json(request): Json<crate::models::UpdateTrackDescriptionRequest>,
 ) -> Result<Json<serde_json::Value>> {
     // Ownership check
-    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
-        .await
-        .map_err(crate::handlers::util::handle_db_error)?;
-
-    check_track_ownership(
-        track_user_id,
-        track_session_id,
-        &auth_user,
-        Some(request.session_id),
-    )
-    .map_err(|_| AppError::Forbidden)?;
+    verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
 
     db::update_track_description(&pool, track_id, &request.description).await?;
 
@@ -68,17 +58,7 @@ pub async fn update_track_name(
     auth_user: OptionalAuthUser,
     Json(request): Json<crate::models::UpdateTrackNameRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
-        .await
-        .map_err(crate::handlers::util::handle_db_error)?;
-
-    check_track_ownership(
-        track_user_id,
-        track_session_id,
-        &auth_user,
-        Some(request.session_id),
-    )
-    .map_err(|_| AppError::Forbidden)?;
+    verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
 
     db::update_track_name(&pool, track_id, &request.name).await?;
 
@@ -105,17 +85,7 @@ pub async fn update_track_categories(
         ));
     }
 
-    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
-        .await
-        .map_err(crate::handlers::util::handle_db_error)?;
-
-    check_track_ownership(
-        track_user_id,
-        track_session_id,
-        &auth_user,
-        Some(request.session_id),
-    )
-    .map_err(|_| AppError::Forbidden)?;
+    verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
 
     db::update_track_categories(&pool, track_id, &request.categories).await?;
 
@@ -137,17 +107,7 @@ pub async fn update_track_distance_markers(
     auth_user: OptionalAuthUser,
     Json(request): Json<crate::models::UpdateTrackDistanceMarkersRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let (track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
-        .await
-        .map_err(crate::handlers::util::handle_db_error)?;
-
-    check_track_ownership(
-        track_user_id,
-        track_session_id,
-        &auth_user,
-        Some(request.session_id),
-    )
-    .map_err(|_| AppError::Forbidden)?;
+    verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
 
     db::update_track_distance_markers(&pool, track_id, request.distance_markers_enabled).await?;
 
@@ -204,18 +164,7 @@ pub async fn delete_track(
     auth_user: OptionalAuthUser,
 ) -> Result<Json<serde_json::Value>> {
     // Ownership check
-    let (_track_session_id, track_user_id) = db::get_track_ownership(&pool, track_id)
-        .await
-        .map_err(crate::handlers::util::handle_db_error)?;
-
-    // Allow deletion if user owns the track
-    if let Some(user) = auth_user.user() {
-        if track_user_id != Some(user.user_id) {
-            return Err(AppError::Forbidden);
-        }
-    } else {
-        return Err(AppError::Forbidden);
-    }
+    verify_track_owner(&pool, track_id, &auth_user, None).await?;
 
     let rows = db::delete_track(&pool, track_id).await?;
     if rows == 0 {
