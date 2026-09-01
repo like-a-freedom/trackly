@@ -4,7 +4,7 @@
 //! never build SQL themselves.
 
 use crate::models::{CreatePoiRequest, Poi, PoiWithDistance, UpdatePoiRequest};
-use crate::poi_deduplication::PoiDeduplicationService;
+use crate::poi_deduplication;
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -286,7 +286,7 @@ pub async fn bulk_link_to_track(
     track_id: Uuid,
     poi_ids_with_order: &[(i32, i32)],
 ) -> Result<usize, sqlx::Error> {
-    PoiDeduplicationService::bulk_link_pois_to_track(pool, track_id, poi_ids_with_order).await
+    poi_deduplication::bulk_link_pois_to_track(pool, track_id, poi_ids_with_order).await
 }
 
 #[cfg(test)]

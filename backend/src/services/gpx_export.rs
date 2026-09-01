@@ -2,37 +2,25 @@ use crate::models::TrackDetail;
 use crate::track_utils::extract_segments_from_geojson;
 use chrono::Utc;
 
-/// Service for exporting tracks to GPX format
-#[derive(Default)]
-pub struct GpxExportService;
+/// Generate GPX XML from track data
+pub fn generate_gpx(track: &TrackDetail) -> String {
+    let created_at = track
+        .created_at
+        .unwrap_or(Utc::now())
+        .format("%Y-%m-%dT%H:%M:%SZ");
 
-impl GpxExportService {
-    pub fn new() -> Self {
-        Self
-    }
+    let coordinates = extract_coordinates(&track.geom_geojson);
+    let track_points = generate_track_points(&coordinates, track);
 
-    /// Generate GPX XML from track data
-    pub fn generate_gpx(&self, track: &TrackDetail) -> String {
-        let created_at = track
-            .created_at
-            .unwrap_or(Utc::now())
-            .format("%Y-%m-%dT%H:%M:%SZ");
+    let track_name = xml_escape(&track.name);
+    let track_description = track
+        .description
+        .as_ref()
+        .map(|d| xml_escape(d))
+        .unwrap_or_default();
 
-        // Extract coordinates from GeoJSON
-        let coordinates = self.extract_coordinates(&track.geom_geojson);
-
-        // Generate track points with elevation data if available
-        let track_points = self.generate_track_points(&coordinates, track);
-
-        let track_name = xml_escape(&track.name);
-        let track_description = track
-            .description
-            .as_ref()
-            .map(|d| xml_escape(d))
-            .unwrap_or_default();
-
-        format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Trackly" 
      xmlns="http://www.topografix.com/GPX/1/1"
      xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
@@ -50,80 +38,79 @@ impl GpxExportService {
 {track_points}    </trkseg>
   </trk>
 </gpx>"#
-        )
-    }
+    )
+}
 
-    /// Sanitize filename for safe file system usage
-    pub fn sanitize_filename(&self, name: &str) -> String {
-        name.chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect::<String>()
-            .trim()
-            .to_string()
-            .replace(' ', "_")
-    }
+/// Sanitize filename for safe file system usage
+pub fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim()
+        .to_string()
+        .replace(' ', "_")
+}
 
-    fn extract_coordinates(&self, geom_geojson: &serde_json::Value) -> Vec<(f64, f64)> {
-        match extract_segments_from_geojson(geom_geojson) {
-            Ok(segments) => segments.into_iter().flatten().collect(),
-            Err(_) => Vec::new(),
-        }
+fn extract_coordinates(geom_geojson: &serde_json::Value) -> Vec<(f64, f64)> {
+    match extract_segments_from_geojson(geom_geojson) {
+        Ok(segments) => segments.into_iter().flatten().collect(),
+        Err(_) => Vec::new(),
     }
+}
 
-    fn generate_track_points(&self, coordinates: &[(f64, f64)], track: &TrackDetail) -> String {
-        let mut track_points = String::new();
-        for (i, (lat, lon)) in coordinates.iter().enumerate() {
-            let elevation = self.get_elevation_xml(track, i);
-            let hr_data = self.get_hr_xml(track, i);
-            let time_data = self.get_time_xml(track, i);
+fn generate_track_points(coordinates: &[(f64, f64)], track: &TrackDetail) -> String {
+    let mut track_points = String::new();
+    for (i, (lat, lon)) in coordinates.iter().enumerate() {
+        let elevation = get_elevation_xml(track, i);
+        let hr_data = get_hr_xml(track, i);
+        let time_data = get_time_xml(track, i);
 
-            track_points.push_str(&format!(
-                "      <trkpt lat=\"{lat:.7}\" lon=\"{lon:.7}\">{elevation}{time_data}{hr_data}</trkpt>\n"
-            ));
-        }
-        track_points
+        track_points.push_str(&format!(
+            "      <trkpt lat=\"{lat:.7}\" lon=\"{lon:.7}\">{elevation}{time_data}{hr_data}</trkpt>\n"
+        ));
     }
+    track_points
+}
 
-    fn get_elevation_xml(&self, track: &TrackDetail, index: usize) -> String {
-        if let Some(elevation_profile) = &track.elevation_profile
-            && let Some(elevation_array) = elevation_profile.as_array()
-            && index < elevation_array.len()
-            && let Some(ele_val) = elevation_array[index].as_f64()
-        {
-            return format!("<ele>{ele_val:.1}</ele>");
-        }
-        String::new()
+fn get_elevation_xml(track: &TrackDetail, index: usize) -> String {
+    if let Some(elevation_profile) = &track.elevation_profile
+        && let Some(elevation_array) = elevation_profile.as_array()
+        && index < elevation_array.len()
+        && let Some(ele_val) = elevation_array[index].as_f64()
+    {
+        return format!("<ele>{ele_val:.1}</ele>");
     }
+    String::new()
+}
 
-    fn get_hr_xml(&self, track: &TrackDetail, index: usize) -> String {
-        if let Some(hr_data) = &track.hr_data
-            && let Some(hr_array) = hr_data.as_array()
-            && index < hr_array.len()
-            && let Some(hr_val) = hr_array[index].as_i64()
-        {
-            return format!(
-                "<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>{hr_val}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>"
-            );
-        }
-        String::new()
+fn get_hr_xml(track: &TrackDetail, index: usize) -> String {
+    if let Some(hr_data) = &track.hr_data
+        && let Some(hr_array) = hr_data.as_array()
+        && index < hr_array.len()
+        && let Some(hr_val) = hr_array[index].as_i64()
+    {
+        return format!(
+            "<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>{hr_val}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>"
+        );
     }
+    String::new()
+}
 
-    fn get_time_xml(&self, track: &TrackDetail, index: usize) -> String {
-        if let Some(time_data) = &track.time_data
-            && let Some(time_array) = time_data.as_array()
-            && index < time_array.len()
-            && let Some(time_str) = time_array[index].as_str()
-        {
-            return format!("<time>{}</time>", xml_escape(time_str));
-        }
-        String::new()
+fn get_time_xml(track: &TrackDetail, index: usize) -> String {
+    if let Some(time_data) = &track.time_data
+        && let Some(time_array) = time_data.as_array()
+        && index < time_array.len()
+        && let Some(time_str) = time_array[index].as_str()
+    {
+        return format!("<time>{}</time>", xml_escape(time_str));
     }
+    String::new()
 }
 
 fn xml_escape(input: &str) -> String {
@@ -143,11 +130,10 @@ mod tests {
 
     #[test]
     fn test_sanitize_filename() {
-        let service = GpxExportService::new();
-        assert_eq!(service.sanitize_filename("My Track"), "My_Track");
-        assert_eq!(service.sanitize_filename("Track/Name"), "Track_Name");
-        assert_eq!(service.sanitize_filename("Track<>Name"), "Track__Name");
-        assert_eq!(service.sanitize_filename("  Track  "), "Track");
+        assert_eq!(sanitize_filename("My Track"), "My_Track");
+        assert_eq!(sanitize_filename("Track/Name"), "Track_Name");
+        assert_eq!(sanitize_filename("Track<>Name"), "Track__Name");
+        assert_eq!(sanitize_filename("  Track  "), "Track");
     }
 
     #[test]
@@ -159,7 +145,6 @@ mod tests {
 
     #[test]
     fn test_generate_gpx_from_track() {
-        let service = GpxExportService::new();
         let track = TrackDetail {
             id: Uuid::new_v4(),
             name: "Test Track".to_string(),
@@ -209,7 +194,7 @@ mod tests {
             pace_data: None,
         };
 
-        let gpx = service.generate_gpx(&track);
+        let gpx = generate_gpx(&track);
         assert!(gpx.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
         assert!(gpx.contains("<name>Test Track</name>"));
         assert!(gpx.contains("<desc>Test Description</desc>"));

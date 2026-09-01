@@ -12,8 +12,8 @@ use crate::input_validation::{
 };
 use crate::metrics;
 use crate::models::*;
-use crate::services::gpx_export::GpxExportService;
-use crate::services::track_upload::{TrackUploadRequest, TrackUploadService};
+use crate::services::gpx_export;
+use crate::services::track_upload::TrackUploadRequest;
 use crate::track_utils::{
     ElevationEnrichmentService, calculate_file_hash, extract_coordinates_from_geojson,
     extract_segments_from_geojson, geojson_from_segments, simplify_segments_to_ratio,
@@ -314,7 +314,6 @@ pub async fn upload_track(
         validate_text_field(cat, MAX_CATEGORY_LENGTH, "category")?;
     }
 
-    let service = TrackUploadService::new(Arc::clone(&pool));
     let request = TrackUploadRequest {
         name,
         description,
@@ -324,7 +323,7 @@ pub async fn upload_track(
         file_bytes,
     };
 
-    let response = service.upload_track(request).await?;
+    let response = crate::services::track_upload::upload_track(&pool, request).await?;
     metrics::record_track_uploaded("anonymous");
     metrics::record_session_activity(session_id, "upload");
     info!(endpoint = "upload_track", track_id = %response.id, "track uploaded");
@@ -789,8 +788,7 @@ pub async fn export_track_gpx(
 
     match db::get_track_detail(&pool, id).await {
         Ok(Some(track)) => {
-            let gpx_service = GpxExportService::new();
-            let gpx_content = gpx_service.generate_gpx(&track);
+            let gpx_content = gpx_export::generate_gpx(&track);
 
             let response = axum::response::Response::builder()
                 .header("Content-Type", "application/gpx+xml")
@@ -798,7 +796,7 @@ pub async fn export_track_gpx(
                     "Content-Disposition",
                     format!(
                         "attachment; filename=\"{name}.gpx\"",
-                        name = gpx_service.sanitize_filename(&track.name)
+                        name = gpx_export::sanitize_filename(&track.name)
                     ),
                 )
                 .header(

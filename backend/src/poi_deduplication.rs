@@ -9,9 +9,7 @@ use std::time::Instant;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-pub struct PoiDeduplicationService;
 
-impl PoiDeduplicationService {
     /// Generate a dedup key for a waypoint (similar to DB dedup_hash logic)
     /// Used to deduplicate waypoints client-side before bulk insert
     fn generate_dedup_key(waypoint: &ParsedWaypoint) -> String {
@@ -29,7 +27,7 @@ impl PoiDeduplicationService {
         let mut result = Vec::new();
 
         for (idx, waypoint) in waypoints.iter().enumerate() {
-            let key = Self::generate_dedup_key(waypoint);
+            let key = generate_dedup_key(waypoint);
             if let std::collections::hash_map::Entry::Vacant(e) = seen.entry(key) {
                 e.insert(idx);
                 result.push((idx, waypoint));
@@ -60,7 +58,7 @@ impl PoiDeduplicationService {
         let start = Instant::now();
 
         // Deduplicate waypoints to avoid "ON CONFLICT DO UPDATE cannot affect row a second time"
-        let unique_waypoints = Self::deduplicate_waypoints(waypoints);
+        let unique_waypoints = deduplicate_waypoints(waypoints);
         if unique_waypoints.is_empty() {
             return Ok(Vec::new());
         }
@@ -220,7 +218,7 @@ impl PoiDeduplicationService {
         let pipeline_start = Instant::now();
 
         // Step 1: Bulk insert/update all POIs
-        let poi_results = Self::bulk_find_or_create_pois(pool, &waypoints).await?;
+        let poi_results = bulk_find_or_create_pois(pool, &waypoints).await?;
 
         if poi_results.is_empty() {
             warn!("No POIs were created for track {}", track_id);
@@ -235,7 +233,7 @@ impl PoiDeduplicationService {
 
         // Step 3: Bulk link all POIs to track
         let linked_count =
-            Self::bulk_link_pois_to_track(pool, track_id, &poi_ids_with_order).await?;
+            bulk_link_pois_to_track(pool, track_id, &poi_ids_with_order).await?;
 
         let pipeline_elapsed = pipeline_start.elapsed().as_secs_f64();
         crate::metrics::observe_poi_link_duration("link_pois_to_track", pipeline_elapsed);
@@ -291,7 +289,6 @@ impl PoiDeduplicationService {
 
         Ok(results)
     }
-}
 
 #[cfg(test)]
 mod tests {
@@ -301,8 +298,7 @@ mod tests {
     #[test]
     fn test_poi_deduplication_service_exists() {
         // Ensure the service can be instantiated
-        let _service = PoiDeduplicationService;
-    }
+            }
 
     #[test]
     fn test_parsed_waypoint_creation() {
@@ -361,13 +357,13 @@ mod tests {
         };
 
         let waypoints = vec![wp1.clone(), wp2.clone()];
-        let deduped = PoiDeduplicationService::deduplicate_waypoints(&waypoints);
+        let deduped = deduplicate_waypoints(&waypoints);
         // Should keep only the first occurrence
         assert_eq!(deduped.len(), 1);
         assert_eq!(deduped[0].0, 0_usize);
         // Ensure generated key is the same for both
-        let k1 = PoiDeduplicationService::generate_dedup_key(&wp1);
-        let k2 = PoiDeduplicationService::generate_dedup_key(&wp2);
+        let k1 = generate_dedup_key(&wp1);
+        let k2 = generate_dedup_key(&wp2);
         assert_eq!(k1, k2);
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     },
     metrics,
     models::{ParsedTrackData, ParsedWaypoint, TrackUploadResponse},
-    poi_deduplication::PoiDeduplicationService,
+    poi_deduplication,
     services::enrichment_queue,
     track_utils::{self, extract_coordinates_from_geojson, parse_gpx, parse_gpx_minimal},
 };
@@ -28,28 +28,19 @@ pub struct TrackUploadRequest {
     pub file_bytes: Bytes,
 }
 
-pub struct TrackUploadService {
-    pool: Arc<PgPool>,
-}
 
-impl TrackUploadService {
-    pub fn new(pool: Arc<PgPool>) -> Self {
-        Self { pool }
-    }
 
-    #[tracing::instrument(skip(self, request), fields(endpoint = "upload_track_service", file_name = %request.file_name))]
+    #[tracing::instrument(skip(pool, request), fields(endpoint = "upload_track_service", file_name = %request.file_name))]
     pub async fn upload_track(
-        &self,
+        pool: &Arc<PgPool>,
         request: TrackUploadRequest,
     ) -> Result<TrackUploadResponse, StatusCode> {
         let pipeline_start = Instant::now();
-        self.validate_request(&request)?;
+        validate_request(pool, &request)?;
         validate_file_size(request.file_bytes.len())?;
         let extension = validate_file_extension(&request.file_name)?;
 
-        let parsed_data = self
-            .parse_and_check_duplicates(&request.file_bytes, &extension)
-            .await?;
+        let parsed_data = parse_and_check_duplicates(pool, &request.file_bytes, &extension).await?;
 
         let track_id = Uuid::new_v4();
         let sanitized_name = request
@@ -92,7 +83,7 @@ impl TrackUploadService {
             .and_then(|data| serde_json::to_value(data).ok());
 
         db::insert_track(db::InsertTrackParams {
-            pool: &self.pool,
+            pool,
             id: track_id,
             name: &sanitized_name,
             description: sanitized_description.clone(),
@@ -143,9 +134,9 @@ impl TrackUploadService {
             metrics::record_track_category(category);
         }
 
-        self.maybe_start_elevation_enrichment(track_id, &parsed_data)
+        maybe_start_elevation_enrichment(pool, track_id, &parsed_data)
             .await;
-        self.process_waypoints(track_id, parsed_data.waypoints.clone())
+        process_waypoints(pool, track_id, parsed_data.waypoints.clone())
             .await;
 
         metrics::observe_track_pipeline_latency("success", pipeline_start.elapsed().as_secs_f64());
@@ -163,7 +154,7 @@ impl TrackUploadService {
         })
     }
 
-    fn validate_request(&self, request: &TrackUploadRequest) -> Result<(), StatusCode> {
+    fn validate_request(_pool: &Arc<PgPool>, request: &TrackUploadRequest) -> Result<(), StatusCode> {
         // Require at least one category
         if request.categories.is_empty() {
             warn!(endpoint = "upload_track_service", "no categories selected");
@@ -196,7 +187,7 @@ impl TrackUploadService {
     }
 
     async fn parse_and_check_duplicates(
-        &self,
+        pool: &Arc<PgPool>,
         file_bytes: &Bytes,
         extension: &str,
     ) -> Result<ParsedTrackData, StatusCode> {
@@ -218,7 +209,7 @@ impl TrackUploadService {
                 );
 
                 let dedup_db_start = Instant::now();
-                if db::track_exists(&self.pool, &minimal.hash)
+                if db::track_exists(pool, &minimal.hash)
                     .await
                     .map_err(|e| {
                         error!(?e, "[upload_track_service] db error on dedup");
@@ -283,7 +274,7 @@ impl TrackUploadService {
                 }
 
                 let dedup_db_start = Instant::now();
-                if db::track_exists(&self.pool, &parsed.hash)
+                if db::track_exists(pool, &parsed.hash)
                     .await
                     .map_err(|e| {
                         error!(?e, "[upload_track_service] db error on dedup");
@@ -314,11 +305,11 @@ impl TrackUploadService {
     }
 
     async fn maybe_start_elevation_enrichment(
-        &self,
+        pool: &Arc<PgPool>,
         track_id: Uuid,
         parsed_data: &ParsedTrackData,
     ) {
-        if !self.track_needs_enrichment(parsed_data) {
+        if !track_needs_enrichment(parsed_data) {
             metrics::record_track_enrich_status("skipped_not_needed");
             return;
         }
@@ -361,17 +352,17 @@ impl TrackUploadService {
             }
         }
 
-        enrichment_queue::spawn_immediate_enrichment(Arc::clone(&self.pool), job);
+        enrichment_queue::spawn_immediate_enrichment(Arc::clone(pool), job);
     }
 
-    fn track_needs_enrichment(&self, parsed_data: &ParsedTrackData) -> bool {
+    fn track_needs_enrichment(parsed_data: &ParsedTrackData) -> bool {
         parsed_data.elevation_gain.is_none()
             || parsed_data.elevation_gain == Some(0.0)
             || parsed_data.elevation_loss.is_none()
             || parsed_data.elevation_loss == Some(0.0)
     }
 
-    async fn process_waypoints(&self, track_id: Uuid, waypoints: Vec<ParsedWaypoint>) {
+    async fn process_waypoints(pool: &Arc<PgPool>, track_id: Uuid, waypoints: Vec<ParsedWaypoint>) {
         if waypoints.is_empty() {
             return;
         }
@@ -385,7 +376,7 @@ impl TrackUploadService {
 
         let poi_start = Instant::now();
         if let Err(e) =
-            PoiDeduplicationService::link_pois_to_track(&self.pool, track_id, waypoints).await
+            poi_deduplication::link_pois_to_track(pool, track_id, waypoints).await
         {
             error!(track_id = %track_id, error = ?e, endpoint = "upload_track_service", "failed to link POIs");
         }
@@ -400,4 +391,3 @@ impl TrackUploadService {
             );
         }
     }
-}
