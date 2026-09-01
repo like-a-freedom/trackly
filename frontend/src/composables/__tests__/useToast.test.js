@@ -61,15 +61,16 @@ describe('useToast', () => {
     });
 
     describe('Multiple instances', () => {
-        it('creates independent toast instances', () => {
+        it('shares the same store (singleton pattern)', () => {
             const toast1 = useToast();
             const toast2 = useToast();
 
             toast1.showToast('First toast', 'info');
             toast2.showToast('Second toast', 'error');
 
-            expect(toast1.toast.value.message).toBe('First toast');
-            expect(toast1.toast.value.type).toBe('info');
+            // Both access the same store — last write wins
+            expect(toast1.toast.value.message).toBe('Second toast');
+            expect(toast1.toast.value.type).toBe('error');
             expect(toast2.toast.value.message).toBe('Second toast');
             expect(toast2.toast.value.type).toBe('error');
         });

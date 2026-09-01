@@ -2,6 +2,10 @@
 import { config } from '@vue/test-utils'
 import { vi } from 'vitest'
 import { nextTick } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+
+// Install a global Pinia instance for all tests
+setActivePinia(createPinia())
 
 // Prevent Leaflet from trying to load any assets
 vi.mock('leaflet/dist/leaflet.css', () => ({}))

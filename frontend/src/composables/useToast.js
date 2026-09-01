@@ -1,13 +1,16 @@
-import { ref } from 'vue';
+import { computed } from 'vue';
+import { useToastStore } from '../stores/toast.js';
+
 /**
  * Simple toast notification composable for global user feedback.
  * Usage: const { showToast, toast } = useToast();
- * In template: <Toast :message="toast.message" :type="toast.type" :duration="toast.duration" />
  */
 export function useToast() {
-    const toast = ref({ message: '', type: 'info', duration: 3000 });
-    function showToast(message, type = 'info', duration = 3000) {
-        toast.value = { message, type, duration };
-    }
-    return { showToast, toast };
+    const store = useToastStore();
+    const toast = computed(() => ({
+        message: store.message,
+        type: store.type,
+        duration: store.duration
+    }));
+    return { showToast: store.showToast.bind(store), toast };
 }

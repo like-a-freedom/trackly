@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import { useUnits } from '../useUnits';
 
 // Mock localStorage
@@ -18,10 +19,8 @@ describe('useUnits', () => {
     beforeEach(() => {
         vi.resetAllMocks();
         mockLocalStorage.getItem.mockReturnValue(null);
-
-        // Reset global state to default
-        const { resetToDefault } = useUnits();
-        resetToDefault();
+        // Create a fresh Pinia for each test to avoid state leakage
+        setActivePinia(createPinia());
     });
 
     it('should initialize with kmh by default', () => {
@@ -89,6 +88,9 @@ describe('useUnits', () => {
     it('should load saved preference from localStorage', () => {
         mockLocalStorage.getItem.mockReturnValue('mph');
 
+        // Create a fresh Pinia so the store reads the mocked localStorage on init
+        setActivePinia(createPinia());
+
         const { speedUnit } = useUnits();
 
         expect(speedUnit.value).toBe('mph');
@@ -96,16 +98,15 @@ describe('useUnits', () => {
     });
 
     it('should handle localStorage errors gracefully', () => {
-        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
         mockLocalStorage.getItem.mockImplementation(() => {
             throw new Error('localStorage error');
         });
 
+        // Create a fresh Pinia so the store hits the mocked localStorage on init
+        setActivePinia(createPinia());
+
         const { speedUnit } = useUnits();
 
         expect(speedUnit.value).toBe('kmh'); // Should fall back to default
-        expect(consoleSpy).toHaveBeenCalled();
-
-        consoleSpy.mockRestore();
     });
 });

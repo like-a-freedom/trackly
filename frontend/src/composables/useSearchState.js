@@ -1,39 +1,22 @@
-import { ref } from 'vue'
-
-// Global search state
-const searchQuery = ref('')
-const searchResults = ref([])
-const lastSearchQuery = ref('')
+import { computed } from 'vue';
+import { useSearchStore } from '../stores/search.js';
 
 export function useSearchState() {
-    const saveSearchState = (query, results) => {
-        lastSearchQuery.value = query
-        searchQuery.value = query
-        searchResults.value = [...results]
-    }
-
-    const restoreSearchState = () => {
-        searchQuery.value = lastSearchQuery.value
-        // Results will be restored via the search query
-    }
-
-    const clearSearchState = () => {
-        searchQuery.value = ''
-        searchResults.value = []
-        lastSearchQuery.value = ''
-    }
-
-    const hasSearchState = () => {
-        return lastSearchQuery.value.trim() !== ''
-    }
+    const store = useSearchStore();
+    const searchQuery = computed({
+        get: () => store.searchQuery,
+        set: (val) => { store.searchQuery = val; }
+    });
+    const searchResults = computed(() => store.searchResults);
+    const lastSearchQuery = computed(() => store.lastSearchQuery);
 
     return {
         searchQuery,
         searchResults,
         lastSearchQuery,
-        saveSearchState,
-        restoreSearchState,
-        clearSearchState,
-        hasSearchState
-    }
+        saveSearchState: store.saveSearchState.bind(store),
+        restoreSearchState: store.restoreSearchState.bind(store),
+        clearSearchState: store.clearSearchState.bind(store),
+        hasSearchState: () => store.hasSearchState
+    };
 }
