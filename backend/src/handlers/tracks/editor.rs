@@ -16,9 +16,9 @@ use std::sync::Arc;
 use crate::auth::OptionalAuthUser;
 use crate::error::Result;
 use crate::models::TrackUploadResponse;
+use crate::services::track_editor;
 use crate::services::track_editor::{
-    CreateTrackFromEditorRequest, DuplicateTrackRequest, TrackEditorService,
-    UpdateTrackGeometryRequest,
+    CreateTrackFromEditorRequest, DuplicateTrackRequest, UpdateTrackGeometryRequest,
 };
 
 /// Create a track from editor-drawn geometry.
@@ -31,10 +31,9 @@ pub async fn create_track_from_editor(
     auth_user: OptionalAuthUser,
     Json(request): Json<CreateTrackFromEditorRequest>,
 ) -> Result<(StatusCode, Json<TrackUploadResponse>)> {
-    let service = TrackEditorService::new(pool);
     let user_id = auth_user.user().map(|u| u.user_id);
 
-    let response = service.create_track(request, user_id).await?;
+    let response = track_editor::create_track(&pool, request, user_id).await?;
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -49,9 +48,7 @@ pub async fn update_track_geometry(
     Path(track_id): Path<uuid::Uuid>,
     Json(request): Json<UpdateTrackGeometryRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let service = TrackEditorService::new(pool);
-
-    service.update_geometry(track_id, request).await?;
+    track_editor::update_track_geometry(&pool, track_id, request).await?;
 
     Ok(Json(serde_json::json!({
         "id": track_id.to_string(),
@@ -70,10 +67,9 @@ pub async fn duplicate_track(
     auth_user: OptionalAuthUser,
     Json(request): Json<DuplicateTrackRequest>,
 ) -> Result<(StatusCode, Json<TrackUploadResponse>)> {
-    let service = TrackEditorService::new(pool);
     let user_id = auth_user.user().map(|u| u.user_id);
 
-    let response = service.duplicate_track(source_id, request, user_id).await?;
+    let response = track_editor::duplicate_track(&pool, source_id, request, user_id).await?;
 
     Ok((StatusCode::CREATED, Json(response)))
 }
