@@ -187,6 +187,12 @@ import { createLeafletAdapter } from "../map/LeafletAdapter.js";
 import { createClusterAdapter } from "../map/ClusterAdapter.js";
 import { createE2EAdapter } from "../map/E2EAdapter.js";
 
+// Composables
+import { useTrackFilters } from "../composables/useTrackFilters.js";
+import { useSegmentHighlight } from "../composables/useSegmentHighlight.js";
+import { useMapState } from "../composables/useMapState.js";
+import { useMapEvents } from "../composables/useMapEvents.js";
+
 // Constants
 const ANIMATION_DURATION_MS = 1100;
 const HIGHLIGHT_PANE_Z_INDEX = 750;
@@ -258,7 +264,7 @@ const heatLayer = ref(null);
 const heatmapMaxWeight = ref(0);
 const HEATMAP_PANE = "heatmapPane";
 
-// Track clustering functionality
+
 const clustering = useTrackClustering();
 
 // Clustering configuration
@@ -280,40 +286,9 @@ const clusteringConfig = computed(() => ({
 // Cluster adapter — wraps MarkerClusterGroup lifecycle
 const clusterAdapter = createClusterAdapter(clusteringConfig.value);
 
-// Centralized map state management
-const mapState = ref({
-  lastKnownGood: {
-    zoom: props.zoom,
-    center: props.center ? [...props.center] : null,
-  },
-  preSelection: {
-    zoom: props.zoom,
-    center: props.center ? [...props.center] : null,
-  },
-  userChangedZoomOrCenter: false,
-  pendingRestoreCenterZoom: false,
-});
 
-// Computed values for zoom/center that avoid conflicting with fitBounds
-// When bounds is provided with selectedTrackDetail, we let fitBounds control the view
-// and don't pass zoom/center to l-map to prevent vue-leaflet from overriding fitBounds
-const effectiveZoom = computed(() => {
-  // When we have bounds for a track detail view, don't apply zoom prop
-  // to avoid conflicting with fitBounds
-  if (props.bounds && props.selectedTrackDetail) {
-    return mapState.value.lastKnownGood.zoom || props.zoom;
-  }
-  return props.zoom;
-});
-
-const effectiveCenter = computed(() => {
-  // When we have bounds for a track detail view, don't apply center prop
-  // to avoid conflicting with fitBounds
-  if (props.bounds && props.selectedTrackDetail) {
-    return mapState.value.lastKnownGood.center || props.center;
-  }
-  return props.center;
-});
+// Centralized map state management (delegated to composable)
+const { mapState, effectiveZoom, effectiveCenter, saveMapStateToStorage, loadMapStateFromStorage, updateInitialMapState } = useMapState(props);
 
 // Animation management with proper cleanup and debouncing
 let animationTimeout = null;
@@ -324,14 +299,6 @@ const isZoomAnimating = ref(false);
 const isUnmounting = ref(false);
 const isPanningOrZooming = ref(false);
 
-// E2E testing hooks (must be declared after dependencies)
-const e2eHooks = useTrackMapE2E({
-  isPanningOrZooming,
-  mapIsReady,
-  trackZoomAnimating,
-  props,
-  highlightSegmentForMarker,
-});
 
 function clearAnimationTimeout() {
   if (animationTimeout) {
@@ -395,17 +362,21 @@ function updateStableBounds(newBounds) {
   }, 200); // Reduced from 500ms for faster responsiveness
 }
 
+
 // Debounced clustering update function
+// Uses a forward reference to updateClustering from useMapEvents
+let _updateClusteringRef = null;
+
 function debouncedUpdateClustering() {
   clearClusteringUpdateTimeout();
 
   clusteringUpdateTimeout = setTimeout(() => {
     try {
-      updateClustering();
+      if (_updateClusteringRef) _updateClusteringRef();
     } catch (error) {
       console.error("[TrackMap] Error in debounced clustering update:", error);
     }
-  }, 100); // Reduced from 200ms for faster clustering updates
+  }, 100);
 }
 
 // Debounced filter update function with reduced re-rendering
@@ -429,274 +400,99 @@ function debouncedFilterUpdate() {
   }, 200); // Increased debounce to reduce frequency further
 }
 
-// Use stable category set that doesn't disappear when user moves to areas without tracks
-// Track session-wide categories that only expand, never shrink when new tracks are loaded
-const sessionCategories = ref(new Set());
-
-// Use stable min/max length values that don't change with viewport to prevent filter slider jumping
-// Track session-wide range that only expands, never shrinks when new tracks are loaded
-const sessionTrackLengths = ref(new Set());
-const sessionElevationGains = ref(new Set());
-const sessionSlopeValues = ref(new Set());
-
-// Watch for new tracks and update session categories
-// Watch for new tracks and update session data (categories, lengths, elevation gains, slopes)
-// Combined watcher to prevent multiple reactive cycles
-watch(
-  () => props.polylines,
-  (newPolylines) => {
-    if (newPolylines) {
-      newPolylines.forEach((poly) => {
-        // Update session categories
-        if (poly.properties && Array.isArray(poly.properties.categories)) {
-          poly.properties.categories.forEach((cat) => {
-            if (cat && typeof cat === "string") {
-              sessionCategories.value.add(cat);
-            }
-          });
-        }
-
-        // Update session lengths
-        const length = poly.properties?.length_km;
-        if (typeof length === "number" && length >= 0) {
-          sessionTrackLengths.value.add(length);
-        }
-
-        // Update session elevation gains
-        const elevationGain = poly.properties?.elevation_gain;
-        const elevationUp = poly.properties?.elevation_up;
-        const effectiveGain =
-          typeof elevationGain === "number" && elevationGain >= 0
-            ? elevationGain
-            : typeof elevationUp === "number" && elevationUp >= 0
-            ? elevationUp
-            : null;
-
-        if (effectiveGain !== null) {
-          sessionElevationGains.value.add(effectiveGain);
-        }
-
-        // Update session slope values
-        const slopeMin = poly.properties?.slope_min;
-        const slopeMax = poly.properties?.slope_max;
-        if (typeof slopeMin === "number") {
-          sessionSlopeValues.value.add(slopeMin);
-        }
-        if (typeof slopeMax === "number") {
-          sessionSlopeValues.value.add(slopeMax);
-        }
-      });
+/**
+ * Gets the current map object, ensuring it's valid
+ * @returns {Object|null} The Leaflet map object or null if not available
+ */
+function getMapObject(context = "") {
+  try {
+    if (leafletMap.value && leafletMap.value.mapObject) {
+      return leafletMap.value.mapObject;
     }
-  },
-  { immediate: true, deep: true }
-);
-
-// Compute categories with smart fallback logic:
-// - If there are tracks in viewport: show only their categories
-// - If no tracks in viewport: show all session categories to preserve user selection
-const allCategories = computed(() => {
-  const currentPolylines = props.polylines || [];
-
-  if (currentPolylines.length > 0) {
-    // There are tracks in viewport - show only their categories
-    const currentCategories = new Set();
-    currentPolylines.forEach((poly) => {
-      if (poly.properties && Array.isArray(poly.properties.categories)) {
-        poly.properties.categories.forEach((cat) => {
-          if (cat && typeof cat === "string") {
-            currentCategories.add(cat);
-          }
-        });
-      }
-    });
-    return Array.from(currentCategories).sort();
-  } else {
-    // No tracks in viewport - show all session categories to preserve filter state
-    return Array.from(sessionCategories.value).sort();
+    // Try to access it through alternative means if available
+    const mapInstance =
+      leafletMap.value?.leafletObject || leafletMap.value?.mapObject;
+    if (mapInstance && typeof mapInstance.getZoom === "function") {
+      return mapInstance;
+    }
+    // Don't log warnings during cleanup or unmounting
+    if (context !== "cleanup" && !isUnmounting.value) {
+      console.warn(
+        `[TrackMap] Map object not available${context ? " in " + context : ""}`
+      );
+    }
+    return null;
+  } catch (error) {
+    // Don't log errors during cleanup or unmounting
+    if (context !== "cleanup" && !isUnmounting.value) {
+      console.error(
+        `[TrackMap] Error accessing map object${
+          context ? " in " + context : ""
+        }:`,
+        error
+      );
+    }
+    return null;
   }
-});
+}
 
-// Use stable default range with reasonable bounds that don't change with viewport
-// This prevents the filter slider from jumping when user scrolls to different areas
-// min/max lengths only for visible tracks (props.polylines)
-const minTrackLength = computed(() => {
-  const polylines = props.polylines || [];
-  const lengths = polylines
-    .map((poly) => poly.properties?.length_km)
-    .filter((len) => typeof len === "number" && len >= 0);
-  if (lengths.length > 0) {
-    return Math.min(...lengths);
+
+// Determine display mode based on zoom level and settings
+// Must be defined before useMapEvents composable call (displayMode is a dependency)
+const displayMode = computed(() => {
+  if (props.selectedTrackDetail) {
+    return "detail"; // Show only selected track
   }
-  return 0;
-});
 
-const maxTrackLength = computed(() => {
-  const polylines = props.polylines || [];
-  const lengths = polylines
-    .map((poly) => poly.properties?.length_km)
-    .filter((len) => typeof len === "number" && len >= 0);
-  if (lengths.length > 0) {
-    return Math.max(...lengths);
+  if (clustering.shouldCluster.value) {
+    return "cluster"; // Show clusters
   }
-  return 50;
+
+  return "tracks"; // Show individual tracks
 });
 
-// Elevation gain bounds for current viewport
-// Use elevation_gain if available, fallback to elevation_up for backward compatibility
-const minElevationGain = computed(() => {
-  const polylines = props.polylines || [];
-  const elevationGains = polylines
-    .map((poly) => {
-      const gain = poly.properties?.elevation_gain;
-      const up = poly.properties?.elevation_up;
-      // Use elevation_gain if available, fallback to elevation_up
-      return typeof gain === "number" && gain >= 0
-        ? gain
-        : typeof up === "number" && up >= 0
-        ? up
-        : null;
-    })
-    .filter((gain) => gain !== null);
-  if (elevationGains.length > 0) {
-    return Math.min(...elevationGains);
-  }
-  return 0;
+// ── Track filters composable ──────────────────────────────────────────────
+const {
+  sessionCategories, sessionTrackLengths, sessionElevationGains, sessionSlopeValues,
+  allCategories, minTrackLength, maxTrackLength, minElevationGain, maxElevationGain,
+  minSlope, maxSlope, globalMinTrackLength, globalMaxTrackLength,
+  globalMinElevationGain, globalMaxElevationGain, globalMinSlope, globalMaxSlope,
+  globalCategories, hasElevationData, hasSlopeData,
+  filterState, geoJsonFilter, filteredTracks,
+  onFilterChange, batchedFilterUpdate,
+} = useTrackFilters(props, emit, { isTransitioning, debouncedFilterUpdate });
+
+// ── Segment highlight composable ──────────────────────────────────────────
+const {
+  hoveredMarkerPolyline, hoveredMarker, hoveredSegmentPolyline, markerGapLine,
+  highlightedLayer, highlightedLayerOrigStyle, lastAutoPanTarget,
+  getPolylineWeight, getPolylineOpacity, getFeatureWeight, getFeatureOpacity, geoJsonStyle,
+  getMarkerStrokeColor, getMarkerFillColor,
+  performAutoPan, showMarkerPolyline, clearSegmentHighlight,
+  highlightSegmentForMarker, findNearestPointOnCoords, removeMarkerPolyline,
+} = useSegmentHighlight(leafletAdapter, { isZoomAnimating, isUnmounting, isPanningOrZooming, getMapObject, getSelectedTrackDetail: () => props.selectedTrackDetail, getPolylines: () => props.polylines, getActiveTrackId: () => props.activeTrackId });
+
+// ── E2E testing hooks (must be declared after highlightSegmentForMarker) ──
+const e2eHooks = useTrackMapE2E({
+  isPanningOrZooming,
+  mapIsReady,
+  trackZoomAnimating,
+  props,
+  highlightSegmentForMarker,
 });
 
-const maxElevationGain = computed(() => {
-  const polylines = props.polylines || [];
-  const elevationGains = polylines
-    .map((poly) => {
-      const gain = poly.properties?.elevation_gain;
-      const up = poly.properties?.elevation_up;
-      // Use elevation_gain if available, fallback to elevation_up
-      return typeof gain === "number" && gain >= 0
-        ? gain
-        : typeof up === "number" && up >= 0
-        ? up
-        : null;
-    })
-    .filter((gain) => gain !== null);
-  if (elevationGains.length > 0) {
-    return Math.max(...elevationGains);
-  }
-  return 2000;
-});
+// ── Map events composable ─────────────────────────────────────────────────
+const {
+  onTrackClick, onTrackMouseOver, onTrackMouseMove, onTrackMouseOut,
+  onEachFeature, onGeoJsonClick, onGeoJsonMouseOver, onGeoJsonMouseOut,
+  onMoveStart, onMoveEnd, onZoomStart, onZoomEnd,
+  handleTrackSelected, handleTrackDeselected,
+  onLocationFound, onClusterClick, onClusterMarkerClick, updateClustering,
+} = useMapEvents({ props, emit, leafletAdapter, clusterAdapter, mapState, mapIsReady, isPanningOrZooming, isZoomAnimating, trackZoomAnimating, isTransitioning, stableBounds, highlightSegmentForMarker, removeMarkerPolyline, showMarkerPolyline, clearSegmentHighlight, performAutoPan, setTrackZoomAnimating, updateStableBounds, debouncedUpdateClustering, clustering, layerKey, getMapObject, displayMode, hoveredSegmentPolyline, isUnmounting, filteredTracks, mapBounds });
 
-// Slope bounds for current viewport
-const minSlope = computed(() => {
-  const polylines = props.polylines || [];
-  const slopes = polylines
-    .map((poly) => poly.properties?.slope_min)
-    .filter(
-      (slope) =>
-        slope !== null && slope !== undefined && typeof slope === "number"
-    );
-  if (slopes.length > 0) {
-    return Math.min(...slopes);
-  }
-  return 0;
-});
+// Wire forward reference for debounced clustering updates
+_updateClusteringRef = updateClustering;
 
-const maxSlope = computed(() => {
-  const polylines = props.polylines || [];
-  const slopes = polylines
-    .map((poly) => poly.properties?.slope_max)
-    .filter(
-      (slope) =>
-        slope !== null && slope !== undefined && typeof slope === "number"
-    );
-  if (slopes.length > 0) {
-    return Math.max(...slopes);
-  }
-  return 20;
-});
-
-// Global session-based min/max lengths for reset functionality
-// These represent the full range across all tracks seen in the session
-const globalMinTrackLength = computed(() => {
-  const sessionLengths = Array.from(sessionTrackLengths.value);
-  if (sessionLengths.length > 0) {
-    return Math.min(...sessionLengths);
-  }
-  return 0;
-});
-
-const globalMaxTrackLength = computed(() => {
-  const sessionLengths = Array.from(sessionTrackLengths.value);
-  if (sessionLengths.length > 0) {
-    return Math.max(...sessionLengths);
-  }
-  return 50;
-});
-
-// Global session-based min/max elevation gain for reset functionality
-const globalMinElevationGain = computed(() => {
-  const elevationGains = Array.from(sessionElevationGains.value);
-  if (elevationGains.length > 0) {
-    return Math.min(...elevationGains);
-  }
-  return 0;
-});
-
-const globalMaxElevationGain = computed(() => {
-  const elevationGains = Array.from(sessionElevationGains.value);
-  if (elevationGains.length > 0) {
-    return Math.max(...elevationGains);
-  }
-  return 2000;
-});
-
-// Global session-based slope bounds for reset functionality
-const globalMinSlope = computed(() => {
-  const slopes = Array.from(sessionSlopeValues.value);
-  if (slopes.length > 0) {
-    return Math.min(...slopes);
-  }
-  return 0;
-});
-
-const globalMaxSlope = computed(() => {
-  const slopes = Array.from(sessionSlopeValues.value);
-  if (slopes.length > 0) {
-    return Math.max(...slopes);
-  }
-  return 20;
-});
-
-// Global session categories for reset functionality
-const globalCategories = computed(() => {
-  return Array.from(sessionCategories.value).sort();
-});
-
-// Check if there's elevation data available in tracks
-const hasElevationData = computed(() => {
-  if (!props.polylines || !props.polylines.length) return false;
-  return props.polylines.some(
-    (track) => track.properties && track.properties.elevation_gain != null
-  );
-});
-
-// Check if there's slope data available in tracks
-const hasSlopeData = computed(() => {
-  if (!props.polylines || !props.polylines.length) return false;
-  return props.polylines.some(
-    (track) =>
-      track.properties &&
-      (track.properties.slope_min != null ||
-        track.properties.slope_max != null ||
-        track.properties.slope_avg != null)
-  );
-});
-
-// Initialize filter state properly with watchers to update when track data changes
-const filterState = ref({
-  categories: [],
-  lengthRange: [0, 0],
-  elevationGainRange: [0, 2000],
-  slopeRange: [0, 20],
-  showHeatmap: false,
-});
 
 function ensureHeatmapPane() {
   if (!leafletAdapter.getPane(HEATMAP_PANE)) {
@@ -806,503 +602,45 @@ const geojsonData = computed(() => {
   };
 });
 
-// Determine display mode based on zoom level and settings
-const displayMode = computed(() => {
-  if (props.selectedTrackDetail) {
-    return "detail"; // Show only selected track
-  }
+function initializeClustering(map) {
+  try {
+    // Initialize cluster group via adapter
+    const clusterGroup = clusterAdapter.initialize(clusteringConfig.value);
 
-  if (clustering.shouldCluster.value) {
-    return "cluster"; // Show clusters
-  }
-
-  return "tracks"; // Show individual tracks
-});
-
-// Tracks that pass the current filter
-const filteredTracks = computed(() => {
-  if (!props.polylines || !props.polylines.length) {
-    return [];
-  }
-
-  return props.polylines.filter((track) => {
-    const feature = {
-      properties: track.properties,
-    };
-    return geoJsonFilter(feature, null);
-  });
-});
-
-// Native Leaflet filter function - more efficient than pre-filtering data
-function geoJsonFilter(feature, layer) {
-  // During transition, maintain the same filter behavior as before the transition
-  // to prevent layers from being removed during L-geo-json cleanup
-  if (isTransitioning.value) {
-    // Keep showing the tracks that were visible before transition started
-    // This prevents the dramatic filter behavior change that causes race condition
-    const cats = feature.properties?.categories || [];
-    const len = feature.properties?.length_km;
-
-    // If we have selected categories, use them; otherwise show all tracks
-    if (filterState.value.categories.length > 0) {
-      const catMatch = filterState.value.categories.some((cat) =>
-        cats.includes(cat)
-      );
-      const EPSILON = 0.5;
-      const min = filterState.value.lengthRange[0];
-      const max = filterState.value.lengthRange[1];
-      const lenMatch = len >= min - EPSILON && len <= max + EPSILON;
-
-      // Elevation gain filtering with fallback
-      const elevationGain = feature.properties?.elevation_gain;
-      const elevationUp = feature.properties?.elevation_up;
-      const effectiveGain =
-        typeof elevationGain === "number"
-          ? elevationGain
-          : typeof elevationUp === "number"
-          ? elevationUp
-          : null;
-
-      const elevationMin = filterState.value.elevationGainRange[0];
-      const elevationMax = filterState.value.elevationGainRange[1];
-      const EPSILON_ELEVATION = 10; // Larger tolerance for elevation (10 meters) to handle boundary cases
-      const elevationMatch =
-        effectiveGain === null ||
-        (effectiveGain >= elevationMin - EPSILON_ELEVATION &&
-          effectiveGain <= elevationMax + EPSILON_ELEVATION);
-
-      // Slope filtering
-      const slopeMin = feature.properties?.slope_min;
-      const slopeMax = feature.properties?.slope_max;
-      const slopeFilterMin = filterState.value.slopeRange?.[0] ?? 0;
-      const slopeFilterMax = filterState.value.slopeRange?.[1] ?? 20;
-      const EPSILON_SLOPE = 0.1; // Small tolerance for slope (0.1%) to handle boundary cases
-
-      // Track matches if its slope range overlaps with the filter range
-      const slopeMatch =
-        slopeMin === null ||
-        slopeMin === undefined ||
-        slopeMax === null ||
-        slopeMax === undefined ||
-        (slopeMax >= slopeFilterMin - EPSILON_SLOPE &&
-          slopeMin <= slopeFilterMax + EPSILON_SLOPE);
-
-      // Debug logging for slope filtering
-      if (
-        feature.properties?.name &&
-        feature.properties.name.toLowerCase().includes("alma")
-      ) {
-        console.log(
-          `Track "${feature.properties.name}": slope[${slopeMin}, ${slopeMax}], filter[${slopeFilterMin}, ${slopeFilterMax}], match: ${slopeMatch}`
-        );
+    // Wire up cluster events through the adapter
+    clusterAdapter.on("clusterclick", (e) => {
+      try { onClusterClick(e); }
+      catch (error) { console.error("[TrackMap] Error in cluster click handler:", error); }
+    });
+    clusterAdapter.on("click", (e) => {
+      try { onClusterMarkerClick(e); }
+      catch (error) { console.error("[TrackMap] Error in marker click handler:", error); }
+    });
+    clusterAdapter.on("mouseover", (e) => {
+      const marker = e.layer || e.target;
+      if (marker.trackData && !marker.getAllChildMarkers && !isZoomAnimating.value) {
+        showMarkerPolyline(marker.trackData, map, marker);
+        emit("trackMouseOver", marker.trackData, e.originalEvent || e);
       }
-
-      return catMatch && lenMatch && elevationMatch && slopeMatch;
-    } else {
-      // During transition with no categories selected, show all tracks to prevent cleanup issues
-      return true;
-    }
-  }
-
-  // When track detail panel is open, show ONLY the selected track
-  if (props.selectedTrackDetail && props.selectedTrackDetail.id) {
-    return (
-      feature.properties &&
-      feature.properties.id === props.selectedTrackDetail.id
-    );
-  }
-
-  // Apply category and length filters (only when no track detail is selected)
-  const cats = feature.properties?.categories || [];
-  const len = feature.properties?.length_km;
-
-  // If no categories are selected, show nothing (test expectation)
-  if (filterState.value.categories.length === 0) {
-    return false;
-  }
-
-  const catMatch = filterState.value.categories.some((cat) =>
-    cats.includes(cat)
-  );
-
-  // Use epsilon for both min and max to handle rounding errors
-  const EPSILON = 0.5; // Increased epsilon to handle rounding better
-  const min = filterState.value.lengthRange[0];
-  const max = filterState.value.lengthRange[1];
-  const lenMatch = len >= min - EPSILON && len <= max + EPSILON;
-
-  // Elevation gain filtering with fallback and larger tolerance for boundary values
-  const elevationGain = feature.properties?.elevation_gain;
-  const elevationUp = feature.properties?.elevation_up;
-  const effectiveGain =
-    typeof elevationGain === "number"
-      ? elevationGain
-      : typeof elevationUp === "number"
-      ? elevationUp
-      : null;
-
-  const elevationMin = filterState.value.elevationGainRange[0];
-  const elevationMax = filterState.value.elevationGainRange[1];
-  const EPSILON_ELEVATION = 10; // Larger tolerance for elevation (10 meters) to handle boundary cases
-  const elevationMatch =
-    effectiveGain === null ||
-    (effectiveGain >= elevationMin - EPSILON_ELEVATION &&
-      effectiveGain <= elevationMax + EPSILON_ELEVATION);
-
-  // Slope filtering
-  const slopeMin = feature.properties?.slope_min;
-  const slopeMax = feature.properties?.slope_max;
-  const slopeFilterMin = filterState.value.slopeRange?.[0] ?? 0;
-  const slopeFilterMax = filterState.value.slopeRange?.[1] ?? 20;
-  const EPSILON_SLOPE = 0.1; // Small tolerance for slope (0.1%) to handle boundary cases
-
-  // Track matches if its slope range overlaps with the filter range
-  const slopeMatch =
-    slopeMin === null ||
-    slopeMin === undefined ||
-    slopeMax === null ||
-    slopeMax === undefined ||
-    (slopeMax >= slopeFilterMin - EPSILON_SLOPE &&
-      slopeMin <= slopeFilterMax + EPSILON_SLOPE);
-
-  return catMatch && lenMatch && elevationMatch && slopeMatch;
-}
-
-// Handle filter changes from the control component with proper debouncing
-const debouncedOnFilterChange = useAdvancedDebounce(
-  (newFilterState) => {
-    filterState.value = { ...newFilterState };
-    // Use debounced filter update to prevent excessive re-renders
-    debouncedFilterUpdate();
-    // Propagate (debounced) to parent to avoid spamming requests
-    emit("filter-changed", newFilterState);
-  },
-  150,
-  { leading: false, trailing: true }
-);
-
-function onFilterChange(newFilterState) {
-  // Ignore emissions that don't change the filter to avoid event loops
-  try {
-    if (JSON.stringify(filterState.value) === JSON.stringify(newFilterState)) {
-      return;
-    }
-  } catch (e) {
-    // If serialization fails for some reason, fall back to processing
-  }
-
-  if (import.meta.env.MODE === "test") {
-    // In test mode, update immediately without debouncing
-    filterState.value = { ...newFilterState };
-    debouncedFilterUpdate();
-    // Propagate filter up so parent (HomeView) can trigger server-side fetches (e.g., My tracks)
-    emit("filter-changed", newFilterState);
-  } else {
-    // In production, use debounced function to prevent excessive updates
-    debouncedOnFilterChange(newFilterState);
-  }
-}
-
-// Watch for changes in track ranges and update filter accordingly (only for initialization)
-// Use a single batched watcher to prevent multiple simultaneous updates
-const batchedFilterUpdate = useAdvancedDebounce(
-  () => {
-    // Force a single filter update after all range changes are processed
-    debouncedFilterUpdate();
-  },
-  50,
-  { leading: false, trailing: true }
-);
-
-watch(
-  [
-    minTrackLength,
-    maxTrackLength,
-    minElevationGain,
-    maxElevationGain,
-    minSlope,
-    maxSlope,
-  ],
-  ([minLen, maxLen, minElev, maxElev, minSlopeVal, maxSlopeVal]) => {
-    let hasUpdates = false;
-
-    // Only update if the current range is uninitialized
-    // Length range
-    if (
-      filterState.value.lengthRange[0] === 0 &&
-      filterState.value.lengthRange[1] === 0
-    ) {
-      filterState.value.lengthRange = [minLen, maxLen];
-      hasUpdates = true;
-    }
-
-    // Elevation gain range
-    if (
-      filterState.value.elevationGainRange[0] === 0 &&
-      filterState.value.elevationGainRange[1] === 2000
-    ) {
-      filterState.value.elevationGainRange = [minElev, maxElev];
-      hasUpdates = true;
-    }
-
-    // Slope range
-    if (
-      (filterState.value.slopeRange?.[0] ?? 0) === 0 &&
-      (filterState.value.slopeRange?.[1] ?? 20) === 20
-    ) {
-      if (!filterState.value.slopeRange) {
-        filterState.value.slopeRange = [0, 20];
+    });
+    clusterAdapter.on("mouseout", (e) => {
+      const marker = e.layer || e.target;
+      if (marker.trackData && !marker.getAllChildMarkers) {
+        removeMarkerPolyline(map);
+        emit("trackMouseOut", e.originalEvent || e);
       }
-      filterState.value.slopeRange = [minSlopeVal, maxSlopeVal];
-      hasUpdates = true;
-    }
+    });
 
-    // Only trigger update if we actually changed something
-    if (hasUpdates) {
-      batchedFilterUpdate();
-    }
-  },
-  { immediate: true }
-);
+    // Add cluster group to map via adapter
+    clusterAdapter.addTo(map);
 
-// LocalStorage operations with proper error handling
-const storageKeys = {
-  preSelectionZoom: "trackly_preSelectionZoom",
-  preSelectionCenterLat: "trackly_preSelectionCenterLat",
-  preSelectionCenterLng: "trackly_preSelectionCenterLng",
-};
+    // Set initial zoom level for clustering
+    clustering.updateZoomLevel(map.getZoom());
 
-function saveMapStateToStorage(zoom, center) {
-  try {
-    if (zoom !== undefined) {
-      localStorage.setItem(storageKeys.preSelectionZoom, zoom.toString());
-    }
-    if (center && center.length >= 2) {
-      localStorage.setItem(
-        storageKeys.preSelectionCenterLat,
-        center[0].toString()
-      );
-      localStorage.setItem(
-        storageKeys.preSelectionCenterLng,
-        center[1].toString()
-      );
-    }
+    // Perform initial clustering update with delay to ensure map is ready
+    setTimeout(() => { updateClustering(); }, 100);
   } catch (error) {
-    console.warn("[TrackMap] Failed to save state to localStorage:", error);
-  }
-}
-
-function loadMapStateFromStorage() {
-  try {
-    const storedZoom = localStorage.getItem(storageKeys.preSelectionZoom);
-    const storedLat = localStorage.getItem(storageKeys.preSelectionCenterLat);
-    const storedLng = localStorage.getItem(storageKeys.preSelectionCenterLng);
-
-    if (storedZoom && storedLat && storedLng) {
-      return {
-        zoom: parseFloat(storedZoom),
-        center: [parseFloat(storedLat), parseFloat(storedLng)],
-      };
-    }
-  } catch (error) {
-    console.warn("[TrackMap] Failed to load state from localStorage:", error);
-  }
-  return null;
-}
-
-/**
- * Gets the current map object, ensuring it's valid
- * @returns {Object|null} The Leaflet map object or null if not available
- */
-function getMapObject(context = "") {
-  try {
-    if (leafletMap.value && leafletMap.value.mapObject) {
-      return leafletMap.value.mapObject;
-    }
-    // Try to access it through alternative means if available
-    const mapInstance =
-      leafletMap.value?.leafletObject || leafletMap.value?.mapObject;
-    if (mapInstance && typeof mapInstance.getZoom === "function") {
-      return mapInstance;
-    }
-    // Don't log warnings during cleanup or unmounting
-    if (context !== "cleanup" && !isUnmounting.value) {
-      console.warn(
-        `[TrackMap] Map object not available${context ? " in " + context : ""}`
-      );
-    }
-    return null;
-  } catch (error) {
-    // Don't log errors during cleanup or unmounting
-    if (context !== "cleanup" && !isUnmounting.value) {
-      console.error(
-        `[TrackMap] Error accessing map object${
-          context ? " in " + context : ""
-        }:`,
-        error
-      );
-    }
-    return null;
-  }
-}
-
-/**
- * Calculates the weight for a given polyline based on the current map state.
- * @param {Object} poly - The polyline object.
- * @returns {number} The weight for the polyline.
- */
-function getPolylineWeight(poly) {
-  if (poly.properties && poly.properties.id === props.activeTrackId) {
-    return POLYLINE_WEIGHT_ACTIVE;
-  }
-  if (props.selectedTrackDetail) {
-    return POLYLINE_WEIGHT_SELECTED_DETAIL;
-  }
-  return POLYLINE_WEIGHT_DEFAULT;
-}
-
-/**
- * Calculates the opacity for a given polyline based on the current map state.
- * @param {Object} poly - The polyline object.
- * @returns {number} The opacity for the polyline.
- */
-function getPolylineOpacity(poly) {
-  if (props.activeTrackId) {
-    return poly.properties && poly.properties.id === props.activeTrackId
-      ? POLYLINE_OPACITY_ACTIVE
-      : POLYLINE_OPACITY_HOVER_DIM;
-  }
-  if (props.selectedTrackDetail) {
-    return POLYLINE_OPACITY_SELECTED_DETAIL;
-  }
-  return POLYLINE_OPACITY_DEFAULT;
-}
-
-/**
- * Calculates the weight for a given GeoJSON feature based on the current map state.
- * @param {Object} feature - The GeoJSON feature object.
- * @returns {number} The weight for the feature.
- */
-function getFeatureWeight(feature) {
-  if (feature.properties && feature.properties.id === props.activeTrackId) {
-    return POLYLINE_WEIGHT_ACTIVE;
-  }
-  if (props.selectedTrackDetail) {
-    return POLYLINE_WEIGHT_SELECTED_DETAIL;
-  }
-  return POLYLINE_WEIGHT_DEFAULT;
-}
-
-/**
- * Calculates the opacity for a given GeoJSON feature based on the current map state.
- * @param {Object} feature - The GeoJSON feature object.
- * @returns {number} The opacity for the feature.
- */
-function getFeatureOpacity(feature) {
-  if (props.activeTrackId) {
-    return feature.properties && feature.properties.id === props.activeTrackId
-      ? POLYLINE_OPACITY_ACTIVE
-      : POLYLINE_OPACITY_HOVER_DIM;
-  }
-  if (props.selectedTrackDetail) {
-    return POLYLINE_OPACITY_SELECTED_DETAIL;
-  }
-  return POLYLINE_OPACITY_DEFAULT;
-}
-
-// GeoJSON layer styling function
-function geoJsonStyle(feature) {
-  return {
-    color: feature.properties.color,
-    weight: getFeatureWeight(feature),
-    opacity: getFeatureOpacity(feature),
-  };
-}
-
-// Function to bind events to each feature
-function onEachFeature(feature, layer) {
-  layer.on({
-    click: (event) => onGeoJsonClick(event),
-    mouseover: (event) => onGeoJsonMouseOver(event),
-    mousemove: (event) => onTrackMouseMove(event),
-    mouseout: (event) => onGeoJsonMouseOut(event),
-  });
-}
-
-// Event handlers for GeoJSON layer
-function onGeoJsonClick(event) {
-  // In GeoJSON layer events, the feature is accessed via event.target.feature
-  const layer = event.target;
-  const feature = layer?.feature;
-
-  if (!feature?.properties?.id) {
-    return;
-  }
-
-  const poly = props.polylines.find(
-    (p) => p.properties?.id === feature.properties.id
-  );
-  if (poly) {
-    emit("trackClick", poly, event);
-  }
-}
-
-function onGeoJsonMouseOver(event) {
-  // Skip hover events during zoom animations or panning to reduce processing
-  if (
-    props.selectedTrackDetail ||
-    isZoomAnimating.value ||
-    isPanningOrZooming.value
-  )
-    return;
-
-  const layer = event.target;
-  const feature = layer?.feature;
-
-  if (!feature?.properties?.id) {
-    return;
-  }
-
-  // Bring the layer to front
-  if (layer && typeof layer.bringToFront === "function") {
-    layer.bringToFront();
-  }
-
-  const poly = props.polylines.find(
-    (p) => p.properties?.id === feature.properties.id
-  );
-  if (poly) {
-    emit("trackMouseOver", poly, event);
-  }
-}
-
-function onGeoJsonMouseOut(event) {
-  if (props.selectedTrackDetail) return;
-  emit("trackMouseOut", event);
-}
-
-/**
- * Updates the initial map state (zoom and center) if the user interacts with the map
- * and no detail view is active.
- * @param {Object} e - The map event object.
- */
-function updateInitialMapState(e) {
-  if (!props.selectedTrackDetail) {
-    const map = e.target;
-    mapState.value.lastKnownGood.zoom = map.getZoom();
-    mapState.value.lastKnownGood.center = [
-      map.getCenter().lat,
-      map.getCenter().lng,
-    ];
-
-    // When no detail view is active, also update preSelection values
-    // to match the current state for next time a track is selected
-    mapState.value.preSelection.zoom = mapState.value.lastKnownGood.zoom;
-    mapState.value.preSelection.center = [
-      ...mapState.value.lastKnownGood.center,
-    ];
-
-    mapState.value.userChangedZoomOrCenter = true;
+    console.error("[TrackMap] Error initializing clustering:", error);
   }
 }
 
@@ -1438,868 +776,6 @@ async function onMapReady(e) {
     });
     if (!mapIsReady.value) mapIsReady.value = true;
     emit("mapReady", e);
-  }
-}
-
-/**
- * Initialize clustering functionality
- * @param {L.Map} map - Leaflet map instance
- */
-function initializeClustering(map) {
-  try {
-    // Initialize cluster group via adapter
-    const clusterGroup = clusterAdapter.initialize(clusteringConfig.value);
-
-    // Wire up cluster events through the adapter
-    clusterAdapter.on("clusterclick", (e) => {
-      try { onClusterClick(e); }
-      catch (error) { console.error("[TrackMap] Error in cluster click handler:", error); }
-    });
-    clusterAdapter.on("click", (e) => {
-      try { onClusterMarkerClick(e); }
-      catch (error) { console.error("[TrackMap] Error in marker click handler:", error); }
-    });
-    clusterAdapter.on("mouseover", (e) => {
-      const marker = e.layer || e.target;
-      if (marker.trackData && !marker.getAllChildMarkers && !isZoomAnimating.value) {
-        showMarkerPolyline(marker.trackData, map, marker);
-        emit("trackMouseOver", marker.trackData, e.originalEvent || e);
-      }
-    });
-    clusterAdapter.on("mouseout", (e) => {
-      const marker = e.layer || e.target;
-      if (marker.trackData && !marker.getAllChildMarkers) {
-        removeMarkerPolyline(map);
-        emit("trackMouseOut", e.originalEvent || e);
-      }
-    });
-
-    // Add cluster group to map via adapter
-    clusterAdapter.addTo(map);
-
-    // Set initial zoom level for clustering
-    clustering.updateZoomLevel(map.getZoom());
-
-    // Perform initial clustering update with delay to ensure map is ready
-    setTimeout(() => { updateClustering(); }, 100);
-  } catch (error) {
-    console.error("[TrackMap] Error initializing clustering:", error);
-  }
-}
-
-const hoveredMarkerPolyline = ref(null);
-const hoveredMarker = ref(null);
-const hoveredSegmentPolyline = ref(null);
-const markerGapLine = ref(null);
-// When highlighting a single-segment track we prefer to temporarily adjust the existing layer
-// instead of overlaying a new colored polyline (this preserves the original track color)
-const highlightedLayer = ref(null);
-const highlightedLayerOrigStyle = ref(null);
-// For testing/observability: record last auto-pan target
-const lastAutoPanTarget = ref(null);
-
-function performAutoPan(latlng, map) {
-  lastAutoPanTarget.value = latlng;
-  if (map && typeof map.panTo === "function") {
-    try {
-      map.panTo(latlng, { animate: true, duration: 0.25 });
-    } catch (e) {
-      // ignore pan errors
-    }
-  }
-}
-
-function showMarkerPolyline(track, map, marker) {
-  // Prevent hover polylines during zoom animations or unmounting to avoid conflicts
-  if (
-    !track ||
-    !track.latlngs ||
-    !map ||
-    isZoomAnimating.value ||
-    isUnmounting.value
-  )
-    return;
-
-  try {
-    removeMarkerPolyline(map);
-    if (marker) {
-      marker.setOpacity(0); // Hide marker
-      hoveredMarker.value = marker;
-    }
-    hoveredMarkerPolyline.value = leafletAdapter.createPolyline(track.latlngs, {
-      color: track.color || "#3388ff",
-      weight: POLYLINE_WEIGHT_ACTIVE,
-      opacity: POLYLINE_OPACITY_ACTIVE,
-      pane: "overlayPane",
-      interactive: false,
-    });
-    if (hoveredMarkerPolyline.value) {
-      leafletAdapter.addLayer(hoveredMarkerPolyline.value);
-    }
-  } catch (error) {
-    console.warn("[TrackMap] Error adding hover polyline:", error);
-    // Clean up on error
-    removeMarkerPolyline(map);
-  }
-}
-
-function clearSegmentHighlight(map) {
-  try {
-    // If we had temporarily modified an existing GeoJSON layer (single-segment highlight), restore its style
-    if (highlightedLayer.value && highlightedLayerOrigStyle.value) {
-      try {
-        if (typeof highlightedLayer.value.setStyle === "function") {
-          highlightedLayer.value.setStyle(highlightedLayerOrigStyle.value);
-        }
-      } catch (e) {
-        console.warn("[TrackMap] Error restoring highlighted layer style:", e);
-      }
-      highlightedLayer.value = null;
-      highlightedLayerOrigStyle.value = null;
-    }
-
-    if (hoveredSegmentPolyline.value && map) {
-      map.removeLayer(hoveredSegmentPolyline.value);
-      hoveredSegmentPolyline.value = null;
-    }
-    if (markerGapLine.value && map) {
-      map.removeLayer(markerGapLine.value);
-      markerGapLine.value = null;
-    }
-    if (window.__e2e) {
-      try {
-        window.__e2e.lastGapLineExists = false;
-        window.__e2e.lastHighlightedColor = null;
-      } catch (e) {}
-    }
-  } catch (e) {
-    console.warn("[TrackMap] Error clearing segment highlight:", e);
-    hoveredSegmentPolyline.value = null;
-    markerGapLine.value = null;
-    highlightedLayer.value = null;
-    highlightedLayerOrigStyle.value = null;
-  }
-}
-
-function highlightSegmentForMarker(markerData) {
-  const map = getMapObject("highlightSegmentForMarker");
-  clearSegmentHighlight(map);
-  // Allow fallback behavior in tests when map is not available (we still create polyline objects)
-  if (
-    !markerData ||
-    !markerData.latlng ||
-    isPanningOrZooming.value ||
-    isZoomAnimating.value
-  ) {
-    // If the map is still animating/panning, schedule a short retry in E2E/dev mode
-    try {
-      if (window.__e2e) {
-        setTimeout(() => {
-          try {
-            highlightSegmentForMarker(markerData);
-          } catch (e) {}
-        }, 150);
-      }
-    } catch (e) {}
-    return;
-  }
-
-  // Need selected track to locate segments
-  const sel = props.selectedTrackDetail;
-  if (!sel || !sel.id) return;
-
-  const poly = (props.polylines || []).find(
-    (p) => p.properties && p.properties.id === sel.id
-  );
-  if (!poly) {
-    // Poly not available yet - schedule retry in E2E/dev mode
-    try {
-      if (window.__e2e) {
-        setTimeout(() => highlightSegmentForMarker(markerData), 150);
-      }
-    } catch (e) {}
-    return;
-  }
-
-  // Determine segments array format
-  const rawLatlngs = poly.latlngs || [];
-  const isNestedSegments =
-    Array.isArray(rawLatlngs) &&
-    rawLatlngs.length > 0 &&
-    Array.isArray(rawLatlngs[0]) &&
-    (Array.isArray(rawLatlngs[0][0]) ||
-      (rawLatlngs[0][0] && typeof rawLatlngs[0][0] === "object"));
-  const segments =
-    poly.segments ||
-    (rawLatlngs.length > 0
-      ? isNestedSegments
-        ? rawLatlngs
-        : [rawLatlngs]
-      : []);
-  const segIdx = markerData.segmentIndex || 0;
-  if (!segments[segIdx] || segments[segIdx].length === 0) {
-    // Segments not ready - schedule retry for E2E/dev
-    try {
-      if (window.__e2e) {
-        setTimeout(() => highlightSegmentForMarker(markerData), 150);
-      }
-    } catch (e) {}
-    return;
-  }
-
-  const segCoords = segments[segIdx];
-
-  try {
-    // If map object does not exist (e.g., test environment), still create polyline objects for assertions
-    // Prefer using the original track color (if available) so we don't visually change the track color
-    const trackColor =
-      poly.properties?.color || getMarkerStrokeColor({ segmentIndex: segIdx });
-
-    // Expose E2E observability early so tests can assert highlighting deterministically
-    if (window.__e2e) {
-      try {
-        window.__e2e.lastHighlightedColor = trackColor;
-      } catch (e) {}
-    }
-    // Debug: log when highlight is requested (helps e2e diagnostics)
-    try {
-      console.debug("[TrackMap][E2E] highlight requested", {
-        trackId: sel?.id,
-        segmentIndex: segIdx,
-        trackColor,
-      });
-    } catch (e) {}
-
-    // If the track has only a single segment and we have a live map, prefer to emphasize the existing layer
-    // by increasing weight/opacity rather than overlaying a new colored polyline — this preserves the
-    // original track color and avoids a visual color change for single-segment tracks.
-    const isSingleSegment = segments.length === 1;
-
-    if (map && isSingleSegment) {
-      try {
-        let foundLayer = null;
-        // Search for the GeoJSON layer by feature id
-        if (map.eachLayer) {
-          map.eachLayer((layer) => {
-            if (
-              !foundLayer &&
-              layer &&
-              layer.feature &&
-              layer.feature.properties &&
-              layer.feature.properties.id === sel.id
-            ) {
-              foundLayer = layer;
-            }
-          });
-        }
-
-        if (foundLayer && typeof foundLayer.setStyle === "function") {
-          // Save original style so it can be restored later
-          highlightedLayerOrigStyle.value = {
-            color: foundLayer.options?.color ?? poly.properties?.color ?? null,
-            weight:
-              foundLayer.options?.weight ??
-              getFeatureWeight(foundLayer.feature),
-            opacity:
-              typeof foundLayer.options?.opacity !== "undefined"
-                ? foundLayer.options.opacity
-                : getFeatureOpacity(foundLayer.feature),
-          };
-          try {
-            console.log("[TrackMap][E2E] using foundLayer for highlight", {
-              foundLayerId: foundLayer.feature?.properties?.id,
-              originalColor: highlightedLayerOrigStyle.value.color,
-            });
-
-            foundLayer.setStyle({
-              weight:
-                (highlightedLayerOrigStyle.value.weight ||
-                  POLYLINE_WEIGHT_ACTIVE) + 2,
-              opacity: 1,
-            });
-
-            highlightedLayer.value = foundLayer;
-
-            if (window.__e2e) {
-              try {
-                window.__e2e.lastHighlightedColor =
-                  highlightedLayerOrigStyle.value.color || trackColor;
-              } catch (e) {}
-            }
-          } catch (e) {
-            console.warn(
-              "[TrackMap] Failed to style existing layer for highlight, falling back to overlay:",
-              e
-            );
-          }
-        }
-      } catch (e) {
-        console.warn(
-          "[TrackMap] Error trying to locate layer for single-segment highlight:",
-          e
-        );
-      }
-    }
-
-    // If we didn't apply style on an existing layer (multi-segment or layer not found), fall back to overlay polyline
-    if (!highlightedLayer.value) {
-      if (!map) {
-        hoveredSegmentPolyline.value = leafletAdapter.createPolyline(segCoords, {
-          color: trackColor,
-          weight: (POLYLINE_WEIGHT_ACTIVE || 6) + 2,
-          opacity: 1,
-          interactive: false,
-          className: "chart-hover-segment",
-        });
-
-        // Expose E2E observability for tests (non-production only)
-        if (window.__e2e) {
-          try {
-            window.__e2e.lastHighlightedColor = trackColor;
-          } catch (e) {}
-        }
-
-        const nearest = findNearestPointOnCoords(markerData.latlng, segCoords);
-        if (nearest) {
-          markerGapLine.value = leafletAdapter.createPolyline([markerData.latlng, nearest], {
-            color: trackColor,
-            weight: 1.5,
-            opacity: 0.6,
-            interactive: false,
-            className: "chart-gap-line",
-          });
-
-          if (window.__e2e) {
-            try {
-              window.__e2e.lastGapLineExists = true;
-            } catch (e) {}
-          }
-        }
-
-        return;
-      }
-
-      hoveredSegmentPolyline.value = leafletAdapter.createPolyline(segCoords, {
-        color: trackColor,
-        weight: (POLYLINE_WEIGHT_ACTIVE || 6) + 2,
-        opacity: 1,
-        pane: "overlayPane",
-        interactive: false,
-        className: "chart-hover-segment",
-      });
-      if (hoveredSegmentPolyline.value) {
-        leafletAdapter.addLayer(hoveredSegmentPolyline.value);
-      }
-
-      // Expose highlight color for E2E in map-enabled environments
-      if (import.meta.env.MODE !== "production" && window.__e2e) {
-        try {
-          window.__e2e.lastHighlightedColor = trackColor;
-        } catch (e) {}
-      }
-
-      // Draw gap line from marker to nearest point on segment
-      const nearest = findNearestPointOnCoords(markerData.latlng, segCoords);
-      if (nearest) {
-        markerGapLine.value = leafletAdapter.createPolyline([markerData.latlng, nearest], {
-          color: trackColor,
-          weight: 1.5,
-          opacity: 0.6,
-          pane: "overlayPane",
-          interactive: false,
-          className: "chart-gap-line",
-        });
-        if (markerGapLine.value) {
-          leafletAdapter.addLayer(markerGapLine.value);
-        }
-
-        if (import.meta.env.MODE !== "production" && window.__e2e) {
-          try {
-            window.__e2e.lastGapLineExists = true;
-          } catch (e) {}
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("[TrackMap] Error highlighting segment:", err);
-    clearSegmentHighlight(map);
-  }
-}
-
-function findNearestPointOnCoords(point, coords) {
-  if (!point || !coords || coords.length === 0) return null;
-  const pointArray = Array.isArray(point) ? point : [point.lat, point.lng];
-  const [plat, plng] = pointArray;
-  if (!Number.isFinite(plat) || !Number.isFinite(plng)) return null;
-  let best = null;
-  let bestDist = Infinity;
-  for (let i = 0; i < coords.length; i++) {
-    const coord = coords[i];
-    const coordArray = Array.isArray(coord) ? coord : [coord.lat, coord.lng];
-    const [lat, lng] = coordArray;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-    const d = (lat - plat) * (lat - plat) + (lng - plng) * (lng - plng);
-    if (d < bestDist) {
-      bestDist = d;
-      best = coordArray;
-    }
-  }
-  return best;
-}
-
-function removeMarkerPolyline(map) {
-  try {
-    if (hoveredMarkerPolyline.value && map) {
-      map.removeLayer(hoveredMarkerPolyline.value);
-      hoveredMarkerPolyline.value = null;
-    }
-    if (hoveredMarker.value) {
-      hoveredMarker.value.setOpacity(1); // Restore marker
-      hoveredMarker.value = null;
-    }
-  } catch (error) {
-    console.warn("[TrackMap] Error removing hover polyline:", error);
-    // Force clear references even on error
-    hoveredMarkerPolyline.value = null;
-    hoveredMarker.value = null;
-  }
-}
-
-/**
- * Handle cluster click events
- * @param {Event} e - Cluster click event
- */
-function onClusterClick(e) {
-  const cluster = e.layer || e.target;
-
-  if (cluster.getAllChildMarkers) {
-    // This is a cluster, zoom in to show individual tracks
-    const map = getMapObject("onClusterClick");
-    if (map && cluster.getBounds) {
-      // Clean up hover polylines before fitting bounds
-      removeMarkerPolyline(map);
-      const bounds = cluster.getBounds();
-      map.fitBounds(bounds, { padding: [20, 20] });
-    }
-  }
-}
-
-/**
- * Handle individual marker click within cluster
- * @param {Event} e - Marker click event
- */
-function onClusterMarkerClick(e) {
-  const marker = e.layer || e.target;
-
-  // Check if this is an individual marker (not a cluster)
-  if (marker.trackData && !marker.getAllChildMarkers) {
-    // Emit track click event with track data
-    emit("trackClick", marker.trackData, e);
-  }
-}
-
-/**
- * Update clustering based on current tracks and filters with debouncing
- */
-function updateClustering() {
-  if (!clustering.clusterGroup.value || displayMode.value === "detail") {
-    return;
-  }
-
-  // Clear any pending clustering updates to debounce
-  clearClusteringUpdateTimeout();
-
-  clusteringUpdateTimeout = setTimeout(() => {
-    try {
-      if (displayMode.value === "cluster") {
-        // Add filtered tracks to cluster
-        clustering.addTracksToCluster(
-          filteredTracks.value,
-          clustering.clusterGroup.value,
-          null,
-          "center" // Use center point strategy
-        );
-      } else {
-        // Clear clusters when showing individual tracks
-        if (
-          clustering.clusterGroup.value.getLayers &&
-          clustering.clusterGroup.value.getLayers().length > 0
-        ) {
-          clustering.clusterGroup.value.clearLayers();
-        }
-      }
-    } catch (error) {
-      console.error("[TrackMap] Error updating clustering:", error);
-    }
-    clusteringUpdateTimeout = null;
-  }, 150); // Debounce clustering updates by 150ms
-}
-
-function onMoveStart(e) {
-  // Set panning state to optimize certain operations during pan
-  isPanningOrZooming.value = true;
-  // Remove hover polylines during move to prevent visual glitches
-  const map = e.target;
-  removeMarkerPolyline(map);
-  clearSegmentHighlight(map);
-}
-
-function onMoveEnd(e) {
-  const map = e.target;
-  const center_val = map.getCenter();
-  const mapBounds = map.getBounds();
-
-  // Clear panning state immediately
-  isPanningOrZooming.value = false;
-
-  // Update stable bounds with debouncing to reduce reactive updates
-  updateStableBounds(mapBounds);
-
-  // Only emit center update if it's meaningfully different to prevent oscillation
-  const newCenter = [center_val.lat, center_val.lng];
-  if (
-    !props.center ||
-    Math.abs(newCenter[0] - props.center[0]) > 0.0001 ||
-    Math.abs(newCenter[1] - props.center[1]) > 0.0001
-  ) {
-    emit("update:center", newCenter);
-  }
-
-  emit("update:bounds", mapBounds);
-  updateInitialMapState(e);
-
-  // If we have a marker persisted, re-draw the segment highlight after pan ends
-  if (props.markerLatLng) {
-    // Delay slightly to let map repaint
-    setTimeout(() => {
-      highlightSegmentForMarker(props.markerLatLng);
-    }, 150);
-  }
-}
-
-function onZoomStart(e) {
-  // Set zoom animating state and clean up hover polylines immediately
-  isZoomAnimating.value = true;
-  const map = e.target;
-  removeMarkerPolyline(map);
-}
-
-function onZoomEnd(e) {
-  const map = e.target;
-  const currentZoom = map.getZoom();
-
-  // Update stable bounds with debouncing to reduce reactive updates
-  updateStableBounds(map.getBounds());
-
-  // Debounced update of clustering and animation states
-  clearMapUpdateTimeout();
-  mapUpdateTimeout = setTimeout(() => {
-    try {
-      clustering.updateZoomLevel(currentZoom);
-
-      // Only emit zoom update if it's meaningfully different to prevent oscillation
-      if (Math.abs(currentZoom - props.zoom) > 0.1) {
-        emit("update:zoom", currentZoom);
-      }
-
-      // Clear zoom animating state after debounced update
-      isZoomAnimating.value = false;
-    } catch (error) {
-      console.error("[TrackMap] Error updating clustering zoom level:", error);
-      // Ensure states are cleared even on error
-      isZoomAnimating.value = false;
-    }
-  }, 100); // Slightly increased debounce time to prevent rapid-fire updates
-
-  emit("update:zoom", map.getZoom());
-  updateInitialMapState(e);
-}
-
-function onTrackClick(poly, event) {
-  emit("trackClick", poly, event);
-}
-
-function onTrackMouseOver(poly, event) {
-  // Skip hover events during zoom animations or panning to reduce processing
-  if (
-    props.selectedTrackDetail ||
-    isZoomAnimating.value ||
-    isPanningOrZooming.value
-  )
-    return;
-
-  const leafletLayer = event.target;
-  if (leafletLayer && typeof leafletLayer.bringToFront === "function") {
-    leafletLayer.bringToFront();
-  }
-  emit("trackMouseOver", poly, event);
-}
-
-function onTrackMouseMove(event) {
-  // Skip mouse move events during active operations
-  if (!isPanningOrZooming.value && !isZoomAnimating.value) {
-    emit("trackMouseMove", event);
-  }
-}
-
-function onTrackMouseOut(event) {
-  if (props.selectedTrackDetail) return;
-  emit("trackMouseOut", event);
-}
-
-/**
- * Handle geolocation results from the GeolocationButton component
- * @param {Object} location - Location object with latitude, longitude, or error
- */
-function onLocationFound(location) {
-  if (location.error) {
-    console.warn("[TrackMap] Geolocation error:", location.error);
-    return;
-  }
-
-  const map = getMapObject("onLocationFound");
-  if (!map) {
-    console.warn("[TrackMap] Map not available for geolocation");
-    return;
-  }
-
-  try {
-    // Center the map on the user's location
-    // Check if component is still mounted before flying
-    if (isUnmounting.value) return;
-
-    map.flyTo([location.latitude, location.longitude], 15, {
-      duration: 1.5,
-      easeLinearity: 0.25,
-    });
-
-    // If we have a highlighted segment or gap lines, keep them in sync (no-op here)
-    // This is a placeholder for more advanced sync logic if needed later
-    if (hoveredSegmentPolyline.value) {
-      // No action required now
-    }
-  } catch (error) {
-    console.error("[TrackMap] Error centering map on user location:", error);
-  }
-}
-
-/**
- * Get stroke color for chart hover marker based on segment index.
- * @param {Object} markerData - Marker data with segmentIndex property
- * @returns {string} Color hex string
- */
-function getMarkerStrokeColor(markerData) {
-  // Default blue color for single-segment tracks or when segmentIndex is not provided
-  if (!markerData.segmentIndex && markerData.segmentIndex !== 0) {
-    return "#3B82F6"; // Default blue
-  }
-
-  // Use a color palette for multi-segment tracks
-  const colors = [
-    "#3B82F6", // Blue
-    "#EF4444", // Red
-    "#10B981", // Green
-    "#F59E0B", // Amber
-    "#8B5CF6", // Purple
-    "#EC4899", // Pink
-    "#14B8A6", // Teal
-    "#F97316", // Orange
-  ];
-
-  return colors[markerData.segmentIndex % colors.length];
-}
-
-/**
- * Get fill color for chart hover marker.
- * @param {Object} markerData - Marker data with segmentIndex property
- * @returns {string} Color hex string
- */
-function getMarkerFillColor(markerData) {
-  // For fixed marker, use semi-transparent version of stroke color (alpha)
-  const stroke = getMarkerStrokeColor(markerData) || "#3B82F6";
-  // Tiny utility to add alpha to hex color (assumes #rrggbb)
-  function withAlpha(hex, alpha) {
-    if (!hex || hex.length !== 7) return hex;
-    const a = Math.round(alpha * 255)
-      .toString(16)
-      .padStart(2, "0");
-    return `${hex}${a}`; // #rrggbbaa
-  }
-  return markerData && markerData.isFixed ? withAlpha(stroke, 0.28) : "white";
-}
-
-/**
- * Handles logic when a track detail is selected.
- * @param {Object} newDetail - The new track detail object.
- */
-async function handleTrackSelected(newDetail) {
-  try {
-    // If bounds prop is provided, let the bounds watch handle positioning
-    // This prevents double-positioning and conflicts
-    if (
-      props.bounds &&
-      Array.isArray(props.bounds) &&
-      props.bounds.length === 2
-    ) {
-      console.log(
-        "[TrackMap] Bounds provided, skipping handleTrackSelected flyToBounds"
-      );
-      // Just save pre-selection state for returning later
-      const map = getMapObject("handleTrackSelected-saveState");
-      if (map) {
-        mapState.value.preSelection.zoom = map.getZoom();
-        mapState.value.preSelection.center = [
-          map.getCenter().lat,
-          map.getCenter().lng,
-        ];
-        saveMapStateToStorage(
-          mapState.value.preSelection.zoom,
-          mapState.value.preSelection.center
-        );
-      }
-      return;
-    }
-
-    const selectedPolyline = props.polylines.find(
-      (poly) => poly.properties && poly.properties.id === newDetail.id
-    );
-    if (
-      !selectedPolyline ||
-      !selectedPolyline.latlngs ||
-      !selectedPolyline.latlngs.length
-    )
-      return;
-
-    const map = getMapObject("handleTrackSelected");
-    if (map) {
-      // Clean up any hover polylines before flying to track
-      removeMarkerPolyline(map);
-
-      // Save current state before flying to track
-      mapState.value.preSelection.zoom = map.getZoom();
-      mapState.value.preSelection.center = [
-        map.getCenter().lat,
-        map.getCenter().lng,
-      ];
-      saveMapStateToStorage(
-        mapState.value.preSelection.zoom,
-        mapState.value.preSelection.center
-      );
-
-      map.flyToBounds(selectedPolyline.latlngs, {
-        ...getDetailPanelFitBoundsOptions(),
-        duration: 1.5,
-        easeLinearity: 0.25,
-      });
-    } else {
-      // Fallback when map object is not available
-      if (
-        mapState.value.lastKnownGood.zoom !== undefined &&
-        mapState.value.lastKnownGood.center
-      ) {
-        mapState.value.preSelection.zoom = mapState.value.lastKnownGood.zoom;
-        mapState.value.preSelection.center = [
-          ...mapState.value.lastKnownGood.center,
-        ];
-        saveMapStateToStorage(
-          mapState.value.preSelection.zoom,
-          mapState.value.preSelection.center
-        );
-      }
-
-      mapBounds.value = null;
-      await nextTick();
-      mapBounds.value = latLngBounds(selectedPolyline.latlngs);
-    }
-  } catch (error) {
-    console.error("[TrackMap] Error in handleTrackSelected:", error, {
-      newDetail,
-    });
-  }
-}
-
-/**
- * Handles logic when a track detail is deselected (closed).
- */
-async function handleTrackDeselected() {
-  try {
-    setTrackZoomAnimating(true);
-    const map = getMapObject("handleTrackDeselected");
-
-    // Clean up any hover polylines before flying back
-    removeMarkerPolyline(map);
-
-    mapBounds.value = null;
-
-    let center = mapState.value.preSelection.center;
-    let zoom = mapState.value.preSelection.zoom;
-
-    // Try to load from localStorage if not available in memory
-    if (!center || zoom === undefined) {
-      const storedState = loadMapStateFromStorage();
-      if (storedState) {
-        zoom = storedState.zoom;
-        center = storedState.center;
-      }
-    }
-
-    // Final fallback to last known good state
-    if (!center || zoom === undefined) {
-      center = mapState.value.lastKnownGood.center;
-      zoom = mapState.value.lastKnownGood.zoom;
-    }
-
-    if (map && center && zoom !== undefined && !isUnmounting.value) {
-      // Clean up hover polylines before starting flyTo
-      removeMarkerPolyline(map);
-
-      setTimeout(() => {
-        // Double-check if component is still mounted
-        if (isUnmounting.value) return;
-
-        try {
-          map.flyTo(center, zoom, {
-            duration: 1.5,
-            easeLinearity: 0.25,
-          });
-          // Update state after successful fly
-          mapState.value.lastKnownGood.center = Array.isArray(center)
-            ? [...center]
-            : [center.lat, center.lng];
-          mapState.value.lastKnownGood.zoom = zoom;
-        } catch (flyError) {
-          console.warn("[TrackMap] flyTo failed, trying setView:", flyError);
-          try {
-            if (!isUnmounting.value) {
-              map.setView(center, zoom, { animate: false }); // Disable animation on fallback
-            }
-          } catch (setViewError) {
-            console.error("[TrackMap] setView also failed:", setViewError);
-          }
-        }
-      }, 50);
-    }
-  } catch (error) {
-    console.error("[TrackMap] Error in handleTrackDeselected:", error);
-    // Recovery attempt
-    try {
-      const map = getMapObject("handleTrackDeselected-recovery");
-      if (map && !isUnmounting.value) {
-        const center =
-          mapState.value.preSelection.center ||
-          mapState.value.lastKnownGood.center;
-        const zoom =
-          mapState.value.preSelection.zoom || mapState.value.lastKnownGood.zoom;
-        if (center && zoom !== undefined) {
-          map.setView(center, zoom, { animate: false }); // Disable animation in recovery
-        }
-      }
-    } catch (recoveryError) {
-      console.error(
-        "[TrackMap] Failed to recover from deselection error:",
-        recoveryError
-      );
-    }
   }
 }
 
@@ -2458,10 +934,7 @@ function cleanup() {
   clearMapUpdateTimeout();
   clearFilterUpdateTimeout();
 
-  // Clean up new debounced functions
-  if (debouncedOnFilterChange && debouncedOnFilterChange.cancel) {
-    debouncedOnFilterChange.cancel();
-  }
+  // Clean up debounced filter functions
   if (batchedFilterUpdate && batchedFilterUpdate.cancel) {
     batchedFilterUpdate.cancel();
   }
@@ -2557,7 +1030,9 @@ watch(
     }
   }
 );
+
 </script>
+
 <style scoped>
 .fullscreen-map {
   height: 100vh;
