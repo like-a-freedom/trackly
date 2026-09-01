@@ -1,6 +1,6 @@
 import { computed } from 'vue';
 import { useTracksStore } from '../stores/tracks.js';
-import { useAuth } from './useAuth';
+import { http } from '../http-instance';
 import { getSessionId } from '../utils/session';
 import {
     formatDuration,
@@ -98,20 +98,6 @@ function buildFilterQueryParams(options = {}) {
     return params;
 }
 
-async function getAuthHeaders(options) {
-    const headers = {};
-    if (options?.mine || options?.isAuthenticated) {
-        const { accessToken, ensureValidToken, isAuthenticated } = useAuth();
-        if (isAuthenticated.value && accessToken.value) {
-            try {
-                await ensureValidToken();
-                headers['Authorization'] = `Bearer ${accessToken.value}`;
-            } catch { /* expired */ }
-        }
-    }
-    return headers;
-}
-
 export function resetTracksCaches() {
     bboxCache.clear();
     heatmapCache.clear();
@@ -148,8 +134,7 @@ export function useTracks() {
 
         try {
             currentController = new AbortController();
-            const headers = await getAuthHeaders(options);
-            const response = await fetch(url, { signal: currentController.signal, headers });
+            const response = await http(url, { signal: currentController.signal });
             if (!response.ok) throw new Error('Failed to fetch tracks');
             const data = await response.json();
             if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
@@ -201,10 +186,8 @@ export function useTracks() {
 
         try {
             heatmapController = new AbortController();
-            const headers = await getAuthHeaders(options);
-            const response = await fetch(`/api/tracks/heatmap?${filterParams.toString()}`, {
+            const response = await http(`/api/tracks/heatmap?${filterParams.toString()}`, {
                 signal: heatmapController.signal,
-                headers
             });
             if (!response.ok) throw new Error('Failed to fetch heatmap data');
             const data = await response.json();
@@ -233,8 +216,7 @@ export function useTracks() {
         if (isPublic !== undefined) formData.append('is_public', isPublic.toString());
 
         try {
-            const headers = await getAuthHeaders({ isAuthenticated: true });
-            const response = await fetch('/api/tracks/upload', { method: 'POST', body: formData, headers });
+            const response = await http('/api/tracks/upload', { method: 'POST', body: formData });
             if (!response.ok) {
                 const text = await response.text();
                 if (response.status === 429) throw new Error('Please, wait 10 seconds between uploads.');
@@ -263,12 +245,8 @@ export function useTracks() {
 
             const sessionId = getSessionId();
             const headers = sessionId ? { 'x-session-id': sessionId } : {};
-            const { accessToken, isAuthenticated } = useAuth();
-            if (isAuthenticated.value && accessToken.value) {
-                headers['Authorization'] = `Bearer ${accessToken.value}`;
-            }
 
-            const response = await fetch(endpoint, { headers });
+            const response = await http(endpoint, { headers });
             if (!response.ok) throw new Error(`Failed to fetch track detail: ${response.status}`);
             return store.processTrackData(await response.json());
         } catch (e) {
@@ -280,13 +258,8 @@ export function useTracks() {
     async function updateTrackCategories(id, categories) {
         store.error = null;
         try {
-            const headers = { 'Content-Type': 'application/json' };
-            const { accessToken, isAuthenticated } = useAuth();
-            if (isAuthenticated.value && accessToken.value) {
-                headers['Authorization'] = `Bearer ${accessToken.value}`;
-            }
-            const response = await fetch(`/api/tracks/${id}/categories`, {
-                method: 'PATCH', headers,
+            const response = await http(`/api/tracks/${id}/categories`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ session_id: getSessionId(), categories })
             });
             if (!response.ok) throw new Error(await response.text() || 'Failed to update categories');
@@ -301,14 +274,8 @@ export function useTracks() {
     async function updateTrackDistanceMarkers(id, enabled) {
         store.error = null;
         try {
-            const headers = { 'Content-Type': 'application/json' };
-            const { accessToken, ensureValidToken, isAuthenticated } = useAuth();
-            if (isAuthenticated.value && accessToken.value) {
-                await ensureValidToken();
-                headers['Authorization'] = `Bearer ${accessToken.value}`;
-            }
-            const response = await fetch(`/api/tracks/${id}/distance-markers`, {
-                method: 'PATCH', headers,
+            const response = await http(`/api/tracks/${id}/distance-markers`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ distance_markers_enabled: !!enabled, session_id: getSessionId() })
             });
             if (!response.ok) throw new Error(await response.text() || 'Failed to update distance markers');
@@ -323,14 +290,8 @@ export function useTracks() {
     async function updateTrackVisibility(id, isPublic) {
         store.error = null;
         try {
-            const headers = { 'Content-Type': 'application/json' };
-            const { accessToken, ensureValidToken, isAuthenticated } = useAuth();
-            if (isAuthenticated.value && accessToken.value) {
-                await ensureValidToken();
-                headers['Authorization'] = `Bearer ${accessToken.value}`;
-            }
-            const response = await fetch(`/api/tracks/${id}/visibility`, {
-                method: 'PATCH', headers,
+            const response = await http(`/api/tracks/${id}/visibility`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_public: isPublic, session_id: getSessionId() })
             });
             if (!response.ok) throw new Error(await response.text() || 'Failed to update visibility');
