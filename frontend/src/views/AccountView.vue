@@ -542,13 +542,14 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useConfirm } from "../composables/useConfirm";
+import { http } from "../http-instance";
 
 defineOptions({
   name: "AccountView",
 });
 
 const router = useRouter();
-const { user, isLoading, logout, updateProfile, deleteAccount, authFetch } =
+const { user, isLoading, logout, updateProfile, deleteAccount } =
   useAuth();
 const { confirm } = useConfirm();
 
@@ -660,7 +661,7 @@ function formatDate(dateStr) {
 async function loadTracks() {
   loadingTracks.value = true;
   try {
-    const response = await authFetch(
+    const response = await http(
       `/api/account/tracks?limit=${tracksLimit}&offset=${tracksOffset.value}&sort=created_at&order=desc`
     );
     if (response.ok) {
@@ -712,7 +713,7 @@ function toggleTrackSelection(trackId) {
 async function toggleTrackVisibility(track) {
   togglingVisibility.value = track.id;
   try {
-    const response = await authFetch(`/api/tracks/${track.id}/visibility`, {
+    const response = await http(`/api/tracks/${track.id}/visibility`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_public: !track.is_public }),
@@ -732,7 +733,7 @@ async function bulkToggleVisibility() {
 
   bulkOperating.value = true;
   try {
-    const response = await authFetch("/api/account/tracks/bulk/visibility", {
+    const response = await http("/api/account/tracks/bulk/visibility", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_ids: selectedTrackIds.value }),
@@ -769,7 +770,7 @@ async function bulkDeleteTracks() {
 
   bulkOperating.value = true;
   try {
-    const response = await authFetch("/api/account/tracks/bulk", {
+    const response = await http("/api/account/tracks/bulk", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_ids: selectedTrackIds.value }),
