@@ -96,6 +96,7 @@
 
     <!-- Create track button — top right -->
     <button
+      v-if="featureFlags.isEditorEnabled"
       class="create-track-btn"
       title="Create new track"
       aria-label="Create new track"
@@ -118,7 +119,7 @@
     </button>
 
     <!-- Auth button - positioned in bottom left -->
-    <div class="auth-button-overlay">
+    <div v-if="featureFlags.isAuthEnabled" class="auth-button-overlay">
       <LoginButton />
     </div>
 
@@ -158,6 +159,7 @@ import { useTracks } from "../composables/useTracks";
 import { useToast } from "../composables/useToast";
 import { useSearchState } from "../composables/useSearchState";
 import { useMapUrlState } from "../composables/useMapUrlState";
+import { useFeatureFlagsStore } from "../stores/featureFlags";
 import { events } from "../events";
 import { getSessionId } from "../utils/session";
 import {
@@ -222,6 +224,7 @@ const tooltip = reactive({ visible: false, x: 0, y: 0, data: null });
 const { showToast, toast } = useToast();
 const { clearSearchState, searchResults, searchQuery, hasSearchState } =
   useSearchState();
+const featureFlags = useFeatureFlagsStore();
 const activeTrackId = ref(null);
 const sessionId = getSessionId();
 

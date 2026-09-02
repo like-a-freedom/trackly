@@ -103,6 +103,10 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(handlers::health))
+        .route(
+            "/api/feature-flags",
+            get(handlers::get_feature_flags),
+        )
         .route("/metrics", get(metrics::serve_metrics))
         .nest_service("/graphs", ServeDir::new(graph_dir))
         .route("/api/tracks/upload", post(handlers::upload_track))

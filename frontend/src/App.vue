@@ -1,25 +1,32 @@
 <template>
   <div id="app-container">
-    <router-view v-slot="{ Component, route }">
-      <transition
-        name="page"
-        mode="out-in"
-        appear
-      >
-        <keep-alive
-          :include="['HomeView', 'TrackView']"
-          :max="3"
+    <template v-if="featureFlags.isLoaded">
+      <router-view v-slot="{ Component, route }">
+        <transition
+          name="page"
+          mode="out-in"
+          appear
         >
-          <component
-            :is="Component"
-            :key="getComponentKey(route)"
-          />
-        </keep-alive>
-      </transition>
-    </router-view>
+          <keep-alive
+            :include="['HomeView', 'TrackView']"
+            :max="3"
+          >
+            <component
+              :is="Component"
+              :key="getComponentKey(route)"
+            />
+          </keep-alive>
+        </transition>
+      </router-view>
 
-    <!-- Global dialog provider -->
-    <ConfirmDialogProvider />
+      <!-- Global dialog provider -->
+      <ConfirmDialogProvider />
+    </template>
+    <template v-else>
+      <div class="loading-screen">
+        <div class="loading-spinner"></div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -27,12 +34,16 @@
 import { onMounted } from "vue";
 import ConfirmDialogProvider from "./components/ConfirmDialogProvider.vue";
 import { useAuth } from "./composables/useAuth";
+import { useFeatureFlagsStore } from "./stores/featureFlags";
 
-// Initialize auth on app mount
+const featureFlags = useFeatureFlagsStore();
 const { initialize } = useAuth();
 
-onMounted(() => {
-  initialize();
+onMounted(async () => {
+  await featureFlags.fetchFlags();
+  if (featureFlags.isAuthEnabled) {
+    initialize();
+  }
 });
 
 // Generate component key that ignores URL query params to prevent unnecessary rerenders
@@ -113,5 +124,26 @@ body,
   /* Prevent subpixel rendering issues */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

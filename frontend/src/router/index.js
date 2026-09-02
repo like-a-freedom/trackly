@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import TrackView from '../views/TrackView.vue'
+import { useFeatureFlagsStore } from '../stores/featureFlags'
 
 // Lazy-loaded views
 const AccountView = () => import('../views/AccountView.vue')
@@ -16,13 +17,15 @@ const routes = [
   {
     path: '/tracks/new',
     name: 'TrackCreate',
-    component: TrackEditorView
+    component: TrackEditorView,
+    meta: { feature: 'editor' }
   },
   {
     path: '/tracks/:id/edit',
     name: 'TrackEdit',
     component: TrackEditorView,
-    props: true
+    props: true,
+    meta: { feature: 'editor' }
   },
   {
     path: '/track/:id',
@@ -34,18 +37,20 @@ const routes = [
     path: '/account',
     name: 'Account',
     component: AccountView,
-    meta: { requiresAuth: true }
+    meta: { feature: 'auth' }
   },
   {
     path: '/auth/callback',
     name: 'AuthCallback',
-    component: AuthCallbackView
+    component: AuthCallbackView,
+    meta: { feature: 'auth' }
   },
   {
     // Alias for Google OAuth redirect URI (matches GOOGLE_REDIRECT_URI in .env)
     path: '/auth/google/callback',
     name: 'AuthGoogleCallback',
-    component: AuthCallbackView
+    component: AuthCallbackView,
+    meta: { feature: 'auth' }
   }
 ];
 
@@ -66,6 +71,18 @@ const router = createRouter({
       return { top: 0 }
     }
   }
+})
+
+router.beforeEach((to) => {
+  const feature = to.meta.feature
+  if (!feature) return true
+
+  const flags = useFeatureFlagsStore()
+
+  if (feature === 'auth' && !flags.isAuthEnabled) return '/'
+  if (feature === 'editor' && !flags.isEditorEnabled) return '/'
+
+  return true
 })
 
 export default router

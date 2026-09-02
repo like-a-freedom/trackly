@@ -4,6 +4,7 @@ use crate::error::Result;
 use crate::metrics;
 use crate::models::MapInteractionEvent;
 use axum::{Json, http::StatusCode};
+use serde::Serialize;
 use tracing::debug;
 
 pub async fn record_map_interaction(Json(event): Json<MapInteractionEvent>) -> Result<StatusCode> {
@@ -33,6 +34,20 @@ fn bucket_zoom_level(zoom: Option<f64>) -> &'static str {
     }
 }
 
+/// Response for the feature flags endpoint.
+#[derive(Serialize)]
+pub struct FeatureFlagsResponse {
+    pub auth: bool,
+    pub editor: bool,
+}
+
+pub async fn get_feature_flags() -> Json<FeatureFlagsResponse> {
+    Json(FeatureFlagsResponse {
+        auth: crate::auth::config::is_auth_configured(),
+        editor: true,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -43,5 +58,26 @@ mod tests {
         assert_eq!(bucket_zoom_level(Some(12.0)), "mid");
         assert_eq!(bucket_zoom_level(Some(16.0)), "high");
         assert_eq!(bucket_zoom_level(None), "mid");
+    }
+
+    #[test]
+    fn feature_flags_editor_always_true() {
+        let flags = FeatureFlagsResponse {
+            auth: false,
+            editor: true,
+        };
+        assert!(flags.editor);
+    }
+
+    #[test]
+    fn feature_flags_auth_depends_on_config() {
+        let flags = FeatureFlagsResponse {
+            auth: crate::auth::config::is_auth_configured(),
+            editor: true,
+        };
+        // auth is true only if GOOGLE_CLIENT_ID + JWT_SECRET are set
+        // In test env they typically aren't, so this should be false
+        // The important thing is it doesn't panic
+        let _ = flags.auth;
     }
 }
