@@ -201,7 +201,7 @@ impl ElevationEnrichmentService {
     async fn is_daily_limit_exceeded(&self) -> Result<bool> {
         if let Some(pool) = &self.pool {
             match db::get_today_api_usage(pool, &self.dataset).await {
-                Ok(usage) => Ok(usage >= self.daily_limit as i32),
+                Ok(usage) => Ok(usage >= i32::try_from(self.daily_limit).unwrap_or(i32::MAX)),
                 Err(e) => {
                     tracing::warn!("Failed to check API usage: {}", e);
                     Ok(false) // Allow request if we can't check usage
@@ -254,7 +254,9 @@ impl ElevationEnrichmentService {
         // Process points in chunks to respect API limits
         for chunk in track_points.chunks(self.max_points_per_request) {
             // Check daily API limit before making request - include in-flight usage of this job
-            if current_usage + (total_api_calls as i32) + 1 >= self.daily_limit as i32 {
+            if current_usage + i32::try_from(total_api_calls).unwrap_or(i32::MAX) + 1
+                >= i32::try_from(self.daily_limit).unwrap_or(i32::MAX)
+            {
                 error!("Daily API limit exceeded for service {}", self.dataset);
                 return Err(anyhow!(
                     "Daily API limit exceeded for service {}",

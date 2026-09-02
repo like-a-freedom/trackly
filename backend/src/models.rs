@@ -62,6 +62,8 @@ pub struct GapInfo {
     pub duration_seconds: Option<i64>,
 }
 
+/// Detailed track information with all metadata, geometry, and analytics.
+#[must_use]
 #[derive(Serialize)]
 pub struct TrackDetail {
     pub id: Uuid,
@@ -110,6 +112,8 @@ pub struct TrackDetail {
     pub pace_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
 }
 
+/// Simplified track data for listing views (geometry is pre-simplified).
+#[must_use]
 #[derive(Debug, Serialize)]
 pub struct TrackSimplified {
     pub id: Uuid,
@@ -313,6 +317,8 @@ where
     })
 }
 
+/// View mode for track display (overview vs detail).
+#[must_use]
 #[derive(Debug, Clone, Copy)]
 pub enum TrackMode {
     Overview,
@@ -336,6 +342,8 @@ impl TrackMode {
     }
 }
 
+/// Parsed track data from GPX/KML conversion before DB insertion.
+#[must_use]
 #[derive(Debug)]
 pub struct ParsedTrackData {
     pub geom_geojson: serde_json::Value,
@@ -649,6 +657,7 @@ mod tests {
 // ============================================================================
 
 /// POI structure from database
+#[must_use]
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Poi {
     pub id: i32,

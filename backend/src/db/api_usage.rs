@@ -18,7 +18,7 @@ pub async fn record_api_usage(
     )
     .bind(today)
     .bind(service_name)
-    .bind(api_calls as i32)
+    .bind(i32::try_from(api_calls).unwrap_or(i32::MAX))
     .execute(pool)
     .await?;
 
@@ -51,7 +51,7 @@ pub async fn is_daily_limit_exceeded(
     daily_limit: u32,
 ) -> Result<bool, sqlx::Error> {
     let usage = get_today_api_usage(pool, service_name).await?;
-    Ok(usage >= daily_limit as i32)
+    Ok(usage >= i32::try_from(daily_limit).unwrap_or(i32::MAX))
 }
 
 /// Get API usage statistics for the last N days

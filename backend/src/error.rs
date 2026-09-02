@@ -15,6 +15,9 @@ use axum::{
 use serde_json::json;
 use thiserror::Error;
 
+/// The result type for all backend operations. `Result` already enforces
+/// `#[must_use]` via the standard library, so ignoring a return value is
+/// a compile error.
 pub type Result<T> = std::result::Result<T, AppError>;
 
 /// The single domain error type for the backend.

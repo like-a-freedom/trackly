@@ -108,7 +108,8 @@ fn bearing(from: (f64, f64), to: (f64, f64)) -> f64 {
 /// Higher zoom = lower tolerance (more detail)
 /// Lower zoom = higher tolerance (less detail)
 pub fn get_tolerance_for_zoom(zoom: f64) -> f64 {
-    match zoom as u8 {
+    let z = (zoom.round() as u8).min(22);
+    match z {
         0..=5 => 1000.0, // 1km tolerance for world view
         6..=8 => 500.0,  // 500m for country/region view
         9..=11 => 100.0, // 100m for city view

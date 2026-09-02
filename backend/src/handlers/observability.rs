@@ -35,6 +35,7 @@ fn bucket_zoom_level(zoom: Option<f64>) -> &'static str {
 }
 
 /// Response for the feature flags endpoint.
+#[must_use]
 #[derive(Serialize)]
 pub struct FeatureFlagsResponse {
     pub auth: bool,

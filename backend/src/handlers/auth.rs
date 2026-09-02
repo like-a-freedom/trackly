@@ -91,7 +91,13 @@ fn set_auth_cookies(
             config.refresh_token_expiry_secs as i64,
         ))
         .build();
-    headers.insert(SET_COOKIE, refresh_cookie.to_string().parse().expect("valid cookie header"));
+    headers.insert(
+        SET_COOKIE,
+        refresh_cookie
+            .to_string()
+            .parse()
+            .expect("valid cookie header"),
+    );
 
     let access_cookie = Cookie::build(("access_token", access_token.to_owned()))
         .http_only(true)
@@ -102,7 +108,13 @@ fn set_auth_cookies(
             config.access_token_expiry_secs as i64,
         ))
         .build();
-    headers.append(SET_COOKIE, access_cookie.to_string().parse().expect("valid cookie header"));
+    headers.append(
+        SET_COOKIE,
+        access_cookie
+            .to_string()
+            .parse()
+            .expect("valid cookie header"),
+    );
 }
 
 /// Clear access and refresh token cookies (set to empty with ZERO max-age).
@@ -114,7 +126,13 @@ fn clear_auth_cookies(headers: &mut HeaderMap) {
         .path("/auth")
         .max_age(cookie::time::Duration::ZERO)
         .build();
-    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().expect("valid cookie header"));
+    headers.insert(
+        SET_COOKIE,
+        clear_refresh
+            .to_string()
+            .parse()
+            .expect("valid cookie header"),
+    );
 
     let clear_access = Cookie::build(("access_token", ""))
         .http_only(true)
@@ -123,7 +141,13 @@ fn clear_auth_cookies(headers: &mut HeaderMap) {
         .path("/")
         .max_age(cookie::time::Duration::ZERO)
         .build();
-    headers.append(SET_COOKIE, clear_access.to_string().parse().expect("valid cookie header"));
+    headers.append(
+        SET_COOKIE,
+        clear_access
+            .to_string()
+            .parse()
+            .expect("valid cookie header"),
+    );
 }
 
 /// Request for OAuth callback.
@@ -384,7 +408,9 @@ pub async fn refresh_token(
         }
     }
     let body = serde_json::to_string(&response).expect("serializable response");
-    let resp = builder.body(axum::body::Body::from(body)).expect("valid response");
+    let resp = builder
+        .body(axum::body::Body::from(body))
+        .expect("valid response");
     Ok(resp)
 }
 

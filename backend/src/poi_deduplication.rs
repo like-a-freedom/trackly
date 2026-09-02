@@ -225,7 +225,7 @@ pub async fn link_pois_to_track(
     // Step 2: Prepare data for bulk linking
     let poi_ids_with_order: Vec<(i32, i32)> = poi_results
         .iter()
-        .map(|(idx, poi_id)| (*poi_id, *idx as i32))
+        .map(|(idx, poi_id)| (*poi_id, i32::try_from(*idx).unwrap_or(i32::MAX)))
         .collect();
 
     // Step 3: Bulk link all POIs to track

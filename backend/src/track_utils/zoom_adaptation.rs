@@ -5,7 +5,8 @@ use crate::models::TrackMode;
 /// Lower zoom = broader view = higher tolerance (more simplification)
 /// Higher zoom = detailed view = lower tolerance (less simplification)
 pub fn tolerance_for_zoom(zoom: f64) -> f64 {
-    match zoom as i32 {
+    let z = (zoom.round() as i32).clamp(0, 22);
+    match z {
         z if z <= 8 => 100.0, // ~100m tolerance for world/country view
         z if z <= 10 => 50.0, // ~50m for regional view
         z if z <= 12 => 25.0, // ~25m for city view
@@ -64,8 +65,9 @@ pub fn get_simplification_params(
 /// Lower zoom = fewer points needed for smooth display
 /// Higher zoom = more points needed for detail
 fn calculate_max_points_for_zoom(zoom: f64, is_overview: bool) -> usize {
+    let z = (zoom.round() as i32).clamp(0, 22);
     if is_overview {
-        match zoom as i32 {
+        match z {
             z if z <= 8 => 200,   // Very few points for world view
             z if z <= 10 => 500,  // Moderate for regional
             z if z <= 12 => 1000, // Standard for city view
@@ -74,7 +76,7 @@ fn calculate_max_points_for_zoom(zoom: f64, is_overview: bool) -> usize {
         }
     } else {
         // Detail mode allows more points at all zoom levels
-        match zoom as i32 {
+        match z {
             z if z <= 8 => 1000,
             z if z <= 10 => 2000,
             z if z <= 12 => 5000,
