@@ -208,8 +208,7 @@ async fn test_update_track_categories_handler_owner_check() {
     let id = Uuid::new_v4();
     let hash = format!("testhash-handler-{id}");
     let cats = ["initial"];
-    let geom_geojson =
-        serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
+    let geom_geojson = serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
 
     insert_track(InsertTrackParams {
         pool: &pool,
@@ -313,8 +312,7 @@ async fn test_update_track_categories_empty_rejected() {
     let id = Uuid::new_v4();
     let hash = format!("testhash-emptycat-{id}");
     let cats = ["initial"];
-    let geom_geojson =
-        serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
+    let geom_geojson = serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
 
     insert_track(InsertTrackParams {
         pool: &pool,
@@ -586,9 +584,8 @@ async fn test_search_tracks_by_name() {
     use std::sync::Arc;
     use uuid::Uuid;
 
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "postgres://postgres:password@localhost:5432/trackly_test".to_string()
-    });
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:password@localhost:5432/trackly_test".to_string());
 
     let pool = Arc::new(
         PgPoolOptions::new()
@@ -672,9 +669,8 @@ async fn test_search_tracks_case_insensitive() {
     use std::sync::Arc;
     use uuid::Uuid;
 
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "postgres://postgres:password@localhost:5432/trackly_test".to_string()
-    });
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:password@localhost:5432/trackly_test".to_string());
 
     let pool = Arc::new(
         PgPoolOptions::new()

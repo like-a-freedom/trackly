@@ -203,21 +203,15 @@ pub async fn duplicate_track(
     request: DuplicateTrackRequest,
     user_id: Option<Uuid>,
 ) -> Result<TrackUploadResponse> {
-    let new_id = db::duplicate_track(
-        pool,
-        source_id,
-        request.name,
-        request.session_id,
-        user_id,
-    )
-    .await
-    .map_err(|e| {
-        error!(?e, "failed to duplicate track");
-        match e {
-            sqlx::Error::RowNotFound => AppError::NotFound,
-            other => AppError::Database(other),
-        }
-    })?;
+    let new_id = db::duplicate_track(pool, source_id, request.name, request.session_id, user_id)
+        .await
+        .map_err(|e| {
+            error!(?e, "failed to duplicate track");
+            match e {
+                sqlx::Error::RowNotFound => AppError::NotFound,
+                other => AppError::Database(other),
+            }
+        })?;
 
     info!(source_id = %source_id, new_id = %new_id, "track duplicated");
 

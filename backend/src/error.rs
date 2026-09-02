@@ -19,6 +19,7 @@ pub type Result<T> = std::result::Result<T, AppError>;
 
 /// The single domain error type for the backend.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum AppError {
     #[error("resource not found")]
     NotFound,

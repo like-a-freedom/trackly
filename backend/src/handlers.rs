@@ -23,7 +23,7 @@ pub use auth::{
 };
 
 // Re-export observability handlers
-pub use observability::{health, record_map_interaction, get_feature_flags};
+pub use observability::{get_feature_flags, health, record_map_interaction};
 
 // Re-export sitemap handler
 pub use sitemap::sitemap;

@@ -671,7 +671,6 @@ mod tests {
         );
         let speed_data = parsed_data.speed_data.unwrap();
         assert_eq!(speed_data.len(), 4);
-
     }
 
     #[test]

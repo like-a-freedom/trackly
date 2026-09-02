@@ -75,6 +75,57 @@ impl From<User> for UserResponse {
     }
 }
 
+/// Set access and refresh token cookies on the response headers.
+fn set_auth_cookies(
+    headers: &mut HeaderMap,
+    access_token: &str,
+    refresh_token: &str,
+    config: &crate::auth::AuthConfig,
+) {
+    let refresh_cookie = Cookie::build(("refresh_token", refresh_token.to_owned()))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/auth")
+        .max_age(cookie::time::Duration::seconds(
+            config.refresh_token_expiry_secs as i64,
+        ))
+        .build();
+    headers.insert(SET_COOKIE, refresh_cookie.to_string().parse().expect("valid cookie header"));
+
+    let access_cookie = Cookie::build(("access_token", access_token.to_owned()))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/")
+        .max_age(cookie::time::Duration::seconds(
+            config.access_token_expiry_secs as i64,
+        ))
+        .build();
+    headers.append(SET_COOKIE, access_cookie.to_string().parse().expect("valid cookie header"));
+}
+
+/// Clear access and refresh token cookies (set to empty with ZERO max-age).
+fn clear_auth_cookies(headers: &mut HeaderMap) {
+    let clear_refresh = Cookie::build(("refresh_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/auth")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().expect("valid cookie header"));
+
+    let clear_access = Cookie::build(("access_token", ""))
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .path("/")
+        .max_age(cookie::time::Duration::ZERO)
+        .build();
+    headers.append(SET_COOKIE, clear_access.to_string().parse().expect("valid cookie header"));
+}
+
 /// Request for OAuth callback.
 #[derive(Debug, Deserialize)]
 pub struct CallbackRequest {
@@ -226,30 +277,7 @@ pub async fn google_callback(
 
     // Build response with cookies
     let mut headers = HeaderMap::new();
-
-    // Set refresh token as HttpOnly cookie
-    let refresh_cookie = Cookie::build(("refresh_token", refresh_token.clone()))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/auth")
-        .max_age(cookie::time::Duration::seconds(
-            config.refresh_token_expiry_secs as i64,
-        ))
-        .build();
-    headers.insert(SET_COOKIE, refresh_cookie.to_string().parse().unwrap());
-
-    // Optionally set access token as HttpOnly cookie too
-    let access_cookie = Cookie::build(("access_token", access_token.clone()))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/")
-        .max_age(cookie::time::Duration::seconds(
-            config.access_token_expiry_secs as i64,
-        ))
-        .build();
-    headers.append(SET_COOKIE, access_cookie.to_string().parse().unwrap());
+    set_auth_cookies(&mut headers, &access_token, &refresh_token, config);
 
     info!(
         user_id = %user.id,
@@ -290,7 +318,7 @@ pub async fn refresh_token(
             let resp = axum::http::Response::builder()
                 .status(axum::http::StatusCode::NO_CONTENT)
                 .body(axum::body::Body::empty())
-                .unwrap();
+                .expect("valid response");
             return Ok(resp);
         }
     };
@@ -340,28 +368,7 @@ pub async fn refresh_token(
 
     // Set cookies
     let mut headers = HeaderMap::new();
-
-    let refresh_cookie = Cookie::build(("refresh_token", new_refresh_token.clone()))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/auth")
-        .max_age(cookie::time::Duration::seconds(
-            config.refresh_token_expiry_secs as i64,
-        ))
-        .build();
-    headers.insert(SET_COOKIE, refresh_cookie.to_string().parse().unwrap());
-
-    let access_cookie = Cookie::build(("access_token", access_token.clone()))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/")
-        .max_age(cookie::time::Duration::seconds(
-            config.access_token_expiry_secs as i64,
-        ))
-        .build();
-    headers.append(SET_COOKIE, access_cookie.to_string().parse().unwrap());
+    set_auth_cookies(&mut headers, &access_token, &new_refresh_token, config);
 
     let response = RefreshResponse {
         access_token,
@@ -376,8 +383,8 @@ pub async fn refresh_token(
             builder = builder.header(name.as_str(), s);
         }
     }
-    let body = serde_json::to_string(&response).unwrap();
-    let resp = builder.body(axum::body::Body::from(body)).unwrap();
+    let body = serde_json::to_string(&response).expect("serializable response");
+    let resp = builder.body(axum::body::Body::from(body)).expect("valid response");
     Ok(resp)
 }
 
@@ -403,24 +410,7 @@ pub async fn logout(
 
     // Clear cookies
     let mut headers = HeaderMap::new();
-
-    let clear_refresh = Cookie::build(("refresh_token", ""))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/auth")
-        .max_age(cookie::time::Duration::ZERO)
-        .build();
-    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().unwrap());
-
-    let clear_access = Cookie::build(("access_token", ""))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/")
-        .max_age(cookie::time::Duration::ZERO)
-        .build();
-    headers.append(SET_COOKIE, clear_access.to_string().parse().unwrap());
+    clear_auth_cookies(&mut headers);
 
     Ok((headers, StatusCode::NO_CONTENT))
 }
@@ -438,24 +428,7 @@ pub async fn logout_all(
 
     // Clear cookies
     let mut headers = HeaderMap::new();
-
-    let clear_refresh = Cookie::build(("refresh_token", ""))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/auth")
-        .max_age(cookie::time::Duration::ZERO)
-        .build();
-    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().unwrap());
-
-    let clear_access = Cookie::build(("access_token", ""))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/")
-        .max_age(cookie::time::Duration::ZERO)
-        .build();
-    headers.append(SET_COOKIE, clear_access.to_string().parse().unwrap());
+    clear_auth_cookies(&mut headers);
 
     Ok((headers, StatusCode::NO_CONTENT))
 }
@@ -597,24 +570,7 @@ pub async fn delete_account(
 
     // Clear cookies
     let mut headers = HeaderMap::new();
-
-    let clear_refresh = Cookie::build(("refresh_token", ""))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/auth")
-        .max_age(cookie::time::Duration::ZERO)
-        .build();
-    headers.insert(SET_COOKIE, clear_refresh.to_string().parse().unwrap());
-
-    let clear_access = Cookie::build(("access_token", ""))
-        .http_only(true)
-        .secure(true)
-        .same_site(SameSite::Strict)
-        .path("/")
-        .max_age(cookie::time::Duration::ZERO)
-        .build();
-    headers.append(SET_COOKIE, clear_access.to_string().parse().unwrap());
+    clear_auth_cookies(&mut headers);
 
     let response = DeleteAccountResponse {
         message: "Account deleted successfully".to_string(),

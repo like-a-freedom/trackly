@@ -717,12 +717,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let filtered_pace_data =
         if !pace_data_points.is_empty() && pace_data_points.iter().any(|p| p.is_some()) {
             use crate::track_utils::pace_filter::filter_pace_data;
-            filter_pace_data(
-                &pace_data_points,
-                &speed_data_points,
-                &time_diff_data,
-                &[],
-            )
+            filter_pace_data(&pace_data_points, &speed_data_points, &time_diff_data, &[])
         } else {
             pace_data_points
         };

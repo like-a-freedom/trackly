@@ -209,7 +209,7 @@ pub struct TrackGeoJsonQuery {
 
 /// Common interface for track filter parameters shared across list, geojson, and heatmap queries.
 pub trait TrackFilterParams {
-    fn categories(&self) -> Option<&Vec<String>>;
+    fn categories(&self) -> Option<&[String]>;
     fn min_length(&self) -> Option<f64>;
     fn max_length(&self) -> Option<f64>;
     fn elevation_gain_min(&self) -> Option<f32>;
@@ -222,8 +222,8 @@ pub trait TrackFilterParams {
 }
 
 impl TrackFilterParams for TrackListQuery {
-    fn categories(&self) -> Option<&Vec<String>> {
-        self.categories.as_ref()
+    fn categories(&self) -> Option<&[String]> {
+        self.categories.as_deref()
     }
     fn min_length(&self) -> Option<f64> {
         self.min_length
@@ -255,8 +255,8 @@ impl TrackFilterParams for TrackListQuery {
 }
 
 impl TrackFilterParams for TrackGeoJsonQuery {
-    fn categories(&self) -> Option<&Vec<String>> {
-        self.categories.as_ref()
+    fn categories(&self) -> Option<&[String]> {
+        self.categories.as_deref()
     }
     fn min_length(&self) -> Option<f64> {
         self.min_length
@@ -367,8 +367,8 @@ pub struct ParsedTrackData {
     pub hash: String,
     pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
     pub speed_data: Option<Vec<Option<f64>>>, // Point-by-point speed data (km/h)
-    pub pace_data: Option<Vec<Option<f64>>>, // Point-by-point pace data (min/km)
-    pub waypoints: Vec<ParsedWaypoint>,    // Waypoints/POIs from GPX file
+    pub pace_data: Option<Vec<Option<f64>>>,  // Point-by-point pace data (min/km)
+    pub waypoints: Vec<ParsedWaypoint>,       // Waypoints/POIs from GPX file
 }
 
 #[derive(Debug, Deserialize)]

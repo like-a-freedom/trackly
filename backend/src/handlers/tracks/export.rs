@@ -38,13 +38,13 @@ pub async fn export_track_gpx(
     let mut headers = HeaderMap::new();
     headers.insert(
         axum::http::header::CONTENT_TYPE,
-        "application/gpx+xml".parse().unwrap(),
+        "application/gpx+xml".parse().expect("valid header value"),
     );
     headers.insert(
         axum::http::header::CONTENT_DISPOSITION,
         format!("attachment; filename=\"{}.gpx\"", filename)
             .parse()
-            .unwrap(),
+            .expect("valid header value"),
     );
 
     Ok((headers, gpx_content))
