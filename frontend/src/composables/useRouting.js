@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { openDB } from 'idb';
+import { haversineDistance } from '../utils/haversine';
 
 const GRAPH_DB_NAME = 'fast-paths-graphs';
 const GRAPH_STORE = 'graphs';
@@ -18,20 +19,6 @@ const SURFACE_TYPES = {
     3: 'ground',
     4: 'path',
 };
-
-function haversineMeters(a, b) {
-    const R = 6371000;
-    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-    const sinLat = Math.sin(dLat / 2);
-    const sinLng = Math.sin(dLng / 2);
-    const aVal =
-        sinLat * sinLat +
-        Math.cos((a.lat * Math.PI) / 180) *
-        Math.cos((b.lat * Math.PI) / 180) *
-        sinLng * sinLng;
-    return R * 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1 - aVal));
-}
 
 function getCellKey(lat, lng, cellSize) {
     return `${Math.floor(lat / cellSize)}:${Math.floor(lng / cellSize)}`;
@@ -332,7 +319,7 @@ export function useRouting({ autoLoad = true } = {}) {
                 for (const nodeId of candidates) {
                     const nLat = nodeCoords[nodeId * 2];
                     const nLng = nodeCoords[nodeId * 2 + 1];
-                    const dist = haversineMeters({ lat, lng }, { lat: nLat, lng: nLng });
+                    const dist = haversineDistance({ lat, lng }, { lat: nLat, lng: nLng });
                     if (dist < bestDist) {
                         bestDist = dist;
                         best = { nodeId, lat: nLat, lng: nLng, dist };

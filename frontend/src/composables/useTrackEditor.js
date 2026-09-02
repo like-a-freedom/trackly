@@ -1,5 +1,6 @@
 import { ref, reactive, computed, watch } from 'vue';
 import { getSessionId } from '../utils/session';
+import { haversineDistance } from '../utils/haversine';
 import { useAuth } from './useAuth';
 import { useUndoRedo } from './useUndoRedo';
 import { useDraftSave } from './useDraftSave';
@@ -27,21 +28,6 @@ const SEGMENT_COLORS = [
 
 function getDefaultSegmentColor(index) {
     return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
-}
-
-/** Haversine distance in meters between two {lat, lng} points. */
-function haversineDistance(a, b) {
-    const R = 6371000;
-    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-    const sinLat = Math.sin(dLat / 2);
-    const sinLng = Math.sin(dLng / 2);
-    const aVal =
-        sinLat * sinLat +
-        Math.cos((a.lat * Math.PI) / 180) *
-        Math.cos((b.lat * Math.PI) / 180) *
-        sinLng * sinLng;
-    return R * 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1 - aVal));
 }
 
 /** Build a minimal GPX XML string from an array of [lat, lng] points. */
