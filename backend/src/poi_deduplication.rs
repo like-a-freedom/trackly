@@ -249,43 +249,6 @@ pub async fn link_pois_to_track(
     Ok(linked_count)
 }
 
-/// Find potential duplicates using fuzzy matching
-/// Used for suggesting merges to users
-#[allow(dead_code)]
-pub async fn find_potential_duplicates(
-    pool: &PgPool,
-    poi_id: i32,
-    similarity_threshold: f32,
-    distance_threshold_m: f32,
-) -> Result<Vec<i32>, sqlx::Error> {
-    debug!(
-        "Finding potential duplicates for POI {} (similarity: {}, distance: {}m)",
-        poi_id, similarity_threshold, distance_threshold_m
-    );
-
-    let results = sqlx::query_scalar::<_, i32>(
-        r#"
-            SELECT p2.id
-            FROM pois p1
-            JOIN pois p2 ON p2.id != p1.id
-            WHERE p1.id = $1
-              AND ST_DWithin(p1.geom, p2.geom, $2)
-              AND similarity(p1.name, p2.name) > $3
-            ORDER BY ST_Distance(p1.geom, p2.geom), similarity(p1.name, p2.name) DESC
-            LIMIT 10
-            "#,
-    )
-    .bind(poi_id)
-    .bind(distance_threshold_m as f64)
-    .bind(similarity_threshold)
-    .fetch_all(pool)
-    .await?;
-
-    debug!("Found {} potential duplicates", results.len());
-
-    Ok(results)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

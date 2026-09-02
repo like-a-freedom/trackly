@@ -2,6 +2,7 @@ import { computed } from 'vue';
 import { useTracksStore } from '../stores/tracks.js';
 import { http } from '../http-instance';
 import { getSessionId } from '../utils/session';
+import { LRUCache } from '../utils/lru-cache';
 import {
     formatDuration,
     formatDistance,
@@ -25,11 +26,10 @@ export {
 };
 
 // Module-scope caches (not in store — they hold raw API data, not reactive state)
-const bboxCache = new Map();
-const heatmapCache = new Map();
+const bboxCache = new LRUCache(100);
+const heatmapCache = new LRUCache(100);
 const CACHE_TTL = 30000;
 const HEATMAP_CACHE_TTL = 30000;
-const BBOX_CACHE_MAX_SIZE = 100;
 
 let currentController = null;
 let heatmapController = null;
@@ -40,19 +40,8 @@ function getCachedTracks(bboxString) {
     return null;
 }
 
-function evictIfNeeded(cache) {
-    if (cache.size > BBOX_CACHE_MAX_SIZE) {
-        const oldest = cache.keys().next().value;
-        if (oldest !== undefined) cache.delete(oldest);
-    }
-}
-
 function setCachedTracks(bboxString, data) {
     bboxCache.set(bboxString, { data, timestamp: Date.now() });
-    for (const [key, value] of bboxCache.entries()) {
-        if (Date.now() - value.timestamp > CACHE_TTL) bboxCache.delete(key);
-    }
-    evictIfNeeded(bboxCache);
 }
 
 function getCachedHeatmap(cacheKey) {
@@ -63,10 +52,6 @@ function getCachedHeatmap(cacheKey) {
 
 function setCachedHeatmap(cacheKey, data) {
     heatmapCache.set(cacheKey, { data, timestamp: Date.now() });
-    for (const [key, value] of heatmapCache.entries()) {
-        if (Date.now() - value.timestamp > HEATMAP_CACHE_TTL) heatmapCache.delete(key);
-    }
-    evictIfNeeded(heatmapCache);
 }
 
 function normalizeCategories(categories) {

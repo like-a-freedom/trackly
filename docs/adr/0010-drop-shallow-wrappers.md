@@ -1,4 +1,4 @@
-# ADR 0011: Drop Shallow Wrapper Structs
+# ADR 0010: Drop Shallow Wrapper Structs
 
 ## Status
 Accepted

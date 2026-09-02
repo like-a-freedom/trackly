@@ -796,7 +796,6 @@ mod tests {
     // but using #[ignore] attribute to prevent running in CI by default
 
     #[tokio::test]
-    #[ignore] // Ignored by default - requires network access
     async fn test_enrich_track_elevation_empty_points() {
         let service = ElevationEnrichmentService::new();
         let track_points = vec![];
@@ -813,7 +812,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Ignored by default - requires network access
     async fn test_enrich_track_elevation_disabled_service() {
         with_temp_env_async("ELEVATION_SERVICE", Some("disabled"), || async {
             let service = ElevationEnrichmentService::new();

@@ -1,4 +1,4 @@
-# ADR 0010: Remove Dead Metric Labels and --health-check Flag
+# ADR 0012: Remove Dead Metric Labels and --health-check Flag
 
 ## Status
 Accepted
