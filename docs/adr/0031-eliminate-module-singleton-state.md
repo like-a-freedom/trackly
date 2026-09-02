@@ -1,0 +1,3 @@
+# Eliminate module-singleton state in composables (stage 5, ADR 0031)
+
+Four composables (`useConfirm.js`, `useMemoization.js`, `useTracks.js`, `useRouting.js`) declare `ref()` or class instances at module scope, creating hidden singletons. This breaks test isolation (state leaks across tests), HMR (stale state survives reload), and multi-instance scenarios (two components share unexpected state). We move shared state to Pinia stores (explicit singletons with `$reset()` for tests) and keep per-instance state in function scope. This is a prerequisite for Stage 6 (splitting useTrackEditor) because the editor uses `useTracks` and `useRouting`.

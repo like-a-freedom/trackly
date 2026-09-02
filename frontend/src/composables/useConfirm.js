@@ -1,36 +1,15 @@
-import { ref } from 'vue';
-
-const confirmDialogs = ref([]);
+import { useConfirmStore } from '../stores/confirm';
+import { storeToRefs } from 'pinia';
 
 export function useConfirm() {
-    function showConfirm(options) {
-        return new Promise((resolve) => {
-            const dialog = {
-                id: Date.now() + Math.random(),
-                title: options.title || '',
-                message: options.message,
-                confirmText: options.confirmText || 'Confirm',
-                cancelText: options.cancelText || 'Cancel',
-                closeOnOverlay: options.closeOnOverlay !== false,
-                resolve
-            };
-
-            confirmDialogs.value.push(dialog);
-        });
-    }
-
-    function confirmDialog(dialog, confirmed) {
-        const index = confirmDialogs.value.findIndex(d => d.id === dialog.id);
-        if (index !== -1) {
-            confirmDialogs.value.splice(index, 1);
-            dialog.resolve(confirmed);
-        }
-    }
+    const store = useConfirmStore();
+    const { confirmDialogs } = storeToRefs(store);
+    const showConfirm = store.showConfirm.bind(store);
 
     return {
         confirmDialogs,
         showConfirm,
-        confirm: showConfirm,   // alias for AccountView.vue:451,659,722 (stage 0.5a)
-        confirmDialog
+        confirm: showConfirm, // alias for AccountView.vue:451,659,722
+        confirmDialog: store.confirmDialog.bind(store),
     };
 }

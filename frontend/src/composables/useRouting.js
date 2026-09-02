@@ -204,6 +204,12 @@ async function loadGraphData(mode, onProgress) {
 }
 
 let wasmModulePromise = null;
+
+// Reset function for test isolation
+export function resetWasmCache() {
+    wasmModulePromise = null;
+}
+
 async function loadWasmModule() {
     if (!wasmModulePromise) {
         wasmModulePromise = import(/* @vite-ignore */ WASM_MODULE_URL).then(async (mod) => {

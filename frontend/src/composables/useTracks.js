@@ -26,13 +26,22 @@ export {
 };
 
 // Module-scope caches (not in store — they hold raw API data, not reactive state)
-const bboxCache = new LRUCache(100);
-const heatmapCache = new LRUCache(100);
+// These are shared across all consumers for cache efficiency, but can be reset for tests.
+let bboxCache = new LRUCache(100);
+let heatmapCache = new LRUCache(100);
 const CACHE_TTL = 30000;
 const HEATMAP_CACHE_TTL = 30000;
 
 let currentController = null;
 let heatmapController = null;
+
+// Reset function for test isolation
+export function resetTracksCache() {
+    bboxCache = new LRUCache(100);
+    heatmapCache = new LRUCache(100);
+    currentController = null;
+    heatmapController = null;
+}
 
 function getCachedTracks(bboxString) {
     const cached = bboxCache.get(bboxString);

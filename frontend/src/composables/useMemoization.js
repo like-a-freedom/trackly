@@ -1,7 +1,7 @@
 /**
  * Composable for memoizing expensive computations
  */
-import { ref, computed, watchEffect } from 'vue';
+import { computed } from 'vue';
 
 // Simple cache with TTL support
 class MemoCache {
@@ -59,7 +59,14 @@ class MemoCache {
     }
 }
 
-const globalCache = new MemoCache();
+// Module-level cache instance (shared across consumers)
+let globalCache = new MemoCache();
+
+// Reset function for test isolation
+export function resetMemoCache() {
+    globalCache.clear();
+    globalCache = new MemoCache();
+}
 
 // Function to clear cache for specific patterns
 export function clearCacheByPattern(pattern) {
