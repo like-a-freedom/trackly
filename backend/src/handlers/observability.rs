@@ -64,48 +64,32 @@ mod tests {
         assert_eq!(bucket_zoom_level(None), "mid");
     }
 
-    #[test]
-    fn feature_flags_editor_always_true() {
-        let flags = FeatureFlagsResponse {
-            auth: false,
-            editor: true,
-        };
-        assert!(flags.editor);
+    #[tokio::test]
+    async fn get_feature_flags_returns_defaults() {
+        unsafe { std::env::remove_var("FEATURE_EDITOR") };
+        let response = get_feature_flags().await;
+        let body = response.0;
+        assert!(body.editor, "editor should default to true");
+        // auth depends on env vars — just assert it's a valid bool
+        let _ = body.auth;
     }
 
-    #[test]
-    fn feature_flags_editor_responds_to_env() {
-        // Default: editor is true
-        unsafe { std::env::remove_var("FEATURE_EDITOR") };
-        let flags = FeatureFlagsResponse {
-            auth: false,
-            editor: std::env::var("FEATURE_EDITOR")
-                .map(|v| v != "false")
-                .unwrap_or(true),
-        };
-        assert!(flags.editor);
-
-        // Set to "false": editor is disabled
+    #[tokio::test]
+    async fn get_feature_flags_respects_editor_env() {
         unsafe { std::env::set_var("FEATURE_EDITOR", "false") };
-        let flags = FeatureFlagsResponse {
-            auth: false,
-            editor: std::env::var("FEATURE_EDITOR")
-                .map(|v| v != "false")
-                .unwrap_or(true),
-        };
-        assert!(!flags.editor);
+        let response = get_feature_flags().await;
+        assert!(
+            !response.0.editor,
+            "FEATURE_EDITOR=false should disable editor"
+        );
 
-        // Set to "true": editor is enabled
         unsafe { std::env::set_var("FEATURE_EDITOR", "true") };
-        let flags = FeatureFlagsResponse {
-            auth: false,
-            editor: std::env::var("FEATURE_EDITOR")
-                .map(|v| v != "false")
-                .unwrap_or(true),
-        };
-        assert!(flags.editor);
+        let response = get_feature_flags().await;
+        assert!(
+            response.0.editor,
+            "FEATURE_EDITOR=true should enable editor"
+        );
 
-        // Cleanup
         unsafe { std::env::remove_var("FEATURE_EDITOR") };
     }
 }

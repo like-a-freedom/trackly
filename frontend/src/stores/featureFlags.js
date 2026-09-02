@@ -18,8 +18,8 @@ export const useFeatureFlagsStore = defineStore('featureFlags', {
         const data = await res.json();
         this.auth = data.auth;
         this.editor = data.editor;
-      } catch {
-        // Keep defaults on failure
+      } catch (e) {
+        console.warn('[FeatureFlags] Failed to fetch, using defaults:', e);
       } finally {
         this.isLoaded = true;
       }
