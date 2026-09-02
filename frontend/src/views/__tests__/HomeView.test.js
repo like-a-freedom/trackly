@@ -14,19 +14,21 @@ vi.mock('../composables/useTracks', () => ({
     })
 }));
 
-vi.mock('../composables/useToast', () => ({
-    useToast: () => ({
+vi.mock('../stores/toast.js', () => ({
+    useToastStore: () => ({
         showToast: vi.fn(),
-        toast: ref({ value: null })
+        message: '',
+        type: 'info',
+        duration: 3000
     })
 }));
 
-vi.mock('../composables/useSearchState', () => ({
-    useSearchState: () => ({
+vi.mock('../stores/search.js', () => ({
+    useSearchStore: () => ({
         clearSearchState: vi.fn(),
-        searchResults: ref([]),
-        searchQuery: ref(''),
-        hasSearchState: () => false
+        searchResults: [],
+        searchQuery: '',
+        hasSearchState: false
     })
 }));
 

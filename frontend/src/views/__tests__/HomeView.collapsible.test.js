@@ -13,20 +13,22 @@ vi.mock('../../composables/useTracks', () => ({
     }))
 }));
 
-vi.mock('../../composables/useToast', () => ({
-    useToast: vi.fn(() => ({
+vi.mock('../../stores/toast.js', () => ({
+    useToastStore: () => ({
         showToast: vi.fn(),
-        toast: ref({ message: '', type: 'info', duration: 3000 })
-    }))
+        message: '',
+        type: 'info',
+        duration: 3000
+    })
 }));
 
-vi.mock('../../composables/useSearchState', () => ({
-    useSearchState: vi.fn(() => ({
+vi.mock('../../stores/search.js', () => ({
+    useSearchStore: () => ({
         clearSearchState: vi.fn(),
-        searchResults: ref([]),
-        searchQuery: ref(''),
-        hasSearchState: ref(false)
-    }))
+        searchResults: [],
+        searchQuery: '',
+        hasSearchState: false
+    })
 }));
 
 vi.mock('../../utils/session', () => ({

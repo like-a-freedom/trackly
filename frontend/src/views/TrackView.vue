@@ -152,12 +152,12 @@ import PoiClusterGroup from "../components/PoiClusterGroup.vue";
 import TrackEndpoints from "../components/TrackEndpoints.vue";
 import TrackDistanceMarkers from "../components/TrackDistanceMarkers.vue";
 import TrackDirectionLayer from "../components/TrackDirectionLayer.vue";
-import { useToast } from "../composables/useToast";
+import { useToastStore } from "../stores/toast.js";
 import { useAuth } from "../composables/useAuth";
 import { useTracks } from "../composables/useTracks";
 import { usePois } from "../composables/usePois";
 import { events } from "../events";
-import { useSearchState } from "../composables/useSearchState";
+import { useSearchStore } from "../stores/search.js";
 import { useTrackViewE2E } from "../composables/useTrackViewE2E";
 import { getSessionId } from "../utils/session";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
@@ -305,7 +305,9 @@ const { user } = useAuth();
 const { pois, fetchTrackPois } = usePois();
 
 // Use search state to determine where to return
-const { hasSearchState, restoreSearchState } = useSearchState();
+const searchStore = useSearchStore();
+const hasSearchState = () => searchStore.hasSearchState;
+const { restoreSearchState } = searchStore;
 
 // Debounced track fetching with zoom and mode support
 const debouncedFetchTrack = useAdvancedDebounce(
@@ -537,7 +539,13 @@ const trackBounds = computed(() => {
 });
 
 // Toast
-const { toast, showToast } = useToast();
+const toastStore = useToastStore();
+const { showToast } = toastStore;
+const toast = computed(() => ({
+    message: toastStore.message,
+    type: toastStore.type,
+    duration: toastStore.duration
+}));
 provide("toast", toast);
 
 async function fetchTrack(

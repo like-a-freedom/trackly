@@ -845,7 +845,7 @@
               :track-name="chartTitle"
               :total-distance="track.length_km"
               :chart-mode="chartMode"
-              :distance-unit="getDistanceUnit()"
+              :distance-unit="distanceUnit"
               :elevation-stats="{
                 gain: track.elevation_gain,
                 loss: track.elevation_loss,
@@ -1038,12 +1038,12 @@ import {
   calculatePaceFromSpeed,
   useTracks,
 } from "../composables/useTracks";
-import { useUnits } from "../composables/useUnits";
+import { useUnitsStore } from "../stores/units.js";
 import { events } from "../events";
 import { useMemoizedComputed } from "../composables/useMemoization";
 import { clearCacheByPattern } from "../composables/useMemoization";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
-import { useToast } from "../composables/useToast";
+import { useToastStore } from "../stores/toast.js";
 import { useConfirm } from "../composables/useConfirm";
 
 const props = defineProps({
@@ -1081,10 +1081,14 @@ const router = useRouter();
 const isClosing = ref(false);
 const isCollapsed = ref(false);
 // Use global unit management
-const { speedUnit, setSpeedUnit, getDistanceUnit, getPaceUnit, convertPace } =
-  useUnits();
+const unitsStore = useUnitsStore();
+const speedUnit = computed(() => unitsStore.speedUnit);
+const distanceUnit = computed(() => unitsStore.distanceUnit);
+const paceUnit = computed(() => unitsStore.paceUnit);
+const { setSpeedUnit, convertPace } = unitsStore;
 // Use toast notifications
-const { showToast } = useToast();
+const toastStore = useToastStore();
+const { showToast } = toastStore;
 // Use confirm dialogs
 const { showConfirm } = useConfirm();
 const chartMode = ref("elevation");
@@ -2010,7 +2014,7 @@ const formattedDistance = useMemoizedComputed(
     }
     return formatDistance(lengthKm, distanceUnit);
   },
-  [() => track.value?.length_km, () => getDistanceUnit()],
+  [() => track.value?.length_km, () => distanceUnit.value],
   {
     keyFn: (deps) => `distance_${deps[0]}_${deps[1]}`,
   }
@@ -2056,7 +2060,7 @@ const formattedAvgPace = useMemoizedComputed(
     if (!validateSpeedData(avgSpeed)) return "N/A";
     return calculatePaceFromSpeed(avgSpeed, paceUnit);
   },
-  [() => track.value?.avg_speed, () => getPaceUnit()],
+  [() => track.value?.avg_speed, () => paceUnit.value],
   {
     keyFn: (deps) => `avgpace_${deps[0]}_${deps[1]}`,
   }
@@ -2067,7 +2071,7 @@ const formattedBestPace = useMemoizedComputed(
     if (!validateSpeedData(maxSpeed)) return "N/A";
     return calculatePaceFromSpeed(maxSpeed, paceUnit);
   },
-  [() => track.value?.max_speed, () => getPaceUnit()],
+  [() => track.value?.max_speed, () => paceUnit.value],
   {
     keyFn: (deps) => `bestpace_${deps[0]}_${deps[1]}`,
   }
@@ -2097,7 +2101,7 @@ const formattedMovingAvgPace = useMemoizedComputed(
     if (convertedPace === null) return "N/A";
     return formatPace(convertedPace, paceUnit);
   },
-  [() => track.value?.moving_avg_pace, () => getPaceUnit()],
+  [() => track.value?.moving_avg_pace, () => paceUnit.value],
   {
     keyFn: (deps) => `movingavgpace_${deps[0]}_${deps[1]}`,
   }

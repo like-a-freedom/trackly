@@ -311,7 +311,7 @@ import Slider from '@vueform/slider';
 import '@vueform/slider/themes/default.css';
 // Import debouncing functionality to prevent excessive filter updates
 import { useAdvancedDebounce } from '../composables/useAdvancedDebounce';
-import { useUnits } from '../composables/useUnits';
+import { useUnitsStore } from '../stores/units.js';
 import { capitalize } from '../utils/string';
 
 const props = defineProps({
@@ -380,7 +380,7 @@ const emitFilter = (filterState) => {
 };
 
 // Initialize global units (this ensures units are loaded on app startup)
-useUnits();
+useUnitsStore();
 
 // Track whether we're waiting for filter results to prevent flickering
 // when toggling filters like "My tracks"

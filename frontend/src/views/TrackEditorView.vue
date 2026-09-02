@@ -177,7 +177,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useTrackEditor } from "../composables/useTrackEditor";
-import { useToast } from "../composables/useToast";
+import { useToastStore } from "../stores/toast.js";
 import TrackEditorMap from "../components/TrackEditorMap.vue";
 import TrackEditorLeftPanel from "../components/editor/TrackEditorLeftPanel.vue";
 import TrackEditorToolbar from "../components/editor/TrackEditorToolbar.vue";
@@ -186,7 +186,13 @@ import Toast from "../components/ToastNotification.vue";
 
 const route = useRoute();
 const router = useRouter();
-const { showToast, toast } = useToast();
+const toastStore = useToastStore();
+const { showToast } = toastStore;
+const toast = computed(() => ({
+    message: toastStore.message,
+    type: toastStore.type,
+    duration: toastStore.duration
+}));
 
 // Determine if editing existing track
 const trackId = computed(() => route.params.id ?? null);

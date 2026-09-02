@@ -156,8 +156,8 @@ import SearchButton from "../components/SearchButton.vue";
 import GeolocationButton from "../components/GeolocationButton.vue";
 import LoginButton from "../components/LoginButton.vue";
 import { useTracks } from "../composables/useTracks";
-import { useToast } from "../composables/useToast";
-import { useSearchState } from "../composables/useSearchState";
+import { useToastStore } from "../stores/toast.js";
+import { useSearchStore } from "../stores/search.js";
 import { useMapUrlState } from "../composables/useMapUrlState";
 import { useFeatureFlagsStore } from "../stores/featureFlags";
 import { events } from "../events";
@@ -221,9 +221,21 @@ const showHeatmap = ref(false);
 // Keep track of the latest filter state coming from TrackMap/TrackFilterControl
 const currentFilterState = ref(null);
 const tooltip = reactive({ visible: false, x: 0, y: 0, data: null });
-const { showToast, toast } = useToast();
-const { clearSearchState, searchResults, searchQuery, hasSearchState } =
-  useSearchState();
+const toastStore = useToastStore();
+const { showToast } = toastStore;
+const toast = computed(() => ({
+    message: toastStore.message,
+    type: toastStore.type,
+    duration: toastStore.duration
+}));
+const searchStore = useSearchStore();
+const { clearSearchState } = searchStore;
+const searchResults = computed(() => searchStore.searchResults);
+const searchQuery = computed({
+    get: () => searchStore.searchQuery,
+    set: (val) => { searchStore.searchQuery = val; }
+});
+const hasSearchState = () => searchStore.hasSearchState;
 const featureFlags = useFeatureFlagsStore();
 const activeTrackId = ref(null);
 const sessionId = getSessionId();

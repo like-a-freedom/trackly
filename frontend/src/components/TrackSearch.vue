@@ -148,8 +148,8 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from "vue";
-import { useSearchState } from "../composables/useSearchState";
+import { ref, watch, nextTick, computed } from "vue";
+import { useSearchStore } from "../stores/search.js";
 import { capitalize } from "../utils/string";
 
 const props = defineProps({
@@ -166,8 +166,14 @@ const isLoading = ref(false);
 const searchTimeout = ref(null);
 
 // Use global search state
-const { searchQuery, searchResults, saveSearchState, hasSearchState } =
-  useSearchState();
+const searchStore = useSearchStore();
+const searchQuery = computed({
+    get: () => searchStore.searchQuery,
+    set: (val) => { searchStore.searchQuery = val; }
+});
+const searchResults = computed(() => searchStore.searchResults);
+const { saveSearchState } = searchStore;
+const hasSearchState = () => searchStore.hasSearchState;
 
 // Watch for visibility to focus input and handle search restoration
 watch(

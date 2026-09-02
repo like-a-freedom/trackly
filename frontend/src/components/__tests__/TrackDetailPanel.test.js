@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { ref, reactive } from 'vue';
 import TrackDetailPanel from '../TrackDetailPanel.vue';
 import ElevationChart from '../ElevationChart.vue';
 
-// Mock the useToast composable
+// Mock the useToastStore
 const mockShowToast = vi.fn();
-vi.mock('../../composables/useToast', () => ({
-  useToast: () => ({
-    showToast: mockShowToast
+vi.mock('../../stores/toast.js', () => ({
+  useToastStore: () => ({
+    showToast: mockShowToast,
+    message: '',
+    type: 'info',
+    duration: 3000
   })
 }));
 
@@ -31,6 +35,22 @@ vi.mock('../ElevationChart.vue', () => ({
     template: '<div class="elevation-chart-mock">Elevation Chart</div>',
     props: ['elevationData', 'heartRateData', 'temperatureData', 'trackName', 'totalDistance', 'chartMode']
   }
+}));
+
+// Mock the useUnitsStore with reactive state
+const mockUnitsState = reactive({ speedUnit: 'kmh' });
+vi.mock('../../stores/units.js', () => ({
+  useUnitsStore: () => ({
+    get speedUnit() { return mockUnitsState.speedUnit; },
+    set speedUnit(v) { mockUnitsState.speedUnit = v; },
+    toggleSpeedUnit: () => { mockUnitsState.speedUnit = mockUnitsState.speedUnit === 'kmh' ? 'mph' : 'kmh'; },
+    setSpeedUnit: (unit) => { mockUnitsState.speedUnit = unit; },
+    get distanceUnit() { return mockUnitsState.speedUnit === 'mph' ? 'mi' : 'km'; },
+    get paceUnit() { return mockUnitsState.speedUnit === 'mph' ? 'min/mi' : 'min/km'; },
+    convertPace: vi.fn(),
+    _savePreference: vi.fn(),
+    resetToDefault: () => { mockUnitsState.speedUnit = 'kmh'; }
+  })
 }));
 
 // Mock the useTracks composable

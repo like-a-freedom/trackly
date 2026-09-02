@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import TrackDetailPanel from '../TrackDetailPanel.vue';
 
-// Mock the useToast composable
+// Mock the useToastStore
 const mockShowToast = vi.fn();
-vi.mock('../../composables/useToast', () => ({
-    useToast: () => ({
-        showToast: mockShowToast
+vi.mock('../../stores/toast.js', () => ({
+    useToastStore: () => ({
+        showToast: mockShowToast,
+        message: '',
+        type: 'info',
+        duration: 3000
     })
 }));
 
