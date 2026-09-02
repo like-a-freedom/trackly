@@ -11,53 +11,11 @@ import { latLngBounds } from "leaflet";
 import {
   getDetailPanelFitBoundsOptions,
 } from "../utils/mapConstants.js";
+import {
+  saveMapStateToStorage,
+  loadMapStateFromStorage,
+} from "./useMapState.js";
 
-// ---------------------------------------------------------------------------
-// Local storage helpers for pre-selection state persistence
-// ---------------------------------------------------------------------------
-const STORAGE_KEYS = {
-  preSelectionZoom: "trackly_preSelectionZoom",
-  preSelectionCenterLat: "trackly_preSelectionCenterLat",
-  preSelectionCenterLng: "trackly_preSelectionCenterLng",
-};
-
-function saveMapStateToStorage(zoom, center) {
-  try {
-    if (zoom !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.preSelectionZoom, zoom.toString());
-    }
-    if (center && center.length >= 2) {
-      localStorage.setItem(
-        STORAGE_KEYS.preSelectionCenterLat,
-        center[0].toString()
-      );
-      localStorage.setItem(
-        STORAGE_KEYS.preSelectionCenterLng,
-        center[1].toString()
-      );
-    }
-  } catch (error) {
-    console.warn("[useMapEvents] Failed to save state to localStorage:", error);
-  }
-}
-
-function loadMapStateFromStorage() {
-  try {
-    const storedZoom = localStorage.getItem(STORAGE_KEYS.preSelectionZoom);
-    const storedLat = localStorage.getItem(STORAGE_KEYS.preSelectionCenterLat);
-    const storedLng = localStorage.getItem(STORAGE_KEYS.preSelectionCenterLng);
-
-    if (storedZoom && storedLat && storedLng) {
-      return {
-        zoom: parseFloat(storedZoom),
-        center: [parseFloat(storedLat), parseFloat(storedLng)],
-      };
-    }
-  } catch (error) {
-    console.warn("[useMapEvents] Failed to load state from localStorage:", error);
-  }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // Main composable

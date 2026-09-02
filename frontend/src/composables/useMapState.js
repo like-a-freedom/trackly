@@ -8,16 +8,62 @@ const storageKeys = {
 };
 
 /**
+ * Save map state to localStorage.
+ * @param {number} zoom - Map zoom level.
+ * @param {Array} center - Map center [lat, lng].
+ */
+export function saveMapStateToStorage(zoom, center) {
+  try {
+    if (zoom !== undefined) {
+      localStorage.setItem(storageKeys.preSelectionZoom, zoom.toString());
+    }
+    if (center && center.length >= 2) {
+      localStorage.setItem(
+        storageKeys.preSelectionCenterLat,
+        center[0].toString()
+      );
+      localStorage.setItem(
+        storageKeys.preSelectionCenterLng,
+        center[1].toString()
+      );
+    }
+  } catch (error) {
+    console.warn("[useMapState] Failed to save state to localStorage:", error);
+  }
+}
+
+/**
+ * Load map state from localStorage.
+ * @returns {{zoom: number, center: Array}|null} Saved state or null.
+ */
+export function loadMapStateFromStorage() {
+  try {
+    const storedZoom = localStorage.getItem(storageKeys.preSelectionZoom);
+    const storedLat = localStorage.getItem(storageKeys.preSelectionCenterLat);
+    const storedLng = localStorage.getItem(storageKeys.preSelectionCenterLng);
+
+    if (storedZoom && storedLat && storedLng) {
+      return {
+        zoom: parseFloat(storedZoom),
+        center: [parseFloat(storedLat), parseFloat(storedLng)],
+      };
+    }
+  } catch (error) {
+    console.warn("[useMapState] Failed to load state from localStorage:", error);
+  }
+  return null;
+}
+
+/**
  * Composable that encapsulates map state persistence logic extracted from TrackMap.vue.
  *
  * Manages:
  * - Reactive map state (lastKnownGood, preSelection, flags)
  * - effectiveZoom / effectiveCenter computed values that avoid conflicting with fitBounds
- * - localStorage save/load helpers for zoom and center
  * - updateInitialMapState: captures zoom/center on user interaction
  *
  * @param {Object} props - Component props (needs zoom, center, bounds, selectedTrackDetail)
- * @returns {{ mapState, effectiveZoom, effectiveCenter, saveMapStateToStorage, loadMapStateFromStorage, updateInitialMapState }}
+ * @returns {{ mapState, effectiveZoom, effectiveCenter, updateInitialMapState }}
  */
 export function useMapState(props) {
   // Centralized map state management
@@ -55,44 +101,6 @@ export function useMapState(props) {
     return props.center;
   });
 
-  function saveMapStateToStorage(zoom, center) {
-    try {
-      if (zoom !== undefined) {
-        localStorage.setItem(storageKeys.preSelectionZoom, zoom.toString());
-      }
-      if (center && center.length >= 2) {
-        localStorage.setItem(
-          storageKeys.preSelectionCenterLat,
-          center[0].toString()
-        );
-        localStorage.setItem(
-          storageKeys.preSelectionCenterLng,
-          center[1].toString()
-        );
-      }
-    } catch (error) {
-      console.warn("[useMapState] Failed to save state to localStorage:", error);
-    }
-  }
-
-  function loadMapStateFromStorage() {
-    try {
-      const storedZoom = localStorage.getItem(storageKeys.preSelectionZoom);
-      const storedLat = localStorage.getItem(storageKeys.preSelectionCenterLat);
-      const storedLng = localStorage.getItem(storageKeys.preSelectionCenterLng);
-
-      if (storedZoom && storedLat && storedLng) {
-        return {
-          zoom: parseFloat(storedZoom),
-          center: [parseFloat(storedLat), parseFloat(storedLng)],
-        };
-      }
-    } catch (error) {
-      console.warn("[useMapState] Failed to load state from localStorage:", error);
-    }
-    return null;
-  }
-
   /**
    * Updates the initial map state (zoom and center) if the user interacts with the map
    * and no detail view is active.
@@ -118,6 +126,7 @@ export function useMapState(props) {
     }
   }
 
+  // Return module-level functions (they don't depend on closure)
   return {
     mapState,
     effectiveZoom,
