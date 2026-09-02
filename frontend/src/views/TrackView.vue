@@ -218,6 +218,7 @@ const lastFetchAt = ref(null); // Timestamp of last successful/started fetch for
 const isInitialLoad = ref(true); // Track if this is the first load to prevent redundant fetches
 const currentTrackId = ref(null); // Track current processing track ID to prevent race conditions
 const mapStabilizationTimer = ref(null); // Timer to wait for map stabilization
+const offElevationUpdated = ref(null); // Cleanup fn for events.on('track-elevation-updated')
 const STABILIZATION_DELAY = 3000; // 3 seconds to wait for map auto-zoom to stabilize
 const lastPoiFetchedTrackId = ref(null); // Track which track ID has had POIs fetched to prevent duplicates
 const mapIsReady = ref(false); // Track if map is ready for POI clustering
@@ -744,8 +745,8 @@ function handleKeyDown(event) {
   }
 }
 
-// Handle track elevation updates from TrackDetailPanel
-function handleTrackElevationUpdated(event) {
+// Handle track elevation updates from TrackDetailPanel (via events bus)
+function handleTrackElevationUpdated(payload) {
   const {
     trackId,
     elevation_gain,
@@ -755,7 +756,7 @@ function handleTrackElevationUpdated(event) {
     elevation_dataset,
     elevation_profile,
     elevation_enriched_at,
-  } = event.detail;
+  } = payload;
 
   // Only update if this is the current track
   if (track.value && track.value.id === trackId) {
@@ -967,8 +968,8 @@ onMounted(async () => {
 
   // Add ESC key listener
   document.addEventListener("keydown", handleKeyDown);
-  // Add track elevation update listener
-  window.addEventListener(
+  // Add track elevation update listener (via events bus, not DOM)
+  offElevationUpdated.value = events.on(
     "track-elevation-updated",
     handleTrackElevationUpdated
   );
@@ -982,10 +983,8 @@ onUnmounted(() => {
   // Remove ESC key listener
   document.removeEventListener("keydown", handleKeyDown);
   // Remove track elevation update listener
-  window.removeEventListener(
-    "track-elevation-updated",
-    handleTrackElevationUpdated
-  );
+  offElevationUpdated.value?.();
+  offElevationUpdated.value = null;
 
   // Cleanup E2E hooks
   e2eHooks.cleanup();
@@ -1001,8 +1000,8 @@ onUnmounted(() => {
 onActivated(() => {
   // Add ESC key listener when component is activated from keep-alive
   document.addEventListener("keydown", handleKeyDown);
-  // Add track elevation update listener
-  window.addEventListener(
+  // Add track elevation update listener (via events bus, not DOM)
+  offElevationUpdated.value = events.on(
     "track-elevation-updated",
     handleTrackElevationUpdated
   );
@@ -1013,10 +1012,8 @@ onDeactivated(() => {
   // Remove ESC key listener when component is deactivated to keep-alive
   document.removeEventListener("keydown", handleKeyDown);
   // Remove track elevation update listener
-  window.removeEventListener(
-    "track-elevation-updated",
-    handleTrackElevationUpdated
-  );
+  offElevationUpdated.value?.();
+  offElevationUpdated.value = null;
 
   // Cleanup E2E hooks
   e2eHooks.cleanup();

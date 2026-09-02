@@ -1128,25 +1128,6 @@ watch(
   margin-top: 4px;
   font-style: italic;
 }
-</style>  30% {
-    transform: scale(1.12);
-    filter: drop-shadow(0 0 10px #1976d2bb) brightness(1.14);
-    stroke-width: 7.5;
-    opacity: 0.8;
-  }
-  60% {
-    transform: scale(1.02);
-    filter: drop-shadow(0 0 5px #1976d2aa) brightness(1.04);
-    stroke-width: 5.5;
-    opacity: 0.97;
-  }
-  100% {
-    transform: scale(1);
-    filter: none;
-    stroke-width: 4;
-    opacity: 1;
-  }
-}
 
 /* Performance optimizations for smooth map rendering */
 :deep(.leaflet-container) {
@@ -1164,7 +1145,6 @@ watch(
   backface-visibility: hidden;
 }
 
-/* Optimize GeoJSON layers for smoother interactions */
 :deep(.leaflet-overlay-pane svg) {
   will-change: transform;
   transform: translateZ(0);
@@ -1173,51 +1153,14 @@ watch(
 :deep(.leaflet-overlay-pane path) {
   will-change: transform, stroke-width, stroke-opacity;
   backface-visibility: hidden;
-  /* Smooth transitions for better visual experience */
   transition: stroke-width 0.1s ease, stroke-opacity 0.1s ease;
 }
 
-/* Optimize zoom animations - keep paths visible during zoom */
 :deep(.leaflet-zoom-anim .leaflet-overlay-pane path) {
-  /* Disable expensive transitions only during zoom, keep visibility */
   transition: none !important;
   animation: none !important;
 }
 
-/* Chart hover marker styles */
-:deep(.chart-hover-marker) {
-  z-index: 850 !important;
-  pointer-events: none;
-  transition: all 0.2s ease;
-}
-
-:deep(.chart-fixed-marker) {
-  animation: marker-pulse 2s ease-in-out infinite;
-}
-
-@keyframes marker-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-:deep(.marker-tooltip) {
-  font-size: 12px;
-  line-height: 1.4;
-  min-width: 80px;
-}
-
-:deep(.marker-tooltip .fixed-hint) {
-  font-size: 10px;
-  color: #666;
-  margin-top: 4px;
-  font-style: italic;
-}
-
-/* Fixed icon inside marker */
 :deep(.fixed-icon) {
   font-size: 14px;
   line-height: 1;
@@ -1227,7 +1170,4 @@ watch(
 :deep(.chart-fixed-marker) :deep(.fixed-icon) {
   transform: translateY(-2px);
 }
-
-:deep(.chart-fixed-marker) {
-  /* Slightly larger and pulsing already defined */
-}
+</style>
