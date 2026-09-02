@@ -42,9 +42,13 @@ pub struct FeatureFlagsResponse {
 }
 
 pub async fn get_feature_flags() -> Json<FeatureFlagsResponse> {
+    let editor = std::env::var("FEATURE_EDITOR")
+        .map(|v| v != "false")
+        .unwrap_or(true);
+
     Json(FeatureFlagsResponse {
         auth: crate::auth::config::is_auth_configured(),
-        editor: true,
+        editor,
     })
 }
 
@@ -70,14 +74,38 @@ mod tests {
     }
 
     #[test]
-    fn feature_flags_auth_depends_on_config() {
+    fn feature_flags_editor_responds_to_env() {
+        // Default: editor is true
+        unsafe { std::env::remove_var("FEATURE_EDITOR") };
         let flags = FeatureFlagsResponse {
-            auth: crate::auth::config::is_auth_configured(),
-            editor: true,
+            auth: false,
+            editor: std::env::var("FEATURE_EDITOR")
+                .map(|v| v != "false")
+                .unwrap_or(true),
         };
-        // auth is true only if GOOGLE_CLIENT_ID + JWT_SECRET are set
-        // In test env they typically aren't, so this should be false
-        // The important thing is it doesn't panic
-        let _ = flags.auth;
+        assert!(flags.editor);
+
+        // Set to "false": editor is disabled
+        unsafe { std::env::set_var("FEATURE_EDITOR", "false") };
+        let flags = FeatureFlagsResponse {
+            auth: false,
+            editor: std::env::var("FEATURE_EDITOR")
+                .map(|v| v != "false")
+                .unwrap_or(true),
+        };
+        assert!(!flags.editor);
+
+        // Set to "true": editor is enabled
+        unsafe { std::env::set_var("FEATURE_EDITOR", "true") };
+        let flags = FeatureFlagsResponse {
+            auth: false,
+            editor: std::env::var("FEATURE_EDITOR")
+                .map(|v| v != "false")
+                .unwrap_or(true),
+        };
+        assert!(flags.editor);
+
+        // Cleanup
+        unsafe { std::env::remove_var("FEATURE_EDITOR") };
     }
 }
