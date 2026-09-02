@@ -8,20 +8,20 @@ name = "backend"
 path = "src/lib.rs"
 
 [dependencies]
-axum = "0.8.8"
-tokio = { version = "1.50.0", features = ["full"] }
-tokio-macros = "2.6.1"
-bytes = "1.11.1"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+axum = "0.8.9"
+tokio = { version = "1.53.1", features = ["full"] }
+tokio-macros = "2.7.2"
+bytes = "1.12.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 tower = "0.5.3"
-tower-http = { version = "0.6.8", features = ["cors", "fs"] }
+tower-http = { version = "0.7.1", features = ["cors", "fs"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
-thiserror = "2.0.18"
-anyhow = "1.0.102"
+thiserror = "2.0.20"
+anyhow = "1.0.104"
 once_cell = "1.21.4"
-mimalloc = "0.1.48"
+mimalloc = "0.1.52"
 prometheus = "0.14.0"
 # Database
 sqlx = { version = "0.8.6", features = [
@@ -32,36 +32,36 @@ sqlx = { version = "0.8.6", features = [
     "macros",
     "migrate",
 ] }
-uuid = { version = "1.22.0", features = ["v4", "serde"] }
-chrono = { version = "0.4.44", features = ["serde"] }
+uuid = { version = "1.26.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
 # HTTP client
 reqwest = { version = "0.12.28", default-features = false, features = [
     "json",
     "rustls-tls",
     "http2",
 ] }
-ammonia = "4.1.2"
+ammonia = "4.1.4"
 # File parsing
 quick-xml = "0.39"
 kml = "0.13.0"
 geo = "0.32.0"
-geo-types = "0.7.18"
+geo-types = "0.7.20"
 # Multipart
-axum-extra = { version = "0.12.5", features = [
+axum-extra = { version = "0.12.6", features = [
     "multipart",
     "typed-header",
     "cookie"
 ] }
 sha2 = "0.10.9"
-tokio-util = "0.7.18"
+tokio-util = "0.7.19"
 # Authentication
-jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+jsonwebtoken = { version = "11.0.0", features = ["rust_crypto"] }
 oauth2 = "5.0.0"
-rand = "0.10.0"
+rand = "0.10.2"
 base64 = "0.22.1"
 tower-cookies = "0.11.0"
 hex = "0.4.3"
-cookie = { version = "0.18.1", features = ["secure"] }
+cookie = { version = "0.18.2", features = ["secure"] }
 dotenvy = "0.15.7"
 
 # For tests

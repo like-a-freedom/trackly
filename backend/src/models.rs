@@ -7,12 +7,6 @@ pub struct TrackUploadResponse {
     pub url: String,
 }
 
-#[derive(Serialize, serde::Deserialize)]
-pub struct TrackExistResponse {
-    pub is_exist: bool,
-    pub id: Option<Uuid>,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct TrackListQuery {
     pub categories: Option<Vec<String>>,
@@ -182,11 +176,6 @@ pub struct HeatmapPoint {
     pub lat: f64,
     pub lon: f64,
     pub weight: i32,
-}
-
-#[derive(Serialize)]
-pub struct TrackHeatmapResponse {
-    pub points: Vec<HeatmapPoint>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -456,18 +445,6 @@ pub struct EnrichElevationRequest {
     pub session_id: Uuid,
 }
 
-#[derive(Debug, Serialize)]
-pub struct EnrichElevationResponse {
-    pub id: Uuid,
-    pub message: String,
-    pub elevation_gain: Option<f32>,
-    pub elevation_loss: Option<f32>,
-    pub elevation_min: Option<f32>,
-    pub elevation_max: Option<f32>,
-    pub elevation_dataset: Option<String>,
-    pub enriched_at: Option<chrono::NaiveDateTime>,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct ElevationPreviewRequest {
     pub coordinates: Vec<[f64; 2]>,
@@ -512,17 +489,6 @@ mod tests {
         let json = serde_json::to_string(&resp).unwrap();
         let de: TrackUploadResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(resp.url, de.url);
-    }
-
-    #[test]
-    fn test_track_exist_response_serde() {
-        let resp = TrackExistResponse {
-            is_exist: true,
-            id: Some(Uuid::new_v4()),
-        };
-        let json = serde_json::to_string(&resp).unwrap();
-        let de: TrackExistResponse = serde_json::from_str(&json).unwrap();
-        assert_eq!(resp.is_exist, de.is_exist);
     }
 
     // Track optimization related tests
