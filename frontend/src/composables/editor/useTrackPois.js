@@ -1,71 +1,20 @@
+import { ref, computed } from 'vue';
+import { haversineDistance } from '../../utils/haversine.js';
+import { distancePointToSegmentMeters, isValidCoord } from './trackGeometryUtils.js';
+
+const POI_FAR_DISTANCE_M = 1000;
+
 /**
- * Composable for track POI (Point of Interest) management.
- * Handles POI CRUD operations and metrics calculation.
+ * Composable for managing POIs (Points of Interest).
+ * Can be used standalone or with the editorStore.
+ *
+ * @param {Object} options
+ * @param {Array} options.initialPois - Initial POIs array
+ * @returns {Object} POI management API
  */
-import { ref } from 'vue';
-import { haversineDistance } from '../../utils/haversine';
+export function useTrackPois({ initialPois = [] } = {}) {
+    const pois = ref([...initialPois]);
 
-export function useTrackPois(options = {}) {
-    const pois = ref(options.initialPois || []);
-
-    // Far distance threshold in meters
-    const POI_FAR_DISTANCE_M = 1000;
-
-    /**
-     * Calculate nearest point metrics for a POI.
-     * @param {number} lat - POI latitude
-     * @param {number} lng - POI longitude
-     * @param {Array} segments - Track segments
-     * @returns {{distanceFromStart: number, distanceToTrack: number, nearestPoint: Object}}
-     */
-    function calculateNearestMetrics(lat, lng, segments) {
-        let distanceFromStart = 0;
-        let minDistToTrack = Infinity;
-        let nearestPoint = null;
-
-        for (const seg of segments) {
-            for (let i = 0; i < seg.points.length; i++) {
-                const [ptLat, ptLng] = seg.points[i];
-                const dist = haversineDistance({ lat, lng }, { lat: ptLat, lng: ptLng });
-
-                if (dist < minDistToTrack) {
-                    minDistToTrack = dist;
-                    nearestPoint = { lat: ptLat, lng: ptLng, segIndex: seg.index, pointIndex: i };
-                }
-                if (i > 0) {
-                    const [prevLat, prevLng] = seg.points[i - 1];
-                    distanceFromStart += haversineDistance(
-                        { lat: prevLat, lng: prevLng },
-                        { lat: ptLat, lng: ptLng }
-                    );
-                }
-            }
-        }
-
-        return {
-            distanceFromStart,
-            distanceToTrack: minDistToTrack,
-            nearestPoint,
-        };
-    }
-
-    /**
-     * Update POI metrics based on track segments.
-     * @param {Array} segments - Track segments
-     */
-    function updatePoiMetrics(segments) {
-        for (const poi of pois.value) {
-            const metrics = calculateNearestMetrics(poi.lat, poi.lng, segments);
-            poi.distFromStart = metrics.distanceFromStart;
-            poi.distanceToTrack = metrics.distanceToTrack;
-            poi.isFarFromTrack = metrics.distanceToTrack > POI_FAR_DISTANCE_M;
-        }
-    }
-
-    /**
-     * Get next available POI name.
-     * @returns {string} Next POI name (e.g., "POI 001")
-     */
     function getNextPoiName() {
         let maxNumber = 0;
         for (const poi of pois.value) {
@@ -81,42 +30,89 @@ export function useTrackPois(options = {}) {
         return `POI ${next}`;
     }
 
-    /**
-     * Add a new POI.
-     * @param {Object} poi - POI data
-     * @returns {Object} Added POI
-     */
-    function addPoi(poi) {
-        const newPoi = {
-            id: poi.id || Date.now(),
-            name: poi.name || getNextPoiName(),
-            lat: poi.lat,
-            lng: poi.lng,
-            category: poi.category || 'default',
-            description: poi.description || '',
+    function calculateNearestAlongTrack(lat, lng, segments) {
+        let totalDistance = 0;
+        let bestDistance = Infinity;
+        let bestAlong = 0;
+
+        for (const seg of segments) {
+            const points = seg.points || seg;
+            for (let i = 1; i < points.length; i++) {
+                const prev = points[i - 1];
+                const curr = points[i];
+                const segmentLength = haversineDistance(
+                    { lat: prev[0], lng: prev[1] },
+                    { lat: curr[0], lng: curr[1] }
+                );
+
+                const result = distancePointToSegmentMeters(
+                    { lat, lng },
+                    { lat: prev[0], lng: prev[1] },
+                    { lat: curr[0], lng: curr[1] }
+                );
+
+                if (result.distance < bestDistance) {
+                    bestDistance = result.distance;
+                    bestAlong = totalDistance + segmentLength * result.t;
+                }
+
+                totalDistance += segmentLength;
+            }
+        }
+
+        return {
+            distanceFromStart: Math.round(bestAlong),
+            distanceToTrack: Math.round(bestDistance),
         };
-        pois.value.push(newPoi);
-        return newPoi;
     }
 
-    /**
-     * Update an existing POI.
-     * @param {string|number} id - POI ID
-     * @param {Object} updates - Fields to update
-     * @returns {boolean} Whether the update succeeded
-     */
+    function addPoi({ lat, lng, name = '', description = '', category = '' } = {}) {
+        if (!isValidCoord(lat, lng)) return null;
+
+        const cleanedName = (name || '').trim();
+        const finalName = cleanedName.length > 0 ? cleanedName : getNextPoiName();
+
+        const poi = {
+            id: Date.now() + Math.random(),
+            lat,
+            lng,
+            name: finalName,
+            description: description.trim(),
+            category,
+            distFromStart: 0,
+            distanceToTrack: 0,
+            isFarFromTrack: false,
+        };
+
+        pois.value.push(poi);
+        return poi;
+    }
+
+    function getPoi(id) {
+        return pois.value.find((p) => p.id === id);
+    }
+
     function updatePoi(id, updates) {
-        const poi = pois.value.find((p) => p.id === id);
+        const poi = getPoi(id);
         if (!poi) return false;
-        Object.assign(poi, updates);
+
+        if (updates.name !== undefined) {
+            const cleaned = updates.name.trim();
+            if (cleaned.length === 0) return false;
+            poi.name = cleaned;
+        }
+        if (updates.description !== undefined) {
+            poi.description = (updates.description ?? '').trim();
+        }
+        if (updates.category !== undefined) {
+            poi.category = updates.category;
+        }
+        if (updates.lat !== undefined) poi.lat = updates.lat;
+        if (updates.lng !== undefined) poi.lng = updates.lng;
+
         return true;
     }
 
-    /**
-     * Delete a POI by ID.
-     * @param {string|number} id - POI ID
-     * @returns {boolean} Whether the deletion succeeded
-     */
     function deletePoi(id) {
         const index = pois.value.findIndex((p) => p.id === id);
         if (index === -1) return false;
@@ -124,30 +120,150 @@ export function useTrackPois(options = {}) {
         return true;
     }
 
-    /**
-     * Get POI by ID.
-     * @param {string|number} id - POI ID
-     * @returns {Object|undefined} POI or undefined
-     */
-    function getPoi(id) {
-        return pois.value.find((p) => p.id === id);
-    }
-
-    /**
-     * Clear all POIs.
-     */
     function clearPois() {
         pois.value = [];
     }
 
+    function updatePoiMetrics(segments) {
+        for (const poi of pois.value) {
+            const metrics = calculateNearestAlongTrack(poi.lat, poi.lng, segments);
+            poi.distFromStart = metrics.distanceFromStart;
+            poi.distanceToTrack = metrics.distanceToTrack;
+            poi.isFarFromTrack = metrics.distanceToTrack > POI_FAR_DISTANCE_M;
+        }
+    }
+
     return {
         pois,
-        getNextPoiName,
-        updatePoiMetrics,
         addPoi,
+        getPoi,
         updatePoi,
         deletePoi,
-        getPoi,
         clearPois,
+        getNextPoiName,
+        updatePoiMetrics,
     };
+}
+
+// ── Standalone functions for use with editorStore ────────────────
+
+export function calculateNearestAlongTrackStandalone(store, lat, lng) {
+    let totalDistance = 0;
+    let bestDistance = Infinity;
+    let bestAlong = 0;
+
+    for (const seg of store.segments) {
+        for (let i = 1; i < seg.points.length; i++) {
+            const prev = seg.points[i - 1];
+            const curr = seg.points[i];
+            const segmentLength = haversineDistance(
+                { lat: prev[0], lng: prev[1] },
+                { lat: curr[0], lng: curr[1] }
+            );
+
+            const result = distancePointToSegmentMeters(
+                { lat, lng },
+                { lat: prev[0], lng: prev[1] },
+                { lat: curr[0], lng: curr[1] }
+            );
+
+            if (result.distance < bestDistance) {
+                bestDistance = result.distance;
+                bestAlong = totalDistance + segmentLength * result.t;
+            }
+
+            totalDistance += segmentLength;
+        }
+    }
+
+    return {
+        distanceFromStart: Math.round(bestAlong),
+        distanceToTrack: Math.round(bestDistance),
+    };
+}
+
+export function getNextPoiNameStandalone(store) {
+    let maxNumber = 0;
+    for (const poi of store.pois) {
+        const match = /^POI\s*(\d{3})$/.exec(poi.name || '');
+        if (match) {
+            const num = Number(match[1]);
+            if (!Number.isNaN(num)) {
+                maxNumber = Math.max(maxNumber, num);
+            }
+        }
+    }
+    const next = String(maxNumber + 1).padStart(3, '0');
+    return `POI ${next}`;
+}
+
+export function updatePoiMetricsStandalone(store) {
+    for (const poi of store.pois) {
+        const metrics = calculateNearestAlongTrackStandalone(store, poi.lat, poi.lng);
+        poi.distFromStart = metrics.distanceFromStart;
+        poi.distanceToTrack = metrics.distanceToTrack;
+        poi.isFarFromTrack = metrics.distanceToTrack > POI_FAR_DISTANCE_M;
+    }
+}
+
+export function addPoiStandalone(store, lat, lng, name, { description = '', category = '' } = {}) {
+    if (!isValidCoord(lat, lng)) return { ok: false };
+
+    const cleanedName = (name || '').trim();
+    const finalName = cleanedName.length > 0 ? cleanedName : getNextPoiNameStandalone(store);
+
+    const metrics = calculateNearestAlongTrackStandalone(store, lat, lng);
+
+    const poi = {
+        lat,
+        lng,
+        name: finalName,
+        description: description.trim(),
+        category,
+        distFromStart: metrics.distanceFromStart,
+        distanceToTrack: metrics.distanceToTrack,
+        isFarFromTrack: metrics.distanceToTrack > POI_FAR_DISTANCE_M,
+        id: null,
+    };
+
+    store.pois.push(poi);
+
+    return {
+        ok: true,
+        warning: poi.isFarFromTrack
+            ? 'POI is more than 1 km from the track'
+            : null,
+        poi,
+    };
+}
+
+export function updatePoiStandalone(store, poiIndex, updates) {
+    const poi = store.pois[poiIndex];
+    if (!poi) return { ok: false, error: 'POI not found' };
+    if (updates.name !== undefined && updates.name.trim().length === 0) {
+        return { ok: false, error: 'POI name cannot be empty' };
+    }
+
+    const nextName = updates.name !== undefined ? updates.name.trim() : poi.name;
+    const nextDescription = updates.description !== undefined
+        ? (updates.description ?? '').trim()
+        : (poi.description ?? '');
+    const nextCategory = updates.category !== undefined
+        ? updates.category
+        : (poi.category ?? '');
+
+    poi.name = nextName;
+    poi.description = nextDescription;
+    poi.category = nextCategory;
+
+    return { ok: true };
+}
+
+export function deletePoiStandalone(store, poiIndex) {
+    if (poiIndex < 0 || poiIndex >= store.pois.length) {
+        return { ok: false, error: 'POI not found' };
+    }
+
+    store.pois.splice(poiIndex, 1);
+    return { ok: true };
 }

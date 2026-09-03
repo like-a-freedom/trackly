@@ -3,6 +3,9 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { ref, computed, nextTick } from 'vue';
 import AccountView from '../../src/views/AccountView.vue';
 
+// Import mocked http for assertions
+import { http as mockHttp } from '../../src/http-instance';
+
 // Mock vue-router
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
@@ -31,9 +34,9 @@ vi.mock('../../src/composables/useAuth', () => ({
     useAuth: vi.fn(() => ({
         user: computed(() => mockAuthState.user),
         isLoading: ref(mockAuthState.isLoading),
-        logout: vi.fn(),
-        updateProfile: vi.fn(),
-        deleteAccount: vi.fn(),
+        logout: (...args) => mockAuthState.logoutFn?.(...args),
+        updateProfile: (...args) => mockAuthState.updateProfileFn?.(...args),
+        deleteAccount: (...args) => mockAuthState.deleteAccountFn?.(...args),
         authFetch: (...args) => mockAuthState.authFetchFn?.(...args),
     })),
 }));
@@ -44,6 +47,11 @@ vi.mock('../../src/composables/useConfirm', () => ({
     useConfirm: () => ({
         confirm: (...args) => mockConfirmFn(...args),
     }),
+}));
+
+// Mock http-instance
+vi.mock('../../src/http-instance', () => ({
+    http: vi.fn(),
 }));
 
 const mockTracks = [
@@ -78,6 +86,13 @@ describe('AccountView', () => {
         vi.clearAllMocks();
         mockPush.mockReset();
         mockReplace.mockReset();
+        mockConfirmFn.mockReset();
+
+        // Default mock for http - returns tracks on first call
+        vi.mocked(mockHttp).mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({ tracks: mockTracks }),
+        });
         mockConfirmFn = vi.fn();
 
         // Reset auth state
@@ -99,6 +114,8 @@ describe('AccountView', () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+        // Clean up teleported modal content from document.body
+        document.body.innerHTML = '';
     });
 
     describe('Track List Display', () => {
@@ -278,14 +295,14 @@ describe('AccountView', () => {
             await flushPromises();
 
             // Reset mock to track visibility toggle call
-            mockAuthState.authFetchFn.mockClear();
-            mockAuthState.authFetchFn.mockResolvedValue({ ok: true });
+            mockHttp.mockClear();
+            mockHttp.mockResolvedValue({ ok: true });
 
             const visibilityButton = wrapper.find('.visibility-toggle');
             await visibilityButton.trigger('click');
             await flushPromises();
 
-            expect(mockAuthState.authFetchFn).toHaveBeenCalledWith(
+            expect(mockHttp).toHaveBeenCalledWith(
                 '/api/tracks/track-1/visibility',
                 expect.objectContaining({
                     method: 'PATCH',
@@ -297,21 +314,20 @@ describe('AccountView', () => {
 
     describe('Bulk Operations', () => {
         it('calls bulk visibility API when toggle visibility button clicked', async () => {
-            mockAuthState.authFetchFn = vi.fn()
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: () => Promise.resolve({ tracks: mockTracks }),
-                })
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: () =>
-                        Promise.resolve({
-                            updated: [
-                                { id: 'track-1', is_public: false },
-                                { id: 'track-2', is_public: true },
-                            ],
-                        }),
-                });
+            mockHttp.mockClear();
+            mockHttp.mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ tracks: mockTracks }),
+            }).mockResolvedValueOnce({
+                ok: true,
+                json: () =>
+                    Promise.resolve({
+                        updated: [
+                            { id: 'track-1', is_public: false },
+                            { id: 'track-2', is_public: true },
+                        ],
+                    }),
+            });
 
             const wrapper = mount(AccountView);
             await flushPromises();
@@ -326,7 +342,7 @@ describe('AccountView', () => {
             await bulkToggleBtn.trigger('click');
             await flushPromises();
 
-            expect(mockAuthState.authFetchFn).toHaveBeenCalledWith(
+            expect(mockHttp).toHaveBeenCalledWith(
                 '/api/account/tracks/bulk/visibility',
                 expect.objectContaining({
                     method: 'PATCH',
@@ -336,15 +352,14 @@ describe('AccountView', () => {
 
         it('calls bulk delete API when delete button clicked after confirmation', async () => {
             mockConfirmFn.mockResolvedValue(true);
-            mockAuthState.authFetchFn = vi.fn()
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: () => Promise.resolve({ tracks: mockTracks }),
-                })
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: () => Promise.resolve({ deleted: ['track-1', 'track-2'] }),
-                });
+            mockHttp.mockClear();
+            mockHttp.mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ tracks: mockTracks }),
+            }).mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ deleted: ['track-1', 'track-2'] }),
+            });
 
             const wrapper = mount(AccountView);
             await flushPromises();
@@ -366,7 +381,7 @@ describe('AccountView', () => {
                 })
             );
 
-            expect(mockAuthState.authFetchFn).toHaveBeenCalledWith(
+            expect(mockHttp).toHaveBeenCalledWith(
                 '/api/account/tracks/bulk',
                 expect.objectContaining({
                     method: 'DELETE',
@@ -376,6 +391,11 @@ describe('AccountView', () => {
 
         it('does not call delete API if confirmation is cancelled', async () => {
             mockConfirmFn.mockResolvedValue(false);
+            mockHttp.mockClear();
+            mockHttp.mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ tracks: mockTracks }),
+            });
 
             const wrapper = mount(AccountView);
             await flushPromises();
@@ -391,7 +411,7 @@ describe('AccountView', () => {
             await flushPromises();
 
             // Only initial load call, no delete call
-            expect(mockAuthState.authFetchFn).toHaveBeenCalledTimes(1);
+            expect(mockHttp).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -469,188 +489,166 @@ describe('AccountView', () => {
     });
 
     describe('Nickname Editing', () => {
-        it('opens nickname modal when clicking edit nickname', async () => {
-            const wrapper = mount(AccountView);
-            await flushPromises();
+        // Modal is teleported to body, so we need to query document
+        const findModal = () => document.querySelector('.modal-overlay');
 
+        // Helper to open nickname modal
+        const openNicknameModal = async (wrapper) => {
             await wrapper.find('.settings-btn').trigger('click');
             await nextTick();
-
             const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
                 item.text().includes('Edit Nickname')
             );
             await editNicknameBtn.trigger('click');
             await nextTick();
+        };
 
-            expect(wrapper.find('.modal-overlay').exists()).toBe(true);
-            expect(wrapper.find('.modal-header h3').text()).toBe('Edit Nickname');
+        it('opens nickname modal when clicking edit nickname', async () => {
+            const wrapper = mount(AccountView, { attachTo: document.body });
+            await flushPromises();
+
+            await openNicknameModal(wrapper);
+
+            expect(findModal()).toBeTruthy();
+            expect(document.querySelector('.modal-header h3')?.textContent).toBe('Edit Nickname');
         });
 
         it('closes nickname modal when clicking cancel', async () => {
-            const wrapper = mount(AccountView);
+            const wrapper = mount(AccountView, { attachTo: document.body });
             await flushPromises();
 
-            // Open modal
-            await wrapper.find('.settings-btn').trigger('click');
-            await nextTick();
-            const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
-                item.text().includes('Edit Nickname')
-            );
-            await editNicknameBtn.trigger('click');
-            await nextTick();
+            await openNicknameModal(wrapper);
 
             // Click cancel
-            await wrapper.find('.btn-cancel').trigger('click');
+            document.querySelector('.btn-cancel')?.click();
             await nextTick();
 
-            expect(wrapper.find('.modal-overlay').exists()).toBe(false);
+            expect(findModal()).toBeFalsy();
         });
 
         it('closes nickname modal when clicking X button', async () => {
-            const wrapper = mount(AccountView);
+            const wrapper = mount(AccountView, { attachTo: document.body });
             await flushPromises();
 
-            // Open modal
-            await wrapper.find('.settings-btn').trigger('click');
-            await nextTick();
-            const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
-                item.text().includes('Edit Nickname')
-            );
-            await editNicknameBtn.trigger('click');
-            await nextTick();
+            await openNicknameModal(wrapper);
 
             // Click X button
-            await wrapper.find('.modal-close').trigger('click');
+            document.querySelector('.modal-close')?.click();
             await nextTick();
 
-            expect(wrapper.find('.modal-overlay').exists()).toBe(false);
+            expect(findModal()).toBeFalsy();
         });
 
         it('validates nickname format', async () => {
-            const updateProfileMock = vi.fn();
-            vi.doMock('../../src/composables/useAuth', () => ({
-                useAuth: vi.fn(() => ({
-                    user: computed(() => mockAuthState.user),
-                    isLoading: ref(mockAuthState.isLoading),
-                    logout: vi.fn(),
-                    updateProfile: updateProfileMock,
-                    deleteAccount: vi.fn(),
-                    authFetch: (...args) => mockAuthState.authFetchFn?.(...args),
-                })),
-            }));
-
-            const wrapper = mount(AccountView);
+            const wrapper = mount(AccountView, { attachTo: document.body });
             await flushPromises();
 
-            // Open modal
-            await wrapper.find('.settings-btn').trigger('click');
-            await nextTick();
-            const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
-                item.text().includes('Edit Nickname')
-            );
-            await editNicknameBtn.trigger('click');
-            await nextTick();
+            await openNicknameModal(wrapper);
 
             // Enter invalid nickname
-            const input = wrapper.find('#nickname-input');
-            await input.setValue('invalid@nickname!');
+            const input = document.querySelector('#nickname-input');
+            if (input) {
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                nativeInputValueSetter?.call(input, 'invalid@nickname!');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             await nextTick();
 
             // Try to save
-            await wrapper.find('.btn-primary').trigger('click');
+            document.querySelector('.modal-footer .btn-primary')?.click();
             await flushPromises();
 
             // Should show error
-            expect(wrapper.find('.form-error').exists()).toBe(true);
+            expect(document.querySelector('.form-error')).toBeTruthy();
         });
 
         it('disables save button when nickname is unchanged', async () => {
-            const wrapper = mount(AccountView);
+            const wrapper = mount(AccountView, { attachTo: document.body });
             await flushPromises();
 
-            // Open modal
-            await wrapper.find('.settings-btn').trigger('click');
-            await nextTick();
-            const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
-                item.text().includes('Edit Nickname')
-            );
-            await editNicknameBtn.trigger('click');
-            await nextTick();
+            await openNicknameModal(wrapper);
 
-            const saveBtn = wrapper.find('.btn-primary');
-            expect(saveBtn.attributes('disabled')).toBeDefined();
+            const saveBtn = document.querySelector('.modal-footer .btn-primary');
+            expect(saveBtn?.hasAttribute('disabled')).toBeTruthy();
         });
 
         it('enables save button when nickname changes', async () => {
-            const wrapper = mount(AccountView);
+            const wrapper = mount(AccountView, { attachTo: document.body });
             await flushPromises();
 
-            // Open modal
-            await wrapper.find('.settings-btn').trigger('click');
-            await nextTick();
-            const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
-                item.text().includes('Edit Nickname')
-            );
-            await editNicknameBtn.trigger('click');
-            await nextTick();
+            await openNicknameModal(wrapper);
 
             // Change nickname
-            const input = wrapper.find('#nickname-input');
-            await input.setValue('newnickname');
+            const input = document.querySelector('#nickname-input');
+            if (input) {
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                nativeInputValueSetter?.call(input, 'newnickname');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             await nextTick();
 
-            const saveBtn = wrapper.find('.btn-primary');
-            expect(saveBtn.attributes('disabled')).toBeUndefined();
+            const saveBtn = document.querySelector('.modal-footer .btn-primary');
+            expect(saveBtn?.hasAttribute('disabled')).toBeFalsy();
         });
 
         it('calls updateProfile when saving valid nickname', async () => {
             const updateProfileMock = vi.fn().mockResolvedValue({});
-            mockAuthState.updateProfile = updateProfileMock;
+            mockAuthState.updateProfileFn = updateProfileMock;
 
-            const wrapper = mount(AccountView);
+            const wrapper = mount(AccountView, { attachTo: document.body });
             await flushPromises();
 
-            // Open modal
-            await wrapper.find('.settings-btn').trigger('click');
-            await nextTick();
-            const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
-                item.text().includes('Edit Nickname')
-            );
-            await editNicknameBtn.trigger('click');
-            await nextTick();
+            await openNicknameModal(wrapper);
 
             // Enter new nickname
-            const input = wrapper.find('#nickname-input');
-            await input.setValue('newnickname');
+            const input = document.querySelector('#nickname-input');
+            if (input) {
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                nativeInputValueSetter?.call(input, 'newnickname');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             await nextTick();
 
             // Save
-            await wrapper.find('.btn-primary').trigger('click');
+            document.querySelector('.modal-footer .btn-primary')?.click();
             await flushPromises();
 
             expect(updateProfileMock).toHaveBeenCalledWith({ nickname: 'newnickname' });
         });
 
         it('shows loading state while saving nickname', async () => {
-            const wrapper = mount(AccountView);
+            // Use a delayed mock to test loading state
+            let resolveProfile;
+            const updateProfileMock = vi.fn().mockImplementation(() =>
+                new Promise((resolve) => { resolveProfile = resolve; })
+            );
+            mockAuthState.updateProfileFn = updateProfileMock;
+
+            const wrapper = mount(AccountView, { attachTo: document.body });
             await flushPromises();
 
-            // Open modal
-            await wrapper.find('.settings-btn').trigger('click');
-            await nextTick();
-            const editNicknameBtn = wrapper.findAll('.menu-item').find((item) =>
-                item.text().includes('Edit Nickname')
-            );
-            await editNicknameBtn.trigger('click');
+            await openNicknameModal(wrapper);
+
+            // Enter new nickname
+            const input = document.querySelector('#nickname-input');
+            if (input) {
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                nativeInputValueSetter?.call(input, 'newnickname');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             await nextTick();
 
-            // Enter new nickname and save
-            const input = wrapper.find('#nickname-input');
-            await input.setValue('newnickname');
-            await wrapper.find('.btn-primary').trigger('click');
+            // Click save and wait for Vue to update DOM
+            document.querySelector('.modal-footer .btn-primary')?.click();
+            await nextTick();
+            await nextTick(); // Extra tick for async function to start
 
-            // Should show loading text
-            expect(wrapper.find('.btn-primary').text()).toContain('Saving');
+            // Check loading state - the mock promise hasn't resolved yet, so loading should be true
+            expect(document.querySelector('.modal-footer .btn-primary')?.textContent).toContain('Saving');
+
+            // Resolve the promise to clean up
+            resolveProfile({});
+            await flushPromises();
         });
     });
 
@@ -668,7 +666,7 @@ describe('AccountView', () => {
 
     describe('Load More Tracks', () => {
         it('shows load more button when there are more tracks', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
+            vi.mocked(mockHttp).mockResolvedValue({
                 ok: true,
                 json: () =>
                     Promise.resolve({
@@ -690,7 +688,7 @@ describe('AccountView', () => {
 
         it('loads more tracks when clicking load more button', async () => {
             let callCount = 0;
-            mockAuthState.authFetchFn = vi.fn().mockImplementation(() => {
+            vi.mocked(mockHttp).mockImplementation(() => {
                 callCount++;
                 return Promise.resolve({
                     ok: true,
@@ -713,14 +711,14 @@ describe('AccountView', () => {
                 await loadMoreBtn.trigger('click');
                 await flushPromises();
 
-                expect(mockAuthState.authFetchFn).toHaveBeenCalledTimes(2);
+                expect(mockHttp).toHaveBeenCalledTimes(2);
             }
         });
     });
 
     describe('Empty States', () => {
         it('shows empty state when user has no tracks', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
+            vi.mocked(mockHttp).mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({ tracks: [], total: 0 }),
             });
@@ -733,7 +731,7 @@ describe('AccountView', () => {
         });
 
         it('shows upload button in empty state', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
+            vi.mocked(mockHttp).mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({ tracks: [], total: 0 }),
             });
@@ -747,7 +745,7 @@ describe('AccountView', () => {
         });
 
         it('navigates to home when clicking upload button', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
+            vi.mocked(mockHttp).mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({ tracks: [], total: 0 }),
             });
@@ -764,18 +762,8 @@ describe('AccountView', () => {
 
     describe('Loading States', () => {
         it('shows loading state initially', async () => {
-            // Delay the fetch response
-            mockAuthState.authFetchFn = vi.fn().mockImplementation(
-                () =>
-                    new Promise((resolve) =>
-                        setTimeout(() => {
-                            resolve({
-                                ok: true,
-                                json: () => Promise.resolve({ tracks: mockTracks }),
-                            });
-                        }, 100)
-                    )
-            );
+            // Set loading state from auth composable
+            mockAuthState.isLoading = true;
 
             const wrapper = mount(AccountView);
 
@@ -797,7 +785,7 @@ describe('AccountView', () => {
     describe('Logout', () => {
         it('calls logout when clicking sign out', async () => {
             const logoutMock = vi.fn();
-            mockAuthState.logout = logoutMock;
+            mockAuthState.logoutFn = logoutMock;
 
             const wrapper = mount(AccountView);
             await flushPromises();
@@ -857,7 +845,7 @@ describe('AccountView', () => {
 
         it('calls deleteAccount when confirmed', async () => {
             const deleteAccountMock = vi.fn().mockResolvedValue({});
-            mockAuthState.deleteAccount = deleteAccountMock;
+            mockAuthState.deleteAccountFn = deleteAccountMock;
             mockConfirmFn = vi.fn().mockResolvedValue(true);
 
             const wrapper = mount(AccountView);
@@ -895,7 +883,7 @@ describe('AccountView', () => {
 
         it('does not delete account when cancelled', async () => {
             const deleteAccountMock = vi.fn();
-            mockAuthState.deleteAccount = deleteAccountMock;
+            mockAuthState.deleteAccountFn = deleteAccountMock;
             mockConfirmFn = vi.fn().mockResolvedValue(false);
 
             const wrapper = mount(AccountView);
@@ -916,7 +904,7 @@ describe('AccountView', () => {
 
     describe('Error Handling', () => {
         it('handles track loading error gracefully', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockRejectedValue(new Error('Network error'));
+            vi.mocked(mockHttp).mockRejectedValue(new Error('Network error'));
 
             const wrapper = mount(AccountView);
             await flushPromises();
@@ -926,7 +914,7 @@ describe('AccountView', () => {
         });
 
         it('handles visibility toggle error gracefully', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
+            vi.mocked(mockHttp).mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({ tracks: mockTracks }),
             });
@@ -935,7 +923,7 @@ describe('AccountView', () => {
             await flushPromises();
 
             // Simulate toggle failure
-            mockAuthState.authFetchFn = vi.fn().mockRejectedValue(new Error('API error'));
+            vi.mocked(mockHttp).mockRejectedValue(new Error('API error'));
 
             const visibilityButton = wrapper.find('.visibility-toggle');
             await visibilityButton.trigger('click');

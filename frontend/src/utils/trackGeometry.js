@@ -1,11 +1,13 @@
 /**
  * Track Geometry Utilities
- * 
+ *
  * Utilities for calculating distances, positions, and track properties
  * for the track direction visualization feature.
  */
 
-export { haversineDistance, haversineMeters } from './haversine';
+import { haversineDistance, haversineMeters } from './haversine';
+
+export { haversineDistance, haversineMeters };
 
 /**
  * Compute cumulative distances along a track
