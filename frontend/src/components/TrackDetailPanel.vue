@@ -420,105 +420,13 @@
           </div>
         </div>
 
-        <!-- Categories -->
-        <div
-          v-if="isOwner || (track.categories && track.categories.length > 0)"
-          class="stats-section"
-        >
-          <div class="section-header-with-tooltip">
-            <h3>Categories</h3>
-            <span
-              class="info-icon"
-              tabindex="0"
-              data-tooltip="Categories that were added by the user during track upload"
-              aria-label="Categories that were added by the user during track upload"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </span>
-          </div>
-
-          <!-- Owner: inline editable Multiselect -->
-          <div
-            v-if="isOwner"
-            class="categories-inline-edit"
-            @mousedown.stop
-            @mouseup.stop
-            @click.stop
-            @dblclick.stop
-            @selectstart.stop
-            @dragstart.prevent
-          >
-            <Multiselect
-              v-model="selectedCategories"
-              mode="tags"
-              :close-on-select="false"
-              :searchable="true"
-              :create-option="false"
-              :options="categoriesList"
-              :object="true"
-              placeholder="Select categories"
-              class="track-category-select-inline"
-              :append-to-body="true"
-              position="bottom-start"
-              :max-height="220"
-              :disabled="savingCategories"
-              :style="{ margin: '0', marginLeft: '0', marginRight: '0' }"
-              @change="onCategoriesChange"
-              @mousedown.stop
-              @mouseup.stop
-              @click.stop
-              @dblclick.stop
-              @selectstart.stop
-              @dragstart.prevent
-            />
-            <transition name="fade-slide">
-              <div v-if="savingCategories" class="saving-indicator">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  class="spinner"
-                >
-                  <circle cx="12" cy="12" r="10" opacity="0.25" />
-                  <path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round" />
-                </svg>
-                Saving...
-              </div>
-            </transition>
-            <transition name="fade-slide">
-              <div v-if="categoriesError" class="edit-error">
-                {{ categoriesError }}
-              </div>
-            </transition>
-          </div>
-
-          <!-- Non-owner: read-only tags -->
-          <div v-else class="categories">
-            <span
-              v-for="category in track.categories"
-              :key="category"
-              class="category-tag"
-            >
-              {{ formatCategory(category) }}
-            </span>
-          </div>
-        </div>
+        <!-- Categories (extracted to CategoriesPanel component) -->
+        <CategoriesPanel
+          :track="track"
+          :is-owner="isOwner"
+          :categories-list="categoriesList"
+          @categories-updated="handleCategoriesUpdated"
+        />
 
         <!-- Auto Classifications -->
         <div
@@ -1045,6 +953,7 @@ import { clearCacheByPattern } from "../composables/useMemoization";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
 import { useToastStore } from "../stores/toast.js";
 import { useConfirm } from "../composables/useConfirm";
+import CategoriesPanel from "./TrackDetailPanel/CategoriesPanel.vue";
 
 const props = defineProps({
   track: {
@@ -1091,6 +1000,15 @@ const toastStore = useToastStore();
 const { showToast } = toastStore;
 // Use confirm dialogs
 const { showConfirm } = useConfirm();
+
+const categoriesList = [
+    { value: "hiking", label: "Hiking" },
+    { value: "running", label: "Running" },
+    { value: "walking", label: "Walking" },
+    { value: "cycling", label: "Cycling" },
+    { value: "skiing", label: "Skiing" },
+    { value: "other", label: "Other" },
+];
 const chartMode = ref("elevation");
 const chartUpdateKey = ref(Date.now()); // Force chart updates
 const flyoutContent = ref(null);
@@ -1191,42 +1109,14 @@ const editedDescription = ref("");
 const savingDescription = ref(false);
 const descriptionError = ref("");
 
-// --- Categories editing state ---
-const selectedCategories = ref([]);
-const savingCategories = ref(false);
-const categoriesError = ref("");
+// --- Categories state (handled by CategoriesPanel component) ---
 const distanceMarkersEnabled = ref(true);
-
-const categoriesList = [
-  { value: "hiking", label: "Hiking" },
-  { value: "running", label: "Running" },
-  { value: "walking", label: "Walking" },
-  { value: "cycling", label: "Cycling" },
-  { value: "skiing", label: "Skiing" },
-  { value: "other", label: "Other" },
-];
 
 const {
   updateTrackCategories,
   updateTrackInPolylines,
   updateTrackDistanceMarkers,
 } = useTracks();
-
-// Initialize selectedCategories from track.categories
-watch(
-  () => props.track?.categories,
-  (newCategories) => {
-    if (newCategories) {
-      selectedCategories.value = newCategories.map((cat) => {
-        const found = categoriesList.find((c) => c.value === cat.toLowerCase());
-        return found || { value: cat.toLowerCase(), label: cat };
-      });
-    } else {
-      selectedCategories.value = [];
-    }
-  },
-  { immediate: true }
-);
 
 watch(
   () => props.track?.distance_markers_enabled,
@@ -1257,24 +1147,8 @@ async function handleDistanceMarkersToggle(event) {
   }
 }
 
-// Auto-save on change
-async function onCategoriesChange(newValue) {
-  categoriesError.value = "";
-
-  if (!newValue || newValue.length === 0) {
-    categoriesError.value = "At least one category is required.";
-    // Revert to previous value
-    selectedCategories.value = props.track.categories.map((cat) => {
-      const found = categoriesList.find((c) => c.value === cat.toLowerCase());
-      return found || { value: cat.toLowerCase(), label: cat };
-    });
-    return;
-  }
-
-  // Convert objects to strings
-  const categoryValues = newValue.map((c) => c.value);
-
-  savingCategories.value = true;
+// Handle categories update from CategoriesPanel component
+async function handleCategoriesUpdated(categoryValues) {
   try {
     await updateTrackCategories(props.track.id, categoryValues);
 
@@ -1287,21 +1161,12 @@ async function onCategoriesChange(newValue) {
     emit("categories-updated", categoryValues);
     showToast("Categories updated", "success");
   } catch (err) {
-    console.error("Failed to update categories", err);
     if (err && err.message && err.message.includes("403")) {
-      categoriesError.value =
-        "You are not allowed to edit categories for this track.";
+      showToast("You are not allowed to edit categories for this track.", "error");
     } else {
-      categoriesError.value = err.message || "Failed to update categories.";
+      showToast(err.message || "Failed to update categories.", "error");
     }
-
-    // Revert to previous value on error
-    selectedCategories.value = props.track.categories.map((cat) => {
-      const found = categoriesList.find((c) => c.value === cat.toLowerCase());
-      return found || { value: cat.toLowerCase(), label: cat };
-    });
-  } finally {
-    savingCategories.value = false;
+    throw err; // Re-throw so CategoriesPanel can revert
   }
 }
 
@@ -2326,14 +2191,6 @@ async function saveDescription() {
 
 // Utility functions - memoized for performance
 // Date formatting function
-
-function formatCategory(category) {
-  // Format category with proper capitalization
-  return category
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
 
 function formatClassification(classification) {
   // Format classification with proper capitalization

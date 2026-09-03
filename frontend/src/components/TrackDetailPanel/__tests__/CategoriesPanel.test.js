@@ -51,13 +51,13 @@ describe('CategoriesPanel', () => {
         expect(wrapper.find('.categories-inline-edit').exists()).toBe(true);
     });
 
-    it('emits categories-change event', async () => {
+    it('emits categories-updated event', async () => {
         const wrapper = mount(CategoriesPanel, {
             props: { ...props, isOwner: true },
         });
         await wrapper.vm.onCategoriesChange([{ value: 'hiking', label: 'Hiking' }]);
-        expect(wrapper.emitted('categories-change')).toBeTruthy();
-        expect(wrapper.emitted('categories-change')[0]).toEqual([['hiking']]);
+        expect(wrapper.emitted('categories-updated')).toBeTruthy();
+        expect(wrapper.emitted('categories-updated')[0]).toEqual([['hiking']]);
     });
 
     it('formats category names', () => {

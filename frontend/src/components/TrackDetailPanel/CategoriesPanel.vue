@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, watch } from 'vue';
 import Multiselect from '@vueform/multiselect';
 
 const props = defineProps({
@@ -8,7 +8,7 @@ const props = defineProps({
     categoriesList: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['categories-change']);
+const emit = defineEmits(['categories-updated', 'error']);
 
 const selectedCategories = ref([]);
 const savingCategories = ref(false);
@@ -19,33 +19,53 @@ function formatCategory(category) {
     return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
-async function onCategoriesChange(selected) {
-    if (!selected) {
-        selectedCategories.value = [];
+// Initialize selectedCategories from track.categories
+watch(
+    () => props.track?.categories,
+    (newCategories) => {
+        if (newCategories) {
+            selectedCategories.value = newCategories.map((cat) => {
+                const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
+                return found || { value: cat.toLowerCase(), label: cat };
+            });
+        } else {
+            selectedCategories.value = [];
+        }
+    },
+    { immediate: true }
+);
+
+async function onCategoriesChange(newValue) {
+    categoriesError.value = '';
+
+    if (!newValue || newValue.length === 0) {
+        categoriesError.value = 'At least one category is required.';
+        // Revert to previous value
+        selectedCategories.value = props.track.categories.map((cat) => {
+            const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
+            return found || { value: cat.toLowerCase(), label: cat };
+        });
         return;
     }
 
-    savingCategories.value = true;
-    categoriesError.value = '';
+    // Convert objects to strings
+    const categoryValues = newValue.map((c) => c.value);
 
+    savingCategories.value = true;
     try {
-        const categoryValues = selected.map((item) =>
-            typeof item === 'object' ? item.value || item.label : item
-        );
-        emit('categories-change', categoryValues);
+        emit('categories-updated', categoryValues);
     } catch (err) {
-        categoriesError.value = err.message || 'Failed to update categories';
+        console.error('Failed to update categories', err);
+        categoriesError.value = err.message || 'Failed to update categories.';
+
+        // Revert to previous value on error
+        selectedCategories.value = props.track.categories.map((cat) => {
+            const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
+            return found || { value: cat.toLowerCase(), label: cat };
+        });
     } finally {
         savingCategories.value = false;
     }
-}
-
-// Initialize selected categories from track
-if (props.track.categories) {
-    selectedCategories.value = props.track.categories.map((cat) => ({
-        value: cat,
-        label: formatCategory(cat),
-    }));
 }
 </script>
 

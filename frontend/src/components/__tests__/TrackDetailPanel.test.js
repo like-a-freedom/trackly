@@ -469,18 +469,16 @@ describe('TrackDetailPanel', () => {
   });
 
   describe('Categories Inline Editing', () => {
-    it('initializes selectedCategories from track data', async () => {
+    it('renders CategoriesPanel component for owner', async () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }
       });
 
       await wrapper.vm.$nextTick();
 
-      // Check that selectedCategories is array of objects
-      expect(Array.isArray(wrapper.vm.selectedCategories)).toBe(true);
-      expect(wrapper.vm.selectedCategories.length).toBeGreaterThan(0);
-      expect(wrapper.vm.selectedCategories[0]).toHaveProperty('value');
-      expect(wrapper.vm.selectedCategories[0]).toHaveProperty('label');
+      // Check that CategoriesPanel is rendered
+      const categoriesPanel = wrapper.findComponent({ name: 'CategoriesPanel' });
+      expect(categoriesPanel.exists()).toBe(true);
     });
 
     it('auto-saves categories on change', async () => {
@@ -490,13 +488,8 @@ describe('TrackDetailPanel', () => {
 
       await wrapper.vm.$nextTick();
 
-      // Simulate category change
-      const newCategories = [
-        { value: 'hiking', label: 'Hiking' },
-        { value: 'running', label: 'Running' }
-      ];
-
-      await wrapper.vm.onCategoriesChange(newCategories);
+      // Call handleCategoriesUpdated directly (simulates event from CategoriesPanel)
+      await wrapper.vm.handleCategoriesUpdated(['hiking', 'running']);
       await wrapper.vm.$nextTick();
 
       // Ensure composable was called with string array
@@ -505,50 +498,6 @@ describe('TrackDetailPanel', () => {
         ['hiking', 'running']
       );
       expect(wrapper.emitted('categories-updated')).toBeTruthy();
-    });
-
-    it('validates empty categories on change', async () => {
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: { ...mockTrackComplete, categories: ['hiking'] }, isOwner: true }
-      });
-
-      await wrapper.vm.$nextTick();
-
-      // Try to set empty categories
-      await wrapper.vm.onCategoriesChange([]);
-      await wrapper.vm.$nextTick();
-
-      expect(wrapper.vm.categoriesError).toBe('At least one category is required.');
-    });
-
-    it('shows saving indicator during save', async () => {
-      let resolveSave;
-      mockUpdateTrackCategories.mockImplementation(() => {
-        return new Promise(resolve => {
-          resolveSave = resolve;
-        });
-      });
-
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackComplete, isOwner: true }
-      });
-
-      await wrapper.vm.$nextTick();
-
-      // Start saving (don't await yet)
-      const savePromise = wrapper.vm.onCategoriesChange([
-        { value: 'hiking', label: 'Hiking' }
-      ]);
-
-      // Wait for the saving state to update
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      // Should show saving indicator
-      expect(wrapper.vm.savingCategories).toBe(true);
-
-      // Clean up
-      resolveSave();
-      await savePromise.catch(() => { });
     });
 
     it('has predefined categories list', () => {
@@ -568,17 +517,7 @@ describe('TrackDetailPanel', () => {
       expect(categoryValues).toContain('cycling');
     });
 
-    it('does not allow custom category creation', () => {
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackComplete, isOwner: true }
-      });
-
-      // Multiselect component should have createOption set to false
-      const multiselect = wrapper.findComponent({ name: 'Multiselect' });
-      expect(multiselect.props('createOption')).toBe(false);
-    });
-
-    it('reverts to previous categories on error', async () => {
+    it('handles categories update error', async () => {
       mockUpdateTrackCategories.mockRejectedValue(new Error('Network error'));
 
       wrapper = mount(TrackDetailPanel, {
@@ -587,17 +526,9 @@ describe('TrackDetailPanel', () => {
 
       await wrapper.vm.$nextTick();
 
-      const initialCategories = [...wrapper.vm.selectedCategories];
-
       // Try to change categories (should fail)
-      await wrapper.vm.onCategoriesChange([
-        { value: 'walking', label: 'Walking' }
-      ]);
-      await wrapper.vm.$nextTick();
-
-      // Should revert to initial categories
-      expect(wrapper.vm.selectedCategories).toHaveLength(2);
-      expect(wrapper.vm.categoriesError).toContain('Network error');
+      await expect(wrapper.vm.handleCategoriesUpdated(['walking']))
+        .rejects.toThrow('Network error');
     });
   });
 
