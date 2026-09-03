@@ -2,7 +2,8 @@
  * Composable for track POI (Point of Interest) management.
  * Handles POI CRUD operations and metrics calculation.
  */
-import { ref, computed, watch } from 'vue';
+import { ref } from 'vue';
+import { haversineDistance } from '../../utils/haversine';
 
 export function useTrackPois(options = {}) {
     const pois = ref(options.initialPois || []);
@@ -25,19 +26,17 @@ export function useTrackPois(options = {}) {
         for (const seg of segments) {
             for (let i = 0; i < seg.points.length; i++) {
                 const [ptLat, ptLng] = seg.points[i];
-                const dist = Math.sqrt(
-                    Math.pow((lat - ptLat) * 111320, 2) +
-                    Math.pow((lng - ptLng) * 111320 * Math.cos(lat * Math.PI / 180), 2)
-                );
+                const dist = haversineDistance({ lat, lng }, { lat: ptLat, lng: ptLng });
 
                 if (dist < minDistToTrack) {
                     minDistToTrack = dist;
                     nearestPoint = { lat: ptLat, lng: ptLng, segIndex: seg.index, pointIndex: i };
                 }
                 if (i > 0) {
-                    distanceFromStart += Math.sqrt(
-                        Math.pow((seg.points[i][0] - seg.points[i - 1][0]) * 111320, 2) +
-                        Math.pow((seg.points[i][1] - seg.points[i - 1][1]) * 111320 * Math.cos(seg.points[i][0] * Math.PI / 180), 2)
+                    const [prevLat, prevLng] = seg.points[i - 1];
+                    distanceFromStart += haversineDistance(
+                        { lat: prevLat, lng: prevLng },
+                        { lat: ptLat, lng: ptLng }
                     );
                 }
             }

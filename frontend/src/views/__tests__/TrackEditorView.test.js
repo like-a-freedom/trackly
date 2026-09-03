@@ -19,14 +19,12 @@ vi.mock('vue-router', () => ({
 
 const showToast = vi.fn();
 
-vi.mock('../../composables/useToast', () => ({
-    useToast: () => ({
+vi.mock('../../stores/toast.js', () => ({
+    useToastStore: () => ({
         showToast,
-        toast: {
-            message: '',
-            type: 'info',
-            duration: 0,
-        },
+        message: '',
+        type: 'info',
+        duration: 0,
     }),
 }));
 

@@ -3,16 +3,14 @@
  * Handles segment operations, waypoint management, and geometry calculations.
  */
 import { ref, computed } from 'vue';
-import { calcSegmentDistance, isValidCoord, getDefaultSegmentColor } from './trackGeometryUtils';
+import { calcSegmentDistance, getDefaultSegmentColor } from './trackGeometryUtils';
 
 export function useTrackGeometry(options = {}) {
     const segments = ref(options.initialSegments || [{ points: [], waypoints: [], surfaceTypes: [], name: null, color: getDefaultSegmentColor(0) }]);
     const activeSegmentIndex = ref(0);
 
     // Limits
-    const MAX_TRACK_POINTS = options.maxTrackPoints || 100_000;
     const MAX_SEGMENTS = options.maxSegments || 100;
-    const MIN_POINT_DISTANCE_M = options.minPointDistanceM || 5;
 
     const activeSegment = computed(() => segments.value[activeSegmentIndex.value]);
 

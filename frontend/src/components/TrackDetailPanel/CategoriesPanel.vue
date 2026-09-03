@@ -8,7 +8,7 @@ const props = defineProps({
     categoriesList: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['categories-updated', 'error']);
+const emit = defineEmits(['categories-updated']);
 
 const selectedCategories = ref([]);
 const savingCategories = ref(false);
@@ -35,16 +35,19 @@ watch(
     { immediate: true }
 );
 
+function revertCategories() {
+    selectedCategories.value = (props.track.categories || []).map((cat) => {
+        const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
+        return found || { value: cat.toLowerCase(), label: cat };
+    });
+}
+
 async function onCategoriesChange(newValue) {
     categoriesError.value = '';
 
     if (!newValue || newValue.length === 0) {
         categoriesError.value = 'At least one category is required.';
-        // Revert to previous value
-        selectedCategories.value = props.track.categories.map((cat) => {
-            const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
-            return found || { value: cat.toLowerCase(), label: cat };
-        });
+        revertCategories();
         return;
     }
 
@@ -52,20 +55,8 @@ async function onCategoriesChange(newValue) {
     const categoryValues = newValue.map((c) => c.value);
 
     savingCategories.value = true;
-    try {
-        emit('categories-updated', categoryValues);
-    } catch (err) {
-        console.error('Failed to update categories', err);
-        categoriesError.value = err.message || 'Failed to update categories.';
-
-        // Revert to previous value on error
-        selectedCategories.value = props.track.categories.map((cat) => {
-            const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
-            return found || { value: cat.toLowerCase(), label: cat };
-        });
-    } finally {
-        savingCategories.value = false;
-    }
+    emit('categories-updated', categoryValues);
+    savingCategories.value = false;
 }
 </script>
 
