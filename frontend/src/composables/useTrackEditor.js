@@ -7,15 +7,11 @@ import { useDraftSave } from './useDraftSave';
 import { useRouting } from './useRouting';
 import {
     geojsonToPoints,
-    pointsToGeoJSON,
     calcSegmentDistance,
     isValidCoord,
-    createEmptySegment,
     getDefaultSegmentColor,
     toMeters,
     distancePointToSegmentMeters,
-    findNearestPointIndex,
-    getNextPoiName,
     SEGMENT_COLORS,
 } from './editor/trackGeometryUtils';
 
