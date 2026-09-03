@@ -470,133 +470,19 @@
           </div>
         </div>
 
-        <!-- Basic Track Info -->
-        <div class="stats-section">
-          <div class="section-header">
-            <h3>Basic info</h3>
-            <div class="header-actions">
-              <div class="unit-toggles">
-                <button
-                  class="unit-toggle"
-                  :class="{ active: speedUnit === 'kmh' }"
-                  @click="setSpeedUnit('kmh')"
-                >
-                  km
-                </button>
-                <button
-                  class="unit-toggle"
-                  :class="{ active: speedUnit === 'mph' }"
-                  @click="setSpeedUnit('mph')"
-                >
-                  miles
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="basic-info-grid">
-            <div class="stat-item">
-              <span class="stat-label">Distance</span>
-              <span class="stat-value">{{ formattedDistance }}</span>
-            </div>
-            <div
-              v-if="
-                track.duration_seconds !== undefined &&
-                track.duration_seconds !== null &&
-                track.duration_seconds > 0
-              "
-              class="stat-item"
-            >
-              <span class="stat-label">Duration</span>
-              <span class="stat-value">{{ formattedDuration }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="stats-section">
-          <div class="section-header">
-            <h3>Map overlays</h3>
-          </div>
-          <label class="toggle-row" data-testid="distance-markers-toggle">
-            <input
-              type="checkbox"
-              :checked="distanceMarkersEnabled"
-              :disabled="!isOwner"
-              @change="handleDistanceMarkersToggle"
-            />
-            <span>Distance markers</span>
-          </label>
-          <p v-if="!isOwner" class="toggle-help">
-            Only the track owner can change overlay settings.
-          </p>
-        </div>
-
-        <!-- Speed and Pace Section -->
-        <div v-if="hasSpeedData" class="stats-section">
-          <h3>Statistics</h3>
-          <div class="speed-pace-grid">
-            <div
-              v-if="
-                track.moving_avg_speed !== undefined &&
-                track.moving_avg_speed !== null
-              "
-              class="stat-item"
-            >
-              <span class="stat-label">Average moving speed</span>
-              <span class="stat-value">{{ formattedMovingAvgSpeed }}</span>
-            </div>
-            <div
-              v-if="
-                track.moving_avg_pace !== undefined &&
-                track.moving_avg_pace !== null
-              "
-              class="stat-item"
-            >
-              <span class="stat-label">Average moving pace</span>
-              <span class="stat-value">{{ formattedMovingAvgPace }}</span>
-            </div>
-            <div
-              v-if="
-                track.moving_time !== undefined && track.moving_time !== null
-              "
-              class="stat-item"
-            >
-              <span class="stat-label">Moving time</span>
-              <span class="stat-value">{{
-                utilFormatDuration(track.moving_time)
-              }}</span>
-            </div>
-            <div
-              v-if="track.pause_time !== undefined && track.pause_time !== null"
-              class="stat-item"
-            >
-              <span class="stat-label">Pause time</span>
-              <span class="stat-value">{{
-                utilFormatDuration(track.pause_time)
-              }}</span>
-            </div>
-            <div
-              v-if="track.avg_hr !== undefined && track.avg_hr !== null"
-              class="stat-item"
-            >
-              <span class="stat-label">Average HR</span>
-              <span class="stat-value">{{ Math.round(track.avg_hr) }} bpm</span>
-            </div>
-            <div
-              v-if="track.hr_min !== undefined && track.hr_min !== null"
-              class="stat-item"
-            >
-              <span class="stat-label">Minimum HR</span>
-              <span class="stat-value">{{ Math.round(track.hr_min) }} bpm</span>
-            </div>
-            <div
-              v-if="track.hr_max !== undefined && track.hr_max !== null"
-              class="stat-item"
-            >
-              <span class="stat-label">Maximum HR</span>
-              <span class="stat-value">{{ Math.round(track.hr_max) }} bpm</span>
-            </div>
-          </div>
-        </div>
+        <!-- Basic Track Info, Map Overlays, Statistics (extracted to StatisticsPanel) -->
+        <StatisticsPanel
+          :track="track"
+          :is-owner="isOwner"
+          :speed-unit="speedUnit"
+          :formatted-distance="formattedDistance"
+          :formatted-duration="formattedDuration"
+          :formatted-moving-avg-speed="formattedMovingAvgSpeed"
+          :formatted-moving-avg-pace="formattedMovingAvgPace"
+          :distance-markers-enabled="distanceMarkersEnabled"
+          @speed-unit-change="setSpeedUnit"
+          @distance-markers-toggle="handleDistanceMarkersToggle"
+        />
 
         <!-- Elevation Stats with Chart (extracted to ElevationPanel) -->
         <ElevationPanel
@@ -691,30 +577,8 @@
           </div>
         </div>
 
-        <!-- Track Metadata -->
-        <div class="track-metadata">
-          <h3>Track info</h3>
-          <div class="metadata-grid">
-            <div v-if="track.recorded_at" class="metadata-item">
-              <span class="metadata-label">Recorded</span>
-              <span class="metadata-value">{{
-                formatDateTime(track.recorded_at)
-              }}</span>
-            </div>
-            <div v-if="track.created_at" class="metadata-item">
-              <span class="metadata-label">Added</span>
-              <span class="metadata-value">{{
-                formatDateTime(track.created_at)
-              }}</span>
-            </div>
-            <div v-if="track.updated_at" class="metadata-item">
-              <span class="metadata-label">Modified</span>
-              <span class="metadata-value">{{
-                formatDateTime(track.updated_at)
-              }}</span>
-            </div>
-          </div>
-        </div>
+        <!-- Track Metadata (extracted to TrackInfoPanel) -->
+        <TrackInfoPanel :track="track" />
       </div>
       <!-- End collapsible-content -->
     </div>
@@ -759,6 +623,8 @@ import { useToastStore } from "../stores/toast.js";
 import { useConfirm } from "../composables/useConfirm";
 import CategoriesPanel from "./TrackDetailPanel/CategoriesPanel.vue";
 import ElevationPanel from "./TrackDetailPanel/ElevationPanel.vue";
+import StatisticsPanel from "./TrackDetailPanel/StatisticsPanel.vue";
+import TrackInfoPanel from "./TrackDetailPanel/TrackInfoPanel.vue";
 
 const props = defineProps({
   track: {
