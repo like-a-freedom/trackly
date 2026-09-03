@@ -5,6 +5,19 @@ import { useAuth } from './useAuth';
 import { useUndoRedo } from './useUndoRedo';
 import { useDraftSave } from './useDraftSave';
 import { useRouting } from './useRouting';
+import {
+    geojsonToPoints,
+    pointsToGeoJSON,
+    calcSegmentDistance,
+    isValidCoord,
+    createEmptySegment,
+    getDefaultSegmentColor,
+    toMeters,
+    distancePointToSegmentMeters,
+    findNearestPointIndex,
+    getNextPoiName,
+    SEGMENT_COLORS,
+} from './editor/trackGeometryUtils';
 
 const API_BASE = '';
 const MAX_TRACK_POINTS = 100_000;
@@ -16,19 +29,6 @@ const OPTIMIZER_DEFAULT_RATIO = 0.1;
 const OPTIMIZER_MIN_RATIO = 0.01;
 const OPTIMIZER_MAX_RATIO = 1.0;
 const SURFACE_UNKNOWN = 'unknown';
-
-/**
- * Segment color palette for differentiating segments visually.
- * Colors chosen for sufficient contrast against the map.
- */
-const SEGMENT_COLORS = [
-    '#1976D2', '#D32F2F', '#388E3C', '#7B1FA2',
-    '#F57C00', '#0097A7', '#C2185B', '#512DA8',
-];
-
-function getDefaultSegmentColor(index) {
-    return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
-}
 
 /** Build a minimal GPX XML string from an array of [lat, lng] points. */
 function buildFragmentGpx(points, name = 'Fragment') {
@@ -48,42 +48,6 @@ ${trkpts}
 </gpx>`;
 }
 
-function toMeters(lat, lng, originLat = lat) {
-    const rad = Math.PI / 180;
-    const x = lng * Math.cos(originLat * rad) * 111320;
-    const y = lat * 110540;
-    return { x, y };
-}
-
-function distancePointToSegmentMeters(point, a, b) {
-    const originLat = (a.lat + b.lat) / 2;
-    const p = toMeters(point.lat, point.lng, originLat);
-    const p1 = toMeters(a.lat, a.lng, originLat);
-    const p2 = toMeters(b.lat, b.lng, originLat);
-
-    const vx = p2.x - p1.x;
-    const vy = p2.y - p1.y;
-    const wx = p.x - p1.x;
-    const wy = p.y - p1.y;
-
-    const lenSq = vx * vx + vy * vy;
-    if (lenSq === 0) {
-        const dx = p.x - p1.x;
-        const dy = p.y - p1.y;
-        return { distance: Math.hypot(dx, dy), t: 0 };
-    }
-
-    let t = (wx * vx + wy * vy) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-
-    const projX = p1.x + t * vx;
-    const projY = p1.y + t * vy;
-    const dx = p.x - projX;
-    const dy = p.y - projY;
-
-    return { distance: Math.hypot(dx, dy), t };
-}
-
 function clampCoordinateArray(points, maxPoints) {
     if (points.length <= maxPoints) return points;
     const ratio = (points.length - 1) / (maxPoints - 1);
@@ -93,43 +57,6 @@ function clampCoordinateArray(points, maxPoints) {
         sampled.push(points[idx]);
     }
     return sampled;
-}
-
-function parseGeoJSONSegments(geojson) {
-    if (!geojson?.coordinates) return [];
-    let coords = [];
-    if (geojson.type === 'LineString') {
-        coords = [geojson.coordinates];
-    } else if (geojson.type === 'MultiLineString') {
-        coords = geojson.coordinates;
-    } else {
-        return [];
-    }
-    return coords.map((line) => line.map(([lng, lat]) => [lat, lng]));
-}
-
-/** Calculate total distance for an array of [lat, lng] points. */
-function calcSegmentDistance(points) {
-    let total = 0;
-    for (let i = 1; i < points.length; i++) {
-        total += haversineDistance(
-            { lat: points[i - 1][0], lng: points[i - 1][1] },
-            { lat: points[i][0], lng: points[i][1] }
-        );
-    }
-    return total;
-}
-
-/** Validate lat/lng coordinate ranges. */
-function isValidCoord(lat, lng) {
-    return (
-        typeof lat === 'number' &&
-        typeof lng === 'number' &&
-        lat >= -90 && lat <= 90 &&
-        lng >= -180 && lng <= 180 &&
-        Number.isFinite(lat) &&
-        Number.isFinite(lng)
-    );
 }
 
 /**
@@ -653,7 +580,7 @@ export function useTrackEditor({ trackId = null } = {}) {
             }
 
             const data = await resp.json();
-            const previewSegments = parseGeoJSONSegments(data.geometry);
+            const previewSegments = geojsonToPoints(data.geometry);
             optimizerPreview.value = {
                 geometry: data.geometry,
                 segments: previewSegments,
