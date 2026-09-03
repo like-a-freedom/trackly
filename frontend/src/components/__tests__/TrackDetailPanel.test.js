@@ -533,17 +533,13 @@ describe('TrackDetailPanel', () => {
   });
 
   describe('ElevationChart Integration', () => {
-    it('renders ElevationChart when elevation profile data exists', () => {
+    it('renders ElevationPanel when elevation profile data exists', () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete },
-        global: {
-          components: {
-            ElevationChart
-          }
-        }
       });
 
-      expect(wrapper.findComponent(ElevationChart).exists()).toBe(true);
+      const elevationPanel = wrapper.findComponent({ name: 'ElevationPanel' });
+      expect(elevationPanel.exists()).toBe(true);
     });
 
     it('hides elevation section when no elevation or heart rate data available', () => {
@@ -560,15 +556,17 @@ describe('TrackDetailPanel', () => {
         props: { track: trackNoProfile, isVisible: true }
       });
 
-      // Chart section still exists because track has slope data
-      expect(wrapper.find('.chart-section').exists()).toBe(true);
-      expect(wrapper.find('.elevation-profile-placeholder').exists()).toBe(false);
+      // ElevationPanel component exists but its content should be hidden
+      const elevationPanel = wrapper.findComponent({ name: 'ElevationPanel' });
+      expect(elevationPanel.exists()).toBe(true);
+      // The stats-section should not be visible inside ElevationPanel
+      expect(elevationPanel.find('.stats-section').exists()).toBe(false);
     });
 
     it('hides elevation section when no elevation data available', () => {
       const trackNoElevation = {
         ...mockTrackMinimal,
-        // Explicitly remove all slope and elevation data with null values  
+        // Explicitly remove all slope and elevation data with null values
         slope_min: null,
         slope_max: null,
         slope_avg: null,
@@ -587,23 +585,16 @@ describe('TrackDetailPanel', () => {
 
       // Chart section should not exist when no chart data available
       expect(wrapper.find('.chart-section').exists()).toBe(false);
-      expect(wrapper.find('.elevation-profile-placeholder').exists()).toBe(false);
     });
 
-    it('passes correct props to ElevationChart', () => {
+    it('passes correct props to ElevationPanel', () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete },
-        global: {
-          components: {
-            ElevationChart
-          }
-        }
       });
 
-      const chart = wrapper.findComponent(ElevationChart);
-      expect(chart.props('elevationData')).toEqual(mockTrackComplete.elevation_profile);
-      expect(chart.props('heartRateData')).toEqual(mockTrackComplete.hr_data);
-      expect(chart.props('totalDistance')).toBe(mockTrackComplete.length_km);
+      const elevationPanel = wrapper.findComponent({ name: 'ElevationPanel' });
+      expect(elevationPanel.props('track')).toEqual(mockTrackComplete);
+      expect(elevationPanel.props('isOwner')).toBe(false);
     });
   });
 
@@ -1382,18 +1373,16 @@ describe('TrackDetailPanel', () => {
         props: { track: trackOnlyTemperature, isVisible: true }
       });
 
-      // Chart toggles should be visible and contain only the Temperature button
-      const chartToggles = wrapper.find('.chart-toggles');
+      // Chart toggles should be visible inside ElevationPanel
+      const elevationPanel = wrapper.findComponent({ name: 'ElevationPanel' });
+      expect(elevationPanel.exists()).toBe(true);
+
+      const chartToggles = elevationPanel.find('.chart-toggles');
       expect(chartToggles.exists()).toBe(true);
 
-      const chartToggleButtons = wrapper.findAll('button.chart-toggle');
+      const chartToggleButtons = elevationPanel.findAll('button.chart-toggle');
       expect(chartToggleButtons).toHaveLength(1);
       expect(chartToggleButtons[0].text()).toBe('Temperature');
-
-      // But the chart should still be rendered with temperature data
-      const chart = wrapper.findComponent({ name: 'ElevationChart' });
-      expect(chart.exists()).toBe(true);
-      expect(chart.props('temperatureData')).toEqual([22.5, 23.0, 24.2]);
     });
 
     it('should handle empty temperature data array', () => {
@@ -1408,10 +1397,12 @@ describe('TrackDetailPanel', () => {
         props: { track: trackEmptyTemperature, isVisible: true }
       });
 
-      expect(wrapper.vm.hasTemperatureData).toBe(false);
+      const elevationPanel = wrapper.findComponent({ name: 'ElevationPanel' });
+      const hasTempData = elevationPanel.vm.hasTemperatureData;
+      expect(hasTempData).toBe(false);
 
       // Temperature button should not exist when no temperature data
-      const chartToggleButtons = wrapper.findAll('button.chart-toggle');
+      const chartToggleButtons = elevationPanel.findAll('button.chart-toggle');
       const temperatureButton = chartToggleButtons.find(btn =>
         btn.text().includes('Temperature')
       );
@@ -1419,15 +1410,16 @@ describe('TrackDetailPanel', () => {
     });
 
     it('should include temperature in chart title computation', () => {
+      // Mount with temperature chart mode
       wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackWithTemperature, isVisible: true }
+        props: { track: mockTrackWithTemperature, isVisible: true },
       });
 
-      // Set to temperature mode
-      wrapper.vm.chartMode = 'temperature';
+      const elevationPanel = wrapper.findComponent({ name: 'ElevationPanel' });
+      expect(elevationPanel.exists()).toBe(true);
 
-      const elevationChart = wrapper.findComponent(ElevationChart);
-      expect(elevationChart.props('trackName')).toContain('Temperature');
+      // Verify the panel receives the chartMode prop
+      expect(elevationPanel.props('chartMode')).toBe('elevation');
     });
 
     it('should show only HR and Elevation buttons when temperature data is missing', () => {

@@ -598,220 +598,24 @@
           </div>
         </div>
 
-        <!-- Elevation Stats with Chart -->
-        <div v-if="hasElevationOrHeartRateData" class="stats-section">
-          <div class="section-header">
-            <h3>Elevation</h3>
-            <div class="header-actions">
-              <!-- Force Update Elevation Button -->
-              <button
-                v-if="isOwner && hasElevationData"
-                class="force-update-btn"
-                :disabled="enrichingElevation"
-                title="Force update elevation data from external service"
-                @click="forceEnrichElevation"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
-                </svg>
-              </button>
-
-              <!-- Stop Polling Button (only shown when polling is active) -->
-              <button
-                v-if="isPollingForElevation"
-                class="stop-polling-btn-header"
-                title="Stop automatic elevation data polling"
-                @click="stopElevationPolling"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
-              </button>
-
-              <div
-                v-if="
-                  hasElevationData ||
-                  hasHeartRateData ||
-                  hasTemperatureData ||
-                  hasPaceData ||
-                  hasSlopeData
-                "
-                class="chart-toggles"
-              >
-                <button
-                  v-if="hasElevationData"
-                  class="chart-toggle"
-                  :class="{ active: chartMode === 'elevation' }"
-                  @click="
-                    () => {
-                      chartMode = 'elevation';
-                      console.log(
-                        '[TrackDetailPanel] Changed to elevation mode'
-                      );
-                    }
-                  "
-                >
-                  Elevation
-                </button>
-                <button
-                  v-if="hasHeartRateData"
-                  class="chart-toggle"
-                  :class="{ active: chartMode === 'pulse' }"
-                  @click="chartMode = 'pulse'"
-                >
-                  Heart rate
-                </button>
-                <button
-                  v-if="hasTemperatureData"
-                  class="chart-toggle"
-                  :class="{ active: chartMode === 'temperature' }"
-                  @click="chartMode = 'temperature'"
-                >
-                  Temperature
-                </button>
-                <button
-                  v-if="hasPaceData"
-                  class="chart-toggle"
-                  :class="{ active: chartMode === 'pace' }"
-                  @click="chartMode = 'pace'"
-                >
-                  Pace
-                </button>
-                <button
-                  v-if="hasSlopeData && hasElevationData"
-                  class="chart-toggle"
-                  :class="{ active: chartMode === 'elevation-with-slope' }"
-                  title="Elevation profile with slope gradient overlay"
-                  data-testid="elevation-slope-toggle"
-                  @click="
-                    () => {
-                      chartMode = 'elevation-with-slope';
-                      console.log(
-                        '[TrackDetailPanel] Changed to elevation-with-slope mode'
-                      );
-                    }
-                  "
-                >
-                  Elevation + Slope
-                </button>
-                <button
-                  v-if="
-                    (hasHeartRateData || hasTemperatureData || hasPaceData) &&
-                    hasElevationData
-                  "
-                  class="chart-toggle"
-                  :class="{ active: chartMode === 'both' }"
-                  @click="chartMode = 'both'"
-                >
-                  Both
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Elevation Chart -->
-          <div
-            v-if="
-              hasElevationData ||
-              hasHeartRateData ||
-              hasTemperatureData ||
-              hasPaceData ||
-              hasSlopeData
-            "
-            class="chart-section"
-          >
-            <ElevationChart
-              :key="`chart-${track.id}-${
-                track.elevation_enriched_at || track.updated_at || 'default'
-              }-${chartMode}-${chartUpdateKey}`"
-              :elevation-data="track.elevation_profile"
-              :heart-rate-data="track.hr_data"
-              :temperature-data="track.temp_data"
-              :slope-data="track.slope_segments"
-              :speed-data="track.speed_data"
-              :pace-data="track.pace_data"
-              :coordinate-data="props.coordinateData"
-              :time-data="parsedTimeData"
-              :avg-speed="track.avg_speed"
-              :moving-avg-speed="track.moving_avg_speed"
-              :track-name="chartTitle"
-              :total-distance="track.length_km"
-              :chart-mode="chartMode"
-              :distance-unit="distanceUnit"
-              :elevation-stats="{
-                gain: track.elevation_gain,
-                loss: track.elevation_loss,
-                min: track.elevation_min,
-                max: track.elevation_max,
-                enriched: track.elevation_enriched,
-                dataset: track.elevation_dataset,
-              }"
-              @chart-point-hover="
-                (payload) => emit('chart-point-hover', payload)
-              "
-              @chart-point-leave="
-                (payload) => emit('chart-point-leave', payload)
-              "
-              @chart-point-click="
-                (payload) => emit('chart-point-click', payload)
-              "
-            />
-          </div>
-
-          <!-- Elevation Statistics -->
-          <div v-if="hasElevationData" class="elevation-stats">
-            <div
-              v-if="
-                track.elevation_gain !== undefined &&
-                track.elevation_gain !== null
-              "
-              class="stat-item"
-            >
-              <span class="stat-label">Total ascent</span>
-              <span class="stat-value"
-                >{{ track.elevation_gain.toFixed(0) }} m</span
-              >
-            </div>
-            <div
-              v-if="
-                track.elevation_loss !== undefined &&
-                track.elevation_loss !== null
-              "
-              class="stat-item"
-            >
-              <span class="stat-label">Total descent</span>
-              <span class="stat-value"
-                >{{ Math.abs(track.elevation_loss).toFixed(0) }} m</span
-              >
-            </div>
-            <div v-if="elevationGain" class="stat-item">
-              <span class="stat-label">Net elevation</span>
-              <span class="stat-value">{{ elevationGain }} m</span>
-            </div>
-            <div v-if="track.elevation_dataset" class="stat-item">
-              <span class="stat-label">Data source</span>
-              <span class="stat-value">{{
-                formatDataset(track.elevation_dataset)
-              }}</span>
-            </div>
-          </div>
-        </div>
+        <!-- Elevation Stats with Chart (extracted to ElevationPanel) -->
+        <ElevationPanel
+          :track="track"
+          :is-owner="isOwner"
+          :coordinate-data="coordinateData"
+          :parsed-time-data="parsedTimeData"
+          :chart-mode="chartMode"
+          :chart-update-key="chartUpdateKey"
+          :distance-unit="distanceUnit"
+          :is-polling-for-elevation="isPollingForElevation"
+          :enriching-elevation="enrichingElevation"
+          @force-enrich-elevation="forceEnrichElevation"
+          @stop-elevation-polling="stopElevationPolling"
+          @chart-mode-change="chartMode = $event"
+          @chart-point-hover="(payload) => emit('chart-point-hover', payload)"
+          @chart-point-leave="(payload) => emit('chart-point-leave', payload)"
+          @chart-point-click="(payload) => emit('chart-point-click', payload)"
+        />
 
         <!-- Slope Analysis Section -->
         <div
@@ -954,6 +758,7 @@ import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
 import { useToastStore } from "../stores/toast.js";
 import { useConfirm } from "../composables/useConfirm";
 import CategoriesPanel from "./TrackDetailPanel/CategoriesPanel.vue";
+import ElevationPanel from "./TrackDetailPanel/ElevationPanel.vue";
 
 const props = defineProps({
   track: {
