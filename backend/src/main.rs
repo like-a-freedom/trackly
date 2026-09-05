@@ -109,7 +109,6 @@ async fn main() {
         .route("/api/tracks/upload", post(handlers::upload_track))
         .route("/api/tracks", get(handlers::list_tracks_geojson))
         .route("/api/tracks/heatmap", get(handlers::list_tracks_heatmap))
-        .route("/api/tracks", post(handlers::upload_track))
         .route("/api/tracks/search", get(handlers::search_tracks))
         .route("/api/tracks/{id}", get(handlers::get_track))
         .route(
@@ -136,7 +135,7 @@ async fn main() {
             "/api/tracks/{id}/distance-markers",
             axum::routing::patch(handlers::update_track_distance_markers),
         )
-        .route("/api/tracks/{id}/export", get(handlers::export_track_gpx))
+        .route("/api/tracks/{id}/export", get(handlers::export_track))
         .route(
             "/api/tracks/{id}/enrich-elevation",
             post(handlers::enrich_elevation),
@@ -167,6 +166,7 @@ async fn main() {
             "/api/tracks/{id}/duplicate",
             post(handlers::duplicate_track),
         )
+        .route("/api/tracks/{id}/publish", post(handlers::publish_track))
         .route(
             "/observability/map-interactions",
             post(handlers::record_map_interaction),
@@ -197,6 +197,10 @@ async fn main() {
         .route(
             "/api/auth/me/nickname",
             axum::routing::patch(handlers::update_nickname),
+        )
+        .route(
+            "/api/account/profile",
+            axum::routing::patch(handlers::update_profile),
         )
         .route(
             "/api/auth/migrate-session-tracks",

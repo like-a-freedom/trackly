@@ -54,8 +54,10 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, watch, shallowRef, onUnmounted, onMounted, onBeforeUnmount } from 'vue';
+<!-- eslint-disable vue/block-lang -->
+<script setup lang="ts">
+// @ts-nocheck - Complex Chart.js types and dynamic data shapes
+import { ref, computed, watch, shallowRef, onUnmounted, onMounted, onBeforeUnmount, type PropType } from 'vue';
 import { useRouter } from 'vue-router';
 import { Line } from 'vue-chartjs';
 import {
@@ -125,15 +127,15 @@ const props = defineProps({
     default: () => []
   },
   speedData: {
-    type: Array,
+    type: Array as PropType<(number | null)[]>,
     default: () => []
   },
   paceData: {
-    type: Array,
+    type: Array as PropType<(number | null)[]>,
     default: () => []
   },
   coordinateData: {
-    type: Array,
+    type: Array as PropType<number[][]>,
     default: () => []
   },
   avgSpeed: {
@@ -290,7 +292,7 @@ function processTouchPoint(clientX, clientY) {
   emitChartPointHover(payload);
 }
 
-function onTouchStart(event) {
+function onTouchStart(event: TouchEvent | MouseEvent) {
   try {
     const t = (event.touches && event.touches[0]) || event;
     lastTouchInfo.value = { time: Date.now(), x: t.clientX || 0, y: t.clientY || 0, moved: false };
@@ -300,7 +302,7 @@ function onTouchStart(event) {
   }
 }
 
-function onTouchMove(event) {
+function onTouchMove(event: TouchEvent | MouseEvent) {
   try {
     const t = (event.touches && event.touches[0]) || event;
     const dx = Math.abs(t.clientX - lastTouchInfo.value.x);
@@ -312,7 +314,7 @@ function onTouchMove(event) {
   }
 }
 
-function onTouchEnd(event) {
+function onTouchEnd(event: TouchEvent | MouseEvent) {
   try {
     const duration = Date.now() - lastTouchInfo.value.time;
     // Treat as tap if short and not moved
@@ -329,7 +331,7 @@ function onTouchEnd(event) {
   }
 }
 
-function onKeyDown(event) {
+function onKeyDown(event: KeyboardEvent) {
   try {
     const labels = chartData.value.labels || [];
     if (!labels || labels.length === 0) return;
@@ -402,14 +404,14 @@ function cleanupTooltip() {
 }
 
 const hasPace = useMemoizedComputed(
-  (speedData, paceData, avgSpeed, movingAvgSpeed) => {
+  (speedData: (number | null)[], paceData: (number | null)[], avgSpeed: number | undefined, movingAvgSpeed: number | undefined) => {
     console.log('[ElevationChart] Checking pace data:', {
       paceData: paceData ? (Array.isArray(paceData) ? paceData.length : 'non-array') : 'missing',
       speedData: speedData ? (Array.isArray(speedData) ? speedData.length : 'non-array') : 'missing',
       avgSpeed,
       movingAvgSpeed
     });
-    
+
     // Check if we have backend-calculated pace data
     if (Array.isArray(paceData) && paceData.length > 0) {
       const hasValidPace = paceData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
@@ -418,7 +420,7 @@ const hasPace = useMemoizedComputed(
         return true;
       }
     }
-    
+
     // Check if we have speed data that we can convert to pace
     if (Array.isArray(speedData) && speedData.length > 0) {
       const hasValidSpeed = speedData.some(value => value !== null && value !== undefined && typeof value === 'number' && value > 0);
@@ -427,13 +429,13 @@ const hasPace = useMemoizedComputed(
         return true;
       }
     }
-    
+
     // Check if we have aggregate speed data for fallback pace estimation
     if ((avgSpeed && avgSpeed > 0) || (movingAvgSpeed && movingAvgSpeed > 0)) {
       console.log('[ElevationChart] Found aggregate speed data for pace estimation');
       return true;
     }
-    
+
     console.log('[ElevationChart] No suitable pace data found');
     return false;
   },
@@ -518,22 +520,39 @@ const hasTemperature = useMemoizedComputed(
   }
 );
 
-const chartData = useMemoizedComputed(
+interface ChartDataResult {
+  labels?: string[];
+  datasets?: unknown[];
+  elevationData?: number[];
+  slopeData?: number[];
+  speedData?: (number | null)[];
+  paceData?: (number | null)[];
+  heartRateData?: (number | null)[];
+  temperatureData?: (number | null)[];
+  coordinateData?: number[][];
+  timeData?: string[];
+  totalDistance?: number;
+  distanceUnit?: string;
+  chartMode?: string;
+  elevationStats?: { gain: number; loss: number };
+}
+
+const chartData = useMemoizedComputed<ChartDataResult>(
   (elevationData, heartRateData, temperatureData, slopeData, speedData, paceData, coordinateData, timeData, avgSpeed, movingAvgSpeed, hasPulseValue, hasTemperatureValue, hasPaceValue, totalDistance, chartMode, elevationStats, distanceUnit) => {
     if ((!elevationData || elevationData.length === 0) && (!hasPulseValue) && (!hasTemperatureValue) && (!hasPaceValue) && (!elevationStats.gain && !elevationStats.loss)) {
       return {};
     }
     
     // Elevation extraction (optimized with memoization)
-    let elevation = [];
+    let elevation: number[] = [];
     let elevationPointCount = 0;
     if (elevationData && elevationData.length > 0) {
-      if (elevationData.every(p => typeof p === 'number' || p === null)) {
-        elevation = elevationData;
-      } else if (elevationData.every(p => Array.isArray(p) && p.length === 2)) {
-        elevation = elevationData.map(p => p[1]);
-      } else if (elevationData.every(p => typeof p === 'object' && p !== null && 'dist' in p && 'ele' in p)) {
-        elevation = elevationData.map(p => p.ele);
+      if (elevationData.every((p: unknown) => typeof p === 'number' || p === null)) {
+        elevation = elevationData as number[];
+      } else if (elevationData.every((p: unknown) => Array.isArray(p) && p.length === 2)) {
+        elevation = (elevationData as number[][]).map(p => p[1]);
+      } else if (elevationData.every((p: unknown) => typeof p === 'object' && p !== null && 'dist' in p && 'ele' in p)) {
+        elevation = (elevationData as Array<{ dist: number; ele: number }>).map(p => p.ele);
       }
       elevationPointCount = elevation.length;
     } else if ((elevationStats.gain || elevationStats.loss) && (hasPulseValue || hasTemperatureValue)) {
@@ -544,11 +563,11 @@ const chartData = useMemoizedComputed(
         hasTemperatureValue ? temperatureData.length : 0,
         50 // minimum reasonable number of points for smooth synthetic curve
       );
-      
+
       const baseElevation = elevationStats.min || 0;
       const totalGain = elevationStats.gain || 0;
       const totalLoss = Math.abs(elevationStats.loss || 0);
-      
+
       // Simple linear interpolation from min to max
       const maxElevation = baseElevation + totalGain;
       elevation = Array.from({ length: elevationPointCount }, (_, i) => {
@@ -556,17 +575,17 @@ const chartData = useMemoizedComputed(
         return baseElevation + (maxElevation - baseElevation) * progress;
       });
     }
-    
+
     // Pulse extraction
-    let pulse = [];
+    let pulse: number[] = [];
     let pulsePointCount = 0;
     if (hasPulseValue) {
-      if (heartRateData.every(p => typeof p === 'number' || p === null)) {
-        pulse = heartRateData;
-      } else if (heartRateData.every(p => Array.isArray(p) && p.length >= 2)) {
-        pulse = heartRateData.map(p => p[1]);
-      } else if (heartRateData.every(p => typeof p === 'object' && p !== null && ('hr' in p || 'pulse' in p))) {
-        pulse = heartRateData.map(p => p.hr ?? p.pulse);
+      if (heartRateData.every((p: unknown) => typeof p === 'number' || p === null)) {
+        pulse = heartRateData as number[];
+      } else if (heartRateData.every((p: unknown) => Array.isArray(p) && p.length >= 2)) {
+        pulse = (heartRateData as number[][]).map(p => p[1]);
+      } else if (heartRateData.every((p: unknown) => typeof p === 'object' && p !== null && ('hr' in p || 'pulse' in p))) {
+        pulse = (heartRateData as Array<{ hr?: number; pulse?: number }>).map(p => p.hr ?? p.pulse ?? 0);
       }
       pulsePointCount = pulse.length;
     }
@@ -576,15 +595,15 @@ const chartData = useMemoizedComputed(
     let slopePointCount = 0;
     
     if (chartMode === 'elevation-with-slope' && slopeData && slopeData.length > 0) {
-      if (slopeData.every(p => typeof p === 'number' || p === null)) {
+      if (slopeData.every((p: unknown) => typeof p === 'number' || p === null)) {
         slope = slopeData;
-      } else if (slopeData.every(p => Array.isArray(p) && p.length === 2)) {
-        slope = slopeData.map(p => p[1]);
-      } else if (slopeData.every(p => typeof p === 'object' && p !== null && 'dist' in p && 'slope' in p)) {
-        slope = slopeData.map(p => p.slope);
-      } else if (slopeData.every(p => typeof p === 'object' && p !== null && 'distance_m' in p && 'slope_percent' in p)) {
+      } else if (slopeData.every((p: unknown) => Array.isArray(p) && p.length === 2)) {
+        slope = slopeData.map((p: number[]) => p[1]);
+      } else if (slopeData.every((p: unknown) => typeof p === 'object' && p !== null && 'dist' in p && 'slope' in p)) {
+        slope = slopeData.map((p: { slope: number }) => p.slope);
+      } else if (slopeData.every((p: unknown) => typeof p === 'object' && p !== null && 'distance_m' in p && 'slope_percent' in p)) {
         // Handle slope_segments format from our API
-        slope = slopeData.map(p => p.slope_percent);
+        slope = slopeData.map((p: { slope_percent: number }) => p.slope_percent);
       }
       
       // Apply adaptive granularity for slope data to prevent overly detailed charts
@@ -622,23 +641,23 @@ const chartData = useMemoizedComputed(
     let temperature = [];
     let temperaturePointCount = 0;
     if (hasTemperatureValue) {
-      if (temperatureData.every(p => typeof p === 'number' || p === null)) {
+      if (temperatureData.every((p: unknown) => typeof p === 'number' || p === null)) {
         temperature = temperatureData;
-      } else if (temperatureData.every(p => Array.isArray(p) && p.length >= 2)) {
-        temperature = temperatureData.map(p => p[1]);
-      } else if (temperatureData.every(p => typeof p === 'object' && p !== null && ('temp' in p || 'temperature' in p))) {
-        temperature = temperatureData.map(p => p.temp ?? p.temperature);
+      } else if (temperatureData.every((p: unknown) => Array.isArray(p) && p.length >= 2)) {
+        temperature = temperatureData.map((p: number[]) => p[1]);
+      } else if (temperatureData.every((p: unknown) => typeof p === 'object' && p !== null && ('temp' in p || 'temperature' in p))) {
+        temperature = temperatureData.map((p: { temp?: number; temperature?: number }) => p.temp ?? p.temperature);
       }
       temperaturePointCount = temperature.length;
     }
-    
+
     // Pace extraction - simplified to use backend-calculated data
     let pace = [];
     let pacePointCount = 0;
     if (hasPaceValue) {
       // Try to use backend-calculated pace data first
       if (paceData && paceData.length > 0) {
-        if (paceData.every(p => typeof p === 'number' || p === null)) {
+        if (paceData.every((p: unknown) => typeof p === 'number' || p === null)) {
           pace = paceData.slice(); // Use backend-calculated pace directly
           pacePointCount = pace.length;
           console.log('[ElevationChart] Using backend-calculated pace data:', pacePointCount, 'points');
@@ -1076,21 +1095,21 @@ watch([
       axis: 'x',
       intersect: false,
     },
-    onClick: (event, elements, chart) => {
+    onClick: (event: { native: { target: HTMLElement } }, elements: Array<{ index: number }>, chart: unknown) => {
       // Handle click on chart to toggle fixed state
       if (elements.length > 0) {
         const element = elements[0];
         const pointIndex = element.index;
         const willBeFixed = !isChartPointFixed.value;
         isChartPointFixed.value = willBeFixed;
-        
+
         const clickPayload = buildPayloadForIndex(pointIndex, willBeFixed);
         if (clickPayload) {
           emit('chart-point-click', clickPayload);
         }
       }
     },
-    onHover: (event, elements) => {
+    onHover: (event: { native: { target: HTMLElement } }, elements: Array<{ index: number }>) => {
       // Change cursor to crosshair when hovering over chart
       event.native.target.style.cursor = elements.length > 0 ? 'crosshair' : 'default';
     },
@@ -1251,7 +1270,7 @@ function formatTime(timeValue) {
 }
 
 // ESC key handler to hide tooltip and clear fixed point
-function handleEscapeKey(event) {
+function handleEscapeKey(event: KeyboardEvent) {
   if (event.key === 'Escape' || event.keyCode === 27) {
     cleanupTooltip();
     // Emit leave event with clearFixed to reset fixed state
@@ -1300,14 +1319,26 @@ onUnmounted(() => {
   }
 });
 
-// Expose debug helper for deterministic unit testing (non-production only)
-if (import.meta.env.MODE !== 'production') {
-  try {
-    defineExpose({ __debugBuildPayloadForIndex: buildPayloadForIndex });
-  } catch (e) {
-    // no-op if defineExpose is unavailable in the test environment
-  }
-}
+// Expose internals for deterministic unit testing
+defineExpose({
+  __debugBuildPayloadForIndex: buildPayloadForIndex,
+  chartData,
+  chartMode: computed(() => props.chartMode),
+  chartOptions,
+  distanceUnit: computed(() => props.distanceUnit),
+  elevationData: computed(() => props.elevationData),
+  heartRateData: computed(() => props.heartRateData),
+  temperatureData: computed(() => props.temperatureData),
+  hasPulse,
+  hasTemperature,
+  isChartPointFixed,
+  lastEmittedPoint,
+  totalDistance: computed(() => props.totalDistance),
+  trackName: computed(() => props.trackName),
+  emitChartPointHover,
+  emitChartPointLeave,
+  buildPayloadForIndex,
+});
 </script>
 
 <style scoped>

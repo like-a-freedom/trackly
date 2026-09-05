@@ -15,19 +15,21 @@
   </teleport>
 </template>
 
-<script setup>
-import { onMounted, onUnmounted } from 'vue';
+<script setup lang="ts">
+import { onUnmounted } from 'vue';
 import ConfirmDialog from './ConfirmDialog.vue';
-import { useConfirm } from '../composables/useConfirm.js';
+import { useConfirm } from '../composables/useConfirm';
+import type { ComponentPublicInstance } from 'vue';
 
 const { confirmDialogs, confirmDialog } = useConfirm();
-const dialogRefs = new Map();
+const dialogRefs = new Map<number, ComponentPublicInstance<{ show: () => void; hide: () => void }>>();
 
-function setDialogRef(id, el) {
-  if (el) {
-    dialogRefs.set(id, el);
+function setDialogRef(id: number, el: unknown): void {
+  const dialogEl = el as ComponentPublicInstance<{ show: () => void; hide: () => void }> | null;
+  if (dialogEl) {
+    dialogRefs.set(id, dialogEl);
     // Show the dialog when the ref is set
-    el.show();
+    dialogEl.show();
   } else {
     dialogRefs.delete(id);
   }

@@ -56,7 +56,8 @@ pub struct AuthResponse {
 pub struct UserResponse {
     pub id: String,
     pub email: String,
-    pub name: Option<String>,
+    // Frontend expects name as a required string; default to empty string if None
+    pub name: String,
     pub nickname: Option<String>,
     pub avatar_url: Option<String>,
     pub roles: Vec<String>,
@@ -67,7 +68,7 @@ impl From<User> for UserResponse {
         Self {
             id: user.id.to_string(),
             email: user.email,
-            name: user.name,
+            name: user.name.unwrap_or_default(),
             nickname: user.nickname,
             avatar_url: user.avatar_url,
             roles: user.roles,
@@ -502,6 +503,71 @@ pub async fn update_nickname(
 
     let user =
         db::update_user_nickname(&pool, auth_user.user_id, request.nickname.as_deref()).await?;
+
+    Ok(Json(user.into()))
+}
+
+/// Request for profile update.
+#[derive(Debug, Deserialize)]
+pub struct UpdateProfileRequest {
+    pub name: Option<String>,
+    pub nickname: Option<String>,
+}
+
+/// Update user profile.
+///
+/// PATCH /api/account/profile
+///
+/// Allows updating name and nickname fields.
+pub async fn update_profile(
+    State(pool): State<Arc<PgPool>>,
+    auth_user: AuthUser,
+    Json(request): Json<UpdateProfileRequest>,
+) -> Result<Json<UserResponse>> {
+    // Validate name if provided
+    if let Some(ref name) = request.name {
+        if name.trim().is_empty() {
+            return Err(AppError::from(AuthError::InvalidInput(
+                "Name cannot be empty".into(),
+            )));
+        }
+        if name.len() > 100 {
+            return Err(AppError::from(AuthError::InvalidInput(
+                "Name too long (max 100 chars)".into(),
+            )));
+        }
+    }
+
+    // Validate nickname if provided
+    if let Some(ref nickname) = request.nickname {
+        if nickname.len() > 50 {
+            return Err(AppError::from(AuthError::InvalidInput(
+                "Nickname too long (max 50 chars)".into(),
+            )));
+        }
+        if nickname.trim().is_empty() {
+            return Err(AppError::from(AuthError::InvalidInput(
+                "Nickname cannot be empty".into(),
+            )));
+        }
+    }
+
+    // Update name if provided
+    if let Some(name) = &request.name {
+        db::update_user_name(&pool, auth_user.user_id, name).await?;
+    }
+
+    // Update nickname if provided
+    if request.nickname.is_some() {
+        db::update_user_nickname(&pool, auth_user.user_id, request.nickname.as_deref()).await?;
+    }
+
+    // Fetch updated user
+    let user = db::get_user_by_id(&pool, auth_user.user_id)
+        .await?
+        .ok_or(AppError::from(AuthError::UserNotFound))?;
+
+    info!(user_id = %auth_user.user_id, "User profile updated");
 
     Ok(Json(user.into()))
 }

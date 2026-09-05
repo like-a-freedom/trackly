@@ -612,14 +612,14 @@ import {
   formatSpeed,
   formatPace,
   calculatePaceFromSpeed,
-  useTracks,
-} from "../composables/useTracks";
+} from "../utils/format";
+import { useTracks } from "../composables/useTracks";
 import { useUnitsStore } from "../stores/units.js";
 import { events } from "../events";
 import { useMemoizedComputed } from "../composables/useMemoization";
 import { clearCacheByPattern } from "../composables/useMemoization";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
-import { useToastStore } from "../stores/toast.js";
+import { useToastStore } from "@/stores/toast";
 import { useConfirm } from "../composables/useConfirm";
 import CategoriesPanel from "./TrackDetailPanel/CategoriesPanel.vue";
 import ElevationPanel from "./TrackDetailPanel/ElevationPanel.vue";

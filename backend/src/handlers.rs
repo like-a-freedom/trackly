@@ -19,7 +19,7 @@ pub use auth::{
     AuthResponse, DeleteAccountResponse, LoginResponse, MigrateSessionResponse,
     OAuthConfigResponse, RefreshResponse, UserResponse, delete_account, get_current_user,
     google_callback, google_login, logout, logout_all, migrate_session_tracks, oauth_config,
-    refresh_token, update_nickname,
+    refresh_token, update_nickname, update_profile,
 };
 
 // Re-export observability handlers

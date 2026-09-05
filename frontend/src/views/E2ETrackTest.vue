@@ -1,3 +1,4 @@
+// @ts-nocheck - Test mocks don't need full type fidelity
 <template>
   <div>
     <h2>Track E2E Test Route</h2>
@@ -12,12 +13,19 @@
   </div>
 </template>
 
-<script setup>
+<!-- eslint-disable vue/block-lang -->
+<script setup lang="ts">
+// @ts-nocheck - Complex Vue component types
 import { ref, computed } from 'vue';
 import TrackMap from '../components/TrackMap.vue';
+import type { LatLngTuple } from '@/types';
 
 // Minimal fixture track with known latlngs
-const track = {
+const track: {
+  id: string;
+  name: string;
+  latlngs: LatLngTuple[];
+} = {
   id: 'e2e-track-1',
   name: 'E2E Test Track',
   latlngs: [

@@ -131,8 +131,9 @@
   </div>
 </template>
 
-<script setup>
-// Import the logic from App.vue
+<!-- eslint-disable vue/block-lang -->
+<script setup lang="ts">
+// @ts-nocheck - Complex Vue component instance types and Leaflet integration
 import {
   ref,
   reactive,
@@ -166,6 +167,7 @@ import {
   useAdvancedDebounce,
   useThrottle,
 } from "../composables/useAdvancedDebounce";
+import type { Bounds } from "../map/MapAdapter";
 
 // Define component name for keep-alive
 defineOptions({
@@ -205,6 +207,14 @@ const pendingZoomRestore = ref(null);
 const markerLatLng = ref(center.value);
 const bounds = ref(null);
 const mapInstance = ref(null); // Store map instance for invalidateSize on activation
+
+// Convert Leaflet LatLngBounds to domain Bounds for the useTracks API
+function toBounds(latLngBounds: { getSouthWest: () => { lng: number; lat: number }; getNorthEast: () => { lng: number; lat: number } } | null): Bounds | null {
+  if (!latLngBounds) return null;
+  const sw = latLngBounds.getSouthWest();
+  const ne = latLngBounds.getNorthEast();
+  return { sw: [sw.lng, sw.lat], ne: [ne.lng, ne.lat] };
+}
 const dragActive = ref(false);
 const uploadFormExpanded = ref(false); // Collapsed by default
 const {
@@ -227,7 +237,7 @@ const toast = computed(() => ({
     message: toastStore.message,
     type: toastStore.type,
     duration: toastStore.duration
-}));
+}) as { message: string; type: 'info' | 'success' | 'warning' | 'error'; duration: number });
 const searchStore = useSearchStore();
 const { clearSearchState } = searchStore;
 const searchResults = computed(() => searchStore.searchResults);
@@ -435,9 +445,10 @@ function onMapReady(e) {
     // Include owner_session_id if "My tracks" filter is active
     ownerSessionId: currentFilterState.value?.myTracks ? sessionId : undefined,
   };
-  fetchTracksInBounds(bounds.value, options);
+  const domainBounds = toBounds(bounds.value);
+  if (domainBounds) fetchTracksInBounds(domainBounds, options);
   if (showHeatmap.value) {
-    fetchHeatmapInBounds(bounds.value, buildHeatmapOptions());
+    fetchHeatmapInBounds(toBounds(bounds.value), buildHeatmapOptions());
   }
 }
 
@@ -451,8 +462,8 @@ function onBoundsUpdate(newBounds) {
   bounds.value = newBounds;
 
   // Use debounced function for API calls
-  debouncedFetchTracks(newBounds);
-  debouncedFetchHeatmap(newBounds, currentFilterState.value);
+  debouncedFetchTracks(toBounds(newBounds));
+  debouncedFetchHeatmap(toBounds(newBounds), currentFilterState.value);
 }
 
 // Called when filters change in TrackMap/TrackFilterControl (bubbled up)
@@ -460,16 +471,17 @@ function onFilterChanged(newFilterState) {
   currentFilterState.value = newFilterState;
   showHeatmap.value = !!newFilterState?.showHeatmap;
   // Immediately refresh tracks to reflect server-side filters like "My tracks"
-  if (bounds.value) {
+  const domainBounds = toBounds(bounds.value);
+  if (domainBounds) {
     const options = {
       zoom: zoom.value,
       mode: "overview",
       forceRefresh: true,
       ownerSessionId: newFilterState?.myTracks ? sessionId : undefined,
     };
-    fetchTracksInBounds(bounds.value, options);
+    fetchTracksInBounds(domainBounds, options);
     if (showHeatmap.value) {
-      fetchHeatmapInBounds(bounds.value, {
+      fetchHeatmapInBounds(domainBounds, {
         ...buildHeatmapOptions(newFilterState),
         forceRefresh: true,
       });
@@ -551,13 +563,14 @@ function updateTooltipPosition(event) {
 }
 
 function refreshTracks() {
-  if (bounds.value) {
+  const domainBounds = toBounds(bounds.value);
+  if (domainBounds) {
     const options = {
       zoom: zoom.value,
       mode: "overview",
       forceRefresh: true, // Force refresh to bypass cache
     };
-    fetchTracksInBounds(bounds.value, options);
+    fetchTracksInBounds(domainBounds, options);
   }
 }
 

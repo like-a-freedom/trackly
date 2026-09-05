@@ -3,15 +3,15 @@
     <!-- Combined Start/Finish marker for loop tracks -->
     <LMarker
       v-if="isLoop"
-      :lat-lng="startPosition"
+      :lat-lng="(startPosition as unknown) as L.LatLngExpression"
       @click="handleLoopClick"
       @touchstart.stop
       @touchmove.stop
     >
       <LIcon
         :icon-url="loopIconUrl"
-        :icon-size="iconSize"
-        :icon-anchor="iconAnchor"
+        :icon-size="(iconSize as unknown) as [number, number]"
+        :icon-anchor="(iconAnchor as unknown) as [number, number]"
         :class-name="'endpoint-marker endpoint-marker--loop'"
       />
       <LTooltip>
@@ -32,15 +32,15 @@
     <!-- Start marker (non-loop) -->
     <LMarker
       v-if="!isLoop"
-      :lat-lng="startPosition"
+      :lat-lng="(startPosition as unknown) as L.LatLngExpression"
       @click="handleStartClick"
       @touchstart.stop
       @touchmove.stop
     >
       <LIcon
         :icon-url="startIconUrl"
-        :icon-size="iconSize"
-        :icon-anchor="iconAnchor"
+        :icon-size="(iconSize as unknown) as [number, number]"
+        :icon-anchor="(iconAnchor as unknown) as [number, number]"
         :class-name="'endpoint-marker endpoint-marker--start'"
       />
       <LTooltip>
@@ -61,15 +61,15 @@
     <!-- Finish marker (non-loop) -->
     <LMarker
       v-if="!isLoop"
-      :lat-lng="endPosition"
+      :lat-lng="(endPosition as unknown) as L.LatLngExpression"
       @click="handleFinishClick"
       @touchstart.stop
       @touchmove.stop
     >
       <LIcon
         :icon-url="finishIconUrl"
-        :icon-size="iconSize"
-        :icon-anchor="iconAnchor"
+        :icon-size="(iconSize as unknown) as [number, number]"
+        :icon-anchor="(iconAnchor as unknown) as [number, number]"
         :class-name="'endpoint-marker endpoint-marker--finish'"
       />
       <LTooltip>
@@ -89,37 +89,29 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { formatDateTime } from '../utils/format';
 import { LMarker, LIcon, LTooltip } from '@vue-leaflet/vue-leaflet';
+import type { LatLngTuple } from '@/types';
 
-const props = defineProps({
-  startPosition: {
-    type: Array,
-    required: true,
-    validator: (val) => Array.isArray(val) && val.length === 2
-  },
-  endPosition: {
-    type: Array,
-    required: true,
-    validator: (val) => Array.isArray(val) && val.length === 2
-  },
-  isLoop: {
-    type: Boolean,
-    default: false
-  },
-  startTime: {
-    type: String,
-    default: null
-  },
-  endTime: {
-    type: String,
-    default: null
-  }
+interface Props {
+  startPosition: LatLngTuple;
+  endPosition: LatLngTuple;
+  isLoop?: boolean;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  isLoop: false,
+  startTime: null,
+  endTime: null
 });
 
-const emit = defineEmits(['marker-click']);
+const emit = defineEmits<{
+  'marker-click': [payload: { type: string; position: LatLngTuple }];
+}>();
 
 // Responsive icon size
 const isMobile = computed(() => window.innerWidth <= 640);
@@ -160,7 +152,7 @@ const loopIconUrl = computed(() => {
 
 // Format time for tooltip
 // uses shared format function - the prop already shows ISO strings or Date objects
-function formatTime(isoString) {
+function formatTime(isoString: string | undefined): string {
   if (!isoString) return '';
   return formatDateTime(isoString);
 }

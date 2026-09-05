@@ -393,6 +393,11 @@ pub struct UpdateTrackDistanceMarkersRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct DeleteTrackRequest {
+    pub session_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct TrackSearchQuery {
     pub query: String,
 }
@@ -702,4 +707,113 @@ pub struct ParsedWaypoint {
 #[derive(Debug, Deserialize)]
 pub struct DeletePoiRequest {
     pub session_id: Option<Uuid>,
+}
+
+// ============================================================================
+// Strong Domain Types for API Responses
+//
+// These types replace serde_json::Value for better type safety while
+// maintaining backward compatibility with the database representation.
+// ============================================================================
+
+/// Elevation profile data: array of {distance, elevation} points
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ElevationPoint {
+    /// Distance from start in meters
+    pub distance: f64,
+    /// Elevation at this point in meters
+    pub elevation: f64,
+}
+
+/// Heart rate data: array of {time, heartrate} points
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HrPoint {
+    /// Time offset from start in seconds
+    pub time: f64,
+    /// Heart rate in BPM
+    pub heartrate: u8,
+}
+
+/// Speed data: array of {time, speed} points
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SpeedPoint {
+    /// Time offset from start in seconds
+    pub time: f64,
+    /// Speed in km/h
+    pub speed: f64,
+}
+
+/// Pace data: array of {time, pace} points
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PacePoint {
+    /// Time offset from start in seconds
+    pub time: f64,
+    /// Pace in min/km
+    pub pace: f64,
+}
+
+/// Temperature data: array of {time, temperature} points
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TempPoint {
+    /// Time offset from start in seconds
+    pub time: f64,
+    /// Temperature in Celsius
+    pub temperature: f64,
+}
+
+/// Time data: array of {distance, time} points
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TimePoint {
+    /// Distance from start in meters
+    pub distance: f64,
+    /// Time offset from start in seconds
+    pub time: f64,
+}
+
+/// Slope histogram bin
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SlopeBin {
+    /// Slope range start in percent
+    pub slope_start: f64,
+    /// Slope range end in percent
+    pub slope_end: f64,
+    /// Count of points in this range
+    pub count: u32,
+}
+
+/// Slope segment with grade information
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SlopeSegment {
+    /// Start distance in meters
+    pub start_distance: f64,
+    /// End distance in meters
+    pub end_distance: f64,
+    /// Average slope in percent
+    pub slope: f64,
+    /// Length in meters
+    pub length: f64,
+}
+
+/// Per-segment metadata
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SegmentMeta {
+    /// Segment name (optional)
+    pub name: Option<String>,
+    /// Segment color (hex string)
+    pub color: Option<String>,
+    /// Surface type (e.g., "asphalt", "gravel", "trail")
+    pub surface: Option<String>,
+}
+
+/// Track data profiles with strong typing
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TrackDataProfiles {
+    pub elevation_profile: Option<Vec<ElevationPoint>>,
+    pub hr_data: Option<Vec<HrPoint>>,
+    pub temp_data: Option<Vec<TempPoint>>,
+    pub time_data: Option<Vec<TimePoint>>,
+    pub speed_data: Option<Vec<SpeedPoint>>,
+    pub pace_data: Option<Vec<PacePoint>>,
+    pub slope_histogram: Option<Vec<SlopeBin>>,
+    pub slope_segments: Option<Vec<SlopeSegment>>,
 }

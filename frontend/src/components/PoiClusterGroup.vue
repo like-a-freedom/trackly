@@ -4,17 +4,27 @@
   <div class="poi-cluster-root" aria-hidden="true" style="display:none"></div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, inject } from 'vue';
 import { capitalize } from '../utils/string';
 import L from 'leaflet';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import type { MapAdapter, MapLayer } from '../map/MapAdapter';
+
+interface PoiItem {
+  poi?: { geom?: { type: string; coordinates: number[] }; name?: string; category?: string; elevation?: number };
+  geom?: { type: string; coordinates: number[] };
+  name?: string;
+  category?: string;
+  elevation?: number;
+  distance_from_start_m?: number;
+}
 
 const props = defineProps({
   pois: {
-    type: Array,
+    type: Array as () => PoiItem[],
     default: () => [],
   },
   // Disable clustering at this zoom level and above
@@ -33,11 +43,11 @@ const emit = defineEmits(['poi-click']);
 
 // Inject the map adapter from parent TrackMap component.
 // Falls back to legacy 'leafletMap' inject for backward compatibility.
-const mapAdapter = inject('mapAdapter', null);
-const leafletMap = inject('leafletMap', null);
+const mapAdapter = inject<MapAdapter | null>('mapAdapter', null);
+const leafletMap = inject<{ getZoom?: unknown; mapObject?: L.Map; leafletObject?: L.Map } | null>('leafletMap', null);
 
 // Cluster group reference
-const clusterGroup = ref(null);
+const clusterGroup = ref<L.MarkerClusterGroup | null>(null);
 
 // Create POI icon
 function createPoiIcon() {
@@ -57,7 +67,7 @@ function createPoiIcon() {
 }
 
 // Create cluster icon with count
-function createClusterIcon(cluster) {
+function createClusterIcon(cluster: L.MarkerCluster): L.DivIcon {
   const count = cluster.getChildCount();
   
   // Size and color based on count
@@ -81,7 +91,7 @@ function createClusterIcon(cluster) {
 }
 
 // Extract coordinates from POI GeoJSON geometry
-function getPoiLatLng(poi) {
+function getPoiLatLng(poi: PoiItem): L.LatLngExpression | null {
   const geom = poi.poi?.geom || poi.geom;
   if (!geom || geom.type !== 'Point' || !geom.coordinates) {
     return null;
@@ -91,7 +101,7 @@ function getPoiLatLng(poi) {
 }
 
 // Create tooltip content for POI
-function createTooltipContent(poi) {
+function createTooltipContent(poi: PoiItem): string {
   const name = poi.poi?.name || poi.name;
   const category = poi.poi?.category || poi.category;
   const elevation = poi.poi?.elevation || poi.elevation;
@@ -117,12 +127,12 @@ function createTooltipContent(poi) {
 }
 
 // Initialize cluster group
-function initClusterGroup(map) {
+function initClusterGroup(map: L.Map) {
   if (clusterGroup.value) {
     if (mapAdapter) {
-      mapAdapter.removeLayer(clusterGroup.value);
+      mapAdapter.removeLayer(clusterGroup.value as unknown as MapLayer);
     } else {
-      map.removeLayer(clusterGroup.value);
+      map.removeLayer(clusterGroup.value as unknown as L.Layer);
     }
   }
 
@@ -137,9 +147,9 @@ function initClusterGroup(map) {
   });
 
   if (mapAdapter) {
-    mapAdapter.addLayer(clusterGroup.value);
+    mapAdapter.addLayer(clusterGroup.value as unknown as MapLayer);
   } else {
-    map.addLayer(clusterGroup.value);
+    map.addLayer(clusterGroup.value as unknown as L.Layer);
   }
   updateMarkers();
 }
@@ -151,13 +161,15 @@ function updateMarkers() {
   clusterGroup.value.clearLayers();
 
   const icon = createPoiIcon();
+  const group = clusterGroup.value;
+  if (!group) return;
 
-  props.pois.forEach((poi) => {
+  props.pois.forEach((poi: PoiItem) => {
     const latLng = getPoiLatLng(poi);
     if (!latLng) return;
 
     const marker = L.marker(latLng, { icon });
-    
+
     // Add tooltip
     marker.bindTooltip(createTooltipContent(poi), {
       direction: 'top',
@@ -169,26 +181,25 @@ function updateMarkers() {
       emit('poi-click', poi);
     });
 
-    clusterGroup.value.addLayer(marker);
+    group.addLayer(marker);
   });
 
   console.log(`[PoiClusterGroup] Added ${props.pois.length} POIs to cluster group`);
 }
 
 // Helper to get map object — prefer the adapter seam, fall back to legacy inject
-function getMapObject() {
+function getMapObject(): L.Map | null {
   if (mapAdapter) {
     const m = mapAdapter.getMap();
-    if (m) return m;
+    if (m) return m as L.Map;
   }
-  if (!leafletMap?.value) return null;
+  if (!leafletMap) return null;
   // Accept either a Vue Leaflet wrapper (has .mapObject / .leafletObject) or
   // a real L.Map directly (has .getZoom). The real L.Map is the post-Stage-0.5b
   // contract; the wrapper path is preserved for backward compatibility with
   // any test or component that still injects the wrapper.
-  const v = leafletMap.value;
-  if (typeof v.getZoom === 'function') return v;
-  return v.mapObject || v.leafletObject || null;
+  if (typeof leafletMap.getZoom === 'function') return leafletMap as unknown as L.Map;
+  return leafletMap.mapObject || leafletMap.leafletObject || null;
 }
 
 // Watch for POI changes
@@ -206,7 +217,7 @@ watch(
 // The onMounted block below handles the initial-value case; the watch handles
 // any later updates from the parent.
 watch(
-  leafletMap,
+  () => leafletMap,
   (newMap) => {
     if (newMap && !clusterGroup.value) {
       const map = getMapObject();
@@ -215,7 +226,7 @@ watch(
           initClusterGroup(map);
         } catch (e) {
           // eslint-disable-next-line no-console
-          console.warn('[PoiClusterGroup] init failed:', e?.message);
+          console.warn('[PoiClusterGroup] init failed:', e instanceof Error ? e.message : String(e));
         }
       }
     }
@@ -235,11 +246,11 @@ onMounted(() => {
 onUnmounted(() => {
   if (clusterGroup.value) {
     if (mapAdapter) {
-      mapAdapter.removeLayer(clusterGroup.value);
+      mapAdapter.removeLayer(clusterGroup.value as unknown as MapLayer);
     } else {
       const map = getMapObject();
       if (map) {
-        map.removeLayer(clusterGroup.value);
+        map.removeLayer(clusterGroup.value as unknown as L.Layer);
       }
     }
     clusterGroup.value = null;

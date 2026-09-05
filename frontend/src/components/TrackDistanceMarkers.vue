@@ -28,35 +28,27 @@
   </LMarker>
 </template>
 
-<script setup>
-import { computed, watch } from 'vue';
-import { LMarker, LIcon, LTooltip } from '@vue-leaflet/vue-leaflet';
-import { 
-  computeDistanceMarkers, 
+<script setup lang="ts">
+import { computed } from 'vue';
+import { LMarker, LIcon } from '@vue-leaflet/vue-leaflet';
+import {
+  computeDistanceMarkers,
   getMarkerInterval
-} from '../utils/trackGeometry.js';
+} from '../utils/trackGeometry';
+import type { LatLngTuple } from '@/types';
 
-const props = defineProps({
-  latlngs: {
-    type: Array,
-    required: true,
-    default: () => []
-  },
-  trackId: {
-    type: String,
-    required: true
-  },
-  zoom: {
-    type: Number,
-    required: true
-  },
-  trackLengthKm: {
-    type: Number,
-    required: true
-  }
-});
+interface Props {
+  latlngs: LatLngTuple[];
+  trackId: string;
+  zoom: number;
+  trackLengthKm: number;
+}
 
-const emit = defineEmits(['marker-click']);
+const props = defineProps<Props>();
+
+const emit = defineEmits<{
+  'marker-click': [payload: { distanceKm: number; position: LatLngTuple }];
+}>();
 
 // Determine if markers should be shown based on zoom
 const shouldShow = computed(() => {
@@ -100,7 +92,7 @@ const dotIconUrl = computed(() => {
 });
 
 // Generate label icon (text with background)
-function getLabelIconUrl(distanceKm) {
+function getLabelIconUrl(distanceKm: number): string {
   const label = formatDistanceLabel(distanceKm);
   const width = label.length * 7 + 8;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 16" width="${width}" height="16">
@@ -111,7 +103,7 @@ function getLabelIconUrl(distanceKm) {
 }
 
 // Format distance for label
-function formatDistanceLabel(distanceKm) {
+function formatDistanceLabel(distanceKm: number): string {
   if (distanceKm >= 1) {
     return `${distanceKm} km`;
   }
@@ -119,7 +111,7 @@ function formatDistanceLabel(distanceKm) {
 }
 
 // Handle marker click
-function handleMarkerClick(marker) {
+function handleMarkerClick(marker: { distanceKm: number; position: LatLngTuple }): void {
   emit('marker-click', {
     distanceKm: marker.distanceKm,
     position: marker.position

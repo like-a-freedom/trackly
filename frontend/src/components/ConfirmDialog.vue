@@ -39,18 +39,29 @@
   </transition>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 
-const props = defineProps({
-  title: { type: String, default: '' },
-  message: { type: String, required: true },
-  confirmText: { type: String, default: 'Confirm' },
-  cancelText: { type: String, default: 'Cancel' },
-  closeOnOverlay: { type: Boolean, default: true }
+interface Props {
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  closeOnOverlay?: boolean;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  title: '',
+  confirmText: 'Confirm',
+  cancelText: 'Cancel',
+  closeOnOverlay: true
 });
 
-const emit = defineEmits(['confirm', 'cancel', 'close']);
+const emit = defineEmits<{
+  confirm: [];
+  cancel: [];
+  close: [];
+}>();
 
 const visible = ref(false);
 

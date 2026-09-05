@@ -157,7 +157,8 @@ defineEmits([
   grid-template-rows: 1fr;
   gap: 8px;
   width: 100%;
-  height: 100%;
+  height: 130px;
+  flex: 0 0 auto;
 }
 
 .deck-card,

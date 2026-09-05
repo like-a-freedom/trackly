@@ -46,6 +46,7 @@ quick-xml = "0.39"
 kml = "0.13.0"
 geo = "0.32.0"
 geo-types = "0.7.20"
+async-trait = "0.1.83"
 # Multipart
 axum-extra = { version = "0.12.6", features = [
     "multipart",

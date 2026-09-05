@@ -1,7 +1,42 @@
 <template>
   <div class="track-editor-view">
-    <div class="editor-shell">
-      <section class="editor-map-stage" data-testid="editor-map-stage">
+    <!-- Top bar: track context + save/export + routing controls -->
+    <TrackEditorTopBar
+      :track-name="editor.trackName.value"
+      :total-points="editor.totalPoints.value"
+      :total-distance-km="editor.totalDistanceKm.value"
+      :estimated-time-minutes="editor.estimatedTimeMinutes.value"
+      :manual-routing-percent="editor.manualRoutingPercent.value"
+      :can-save="editor.canSave.value"
+      :saving="editor.saving.value"
+      :saved-track-id="editor.savedTrackId.value"
+      :routing-mode="editor.routing.mode.value"
+      :snap-to-road-mode="editor.snapToRoadMode.value"
+      :routing-profile="editor.routing.profile.value"
+      :show-distance-markers="showDistanceMarkers"
+      :graph-loading="editor.routing.graphLoading.value"
+      :graph-error="editor.routing.graphError.value"
+      :graph-progress="editor.routing.graphProgress.value"
+      @save="handleSave"
+      @export="handleExport"
+      @toggle-routing="editor.routing.toggleMode"
+      @set-snap-to-road-mode="editor.setSnapToRoadMode"
+      @set-routing-profile="editor.routing.setProfile"
+      @toggle-distance-markers="showDistanceMarkers = !showDistanceMarkers"
+      @reload-graph="handleReloadGraph"
+      @switch-to-manual="handleSwitchToManual"
+    />
+
+    <!-- Alert strip: draft banner, errors, quick-start tips -->
+    <TrackEditorTopAlertStrip
+      :show-draft-banner="showDraftBanner"
+      :error="editor.error.value"
+      :total-points="editor.totalPoints.value"
+      @restore-draft="handleRestoreDraft"
+      @delete-draft="handleDeleteDraft"
+    />
+
+    <section class="editor-map-stage" data-testid="editor-map-stage">
         <section class="editor-map-region" data-testid="editor-map-region">
           <TrackEditorMap
             ref="editorMap"
@@ -45,7 +80,21 @@
         </section>
 
         <div class="editor-overlay-layer" data-testid="editor-overlay-layer">
-          <!-- Left panel: track identity, alerts, tabbed content -->
+          <!-- Left rail: mode switching + undo/redo + POI -->
+          <nav class="editor-left-rail" data-testid="editor-left-rail">
+            <TrackEditorLeftRail
+              :mode="editor.editorMode.value"
+              :can-undo="editor.canUndo.value"
+              :can-redo="editor.canRedo.value"
+              :poi-mode="poiMode"
+              @set-mode="editor.setMode"
+              @undo="editor.handleUndo"
+              @redo="editor.handleRedo"
+              @toggle-poi-mode="poiMode = !poiMode"
+            />
+          </nav>
+
+          <!-- Left panel: tabbed content (no header/alerts) -->
           <aside class="editor-left-panel" data-testid="editor-left-panel">
             <TrackEditorLeftPanel
               :track-name="editor.trackName.value"
@@ -55,15 +104,6 @@
               :total-distance-km="editor.totalDistanceKm.value"
               :estimated-time-minutes="editor.estimatedTimeMinutes.value"
               :manual-routing-percent="editor.manualRoutingPercent.value"
-              :can-save="editor.canSave.value"
-              :saving="editor.saving.value"
-              :saved-track-id="editor.savedTrackId.value"
-              :routing-mode="editor.routing.mode.value"
-              :graph-loading="editor.routing.graphLoading.value"
-              :graph-error="editor.routing.graphError.value"
-              :graph-progress="editor.routing.graphProgress.value"
-              :show-draft-banner="showDraftBanner"
-              :error="editor.error.value"
               :segment-stats="editor.segmentStats.value"
               :active-segment-index="editor.activeSegmentIndex.value"
               :highlighted-segment-index="highlightedSegmentIndex"
@@ -79,10 +119,6 @@
               :optimizer-stats="editor.optimizerStats.value"
               :optimizer-loading="editor.optimizerLoading.value"
               :optimizer-error="editor.optimizerError.value"
-              @save="handleSave"
-              @export="handleExport"
-              @restore-draft="handleRestoreDraft"
-              @delete-draft="handleDeleteDraft"
               @update:track-name="editor.trackName.value = $event"
               @update:track-description="editor.trackDescription.value = $event"
               @update:track-categories="editor.trackCategories.value = $event"
@@ -118,32 +154,6 @@
             />
           </aside>
 
-          <!-- Center toolbar: mode switching + routing controls -->
-          <div class="editor-toolbar" data-testid="editor-toolbar">
-            <TrackEditorToolbar
-              :mode="editor.editorMode.value"
-              :can-undo="editor.canUndo.value"
-              :can-redo="editor.canRedo.value"
-              :poi-mode="poiMode"
-              :routing-mode="editor.routing.mode.value"
-              :snap-to-road-mode="editor.snapToRoadMode.value"
-              :routing-profile="editor.routing.profile.value"
-              :show-distance-markers="showDistanceMarkers"
-              @set-mode="editor.setMode"
-              @undo="editor.handleUndo"
-              @redo="editor.handleRedo"
-              @toggle-poi-mode="poiMode = !poiMode"
-              @toggle-routing="editor.routing.toggleMode"
-              @set-snap-to-road-mode="editor.setSnapToRoadMode"
-              @set-routing-profile="editor.routing.setProfile"
-              @toggle-distance-markers="
-                showDistanceMarkers = !showDistanceMarkers
-              "
-              @reload-graph="handleReloadGraph"
-              @switch-to-manual="handleSwitchToManual"
-            />
-          </div>
-
           <aside
             class="editor-right-inspector"
             data-testid="editor-right-inspector"
@@ -162,7 +172,63 @@
           </aside>
         </div>
       </section>
-    </div>
+
+    <!-- Bottom deck: horizontal card overview -->
+    <TrackEditorBottomDeck
+      :track-name="editor.trackName.value"
+      :track-description="editor.trackDescription.value"
+      :track-categories="editor.trackCategories.value"
+      :segment-stats="editor.segmentStats.value"
+      :active-segment-index="editor.activeSegmentIndex.value"
+      :total-distance-km="editor.totalDistanceKm.value"
+      :total-points="editor.totalPoints.value"
+      :estimated-time-minutes="editor.estimatedTimeMinutes.value"
+      :pois="editor.pois.value"
+      :elevation-profile="editor.elevationProfile.value"
+      :elevation-stats="editor.elevationStats.value"
+      :elevation-loading="editor.elevationLoading.value"
+      :elevation-error="editor.elevationError.value"
+      :coordinate-data="editor.coordinateData.value"
+      :highlighted-segment-index="highlightedSegmentIndex"
+      :fragment-info="fragmentInfo"
+      :optimizer-target-ratio="editor.optimizerTargetRatio.value"
+      :optimizer-preview="editor.optimizerPreview.value"
+      :optimizer-stats="editor.optimizerStats.value"
+      :optimizer-loading="editor.optimizerLoading.value"
+      :optimizer-error="editor.optimizerError.value"
+      @update:track-name="editor.trackName.value = $event"
+      @update:track-description="editor.trackDescription.value = $event"
+      @update:track-categories="editor.trackCategories.value = $event"
+      @update-segment-name="editor.setSegmentName"
+      @update-segment-color="editor.setSegmentColor"
+      @add-segment="editor.addSegment"
+      @delete-segment="editor.deleteSegment"
+      @reverse-segment="editor.reverseSegment"
+      @set-active-segment="editor.setActiveSegment"
+      @join-segments="handleJoinSegments"
+      @new-track-from-segment="handleNewTrackFromSegment"
+      @clear-fragment="editor.clearFragmentSelection"
+      @delete-fragment-connect="handleDeleteFragmentConnect"
+      @delete-fragment-split="handleDeleteFragmentSplit"
+      @reverse-fragment="handleReverseFragment"
+      @reroute-fragment="handleRerouteFragment"
+      @export-fragment="handleExportFragment"
+      @close-loop="handleCloseLoop"
+      @close-loop-same-way="handleCloseLoopSameWay"
+      @close-loop-different-route="handleCloseLoopDifferentRoute"
+      @reverse-track="handleReverseTrack"
+      @duplicate-track="handleDuplicateTrack"
+      @update:optimizer-target-ratio="editor.setOptimizerTargetRatio"
+      @preview-optimization="editor.previewOptimization"
+      @apply-optimization="handleApplyOptimization"
+      @clear-optimization="editor.clearOptimizationPreview"
+      @download-optimization="editor.downloadOptimizationPreview"
+      @chart-point-hover="handleElevationPointHover"
+      @chart-point-leave="handleElevationPointLeave"
+      @chart-point-click="handleElevationPointClick"
+      @hover-segment="(i) => (highlightedSegmentIndex = i)"
+      @leave-segment="() => (highlightedSegmentIndex = null)"
+    />
 
     <!-- Toast notifications -->
     <Toast
@@ -180,8 +246,11 @@ import { useTrackEditor } from "../composables/useTrackEditor";
 import { useToastStore } from "../stores/toast.js";
 import TrackEditorMap from "../components/TrackEditorMap.vue";
 import TrackEditorLeftPanel from "../components/editor/TrackEditorLeftPanel.vue";
-import TrackEditorToolbar from "../components/editor/TrackEditorToolbar.vue";
 import TrackEditorInspector from "../components/editor/TrackEditorInspector.vue";
+import TrackEditorTopBar from "../components/editor/TrackEditorTopBar.vue";
+import TrackEditorTopAlertStrip from "../components/editor/TrackEditorTopAlertStrip.vue";
+import TrackEditorLeftRail from "../components/editor/TrackEditorLeftRail.vue";
+import TrackEditorBottomDeck from "../components/editor/TrackEditorBottomDeck.vue";
 import Toast from "../components/ToastNotification.vue";
 
 const route = useRoute();
@@ -847,35 +916,30 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .track-editor-view {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
   height: 100vh;
   width: 100%;
   overflow: hidden;
 }
 
-.editor-shell {
+.editor-map-stage {
   position: relative;
-  height: 100%;
+  flex: 1;
   width: 100%;
   overflow: hidden;
-}
-
-.editor-map-stage {
   --overlay-pad: 12px;
   --overlay-gap: 12px;
+  --rail-width: 52px;
   --panel-width: 288px;
   --inspector-width: 280px;
   --content-left: calc(
-    var(--overlay-pad) + var(--panel-width) + var(--overlay-gap)
+    var(--overlay-pad) + var(--rail-width) + var(--overlay-gap)
   );
   --content-right: calc(
     var(--overlay-pad) + var(--inspector-width) + var(--overlay-gap)
   );
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
 }
 
 .editor-map-region {
@@ -892,36 +956,32 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.editor-left-rail,
 .editor-left-panel,
-.editor-toolbar,
 .editor-right-inspector {
   position: absolute;
   min-width: 0;
   pointer-events: auto;
 }
 
+/* Left rail: vertical icon rail */
+.editor-left-rail {
+  top: var(--overlay-pad);
+  left: var(--overlay-pad);
+  width: var(--rail-width);
+  height: calc(100% - var(--overlay-pad) * 2);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+}
+
 /* Left panel: full-height sidebar */
 .editor-left-panel {
   top: var(--overlay-pad);
-  left: var(--overlay-pad);
+  left: var(--content-left);
   width: var(--panel-width);
   height: calc(100% - var(--overlay-pad) * 2);
   z-index: 3;
-}
-
-/* Toolbar: centered pill above the map content area */
-.editor-toolbar {
-  top: var(--overlay-pad);
-  left: var(--content-left);
-  right: var(--content-right);
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 5;
-}
-
-.editor-toolbar > * {
-  pointer-events: auto;
 }
 
 /* Right inspector: full-height column */
@@ -932,6 +992,11 @@ onBeforeUnmount(() => {
   max-height: calc(100% - var(--overlay-pad) * 2);
   overflow: auto;
   z-index: 3;
+}
+
+/* Bottom deck: hidden on narrow screens */
+.editor-bottom-deck {
+  flex-shrink: 0;
 }
 
 @media (max-width: 1180px) {
@@ -952,10 +1017,16 @@ onBeforeUnmount(() => {
   .editor-map-stage {
     --overlay-pad: 8px;
     --overlay-gap: 8px;
+    --rail-width: 0px;
     --panel-width: 0px;
     --inspector-width: 0px;
     --content-left: var(--overlay-pad);
     --content-right: var(--overlay-pad);
+  }
+
+  /* Rail hidden on mobile */
+  .editor-left-rail {
+    display: none;
   }
 
   /* Panel becomes a bottom sheet on mobile */
@@ -969,15 +1040,13 @@ onBeforeUnmount(() => {
     z-index: 4;
   }
 
-  /* Toolbar full-width on mobile */
-  .editor-toolbar {
-    left: var(--overlay-pad);
-    right: var(--overlay-pad);
-    justify-content: flex-start;
-  }
-
   /* Inspector hidden on mobile to preserve map space */
   .editor-right-inspector {
+    display: none;
+  }
+
+  /* Bottom deck hidden on mobile */
+  .editor-bottom-deck {
     display: none;
   }
 }

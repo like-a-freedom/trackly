@@ -95,13 +95,13 @@
             </p>
             <div class="track-meta">
               <span class="track-length">{{
-                formatDistance(track.length_km)
+                formatDistance(track.length_km ?? 0)
               }}</span>
               <span
-                v-if="track.categories.length > 0"
+                v-if="track.categories && track.categories.length > 0"
                 class="track-categories"
               >
-                {{ track.categories.map(capitalize).join(", ") }}
+                {{ track.categories?.map(capitalize).join(", ") }}
               </span>
             </div>
           </div>
@@ -147,31 +147,41 @@
   </div>
 </template>
 
-<script setup>
-import { ref, watch, nextTick, computed } from "vue";
-import { useSearchStore } from "../stores/search.js";
+<script setup lang="ts">
+import { ref, watch, nextTick } from "vue";
+import { storeToRefs } from "pinia";
+import { useSearchStore } from "../stores/search";
 import { capitalize } from "../utils/string";
 
-const props = defineProps({
-  isVisible: {
-    type: Boolean,
-    default: false,
-  },
+interface Track {
+  id: string;
+  name?: string;
+  description?: string;
+  length_km?: number;
+  categories?: string[];
+}
+
+interface Props {
+  isVisible?: boolean;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  isVisible: false,
 });
 
-const emit = defineEmits(["close", "track-selected"]);
+const emit = defineEmits<{
+  close: [];
+  "track-selected": [track: Track];
+}>();
 
-const searchInput = ref(null);
+const searchInput = ref<HTMLInputElement | null>(null);
 const isLoading = ref(false);
-const searchTimeout = ref(null);
+const searchTimeout = ref<ReturnType<typeof setTimeout> | null>(null);
 
 // Use global search state
 const searchStore = useSearchStore();
-const searchQuery = computed({
-    get: () => searchStore.searchQuery,
-    set: (val) => { searchStore.searchQuery = val; }
-});
-const searchResults = computed(() => searchStore.searchResults);
+const { searchQuery } = storeToRefs(searchStore);
+const searchResults = ref<Track[]>([]);
 const { saveSearchState } = searchStore;
 const hasSearchState = () => searchStore.hasSearchState;
 
@@ -192,7 +202,7 @@ watch(
   }
 );
 
-const formatDistance = (km) => {
+const formatDistance = (km: number): string => {
   if (km < 1) {
     return `${Math.round(km * 1000)}m`;
   }
@@ -244,7 +254,7 @@ const performSearch = async () => {
   }
 };
 
-const selectTrack = (track) => {
+const selectTrack = (track: Track): void => {
   emit("track-selected", track);
 };
 

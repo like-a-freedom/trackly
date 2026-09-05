@@ -15,16 +15,25 @@
     </div>
   </transition>
 </template>
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue';
-const props = defineProps({
-  message: { type: String, required: true },
-  type: { type: String, default: 'info' },
-  duration: { type: Number, default: 3000 }
+
+interface Props {
+  message: string;
+  type?: string;
+  duration?: number;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  type: 'info',
+  duration: 3000
 });
-const emit = defineEmits(['close']);
+
+const emit = defineEmits<{
+  close: [];
+}>();
 const internalVisible = ref(false);
-let timer = null;
+let timer: ReturnType<typeof setTimeout> | null = null;
 function close() {
   internalVisible.value = false;
   emit('close');

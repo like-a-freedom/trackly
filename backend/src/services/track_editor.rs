@@ -70,6 +70,8 @@ pub struct UpdateTrackGeometryRequest {
     pub waypoints: Vec<WaypointInput>,
     #[serde(default)]
     pub segment_meta: Option<serde_json::Value>,
+    /// Session ID for anonymous ownership verification.
+    /// Required for anonymous users updating their own tracks.
     pub session_id: Option<Uuid>,
 }
 

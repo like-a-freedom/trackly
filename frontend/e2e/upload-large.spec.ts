@@ -24,13 +24,14 @@ test('large gpx upload either succeeds or returns explicit error', async ({ page
     await page.addInitScript(() => { try { localStorage.setItem('trackly_session_id', (window as any).E2E_SESSION_ID || '11111111-1111-1111-1111-111111111111'); } catch (e) { void 0; } });
 
     const gpx = generateLargeGpx(1500);
+    const uniqueName = `Large GPX Test ${Date.now()}`;
 
     // Ensure page origin is set so fetch('/api/tracks/upload') resolves relative to frontend
     await page.goto('http://localhost:81');
     await page.waitForLoadState('networkidle');
 
     const { uploadTrack } = await import('./helpers/uploadWithRetries');
-    const resp = await uploadTrack({ page, gpx, name: 'Large GPX Test', session: TEST_SESSION, categories: 'large-test' });
+    const resp = await uploadTrack({ page, gpx, name: uniqueName, session: TEST_SESSION, categories: 'large-test' });
 
     if (resp.ok && resp.body && resp.body.id) {
         // success path

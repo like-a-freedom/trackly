@@ -191,6 +191,9 @@ import { useTrackFilters } from "../composables/useTrackFilters.js";
 import { useSegmentHighlight } from "../composables/useSegmentHighlight.js";
 import { useMapState } from "../composables/useMapState.js";
 import { useMapEvents } from "../composables/useMapEvents.js";
+import { useMapTimeouts } from "../composables/useMapTimeouts.js";
+import { useHeatmap } from "../composables/useHeatmap.js";
+import { useMapObject } from "../composables/useMapObject.js";
 
 // Constants
 const ANIMATION_DURATION_MS = 1100;
@@ -205,6 +208,18 @@ const leafletAdapter = createLeafletAdapter();
 const e2eAdapter = createE2EAdapter({
   production: import.meta.env.MODE === "production",
 });
+
+// Wrapper for fitBounds that adds detail-panel padding when a track is selected
+function fitBoundsWithPadding(bounds, options = {}) {
+    if (
+        props.selectedTrackDetail &&
+        !options.paddingBottomRight &&
+        !options.paddingTopLeft
+    ) {
+        options = { ...options, ...getDetailPanelFitBoundsOptions() };
+    }
+    leafletAdapter.fitBounds(bounds, options);
+}
 
 const props = defineProps({
   polylines: Array,
@@ -247,8 +262,7 @@ const emit = defineEmits([
 ]);
 
 // State management for map and animations
-const leafletMap = ref(null);
-const leafletInstance = shallowRef(null); // resolved L.Map from @ready
+const { leafletMap, leafletInstance, getMapObject, setMapInstance, setUnmounting } = useMapObject();
 
 // Provide the resolved L.Map (not the Vue Leaflet wrapper ref) to children
 provide("leafletMap", leafletInstance);
@@ -263,10 +277,84 @@ const layerKey = ref(0); // For forcing GeoJSON layer re-renders when filter cha
 const mapIsReady = ref(false);
 const trackZoomAnimating = ref(false);
 const isTransitioning = ref(false); // Prevents filter changes during detail view transitions
-const heatLayer = ref(null);
-const heatmapMaxWeight = ref(0);
 const HEATMAP_PANE = "heatmapPane";
 
+// Timeout management (delegated to composable)
+const timeouts = useMapTimeouts();
+
+const isZoomAnimating = ref(false);
+const isUnmounting = ref(false);
+const isPanningOrZooming = ref(false);
+
+function setTrackZoomAnimating(isAnimating) {
+  timeouts.clearAnimationTimeout();
+  trackZoomAnimating.value = isAnimating;
+
+  if (isAnimating) {
+    timeouts.animationTimeout = setTimeout(() => {
+      trackZoomAnimating.value = false;
+      timeouts.animationTimeout = null;
+    }, ANIMATION_DURATION_MS);
+  }
+}
+
+// Track current viewport bounds for filtering (only update after interaction ends)
+const stableBounds = ref(null);
+
+// Debounced function to update stable bounds
+function updateStableBounds(newBounds) {
+  timeouts.clearBoundsTimeout();
+
+  timeouts.boundsUpdateTimeout = setTimeout(() => {
+    stableBounds.value = newBounds;
+    timeouts.boundsUpdateTimeout = null;
+  }, 200);
+}
+
+// Debounced clustering update function
+// Uses a forward reference to updateClustering from useMapEvents
+let _updateClusteringRef = null;
+
+function debouncedUpdateClustering() {
+  timeouts.clearClusteringUpdateTimeout();
+
+  timeouts.clusteringUpdateTimeout = setTimeout(() => {
+    try {
+      if (_updateClusteringRef) _updateClusteringRef();
+    } catch (error) {
+      console.error("[TrackMap] Error in debounced clustering update:", error);
+    }
+  }, 100);
+}
+
+// Debounced filter update function with reduced re-rendering
+function debouncedFilterUpdate() {
+  timeouts.clearFilterUpdateTimeout();
+
+  timeouts.filterUpdateTimeout = setTimeout(() => {
+    try {
+      // Only force layer key update if we actually need to re-render the layers
+      // This prevents unnecessary re-renders that cause flicker
+      if (
+        !isTransitioning.value &&
+        mapIsReady.value &&
+        !isPanningOrZooming.value
+      ) {
+        layerKey.value += 1;
+      }
+    } catch (error) {
+      console.error("[TrackMap] Error in debounced filter update:", error);
+    }
+  }, 200);
+}
+
+// Heatmap management (delegated to composable)
+const {
+  heatLayer,
+  heatmapMaxWeight,
+  removeHeatmapLayer,
+  updateHeatmapLayer,
+} = useHeatmap(leafletAdapter, HEATMAP_PANE);
 
 const clustering = useTrackClustering();
 
@@ -289,155 +377,8 @@ const clusteringConfig = computed(() => ({
 // Cluster adapter — wraps MarkerClusterGroup lifecycle
 const clusterAdapter = createClusterAdapter(clusteringConfig.value);
 
-
 // Centralized map state management (delegated to composable)
 const { mapState, effectiveZoom, effectiveCenter, saveMapStateToStorage, loadMapStateFromStorage, updateInitialMapState } = useMapState(props);
-
-// Animation management with proper cleanup and debouncing
-let animationTimeout = null;
-let clusteringUpdateTimeout = null;
-let mapUpdateTimeout = null;
-let filterUpdateTimeout = null;
-const isZoomAnimating = ref(false);
-const isUnmounting = ref(false);
-const isPanningOrZooming = ref(false);
-
-
-function clearAnimationTimeout() {
-  if (animationTimeout) {
-    clearTimeout(animationTimeout);
-    animationTimeout = null;
-  }
-}
-
-function clearClusteringUpdateTimeout() {
-  if (clusteringUpdateTimeout) {
-    clearTimeout(clusteringUpdateTimeout);
-    clusteringUpdateTimeout = null;
-  }
-}
-
-function clearMapUpdateTimeout() {
-  if (mapUpdateTimeout) {
-    clearTimeout(mapUpdateTimeout);
-    mapUpdateTimeout = null;
-  }
-}
-
-function clearFilterUpdateTimeout() {
-  if (filterUpdateTimeout) {
-    clearTimeout(filterUpdateTimeout);
-    filterUpdateTimeout = null;
-  }
-}
-
-function setTrackZoomAnimating(isAnimating) {
-  clearAnimationTimeout();
-  trackZoomAnimating.value = isAnimating;
-
-  if (isAnimating) {
-    animationTimeout = setTimeout(() => {
-      trackZoomAnimating.value = false;
-      animationTimeout = null;
-    }, ANIMATION_DURATION_MS);
-  }
-}
-
-// Track current viewport bounds for filtering (only update after interaction ends)
-const stableBounds = ref(null);
-let boundsUpdateTimeout = null;
-
-// Function to safely clear the bounds timeout
-function clearBoundsTimeout() {
-  if (boundsUpdateTimeout) {
-    clearTimeout(boundsUpdateTimeout);
-    boundsUpdateTimeout = null;
-  }
-}
-
-// Debounced function to update stable bounds
-function updateStableBounds(newBounds) {
-  clearBoundsTimeout();
-
-  boundsUpdateTimeout = setTimeout(() => {
-    stableBounds.value = newBounds;
-    boundsUpdateTimeout = null;
-  }, 200); // Reduced from 500ms for faster responsiveness
-}
-
-
-// Debounced clustering update function
-// Uses a forward reference to updateClustering from useMapEvents
-let _updateClusteringRef = null;
-
-function debouncedUpdateClustering() {
-  clearClusteringUpdateTimeout();
-
-  clusteringUpdateTimeout = setTimeout(() => {
-    try {
-      if (_updateClusteringRef) _updateClusteringRef();
-    } catch (error) {
-      console.error("[TrackMap] Error in debounced clustering update:", error);
-    }
-  }, 100);
-}
-
-// Debounced filter update function with reduced re-rendering
-function debouncedFilterUpdate() {
-  clearFilterUpdateTimeout();
-
-  filterUpdateTimeout = setTimeout(() => {
-    try {
-      // Only force layer key update if we actually need to re-render the layers
-      // This prevents unnecessary re-renders that cause flicker
-      if (
-        !isTransitioning.value &&
-        mapIsReady.value &&
-        !isPanningOrZooming.value
-      ) {
-        layerKey.value += 1;
-      }
-    } catch (error) {
-      console.error("[TrackMap] Error in debounced filter update:", error);
-    }
-  }, 200); // Increased debounce to reduce frequency further
-}
-
-/**
- * Gets the current map object, ensuring it's valid
- * @returns {Object|null} The Leaflet map object or null if not available
- */
-function getMapObject(context = "") {
-  try {
-    if (leafletMap.value && leafletMap.value.mapObject) {
-      return leafletMap.value.mapObject;
-    }
-    // Try to access it through alternative means if available
-    const mapInstance =
-      leafletMap.value?.leafletObject || leafletMap.value?.mapObject;
-    if (mapInstance && typeof mapInstance.getZoom === "function") {
-      return mapInstance;
-    }
-    // Don't log warnings during cleanup or unmounting
-    if (context !== "cleanup" && !isUnmounting.value) {
-      console.warn(
-        `[TrackMap] Map object not available${context ? " in " + context : ""}`
-      );
-    }
-    return null;
-  } catch (error) {
-    // Don't log errors during cleanup or unmounting
-    if (context !== "cleanup" && !isUnmounting.value) {
-      console.error(
-        `[TrackMap] Error accessing map object${
-          context ? " in " + context : ""
-        }:`,
-        error
-      );
-    }
-    return null;
-  }
-}
 
 
 // Determine display mode based on zoom level and settings
@@ -497,82 +438,14 @@ const {
 _updateClusteringRef = updateClustering;
 
 
-function ensureHeatmapPane() {
-  if (!leafletAdapter.getPane(HEATMAP_PANE)) {
-    const pane = leafletAdapter.createPane(HEATMAP_PANE);
-    if (pane) {
-      pane.style.zIndex = "350";
-      pane.style.pointerEvents = "none";
-    }
-  }
-}
-
-function buildHeatmapLatLngs() {
-  if (!Array.isArray(props.heatmapPoints)) return [];
-  return props.heatmapPoints
-    .map((point) => {
-      if (!point) return null;
-      const lat = typeof point.lat === "number" ? point.lat : null;
-      const lon = typeof point.lon === "number" ? point.lon : null;
-      if (lat === null || lon === null) return null;
-      const weight =
-        typeof point.weight === "number" && !Number.isNaN(point.weight)
-          ? Math.max(0, point.weight)
-          : 0;
-      return [lat, lon, weight];
-    })
-    .filter((point) => point !== null);
-}
-
-function removeHeatmapLayer() {
-  if (heatLayer.value) {
-    leafletAdapter.removeLayer(heatLayer.value);
-  }
-  heatLayer.value = null;
-  heatmapMaxWeight.value = 0;
-}
-
-function updateHeatmapLayer() {
-  if (!mapIsReady.value || isUnmounting.value) return;
-  const map = getMapObject("heatmap");
-  if (!map) return;
-
-  if (!props.showHeatmap) {
-    removeHeatmapLayer();
-    return;
-  }
-
-  const latlngs = buildHeatmapLatLngs();
-  if (latlngs.length === 0) {
-    removeHeatmapLayer();
-    return;
-  }
-
-  ensureHeatmapPane();
-  const maxWeight = Math.max(...latlngs.map((point) => point[2] || 0), 1);
-  const shouldRecreate =
-    !heatLayer.value || heatmapMaxWeight.value !== maxWeight;
-  if (shouldRecreate && heatLayer.value) {
-    leafletAdapter.removeLayer(heatLayer.value);
-    heatLayer.value = null;
-  }
-
-  if (!heatLayer.value) {
-    heatLayer.value = leafletAdapter.createHeatLayer(latlngs, {
-      radius: 18,
-      blur: 22,
-      minOpacity: 0.25,
-      maxZoom: 17,
-      max: maxWeight,
-      pane: HEATMAP_PANE,
-    });
-    if (heatLayer.value) {
-      leafletAdapter.addLayer(heatLayer.value);
-    }
-    heatmapMaxWeight.value = maxWeight;
-  } else {
-    heatLayer.value.setLatLngs(latlngs);
-  }
+function updateHeatmap() {
+  updateHeatmapLayer(
+    props.heatmapPoints,
+    props.showHeatmap,
+    mapIsReady.value,
+    isUnmounting.value,
+    () => getMapObject("heatmap")
+  );
 }
 
 // Convert polylines to GeoJSON format (no filtering here - use native Leaflet filter)
@@ -661,7 +534,7 @@ async function onMapReady(e) {
     }
 
     // Store the resolved L.Map for child components (PoiClusterGroup, etc.)
-    leafletInstance.value = map;
+    setMapInstance(map);
 
     // Bind the Leaflet adapter to the live map
     leafletAdapter.setMap(map);
@@ -711,7 +584,7 @@ async function onMapReady(e) {
     mapState.value.userChangedZoomOrCenter = false;
     mapIsReady.value = true;
 
-    updateHeatmapLayer();
+    updateHeatmap();
 
     // Initialize stable bounds for track visibility calculation
     stableBounds.value = leafletAdapter.getBounds();
@@ -747,7 +620,7 @@ async function onMapReady(e) {
           "bounds:",
           props.bounds
         );
-        leafletAdapter.fitBounds(props.bounds, options);
+        fitBoundsWithPadding(props.bounds, options);
       } catch (error) {
         console.error("[TrackMap] Error applying initial bounds:", error);
       }
@@ -758,19 +631,6 @@ async function onMapReady(e) {
       });
     }
 
-    // Enhance fitBounds on the adapter so all downstream callers automatically
-    // receive the detail-panel padding when a track detail is selected.
-    const origAdapterFitBounds = leafletAdapter.fitBounds.bind(leafletAdapter);
-    leafletAdapter.fitBounds = function (boundsArg, options = {}) {
-      if (
-        props.selectedTrackDetail &&
-        !options.paddingBottomRight &&
-        !options.paddingTopLeft
-      ) {
-        options = { ...options, ...getDetailPanelFitBoundsOptions() };
-      }
-      return origAdapterFitBounds(boundsArg, options);
-    };
   } catch (error) {
     console.error("[TrackMap] Error in onMapReady logic:", error, {
       eventPayload: e,
@@ -839,17 +699,16 @@ const shouldRenderGeoJson = computed(() => {
 });
 
 // Watch for changes in filtered tracks to update clustering (debounced)
-let tracksWatchTimeout = null;
 watch(
   () => filteredTracks.value,
   () => {
     if (clustering.clusterGroup.value && displayMode.value === "cluster") {
-      clearTimeout(tracksWatchTimeout);
-      tracksWatchTimeout = setTimeout(() => {
+      timeouts.clearTracksWatchTimeout();
+      timeouts.tracksWatchTimeout = setTimeout(() => {
         if (!isUnmounting.value && !isPanningOrZooming.value) {
           updateClustering();
         }
-      }, 300); // Increased debounce for better performance
+      }, 300);
     }
   },
   { deep: true }
@@ -904,12 +763,11 @@ watch(
       const map = getMapObject("boundsWatch");
       if (map && Array.isArray(newBounds) && newBounds.length === 2) {
         try {
-          // Use fitBounds with proper options for track detail view
           const options = props.selectedTrackDetail
             ? getDetailPanelFitBoundsOptions()
             : { padding: [20, 20] };
           console.log("[TrackMap] Fitting bounds with options:", options);
-          leafletAdapter.fitBounds(newBounds, options);
+          fitBoundsWithPadding(newBounds, options);
         } catch (error) {
           console.error("[TrackMap] Error fitting bounds:", error);
         }
@@ -922,18 +780,14 @@ watch(
 watch(
   () => [props.showHeatmap, props.heatmapPoints],
   () => {
-    updateHeatmapLayer();
+    updateHeatmap();
   },
   { deep: true }
 );
 
 // Cleanup function for component unmounting
 function cleanup() {
-  clearBoundsTimeout();
-  clearAnimationTimeout();
-  clearClusteringUpdateTimeout();
-  clearMapUpdateTimeout();
-  clearFilterUpdateTimeout();
+  timeouts.clearAll();
 
   // Clean up debounced filter functions
   if (batchedFilterUpdate && batchedFilterUpdate.cancel) {
@@ -948,10 +802,7 @@ function cleanup() {
   removeHeatmapLayer();
 
   // Clear tracks watch timeout
-  if (tracksWatchTimeout) {
-    clearTimeout(tracksWatchTimeout);
-    tracksWatchTimeout = null;
-  }
+  timeouts.clearTracksWatchTimeout();
 
   // Clean up clustering resources
   if (clustering.clusterGroup.value) {
@@ -963,7 +814,7 @@ function cleanup() {
 // Cleanup on unmount
 onUnmounted(() => {
   // Set unmounting flag to prevent further operations
-  isUnmounting.value = true;
+  setUnmounting(true);
 
   // Force clear zoom animation state to prevent issues
   isZoomAnimating.value = false;
@@ -972,7 +823,7 @@ onUnmounted(() => {
   if (map) {
     // Stop any ongoing map animations
     try {
-      leafletAdapter.stop(); // Stop all animations
+      leafletAdapter.stop();
     } catch (error) {
       console.warn("[TrackMap] Error stopping map animations:", error);
     }
@@ -984,8 +835,8 @@ onUnmounted(() => {
   leafletAdapter.setMap(null);
 
   // Clear any pending zoom-related timeouts immediately
-  clearAnimationTimeout();
-  clearClusteringUpdateTimeout();
+  timeouts.clearAnimationTimeout();
+  timeouts.clearClusteringUpdateTimeout();
 
   cleanup();
 

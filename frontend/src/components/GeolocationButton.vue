@@ -32,10 +32,12 @@
   </button>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from "vue";
 
-const emit = defineEmits(["location-found"]);
+const emit = defineEmits<{
+  "location-found": [payload: { latitude?: number; longitude?: number; error?: string }];
+}>();
 
 const gettingLocation = ref(false);
 
@@ -50,7 +52,7 @@ const getCurrentLocation = async () => {
   gettingLocation.value = true;
 
   try {
-    const position = await new Promise((resolve, reject) => {
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
         enableHighAccuracy: true,
         timeout: 10000,
@@ -60,8 +62,9 @@ const getCurrentLocation = async () => {
 
     const { latitude, longitude } = position.coords;
     emit("location-found", { latitude, longitude });
-  } catch (error) {
+  } catch (err: unknown) {
     let errorMessage = "Unable to get your location";
+    const error = err as { code?: number; PERMISSION_DENIED?: number; POSITION_UNAVAILABLE?: number; TIMEOUT?: number };
 
     switch (error.code) {
       case error.PERMISSION_DENIED:

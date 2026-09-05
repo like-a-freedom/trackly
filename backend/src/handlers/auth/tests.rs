@@ -61,7 +61,7 @@ fn test_user_response_from_user() {
     let response: UserResponse = user.into();
 
     assert_eq!(response.email, "test@example.com");
-    assert_eq!(response.name, Some("Test User".to_string()));
+    assert_eq!(response.name, "Test User");
     assert_eq!(response.nickname, Some("testuser".to_string()));
     assert_eq!(
         response.avatar_url,
@@ -98,7 +98,7 @@ fn test_auth_response_serialization() {
     let user = UserResponse {
         id: uuid::Uuid::new_v4().to_string(),
         email: "test@example.com".to_string(),
-        name: Some("Test User".to_string()),
+        name: "Test User".to_string(),
         nickname: Some("testuser".to_string()),
         avatar_url: None,
         roles: vec!["user".to_string()],
@@ -354,6 +354,84 @@ fn test_user_response_id_is_string() {
 
     // Verify ID is converted to string
     assert_eq!(response.id, user_id.to_string());
+}
+
+#[test]
+fn test_update_profile_request_deserialization() {
+    let json = r#"{"name": "New Name", "nickname": "newnick"}"#;
+    let request: UpdateProfileRequest = serde_json::from_str(json).unwrap();
+
+    assert_eq!(request.name, Some("New Name".to_string()));
+    assert_eq!(request.nickname, Some("newnick".to_string()));
+}
+
+#[test]
+fn test_update_profile_request_name_only() {
+    let json = r#"{"name": "Just Name"}"#;
+    let request: UpdateProfileRequest = serde_json::from_str(json).unwrap();
+
+    assert_eq!(request.name, Some("Just Name".to_string()));
+    assert_eq!(request.nickname, None);
+}
+
+#[test]
+fn test_update_profile_request_nickname_only() {
+    let json = r#"{"nickname": "justnick"}"#;
+    let request: UpdateProfileRequest = serde_json::from_str(json).unwrap();
+
+    assert_eq!(request.name, None);
+    assert_eq!(request.nickname, Some("justnick".to_string()));
+}
+
+#[test]
+fn test_update_profile_request_empty() {
+    let json = r#"{}"#;
+    let request: UpdateProfileRequest = serde_json::from_str(json).unwrap();
+
+    assert_eq!(request.name, None);
+    assert_eq!(request.nickname, None);
+}
+
+#[test]
+fn test_profile_response_serialization() {
+    let response = UserResponse {
+        id: "test-id".to_string(),
+        email: "test@example.com".to_string(),
+        name: "Test User".to_string(),
+        nickname: Some("testnick".to_string()),
+        avatar_url: Some("https://example.com/avatar.jpg".to_string()),
+        roles: vec![],
+    };
+
+    let json = serde_json::to_string(&response).unwrap();
+    let deserialized: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(deserialized["id"], "test-id");
+    assert_eq!(deserialized["email"], "test@example.com");
+    assert_eq!(deserialized["name"], "Test User");
+    assert_eq!(deserialized["nickname"], "testnick");
+    assert_eq!(deserialized["avatar_url"], "https://example.com/avatar.jpg");
+}
+
+#[test]
+fn test_profile_response_with_defaults() {
+    let response = UserResponse {
+        id: "test-id".to_string(),
+        email: "test@example.com".to_string(),
+        name: String::new(),
+        nickname: None,
+        avatar_url: None,
+        roles: vec![],
+    };
+
+    let json = serde_json::to_string(&response).unwrap();
+    let deserialized: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+    // name should always be a string (not null)
+    assert_eq!(deserialized["name"], "");
+    // nullable fields should be null
+    assert!(deserialized["nickname"].is_null());
+    assert!(deserialized["avatar_url"].is_null());
 }
 
 #[test]

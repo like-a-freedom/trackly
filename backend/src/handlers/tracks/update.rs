@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::auth::{AuthError, AuthUser, OptionalAuthUser};
 use crate::db;
@@ -124,23 +125,39 @@ pub async fn update_track_distance_markers(
 #[derive(Debug, Deserialize)]
 pub struct UpdateVisibilityRequest {
     pub is_public: bool,
+    pub session_id: Option<Uuid>,
 }
 
 /// Update track visibility.
 ///
 /// PATCH /api/tracks/{id}/visibility
 ///
-/// Implements FR-TRACK-003: Track Visibility Control
+/// Implements FR-TRACK-003: Track Visibility Control.
+/// Supports both authenticated users and anonymous session-based ownership.
 pub async fn update_track_visibility(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
-    auth_user: AuthUser,
+    auth_user: OptionalAuthUser,
     Json(request): Json<UpdateVisibilityRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    db::update_track_visibility(&pool, track_id, auth_user.user_id, request.is_public).await?;
+    // Verify ownership via authenticated user or session_id
+    verify_track_owner(&pool, track_id, &auth_user, request.session_id).await?;
 
+    db::update_track_visibility(
+        &pool,
+        track_id,
+        auth_user.user_id(),
+        request.session_id,
+        request.is_public,
+    )
+    .await?;
+
+    let user_id_str = auth_user
+        .user_id()
+        .map(|u| u.to_string())
+        .unwrap_or_default();
     info!(
-        user_id = %auth_user.user_id,
+        user_id = %user_id_str,
         track_id = %track_id,
         is_public = request.is_public,
         "Track visibility updated"
@@ -158,13 +175,15 @@ pub async fn update_track_visibility(
 /// Delete a track.
 ///
 /// DELETE /api/tracks/{id}
+/// Body (optional): { "session_id": "<uuid>" } for anonymous ownership check
 pub async fn delete_track(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
     auth_user: OptionalAuthUser,
+    Json(request): Json<crate::models::DeleteTrackRequest>,
 ) -> Result<Json<serde_json::Value>> {
     // Ownership check
-    verify_track_owner(&pool, track_id, &auth_user, None).await?;
+    verify_track_owner(&pool, track_id, &auth_user, request.session_id).await?;
 
     let rows = db::delete_track(&pool, track_id).await?;
     if rows == 0 {

@@ -46,10 +46,10 @@
 
       <div class="header-actions">
         <button
-          ref="settingsButton"
+          ref="settingsMenu.buttonRef"
           class="settings-btn"
           title="Settings"
-          @click="toggleSettingsMenu"
+          @click="settingsMenu.toggle"
         >
           <svg
             width="20"
@@ -72,13 +72,13 @@
 
         <!-- Settings dropdown menu -->
         <div
-          v-if="showSettingsMenu"
-          ref="settingsMenu"
+          v-if="settingsMenu.showMenu.value"
+          ref="settingsMenu.menuRef"
           class="settings-menu"
         >
           <button
             class="menu-item"
-            @click="openNicknameModal"
+            @click="nicknameEdit.open(user?.nickname || '')"
           >
             <svg
               width="16"
@@ -147,9 +147,9 @@
     <!-- Nickname Edit Modal -->
     <Teleport to="body">
       <div
-        v-if="showNicknameModal"
+        v-if="nicknameEdit.showModal.value"
         class="modal-overlay"
-        @click="closeNicknameModal"
+        @click="nicknameEdit.close"
       >
         <div
           class="modal-content"
@@ -159,7 +159,7 @@
             <h3>Edit Nickname</h3>
             <button
               class="modal-close"
-              @click="closeNicknameModal"
+              @click="nicknameEdit.close"
             >
               <svg
                 width="20"
@@ -192,19 +192,19 @@
               >Nickname</label>
               <input
                 id="nickname-input"
-                v-model="editNickname"
+                v-model="nicknameEdit.editValue.value"
                 type="text"
                 class="form-input"
                 placeholder="Enter a nickname..."
                 maxlength="50"
-                :disabled="savingNickname"
-                @keyup.enter="saveNickname"
+                :disabled="nicknameEdit.saving.value"
+                @keyup.enter="nicknameEdit.save"
               >
               <p
-                v-if="nicknameError"
+                v-if="nicknameEdit.error.value"
                 class="form-error"
               >
-                {{ nicknameError }}
+                {{ nicknameEdit.error.value }}
               </p>
               <p class="form-hint">
                 1-50 characters, alphanumeric with underscores and hyphens
@@ -214,17 +214,17 @@
           <div class="modal-footer">
             <button
               class="btn-cancel"
-              :disabled="savingNickname"
-              @click="closeNicknameModal"
+              :disabled="nicknameEdit.saving.value"
+              @click="nicknameEdit.close"
             >
               Cancel
             </button>
             <button
               class="btn-primary"
-              :disabled="!nicknameChanged || savingNickname"
-              @click="saveNickname"
+              :disabled="!nicknameEdit.hasChanged.value || nicknameEdit.saving.value"
+              @click="nicknameEdit.save"
             >
-              {{ savingNickname ? "Saving..." : "Save" }}
+              {{ nicknameEdit.saving.value ? "Saving..." : "Save" }}
             </button>
           </div>
         </div>
@@ -249,12 +249,12 @@
       <section class="account-section tracks-section">
         <div class="section-header">
           <h2>My Tracks</h2>
-          <span class="track-count">{{ filteredTracks.length }} tracks</span>
+          <span class="track-count">{{ search.filteredTracks.value.length }} tracks</span>
         </div>
 
         <!-- Search and Bulk Actions Bar -->
         <div
-          v-if="tracks.length > 0"
+          v-if="trackList.tracks.value.length > 0"
           class="tracks-toolbar"
         >
           <div class="search-box">
@@ -274,7 +274,7 @@
               <path d="M21 21l-4.35-4.35" />
             </svg>
             <input
-              v-model="searchQuery"
+              v-model="search.query.value"
               type="text"
               placeholder="Search tracks..."
               class="search-input"
@@ -284,17 +284,17 @@
             <label class="select-all-label">
               <input
                 type="checkbox"
-                :checked="allVisibleSelected"
-                :indeterminate="someSelected && !allVisibleSelected"
-                @change="toggleSelectAll"
+                :checked="bulkOps.allVisibleSelected.value"
+                :indeterminate="bulkOps.someSelected.value && !bulkOps.allVisibleSelected.value"
+                @change="bulkOps.toggleSelectAll"
               >
               <span>Select all</span>
             </label>
             <button
               v-if="selectedTrackIds.length > 0"
               class="btn-bulk"
-              :disabled="bulkOperating"
-              @click="bulkToggleVisibility"
+              :disabled="bulkOps.bulkOperating.value"
+              @click="bulkOps.bulkToggleVisibility"
             >
               <svg
                 width="14"
@@ -316,8 +316,8 @@
             <button
               v-if="selectedTrackIds.length > 0"
               class="btn-bulk btn-bulk-danger"
-              :disabled="bulkOperating"
-              @click="bulkDeleteTracks"
+              :disabled="bulkOps.bulkOperating.value"
+              @click="bulkOps.bulkDelete"
             >
               <svg
                 width="14"
@@ -338,7 +338,7 @@
         </div>
 
         <div
-          v-if="loadingTracks"
+          v-if="trackList.loading.value"
           class="tracks-loading"
         >
           <div class="spinner-small" />
@@ -346,7 +346,7 @@
         </div>
 
         <div
-          v-else-if="tracks.length === 0"
+          v-else-if="trackList.tracks.value.length === 0"
           class="tracks-empty"
         >
           <div class="empty-icon">
@@ -379,13 +379,13 @@
         </div>
 
         <div
-          v-else-if="filteredTracks.length === 0"
+          v-else-if="search.filteredTracks.value.length === 0"
           class="tracks-empty"
         >
           <p>No tracks match your search</p>
           <button
             class="btn-secondary"
-            @click="searchQuery = ''"
+            @click="search.clear"
           >
             Clear search
           </button>
@@ -397,7 +397,7 @@
         >
           <div class="tracks-list">
             <div
-              v-for="track in filteredTracks"
+              v-for="track in search.filteredTracks.value"
               :key="track.id"
               class="track-card"
               :class="{ selected: selectedTrackIds.includes(track.id) }"
@@ -409,7 +409,7 @@
                 <input
                   type="checkbox"
                   :checked="selectedTrackIds.includes(track.id)"
-                  @change="toggleTrackSelection(track.id)"
+                  @change="bulkOps.toggleSelection(track.id)"
                 >
               </label>
               <div
@@ -459,7 +459,7 @@
                 :class="{ public: track.is_public }"
                 :disabled="togglingVisibility === track.id"
                 :title="track.is_public ? 'Make private' : 'Make public'"
-                @click.stop="toggleTrackVisibility(track)"
+                @click.stop="handleToggleVisibility(track)"
               >
                 <svg
                   v-if="togglingVisibility === track.id"
@@ -525,12 +525,12 @@
         </div>
 
         <button
-          v-if="hasMoreTracks"
+          v-if="trackList.hasMore.value"
           class="btn-load-more"
-          :disabled="loadingTracks"
-          @click="loadMoreTracks"
+          :disabled="trackList.loading.value"
+          @click="trackList.loadMore"
         >
-          {{ loadingTracks ? "Loading..." : "Load more" }}
+          {{ trackList.loading.value ? "Loading..." : "Load more" }}
         </button>
       </section>
     </div>
@@ -538,63 +538,37 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useConfirm } from "../composables/useConfirm";
 import { http } from "../http-instance";
+import { useTrackList } from "../composables/useTrackList";
+import { useBulkTrackOperations } from "../composables/useBulkTrackOperations";
+import { useSettingsMenu } from "../composables/useSettingsMenu";
+import { useNicknameEdit } from "../composables/useNicknameEdit";
+import { useTrackSearch } from "../composables/useTrackSearch";
 
 defineOptions({
   name: "AccountView",
 });
 
 const router = useRouter();
-const { user, isLoading, logout, updateProfile, deleteAccount } =
-  useAuth();
+const { user, isLoading, logout, deleteAccount } = useAuth();
 const { confirm } = useConfirm();
 
-// Settings dropdown
-const showSettingsMenu = ref(false);
-const settingsButton = ref(null);
-const settingsMenu = ref(null);
+// Composables
+const settingsMenu = useSettingsMenu();
+const trackList = useTrackList({ limit: 20 });
+const search = useTrackSearch(trackList.tracks);
+const nicknameEdit = useNicknameEdit(computed(() => user.value?.nickname || ""));
 
-// Profile editing (in modal)
-const showNicknameModal = ref(false);
-const editNickname = ref("");
-const savingNickname = ref(false);
-const nicknameError = ref(null);
-
-// Tracks
-const tracks = ref([]);
-const loadingTracks = ref(false);
-const tracksOffset = ref(0);
-const tracksLimit = 20;
-const hasMoreTracks = ref(false);
-
-// Search and selection
-const searchQuery = ref("");
 const selectedTrackIds = ref([]);
 const togglingVisibility = ref(null);
-const bulkOperating = ref(false);
-
-const nicknameChanged = computed(() => {
-  return editNickname.value !== (user.value?.nickname || "");
-});
-
-const filteredTracks = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return tracks.value;
-  }
-  const query = searchQuery.value.toLowerCase().trim();
-  return tracks.value.filter((track) => {
-    const name = (track.name || "Unnamed Track").toLowerCase();
-    return name.includes(query);
-  });
-});
 
 const allVisibleSelected = computed(() => {
-  if (filteredTracks.value.length === 0) return false;
-  return filteredTracks.value.every((track) =>
+  if (search.filteredTracks.value.length === 0) return false;
+  return search.filteredTracks.value.every((track) =>
     selectedTrackIds.value.includes(track.id)
   );
 });
@@ -602,47 +576,22 @@ const allVisibleSelected = computed(() => {
 const someSelected = computed(() => {
   return (
     selectedTrackIds.value.length > 0 &&
-    filteredTracks.value.some((track) =>
+    search.filteredTracks.value.some((track) =>
       selectedTrackIds.value.includes(track.id)
     )
   );
 });
 
-// Settings menu functions
-function toggleSettingsMenu() {
-  showSettingsMenu.value = !showSettingsMenu.value;
-}
+const bulkOps = useBulkTrackOperations({
+  tracks: trackList.tracks,
+  selectedIds: selectedTrackIds,
+  allVisibleSelected,
+  someSelected,
+  removeTracks: trackList.removeTracks,
+  confirm,
+});
 
-function closeSettingsMenu() {
-  showSettingsMenu.value = false;
-}
-
-function handleClickOutside(event) {
-  if (
-    showSettingsMenu.value &&
-    settingsButton.value &&
-    settingsMenu.value &&
-    !settingsButton.value.contains(event.target) &&
-    !settingsMenu.value.contains(event.target)
-  ) {
-    closeSettingsMenu();
-  }
-}
-
-// Nickname modal functions
-function openNicknameModal() {
-  editNickname.value = user.value?.nickname || "";
-  nicknameError.value = null;
-  showNicknameModal.value = true;
-  closeSettingsMenu();
-}
-
-function closeNicknameModal() {
-  showNicknameModal.value = false;
-  editNickname.value = user.value?.nickname || "";
-  nicknameError.value = null;
-}
-
+// Utility functions
 function formatDistance(km) {
   if (!km || isNaN(km)) return "N/A";
   return `${km.toFixed(1)} km`;
@@ -658,169 +607,23 @@ function formatDate(dateStr) {
   });
 }
 
-async function loadTracks() {
-  loadingTracks.value = true;
-  try {
-    const response = await http(
-      `/api/account/tracks?limit=${tracksLimit}&offset=${tracksOffset.value}&sort=created_at&order=desc`
-    );
-    if (response.ok) {
-      const data = await response.json();
-      if (tracksOffset.value === 0) {
-        tracks.value = data.tracks || [];
-      } else {
-        tracks.value = [...tracks.value, ...(data.tracks || [])];
-      }
-      hasMoreTracks.value = (data.tracks?.length || 0) === tracksLimit;
-    }
-  } catch (e) {
-    console.error("Failed to load tracks:", e);
-  } finally {
-    loadingTracks.value = false;
-  }
-}
-
-async function loadMoreTracks() {
-  tracksOffset.value += tracksLimit;
-  await loadTracks();
-}
-
-function toggleSelectAll() {
-  if (allVisibleSelected.value) {
-    // Deselect all visible tracks
-    const visibleIds = filteredTracks.value.map((t) => t.id);
-    selectedTrackIds.value = selectedTrackIds.value.filter(
-      (id) => !visibleIds.includes(id)
-    );
-  } else {
-    // Select all visible tracks
-    const visibleIds = filteredTracks.value.map((t) => t.id);
-    selectedTrackIds.value = [
-      ...new Set([...selectedTrackIds.value, ...visibleIds]),
-    ];
-  }
-}
-
-function toggleTrackSelection(trackId) {
-  const index = selectedTrackIds.value.indexOf(trackId);
-  if (index === -1) {
-    selectedTrackIds.value.push(trackId);
-  } else {
-    selectedTrackIds.value.splice(index, 1);
-  }
-}
-
-async function toggleTrackVisibility(track) {
+async function handleToggleVisibility(track) {
   togglingVisibility.value = track.id;
   try {
-    const response = await http(`/api/tracks/${track.id}/visibility`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_public: !track.is_public }),
-    });
-    if (response.ok) {
-      track.is_public = !track.is_public;
-    }
-  } catch (e) {
-    console.error("Failed to update visibility:", e);
+    await trackList.toggleVisibility(track.id, !track.is_public);
   } finally {
     togglingVisibility.value = null;
   }
 }
 
-async function bulkToggleVisibility() {
-  if (selectedTrackIds.value.length === 0) return;
-
-  bulkOperating.value = true;
-  try {
-    const response = await http("/api/account/tracks/bulk/visibility", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_ids: selectedTrackIds.value }),
-    });
-    if (response.ok) {
-      const data = await response.json();
-      // Update local track visibility
-      for (const update of data.updated || []) {
-        const track = tracks.value.find((t) => t.id === update.id);
-        if (track) {
-          track.is_public = update.is_public;
-        }
-      }
-      selectedTrackIds.value = [];
-    }
-  } catch (e) {
-    console.error("Failed to bulk toggle visibility:", e);
-  } finally {
-    bulkOperating.value = false;
-  }
-}
-
-async function bulkDeleteTracks() {
-  if (selectedTrackIds.value.length === 0) return;
-
-  const confirmed = await confirm({
-    title: "Delete Tracks?",
-    message: `This will permanently delete ${selectedTrackIds.value.length} track(s). This action cannot be undone.`,
-    confirmText: "Delete",
-    cancelText: "Cancel",
-  });
-
-  if (!confirmed) return;
-
-  bulkOperating.value = true;
-  try {
-    const response = await http("/api/account/tracks/bulk", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_ids: selectedTrackIds.value }),
-    });
-    if (response.ok) {
-      const data = await response.json();
-      // Remove deleted tracks from local state
-      const deletedIds = data.deleted || selectedTrackIds.value;
-      tracks.value = tracks.value.filter((t) => !deletedIds.includes(t.id));
-      selectedTrackIds.value = [];
-    }
-  } catch (e) {
-    console.error("Failed to bulk delete tracks:", e);
-  } finally {
-    bulkOperating.value = false;
-  }
-}
-
-async function saveNickname() {
-  if (!nicknameChanged.value) return;
-
-  // Validate nickname
-  const nickname = editNickname.value.trim();
-  if (nickname && !/^[a-zA-Z0-9_-]{1,50}$/.test(nickname)) {
-    nicknameError.value =
-      "Nickname must be 1-50 characters, alphanumeric with underscores and hyphens only";
-    return;
-  }
-
-  savingNickname.value = true;
-  nicknameError.value = null;
-
-  try {
-    await updateProfile({ nickname: nickname || null });
-    closeNicknameModal();
-  } catch (e) {
-    nicknameError.value = e.message || "Failed to update nickname";
-  } finally {
-    savingNickname.value = false;
-  }
-}
-
 async function handleLogout() {
-  closeSettingsMenu();
+  settingsMenu.close();
   await logout();
   router.replace("/");
 }
 
 async function confirmDeleteAccount() {
-  closeSettingsMenu();
+  settingsMenu.close();
 
   const confirmed = await confirm({
     title: "Delete Account?",
@@ -853,15 +656,7 @@ function openTrack(trackId) {
 }
 
 onMounted(() => {
-  if (user.value) {
-    editNickname.value = user.value.nickname || "";
-  }
-  loadTracks();
-  document.addEventListener("click", handleClickOutside);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("click", handleClickOutside);
+  trackList.loadTracks();
 });
 </script>
 

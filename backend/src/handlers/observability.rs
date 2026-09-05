@@ -56,6 +56,10 @@ pub async fn get_feature_flags() -> Json<FeatureFlagsResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Serialize tests that mutate the FEATURE_EDITOR env var to avoid races.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn bucket_zoom_level_partitions() {
@@ -67,16 +71,19 @@ mod tests {
 
     #[tokio::test]
     async fn get_feature_flags_returns_defaults() {
+        let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::remove_var("FEATURE_EDITOR") };
         let response = get_feature_flags().await;
         let body = response.0;
         assert!(body.editor, "editor should default to true");
         // auth depends on env vars — just assert it's a valid bool
         let _ = body.auth;
+        unsafe { std::env::remove_var("FEATURE_EDITOR") };
     }
 
     #[tokio::test]
     async fn get_feature_flags_respects_editor_env() {
+        let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("FEATURE_EDITOR", "false") };
         let response = get_feature_flags().await;
         assert!(

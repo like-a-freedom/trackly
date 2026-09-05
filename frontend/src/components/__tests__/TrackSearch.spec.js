@@ -182,4 +182,92 @@ describe('TrackSearch', () => {
 
     vi.useRealTimers()
   })
+
+  it('handles search error gracefully', async () => {
+    fetch.mockRejectedValueOnce(new Error('Network error'))
+
+    const wrapper = mount(TrackSearch, {
+      props: {
+        isVisible: true
+      }
+    })
+
+    const input = wrapper.find('.search-input')
+    await input.setValue('test')
+    await input.trigger('keydown.enter')
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+
+    // Should show no results on error
+    expect(wrapper.find('.no-results').exists()).toBe(true)
+  })
+
+  it('handles non-ok response', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500
+    })
+
+    const wrapper = mount(TrackSearch, {
+      props: {
+        isVisible: true
+      }
+    })
+
+    const input = wrapper.find('.search-input')
+    await input.setValue('test')
+    await input.trigger('keydown.enter')
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+
+    // Should show no results on error
+    expect(wrapper.find('.no-results').exists()).toBe(true)
+  })
+
+  it('clears search results when clearSearch is called', async () => {
+    const mockResponse = [
+      {
+        id: '123',
+        name: 'Test Track',
+        categories: [],
+        length_km: 5.0,
+        url: '/api/tracks/123'
+      }
+    ]
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse
+    })
+
+    const wrapper = mount(TrackSearch, {
+      props: {
+        isVisible: true
+      }
+    })
+
+    const input = wrapper.find('.search-input')
+    await input.setValue('test')
+    await input.trigger('keydown.enter')
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+
+    // Verify results are shown
+    expect(wrapper.find('.search-result-item').exists()).toBe(true)
+  })
+
+  it('emits close when closeSearch is called', async () => {
+    const wrapper = mount(TrackSearch, {
+      props: {
+        isVisible: true
+      }
+    })
+
+    // Trigger close via overlay click
+    await wrapper.find('.search-overlay').trigger('click')
+    expect(wrapper.emitted('close')).toBeTruthy()
+  })
 })

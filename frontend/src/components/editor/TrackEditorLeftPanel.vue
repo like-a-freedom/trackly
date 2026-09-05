@@ -3,124 +3,6 @@
     class="track-editor-left-panel"
     data-testid="track-editor-left-panel"
   >
-    <!-- ─── Header: name + metrics + actions ─── -->
-    <header class="panel-header">
-      <div class="panel-track-info">
-        <div
-          class="panel-track-name"
-          data-testid="panel-track-name"
-        >
-          {{ resolvedTrackName }}
-        </div>
-        <div class="panel-metrics">
-          <span data-testid="panel-distance">{{ distanceDisplay }}</span>
-          <span class="panel-metrics-sep">·</span>
-          <span data-testid="panel-time">{{ timeDisplay }}</span>
-          <span class="panel-metrics-sep">·</span>
-          <span data-testid="panel-points">{{ totalPoints }} pts</span>
-        </div>
-      </div>
-      <div class="panel-header-actions">
-        <!-- Export dropdown -->
-        <div
-          ref="exportRef"
-          class="panel-export-wrap"
-        >
-          <button
-            class="panel-ghost-btn"
-            :class="{ 'panel-ghost-btn--active': showExportMenu }"
-            :disabled="!savedTrackId"
-            title="Export track"
-            data-testid="panel-export-toggle"
-            @click="showExportMenu = !showExportMenu"
-          >
-            ↓
-          </button>
-          <div
-            v-if="showExportMenu"
-            class="panel-export-menu"
-            data-testid="panel-export-menu"
-          >
-            <button
-              data-testid="panel-export-gpx"
-              @click="handleExport('gpx')"
-            >
-              GPX
-            </button>
-            <button
-              data-testid="panel-export-kml"
-              @click="handleExport('kml')"
-            >
-              KML
-            </button>
-            <button
-              data-testid="panel-export-geojson"
-              @click="handleExport('geojson')"
-            >
-              GeoJSON
-            </button>
-          </div>
-        </div>
-        <button
-          class="panel-save-btn"
-          :disabled="!canSave || saving"
-          data-testid="panel-save"
-          @click="$emit('save')"
-        >
-          {{ saving ? "Saving…" : "Save" }}
-        </button>
-      </div>
-    </header>
-
-    <!-- ─── Alerts ─── -->
-    <div
-      v-if="showDraftBanner || !!error || showRoutingStatus"
-      class="panel-alerts"
-    >
-      <div
-        v-if="showDraftBanner"
-        class="panel-alert panel-alert--draft"
-        data-testid="panel-alert-draft"
-      >
-        <div class="panel-alert-body">
-          <strong>Unsaved draft found</strong>
-          <span>Restore or remove before starting fresh.</span>
-        </div>
-        <div class="panel-alert-btns">
-          <button
-            class="panel-alert-btn panel-alert-btn--primary"
-            data-testid="top-alert-restore-draft"
-            @click="$emit('restoreDraft')"
-          >
-            Restore
-          </button>
-          <button
-            class="panel-alert-btn"
-            data-testid="top-alert-delete-draft"
-            @click="$emit('deleteDraft')"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-      <div
-        v-if="error"
-        class="panel-alert panel-alert--error"
-        role="alert"
-      >
-        <strong>{{ error }}</strong>
-      </div>
-      <div
-        v-if="showRoutingStatus"
-        class="panel-alert panel-alert--warning"
-      >
-        <span v-if="graphLoading">
-          Loading routing{{ graphProgress > 0 ? ` ${graphProgress}%` : "…" }}
-        </span>
-        <span v-else>⚠️ Routing unavailable</span>
-      </div>
-    </div>
-
     <!-- ─── Tabs ─── -->
     <nav
       class="panel-tabs"
@@ -146,7 +28,7 @@
         class="panel-tab-body"
       >
         <div
-          v-if="totalPoints < 2 && !showDraftBanner"
+          v-if="totalPoints < 2"
           class="panel-empty-tip"
           data-testid="panel-tip"
         >
@@ -239,7 +121,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from "vue";
+import { ref } from "vue";
 import TrackEditorActionsCard from "./TrackEditorActionsCard.vue";
 import TrackEditorChartCard from "./TrackEditorChartCard.vue";
 import TrackEditorMetaCard from "./TrackEditorMetaCard.vue";
@@ -253,19 +135,6 @@ const props = defineProps({
   totalPoints: { type: Number, default: 0 },
   totalDistanceKm: { type: Number, default: 0 },
   estimatedTimeMinutes: { type: Number, default: 0 },
-  manualRoutingPercent: { type: Number, default: 0 },
-  // Save state
-  canSave: { type: Boolean, default: false },
-  saving: { type: Boolean, default: false },
-  savedTrackId: { type: [String, null], default: null },
-  // Routing status
-  routingMode: { type: String, default: "manual" },
-  graphLoading: { type: Boolean, default: false },
-  graphError: { type: String, default: null },
-  graphProgress: { type: Number, default: 0 },
-  // Alerts
-  showDraftBanner: { type: Boolean, default: false },
-  error: { type: String, default: null },
   // Segments
   segmentStats: { type: Array, default: () => [] },
   activeSegmentIndex: { type: Number, default: 0 },
@@ -288,10 +157,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-  "save",
-  "export",
-  "restoreDraft",
-  "deleteDraft",
   "update:trackName",
   "update:trackDescription",
   "update:trackCategories",
@@ -327,60 +192,12 @@ const emit = defineEmits([
 ]);
 
 const activeTab = ref("segments");
-const showExportMenu = ref(false);
-const exportRef = ref(null);
 
 const tabs = [
   { id: "segments", label: "Segments" },
   { id: "info", label: "Info" },
   { id: "elevation", label: "Elevation" },
 ];
-
-const resolvedTrackName = computed(
-  () => props.trackName?.trim() || "Untitled track"
-);
-
-const distanceDisplay = computed(() => {
-  if (props.totalDistanceKm < 1) {
-    return `${Math.round(props.totalDistanceKm * 1000)} m`;
-  }
-  return `${props.totalDistanceKm.toFixed(2)} km`;
-});
-
-const timeDisplay = computed(() => {
-  const mins = props.estimatedTimeMinutes;
-  if (mins <= 0) return "0 min";
-  if (mins < 60) return `${Math.round(mins)} min`;
-  const hours = Math.floor(mins / 60);
-  const rest = Math.round(mins % 60);
-  return rest > 0 ? `${hours} h ${rest} min` : `${hours} h`;
-});
-
-const showRoutingStatus = computed(() => {
-  if (props.graphLoading) return true;
-  if (!props.graphError) return false;
-  return (
-    props.routingMode === "auto" ||
-    props.manualRoutingPercent > 0 ||
-    props.totalPoints > 1
-  );
-});
-
-function handleExport(format) {
-  showExportMenu.value = false;
-  emit("export", format);
-}
-
-function handleOutsideClick(e) {
-  if (exportRef.value && !exportRef.value.contains(e.target)) {
-    showExportMenu.value = false;
-  }
-}
-
-onMounted(() => document.addEventListener("pointerdown", handleOutsideClick));
-onBeforeUnmount(() =>
-  document.removeEventListener("pointerdown", handleOutsideClick)
-);
 </script>
 
 <style scoped>
@@ -399,235 +216,6 @@ onBeforeUnmount(() =>
   overflow: hidden;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-}
-
-/* ── Header ── */
-.panel-header {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 14px 14px 12px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
-  background: rgba(255, 255, 255, 0.99);
-  min-height: 0;
-}
-
-.panel-track-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.panel-track-name {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.2;
-}
-
-.panel-metrics {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 3px;
-  font-size: 0.72rem;
-  color: #64748b;
-  font-variant-numeric: tabular-nums;
-}
-
-.panel-metrics-sep {
-  color: #cbd5e1;
-}
-
-.panel-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.panel-ghost-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  border-radius: 9px;
-  background: transparent;
-  color: #475569;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background-color 0.12s, border-color 0.12s;
-}
-
-.panel-ghost-btn:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 1);
-  border-color: #93c5fd;
-}
-
-.panel-ghost-btn--active {
-  background: #eff6ff;
-  border-color: #93c5fd;
-  color: #2563eb;
-}
-
-.panel-ghost-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* Export dropdown */
-.panel-export-wrap {
-  position: relative;
-}
-
-.panel-export-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 50;
-  min-width: 110px;
-  padding: 4px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.panel-export-menu button {
-  display: block;
-  width: 100%;
-  padding: 7px 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: #334155;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-}
-
-.panel-export-menu button:hover {
-  background: #f1f5f9;
-}
-
-/* Save button */
-.panel-save-btn {
-  height: 30px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 9px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background-color 0.12s, opacity 0.12s;
-  flex-shrink: 0;
-}
-
-.panel-save-btn:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-
-.panel-save-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* ── Alerts ── */
-.panel-alerts {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
-}
-
-.panel-alert {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 9px 14px;
-  font-size: 0.78rem;
-  line-height: 1.35;
-}
-
-.panel-alert--draft {
-  background: #fffbeb;
-  color: #92400e;
-}
-
-.panel-alert--error {
-  background: #fef2f2;
-  color: #991b1b;
-}
-
-.panel-alert--warning {
-  background: #fff7ed;
-  color: #9a3412;
-}
-
-.panel-alert-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.panel-alert-body strong {
-  font-weight: 700;
-}
-
-.panel-alert-body span {
-  font-size: 0.72rem;
-  opacity: 0.85;
-}
-
-.panel-alert-btns {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.panel-alert-btn {
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: 7px;
-  background: transparent;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  color: inherit;
-  transition: background-color 0.1s;
-}
-
-.panel-alert-btn:hover {
-  background: rgba(0, 0, 0, 0.07);
-}
-
-.panel-alert-btn--primary {
-  background: #d97706;
-  border-color: #d97706;
-  color: #fff;
-}
-
-.panel-alert-btn--primary:hover {
-  background: #b45309;
-  border-color: #b45309;
 }
 
 /* ── Tabs ── */

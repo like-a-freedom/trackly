@@ -22,8 +22,10 @@
   </button>
 </template>
 
-<script setup>
-const emit = defineEmits(["open-search"]);
+<script setup lang="ts">
+const emit = defineEmits<{
+  "open-search": [];
+}>();
 
 const openSearch = () => {
   emit("open-search");

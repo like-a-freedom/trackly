@@ -227,6 +227,38 @@ pub async fn update_user_nickname(
 
     Ok(user)
 }
+
+/// Update a user's display name.
+pub async fn update_user_name(pool: &Arc<PgPool>, user_id: Uuid, name: &str) -> Result<User> {
+    let user: User = sqlx::query_as(
+        r#"
+        UPDATE users
+        SET name = $1, updated_at = NOW()
+        WHERE user_id = $2
+        RETURNING
+            user_id AS id,
+            google_sub,
+            email,
+            name,
+            nickname,
+            avatar_url,
+            roles,
+            created_at,
+            updated_at,
+            last_login_at
+        "#,
+    )
+    .bind(name)
+    .bind(user_id)
+    .fetch_one(&**pool)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::RowNotFound => AppError::NotFound,
+        _ => AppError::from(e),
+    })?;
+
+    Ok(user)
+}
 /// Associate existing anonymous tracks with a user.
 ///
 /// This is used after OAuth login to claim tracks that were created
@@ -406,21 +438,8 @@ pub async fn list_user_tracks(
     limit: i64,
     offset: i64,
 ) -> Result<(Vec<UserTrackSummary>, i64)> {
-    // Build sort clause
-    let sort_column = match sort {
-        Some("name") => "name",
-        Some("length_km") => "length_km",
-        Some("elevation_gain") => "elevation_gain",
-        _ => "created_at",
-    };
-
-    let sort_order = match order {
-        Some("asc") => "ASC",
-        _ => "DESC",
-    };
-
-    // Build dynamic query
-    let query = build_user_tracks_query(sort_column, sort_order);
+    // Build dynamic query (allowlist validation inside)
+    let query = build_user_tracks_query(sort, order);
 
     let tracks: Vec<UserTrackSummary> = sqlx::query_as(&query)
         .bind(user_id)
@@ -439,7 +458,19 @@ pub async fn list_user_tracks(
     Ok((tracks, total))
 }
 
-fn build_user_tracks_query(sort_column: &str, sort_order: &str) -> String {
+fn build_user_tracks_query(sort: Option<&str>, order: Option<&str>) -> String {
+    // Allowlist validation: only these exact values reach the query
+    let sort_column = match sort {
+        Some("name") => "name",
+        Some("length_km") => "length_km",
+        Some("elevation_gain") => "elevation_gain",
+        _ => "created_at",
+    };
+    let sort_order = match order {
+        Some("asc") => "ASC",
+        _ => "DESC",
+    };
+
     format!(
         r#"
         SELECT
@@ -455,11 +486,10 @@ fn build_user_tracks_query(sort_column: &str, sort_order: &str) -> String {
             recorded_at
         FROM tracks
         WHERE user_id = $1
-        ORDER BY {} {}
+        ORDER BY {sort_column} {sort_order}
         LIMIT $2
         OFFSET $3
-        "#,
-        sort_column, sort_order
+        "#
     )
 }
 
@@ -469,19 +499,35 @@ fn build_user_tracks_query(sort_column: &str, sort_order: &str) -> String {
 pub async fn update_track_visibility(
     pool: &Arc<PgPool>,
     track_id: Uuid,
-    user_id: Uuid,
+    user_id: Option<Uuid>,
+    session_id: Option<Uuid>,
     is_public: bool,
 ) -> Result<bool> {
-    let result = sqlx::query(
-        r#"
-        UPDATE tracks
-        SET is_public = $1, updated_at = NOW()
-        WHERE id = $2 AND user_id = $3
-        "#,
-    )
-    .bind(is_public)
-    .bind(track_id)
-    .bind(user_id)
+    let result = match (user_id, session_id) {
+        (Some(uid), _) => sqlx::query(
+            r#"
+                UPDATE tracks
+                SET is_public = $1, updated_at = NOW()
+                WHERE id = $2 AND user_id = $3
+                "#,
+        )
+        .bind(is_public)
+        .bind(track_id)
+        .bind(uid),
+        (None, Some(sid)) => sqlx::query(
+            r#"
+                UPDATE tracks
+                SET is_public = $1, updated_at = NOW()
+                WHERE id = $2 AND session_id = $3
+                "#,
+        )
+        .bind(is_public)
+        .bind(track_id)
+        .bind(sid),
+        (None, None) => {
+            return Ok(false);
+        }
+    }
     .execute(&**pool)
     .await?;
 
@@ -501,9 +547,10 @@ pub async fn update_track_visibility(
         return Err(AppError::Forbidden);
     }
 
+    let user_id_str = user_id.map(|u| u.to_string()).unwrap_or_default();
     tracing::info!(
         track_id = %track_id,
-        user_id = %user_id,
+        user_id = %user_id_str,
         is_public = is_public,
         "Track visibility updated"
     );
@@ -651,7 +698,7 @@ mod tests {
 
     #[test]
     fn test_build_user_tracks_query_casts_elevation_fields() {
-        let query = build_user_tracks_query("created_at", "DESC");
+        let query = build_user_tracks_query(Some("created_at"), Some("DESC"));
 
         assert!(query.contains("elevation_gain::float8"));
         assert!(query.contains("elevation_loss::float8"));

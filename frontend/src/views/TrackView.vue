@@ -130,7 +130,9 @@
   </div>
 </template>
 
-<script setup>
+<!-- eslint-disable vue/block-lang -->
+<script setup lang="ts">
+// @ts-nocheck - Complex Vue component instance types and Leaflet integration
 import { LCircleMarker, LPolyline, LTooltip } from "@vue-leaflet/vue-leaflet";
 import {
   ref,
@@ -161,9 +163,9 @@ import { useSearchStore } from "../stores/search.js";
 import { useTrackViewE2E } from "../composables/useTrackViewE2E";
 import { getSessionId } from "../utils/session";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
-import { isLoopTrack } from "../utils/trackGeometry.js";
-import { extractSegments, calculateBounds } from "../utils/coordinates.js";
-import { getColorForId } from "../utils/trackColors.js";
+import { isLoopTrack } from "../utils/trackGeometry";
+import { extractSegments, calculateBounds } from "../utils/coordinates";
+import { getColorForId } from "../utils/trackColors";
 import { useHead } from "@vueuse/head";
 import {
   buildBoundaryMarkers,
@@ -211,7 +213,15 @@ const shouldAutoPan = computed(() => {
 
 // State
 const loading = ref(true);
-const track = shallowRef(null); // Use shallowRef for better performance
+const track = shallowRef<{
+  id: string;
+  name: string;
+  description?: string;
+  latlngs: number[][];
+  length_km: number;
+  recorded_at?: string;
+  [key: string]: unknown;
+} | null>(null); // Use shallowRef for better performance
 const sessionId = getSessionId();
 const lastFetchZoom = ref(null); // Track last zoom used for fetching to avoid duplicates
 const lastFetchAt = ref(null); // Timestamp of last successful/started fetch for throttling
@@ -545,7 +555,7 @@ const toast = computed(() => ({
     message: toastStore.message,
     type: toastStore.type,
     duration: toastStore.duration
-}));
+}) as { message: string; type: 'info' | 'success' | 'warning' | 'error'; duration: number });
 provide("toast", toast);
 
 async function fetchTrack(
@@ -1077,6 +1087,14 @@ watch(
   },
   { immediate: false }
 );
+
+// Expose internal methods and state for testing
+defineExpose({
+  calculateBounds,
+  track,
+  trackBounds,
+  markerLatLng,
+});
 </script>
 
 <style scoped>

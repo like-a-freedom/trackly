@@ -71,25 +71,39 @@
     </div>
   </div>
 </template>
-<script setup>
+<script setup lang="ts">
 import { toRefs } from 'vue';
-const props = defineProps({
-  visible: Boolean,
-  x: Number,
-  y: Number,
-  data: Object
-});
-const { visible, x, y, data } = toRefs(props);
-
 import { formatDateTime } from '../utils/format';
 import { capitalize } from '../utils/string';
 
+interface TrackData {
+  name?: string;
+  description?: string;
+  length_km?: number;
+  recorded_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  elevation_gain?: number;
+  elevation_dataset?: string;
+  categories?: string[];
+}
+
+interface Props {
+  visible: boolean;
+  x: number;
+  y: number;
+  data: TrackData | null;
+}
+
+const props = defineProps<Props>();
+const { visible, x, y, data } = toRefs(props);
+
 // Format dataset name for display
-function formatDataset(dataset) {
+function formatDataset(dataset: string | undefined): string {
   if (!dataset) return 'Unknown';
-  
+
   // Handle common dataset names
-  const datasetNames = {
+  const datasetNames: Record<string, string> = {
     'original_gpx': 'Original GPX',
     'original': 'Original',
     'aster30m': 'ASTER 30m',
@@ -100,7 +114,7 @@ function formatDataset(dataset) {
     'ned10m': 'NED 10m',
     'open-elevation': 'Open-Elevation'
   };
-  
+
   return datasetNames[dataset] || dataset.charAt(0).toUpperCase() + dataset.slice(1);
 }
 </script>
