@@ -392,7 +392,7 @@ fn compute_geometry_hash(geojson: &serde_json::Value) -> String {
     let bytes = serde_json::to_vec(geojson).unwrap_or_default();
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 /// Validate lat/lon coordinate ranges.
@@ -472,7 +472,7 @@ mod tests {
             let bytes = serde_json::to_vec(&geojson).unwrap();
             let mut hasher = Sha256::new();
             hasher.update(&bytes);
-            format!("{:x}", hasher.finalize())
+            hex::encode(hasher.finalize())
         };
         // Same input should produce same hash
         let svc_hash2 = {
@@ -480,7 +480,7 @@ mod tests {
             let bytes = serde_json::to_vec(&geojson).unwrap();
             let mut hasher = Sha256::new();
             hasher.update(&bytes);
-            format!("{:x}", hasher.finalize())
+            hex::encode(hasher.finalize())
         };
         assert_eq!(svc_hash, svc_hash2);
         assert!(!svc_hash.is_empty());

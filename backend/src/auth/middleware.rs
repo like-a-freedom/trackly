@@ -110,11 +110,6 @@ impl OptionalAuthUser {
     pub fn user_id(&self) -> Option<Uuid> {
         self.0.as_ref().map(|u| u.user_id)
     }
-
-    /// Check if the user is authenticated.
-    pub fn is_authenticated(&self) -> bool {
-        self.0.is_some()
-    }
 }
 
 impl<S> FromRequestParts<S> for OptionalAuthUser

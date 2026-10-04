@@ -40,7 +40,9 @@ export function useTrackList(options: UseTrackListOptions = {}): TrackListState 
   const offset = ref(0);
 
   async function fetchTracks(currentOffset: number): Promise<TrackListResponse> {
-    const response = await http.get(`/api/users/me/tracks?offset=${currentOffset}&limit=${limit}`);
+    const response = await http(`/api/users/me/tracks?offset=${currentOffset}&limit=${limit}`, {
+      method: 'GET',
+    });
     if (!response.ok) {
       throw new Error(`Failed to load tracks: ${response.status}`);
     }
@@ -84,7 +86,11 @@ export function useTrackList(options: UseTrackListOptions = {}): TrackListState 
 
   async function toggleVisibility(trackId: string, isPublic: boolean): Promise<void> {
     try {
-      const response = await http.patch(`/api/tracks/${trackId}`, { is_public: isPublic });
+      const response = await http(`/api/tracks/${trackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_public: isPublic }),
+      });
       if (response.ok) {
         const track = tracks.value.find((t) => t.id === trackId);
         if (track) {

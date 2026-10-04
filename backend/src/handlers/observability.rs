@@ -56,10 +56,10 @@ pub async fn get_feature_flags() -> Json<FeatureFlagsResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
+    use tokio::sync::Mutex;
 
     // Serialize tests that mutate the FEATURE_EDITOR env var to avoid races.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    static ENV_LOCK: Mutex<()> = Mutex::const_new(());
 
     #[test]
     fn bucket_zoom_level_partitions() {
@@ -71,7 +71,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_feature_flags_returns_defaults() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.lock().await;
         unsafe { std::env::remove_var("FEATURE_EDITOR") };
         let response = get_feature_flags().await;
         let body = response.0;
@@ -83,7 +83,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_feature_flags_respects_editor_env() {
-        let _guard = ENV_LOCK.lock().unwrap();
+        let _guard = ENV_LOCK.lock().await;
         unsafe { std::env::set_var("FEATURE_EDITOR", "false") };
         let response = get_feature_flags().await;
         assert!(

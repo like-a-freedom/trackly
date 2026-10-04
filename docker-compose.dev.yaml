@@ -3,7 +3,7 @@ services:
   db:
     platform: linux/amd64
     container_name: trackly_db
-    image: imresamu/postgis:alpine
+    image: imresamu/postgis:17-3.6.1-alpine3.22
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-trackly}

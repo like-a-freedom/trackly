@@ -1,0 +1,11 @@
+node_modules
+dist
+.wasm
+wasm/fast_paths_wasm/target
+.git
+.github
+*.log
+e2e
+coverage
+.env
+.env.*

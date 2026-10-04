@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:slim AS builder
+FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.99.0-slim-trixie AS builder
 RUN apt update && apt install -y --no-install-recommends \
     musl-tools musl-dev clang llvm perl cmake libc6-dev \
     pkg-config \

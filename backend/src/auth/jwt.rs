@@ -126,8 +126,6 @@ pub fn validate_access_token(token: &str) -> Result<Claims, AuthError> {
     Ok(token_data.claims)
 }
 
-/// Extract user_id from a validated JWT token string.
-
 #[cfg(test)]
 mod tests {
     use super::*;

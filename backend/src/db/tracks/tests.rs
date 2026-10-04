@@ -1,6 +1,5 @@
 use super::*;
 use crate::error::AppError;
-use crate::models::TrackGeoJsonQuery;
 use serde_json::json;
 
 #[test]
@@ -19,7 +18,8 @@ fn list_tracks_query_uses_binds_for_filters() {
     };
 
     let builder = build_list_tracks_query(&params);
-    let sql = builder.sql().to_string();
+    let query = builder.sql();
+    let sql = query.as_str();
 
     // Expect placeholders rather than inlined user input
     assert!(sql.contains("$1"));
@@ -189,7 +189,6 @@ async fn test_update_track_categories_handler_owner_check() {
     use crate::models::UpdateTrackCategoriesRequest as Req;
     use axum::Json;
     use axum::extract::{Path, State};
-    use axum::http::StatusCode;
     use sqlx::postgres::PgPoolOptions;
     use std::sync::Arc;
     use uuid::Uuid;
@@ -294,7 +293,6 @@ async fn test_update_track_categories_empty_rejected() {
     use crate::models::UpdateTrackCategoriesRequest as Req;
     use axum::Json;
     use axum::extract::{Path, State};
-    use axum::http::StatusCode;
     use sqlx::postgres::PgPoolOptions;
     use std::sync::Arc;
     use uuid::Uuid;

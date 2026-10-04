@@ -48,7 +48,11 @@ export function useNicknameEdit(currentNickname: Ref<string | null>): NicknameEd
     error.value = null;
 
     try {
-      const response = await http.patch('/api/users/me/profile', { nickname });
+      const response = await http('/api/users/me/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname }),
+      });
       if (response.ok) {
         currentNickname.value = nickname;
         close();

@@ -936,14 +936,6 @@ pub async fn serve_metrics() -> impl IntoResponse {
         .unwrap()
 }
 
-pub fn record_track_upload_failure(reason: &str) {
-    TRACK_UPLOAD_FAILURES.with_label_values(&[reason]).inc();
-}
-
-pub fn record_track_uploaded(source: &str) {
-    TRACKS_UPLOADED_TOTAL.with_label_values(&[source]).inc();
-}
-
 pub fn record_track_deduplicated(reason: &str) {
     TRACKS_DEDUPLICATED_TOTAL.with_label_values(&[reason]).inc();
 }
@@ -967,23 +959,6 @@ pub fn record_track_category_edit(action: &str) {
 pub fn record_track_category_edit_by_category(action: &str, category: &str) {
     TRACK_CATEGORY_EDITS_BY_CATEGORY
         .with_label_values(&[action, category])
-        .inc();
-}
-
-pub fn record_track_view(ownership: &str, referrer: &str) {
-    let ownership_label = match ownership {
-        "own" => "own",
-        "public" => "public",
-        _ => "unknown",
-    };
-    let referrer_label = match referrer {
-        "direct" => "direct",
-        "search" => "search",
-        "link" => "link",
-        _ => "direct",
-    };
-    TRACK_VIEWS_TOTAL
-        .with_label_values(&[ownership_label, referrer_label])
         .inc();
 }
 
@@ -1046,7 +1021,7 @@ fn hash_session_id(session_id: &Uuid) -> String {
     let mut hasher = Sha256::new();
     hasher.update(session_id.as_bytes());
     let digest = hasher.finalize();
-    let hex = format!("{:x}", digest);
+    let hex = hex::encode(digest);
     hex.chars().take(16).collect()
 }
 

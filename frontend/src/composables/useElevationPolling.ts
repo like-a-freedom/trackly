@@ -36,7 +36,7 @@ export function useElevationPolling(): ElevationPollingState {
     if (!currentTrackId) return;
 
     try {
-      const response = await http.get(`/api/tracks/${currentTrackId}`);
+      const response = await http(`/api/tracks/${currentTrackId}`, { method: 'GET' });
       if (!response.ok) return;
 
       const data = await response.json();

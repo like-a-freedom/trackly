@@ -19,8 +19,8 @@ use tracing::info;
 fn extract_coordinates(e: &BytesStart) -> (Option<f64>, Option<f64>) {
     let lat = e.attributes().find_map(|a| {
         a.ok().and_then(|attr| {
-            if attr.key.as_ref() == b"lat" {
-                std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
+            if attr.key.as_ref() == "lat" {
+                attr.value.parse::<f64>().ok()
             } else {
                 None
             }
@@ -28,8 +28,8 @@ fn extract_coordinates(e: &BytesStart) -> (Option<f64>, Option<f64>) {
     });
     let lon = e.attributes().find_map(|a| {
         a.ok().and_then(|attr| {
-            if attr.key.as_ref() == b"lon" {
-                std::str::from_utf8(&attr.value).ok()?.parse::<f64>().ok()
+            if attr.key.as_ref() == "lon" {
+                attr.value.parse::<f64>().ok()
             } else {
                 None
             }
@@ -42,7 +42,7 @@ fn extract_coordinates(e: &BytesStart) -> (Option<f64>, Option<f64>) {
 fn calculate_hash(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 /// Fast minimal GPX data for duplicate checking
@@ -77,7 +77,7 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let tag = e.name().as_ref().to_owned();
                 let tag_stripped = tag.split(':').next_back().unwrap_or(&tag);
                 element_stack.push(tag_stripped.to_string());
 
@@ -107,7 +107,7 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
                         && target.as_str() == "metadata_time"
                         && !found_metadata_time
                     {
-                        let text = std::str::from_utf8(&e).unwrap_or_default();
+                        let text = e.as_ref();
                         recorded_at = Some(text.to_string());
                         found_metadata_time = true;
                     }
@@ -116,7 +116,7 @@ pub fn parse_gpx_minimal(bytes: &[u8]) -> Result<MinimalGpxData, String> {
                 }
             }
             Ok(Event::End(ref e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let tag = e.name().as_ref().to_owned();
                 let tag_stripped = tag.split(':').next_back().unwrap_or(&tag);
                 if let Some(last) = element_stack.pop() {
                     // Defensive: ensure stack matches
@@ -220,7 +220,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let tag = e.name().as_ref().to_owned();
                 let tag_stripped = tag.split(':').next_back().unwrap_or(&tag);
                 element_stack.push(tag_stripped.to_string());
                 match tag_stripped {
@@ -327,32 +327,32 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                     if let Some(target) = &text_target {
                         match target.as_str() {
                             "ele" => {
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 ele = text.parse::<f64>().ok();
                             }
                             "hr" => {
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 hr = text.parse::<i32>().ok();
                             }
                             "temp" => {
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 temp = text.parse::<f64>().ok();
                             }
                             "metadata_time" => {
                                 if !found_metadata_time {
-                                    let text = std::str::from_utf8(&e).unwrap_or_default();
+                                    let text = e.as_ref();
                                     recorded_at = Some(text.to_string());
                                     found_metadata_time = true;
                                 }
                             }
                             "point_time" => {
                                 // Capture time for individual points
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 point_time = Some(text.to_string());
                             }
                             "trkpt_time" => {
                                 // Use as both point time and fallback recorded_at
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 let time_str = text.to_string();
                                 point_time = Some(time_str.clone());
                                 if recorded_at.is_none() && !found_metadata_time {
@@ -360,19 +360,19 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                                 }
                             }
                             "wpt_name" => {
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 wpt_name = Some(text.to_string());
                             }
                             "wpt_desc" => {
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 wpt_desc = Some(text.to_string());
                             }
                             "wpt_type" => {
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 wpt_type = Some(text.to_string());
                             }
                             "wpt_sym" => {
-                                let text = std::str::from_utf8(&e).unwrap_or_default();
+                                let text = e.as_ref();
                                 wpt_sym = Some(text.to_string());
                             }
                             _ => {}
@@ -383,7 +383,7 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
                 }
             }
             Ok(Event::End(ref e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let tag = e.name().as_ref().to_owned();
                 let tag_stripped = tag.split(':').next_back().unwrap_or(&tag);
                 if let Some(last) = element_stack.pop() {
                     // Defensive: ensure stack matches

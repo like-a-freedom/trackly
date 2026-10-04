@@ -50,8 +50,10 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
 
     bulkOperating.value = true;
     try {
-      const response = await http.patch('/api/users/me/tracks/visibility', {
-        track_ids: selectedIds.value,
+      const response = await http('/api/users/me/tracks/visibility', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ track_ids: selectedIds.value }),
       });
       if (response.ok) {
         const data: { is_public: boolean } = await response.json();
@@ -82,7 +84,9 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
 
     bulkOperating.value = true;
     try {
-      const response = await http.delete('/api/users/me/tracks', {
+      const response = await http('/api/users/me/tracks', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ track_ids: selectedIds.value }),
       });
       if (response.ok) {

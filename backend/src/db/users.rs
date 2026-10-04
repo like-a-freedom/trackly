@@ -441,7 +441,11 @@ pub async fn list_user_tracks(
     // Build dynamic query (allowlist validation inside)
     let query = build_user_tracks_query(sort, order);
 
-    let tracks: Vec<UserTrackSummary> = sqlx::query_as(&query)
+    // SAFETY: `build_user_tracks_query` interpolates only allowlisted literals
+    // (see the match arms above); all caller-supplied values are bound as $1-$3.
+    let query = sqlx::AssertSqlSafe(query);
+
+    let tracks: Vec<UserTrackSummary> = sqlx::query_as::<_, UserTrackSummary>(query)
         .bind(user_id)
         .bind(limit)
         .bind(offset)

@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, type Ref } from 'vue';
 
 interface TooltipState {
   activeTooltipId: Ref<string | null>;

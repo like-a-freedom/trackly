@@ -9,9 +9,9 @@ use uuid::Uuid;
 /// Append shared ownership and attribute filter WHERE clauses to a query builder.
 ///
 /// `col_prefix` is used for table-qualified column names (e.g. `"t."` for heatmap queries).
-pub fn build_track_filter_sql<'a>(
-    qb: &mut QueryBuilder<'a, Postgres>,
-    filters: &'a dyn crate::models::TrackFilterParams,
+pub fn build_track_filter_sql(
+    qb: &mut QueryBuilder<Postgres>,
+    filters: &dyn crate::models::TrackFilterParams,
     col_prefix: &str,
 ) {
     // Determine ownership filter based on parameters
@@ -80,7 +80,7 @@ pub fn build_track_filter_sql<'a>(
 
 pub fn build_list_tracks_query(
     params: &dyn crate::models::TrackFilterParams,
-) -> QueryBuilder<'_, Postgres> {
+) -> QueryBuilder<Postgres> {
     let mut builder = QueryBuilder::<Postgres>::new(
         "SELECT id, name, categories, length_km, elevation_gain, elevation_loss, elevation_enriched, slope_min, slope_max, slope_avg FROM tracks",
     );

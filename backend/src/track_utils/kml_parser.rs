@@ -308,7 +308,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let hash = {
         let mut hasher = sha2::Sha256::new();
         hasher.update(bytes);
-        format!("{:x}", hasher.finalize())
+        hex::encode(hasher.finalize())
     };
 
     let _final_elevation_gain = if !points.is_empty() {

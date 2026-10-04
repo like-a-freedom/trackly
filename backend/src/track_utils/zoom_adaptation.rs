@@ -98,18 +98,6 @@ impl SimplificationParams {
     pub fn should_simplify(&self, original_points: usize) -> bool {
         self.tolerance_meters > 0.0 || original_points > self.max_points
     }
-
-    /// Get effective tolerance, adjusting for point count if needed
-    pub fn effective_tolerance(&self, original_points: usize) -> f64 {
-        if original_points > self.max_points && self.tolerance_meters == 0.0 {
-            // If we have no base tolerance but too many points,
-            // calculate minimum tolerance needed
-            let ratio = original_points as f64 / self.max_points as f64;
-            5.0 * ratio.ln() // Logarithmic scaling
-        } else {
-            self.tolerance_meters
-        }
-    }
 }
 
 #[cfg(test)]

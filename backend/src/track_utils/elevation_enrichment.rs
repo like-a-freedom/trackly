@@ -191,12 +191,6 @@ impl ElevationEnrichmentService {
         }
     }
 
-    /// Set the database connection pool for API usage tracking
-    pub fn with_pool(mut self, pool: Arc<PgPool>) -> Self {
-        self.pool = Some(pool);
-        self
-    }
-
     /// Check if daily API limit is exceeded
     async fn is_daily_limit_exceeded(&self) -> Result<bool> {
         if let Some(pool) = &self.pool {
