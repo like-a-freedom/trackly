@@ -165,13 +165,13 @@ function goToAccount() {
   cursor: not-allowed;
 }
 
-/* Mobile adjustments to match other buttons */
-@media (max-width: 640px) {
+/* Touch sizing keys on the input mode, not the viewport — a touch iPad is
+   768px wide and still needs 44px targets. */
+@media (max-width: 640px), (pointer: coarse) {
   .login-button {
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    /* Solid background for better visibility */
     background: #ffffff;
     backdrop-filter: none;
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -182,20 +182,10 @@ function goToAccount() {
     width: 22px;
     height: 22px;
   }
-}
 
-/* Safari-specific mobile fixes */
-@supports (-webkit-appearance: none) {
-  @media (max-width: 640px) {
-    .login-button {
-      background: #ffffff !important;
-      backdrop-filter: none !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-      transform: translate3d(0, 0, 0);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-    }
+  .user-button {
+    width: 44px;
+    height: 44px;
   }
 }
 
@@ -232,8 +222,8 @@ function goToAccount() {
 }
 
 .user-button:hover {
-  border-color: #3498db;
-  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
 }
 
 .user-avatar {

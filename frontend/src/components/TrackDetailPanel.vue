@@ -3755,6 +3755,22 @@ defineExpose({
     }
   }
 }
+
+/* Touch targets. The panel's icon buttons render at 28x28 for density, which
+   is a cursor target. On touch the hit area grows to 44x44 while the icon
+   stays the same size, so the visual weight does not change. */
+@media (max-width: 640px), (pointer: coarse) {
+  .close-button,
+  .share-track-btn,
+  .export-gpx-btn,
+  .collapse-toggle-btn,
+  .delete-track-btn,
+  .edit-track-geometry-btn,
+  .panel-controls-tab {
+    min-width: 44px;
+    height: 44px;
+  }
+}
 </style>
 
 <style>
@@ -3791,5 +3807,16 @@ defineExpose({
   margin: 0 !important;
   margin-left: 0 !important;
   margin-right: auto !important;
+}
+
+/* Touch targets for the toggles that live in this unscoped block. The scoped
+   rule above cannot reach them because StatisticsPanel renders its own root
+   and so carries a different scope id. */
+@media (max-width: 640px), (pointer: coarse) {
+  .unit-toggle,
+  .chart-toggle {
+    min-height: 44px;
+    padding: 0 14px;
+  }
 }
 </style>

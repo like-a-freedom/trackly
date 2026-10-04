@@ -23,6 +23,14 @@ async fn main() {
     // dotenvy will silently ignore if no .env file exists.
     dotenvy::dotenv().ok();
 
+    // The container healthcheck runs `/app/backend --health-check`. Without
+    // this branch the flag was ignored and the probe booted a second full
+    // server, which then failed to bind :8080 and reported the container
+    // unhealthy even though the real server was serving fine.
+    if std::env::args().any(|a| a == "--health-check") {
+        std::process::exit(run_health_check().await);
+    }
+
     logging::init();
 
     // Log whether authentication is configured (helpful in local dev)
@@ -254,5 +262,108 @@ async fn main() {
     if let Err(e) = axum::serve(listener, app.into_make_service()).await {
         eprintln!("Server error: {e}");
         std::process::exit(1);
+    }
+}
+
+/// Probe used by the container healthcheck.
+///
+/// It verifies that the database is actually reachable and answerable rather
+/// than merely that the process is alive, and it does so without binding the
+/// HTTP port. Prints a short line for the Docker log and returns a process
+/// exit code.
+async fn run_health_check() -> i32 {
+    let db_url = match std::env::var("DATABASE_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            eprintln!("health: DATABASE_URL is not set");
+            return 1;
+        }
+    };
+
+    let timeout = std::time::Duration::from_secs(5);
+
+    let probe = async {
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(timeout)
+            .connect(&db_url)
+            .await?;
+        let name: String = sqlx::query_scalar("SELECT current_database()")
+            .fetch_one(&pool)
+            .await?;
+        Ok::<_, sqlx::Error>(name)
+    };
+
+    match tokio::time::timeout(timeout, probe).await {
+        Ok(Ok(name)) => {
+            println!("health: ok (database {name})");
+            0
+        }
+        Ok(Err(e)) => {
+            // Keep the driver's message: it is written to the container log,
+            // not to a user-facing surface, and it names the real cause.
+            eprintln!("health: database query failed: {e}");
+            1
+        }
+        Err(_) => {
+            eprintln!("health: database query timed out after {timeout:?}");
+            1
+        }
+    }
+}
+
+#[cfg(test)]
+mod health_check_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn missing_database_url_fails_fast() {
+        // Guards the branch that must never fall through to a success exit:
+        // an unset DATABASE_URL has to be a failure, not a healthy probe.
+        let previous = std::env::var("DATABASE_URL").ok();
+        // SAFETY: single-threaded test process; the variable is restored below.
+        unsafe { std::env::remove_var("DATABASE_URL") };
+
+        let code = run_health_check().await;
+
+        if let Some(value) = previous {
+            // SAFETY: see above.
+            unsafe { std::env::set_var("DATABASE_URL", value) };
+        }
+        assert_eq!(
+            code, 1,
+            "a probe without DATABASE_URL must report unhealthy"
+        );
+    }
+
+    #[tokio::test]
+    async fn unreachable_database_reports_failure() {
+        // Port 1 on loopback refuses connections, so the probe must fail
+        // rather than hang or exit zero.
+        let code = with_database_url(
+            "postgres://trackly:trackly@127.0.0.1:1/trackly",
+            run_health_check(),
+        )
+        .await;
+        assert_eq!(code, 1, "an unreachable database must report unhealthy");
+    }
+
+    /// Run `fut` with DATABASE_URL temporarily set to `url`.
+    async fn with_database_url<F: std::future::Future<Output = i32>>(url: &str, fut: F) -> i32 {
+        let previous = std::env::var("DATABASE_URL").ok();
+        // SAFETY: single-threaded test process; restored immediately after.
+        unsafe { std::env::set_var("DATABASE_URL", url) };
+        let code = fut.await;
+        match previous {
+            Some(value) => {
+                // SAFETY: see above.
+                unsafe { std::env::set_var("DATABASE_URL", value) };
+            }
+            None => {
+                // SAFETY: see above.
+                unsafe { std::env::remove_var("DATABASE_URL") };
+            }
+        }
+        code
     }
 }

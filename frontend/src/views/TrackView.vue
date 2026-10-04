@@ -96,9 +96,9 @@
       </LCircleMarker>
 
       <Toast
-        :message="(toast.value && toast.value.message) || ''"
-        :type="(toast.value && toast.value.type) || 'info'"
-        :duration="(toast.value && toast.value.duration) || 3000"
+        :message="toast.message"
+        :type="toast.type"
+        :duration="toast.duration"
       />
       <TrackDetailPanel
         v-if="track"

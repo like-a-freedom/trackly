@@ -279,24 +279,30 @@ onUnmounted(() => {
   border-radius: 50%;
 }
 
+/* Cluster counts are read against each other across the map, so the digits
+   must be tabular — proportional figures make 8 and 11 different widths and
+   the column of counts stops scanning. */
 .poi-cluster-small {
   background-color: rgba(255, 107, 107, 0.9);
-  font-size: 10px;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .poi-cluster-medium {
   background-color: rgba(255, 80, 80, 0.9);
-  font-size: 12px;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .poi-cluster-large {
   background-color: rgba(220, 53, 53, 0.9);
-  font-size: 14px;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
 }
 
 .poi-tooltip {
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .poi-tooltip .poi-category {

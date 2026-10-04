@@ -27,6 +27,32 @@ pub struct UploadRequest {
     pub file_bytes: Bytes,
 }
 
+/// Resolve the track's display name.
+///
+/// A supplied name wins. Otherwise fall back to the file name with its
+/// extension removed — "KOFA Routes.gpx" becomes "KOFA Routes" — because the
+/// name is shown as the track's identity in the UI, not as a file reference.
+fn derive_track_name(supplied: Option<&str>, file_name: &str) -> String {
+    if let Some(name) = supplied.map(sanitize_input).filter(|n| !n.is_empty()) {
+        return name;
+    }
+
+    // Only strip the extension when something remains in front of it:
+    // ".gpx" is a dotfile with no stem, so rsplit_once yields an empty stem
+    // and the whole name is the better answer than nothing at all.
+    let stem = match file_name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => stem,
+        _ => file_name,
+    };
+
+    let derived = sanitize_input(stem);
+    if derived.is_empty() {
+        "Unnamed track".to_string()
+    } else {
+        derived
+    }
+}
+
 #[tracing::instrument(skip(pool, request), fields(endpoint = "upload_track_service", file_name = %request.file_name))]
 pub async fn upload(pool: &Arc<PgPool>, request: UploadRequest) -> Result<TrackUploadResponse> {
     let pipeline_start = Instant::now();
@@ -37,12 +63,7 @@ pub async fn upload(pool: &Arc<PgPool>, request: UploadRequest) -> Result<TrackU
     let parsed_data = parse_and_check_duplicates(pool, &request.file_bytes, &extension).await?;
 
     let track_id = Uuid::new_v4();
-    let sanitized_name = request
-        .name
-        .as_ref()
-        .map(|n| sanitize_input(n))
-        .or_else(|| Some(sanitize_input(&request.file_name)))
-        .unwrap_or_else(|| "Unnamed track".to_string());
+    let sanitized_name = derive_track_name(request.name.as_deref(), &request.file_name);
     let sanitized_description = request.description.as_ref().map(|d| sanitize_input(d));
     let sanitized_categories: Vec<String> = request
         .categories
@@ -365,5 +386,38 @@ mod tests {
             file_name: "test.gpx".into(),
             file_bytes: Bytes::from_static(b"<gpx></gpx>"),
         };
+    }
+
+    #[test]
+    fn supplied_name_wins() {
+        assert_eq!(
+            derive_track_name(Some("Morning Run"), "whatever.gpx"),
+            "Morning Run"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_file_name_without_extension() {
+        assert_eq!(
+            derive_track_name(None, "KOFA Routes Nov 25 2023.gpx"),
+            "KOFA Routes Nov 25 2023"
+        );
+        assert_eq!(derive_track_name(None, "ride.kml"), "ride");
+        assert_eq!(derive_track_name(None, "track.geojson"), "track");
+    }
+
+    #[test]
+    fn empty_or_blank_supplied_name_falls_back() {
+        assert_eq!(derive_track_name(Some(""), "fallback.gpx"), "fallback");
+        assert_eq!(derive_track_name(Some("   "), "fallback.gpx"), "fallback");
+    }
+
+    #[test]
+    fn degenerate_file_names_do_not_produce_empty_titles() {
+        assert_eq!(derive_track_name(None, ""), "Unnamed track");
+        // ".gpx" has no stem, so the whole name is kept rather than
+        // collapsing to nothing.
+        assert_eq!(derive_track_name(None, ".gpx"), ".gpx");
+        assert_eq!(derive_track_name(None, "no-extension"), "no-extension");
     }
 }

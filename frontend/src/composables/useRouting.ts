@@ -314,6 +314,28 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
     /** Graph download progress (0-100). */
     const graphProgress: Ref<number> = ref(0);
 
+    /**
+     * Turn a graph load failure into copy a user can act on.
+     *
+     * The thrown value is usually a module-resolution or fetch failure whose
+     * message is a URL or a stack frame. Showing it verbatim puts debugging
+     * noise in the status bar, so each shape maps to one plain sentence and
+     * anything unrecognised falls back to a general message.
+     */
+    function describeGraphError(e: unknown): string {
+        const raw = e instanceof Error ? e.message : String(e ?? '');
+        if (/dynamically imported module|Failed to fetch|Importing a module script failed/i.test(raw)) {
+            return 'Routing data is missing. Reload to try again, or draw the route manually.';
+        }
+        if (/out of memory|allocation/i.test(raw)) {
+            return 'Not enough memory to load routing data. Draw the route manually.';
+        }
+        if (!raw) {
+            return 'Routing is currently unavailable';
+        }
+        return 'Routing is currently unavailable. Draw the route manually.';
+    }
+
     /** Last routing timing metrics. */
     const lastRouteMetrics: Ref<RouteMetrics> = ref({ snapMs: 0, routeMs: 0, totalMs: 0 });
 
@@ -361,7 +383,11 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
             graphProgress.value = 100;
         } catch (e: unknown) {
             graphReady.value = false;
-            graphError.value = e instanceof Error ? e.message : 'Failed to load routing graph';
+            // Never surface the raw JS message. A failed dynamic import of the
+            // WASM bundle reads as "Failed to fetch dynamically imported
+            // module: http://localhost:81/wasm/fast_paths_wasm.js?import",
+            // which tells the user nothing they can act on.
+            graphError.value = describeGraphError(e);
             graphProgress.value = 0;
         } finally {
             graphLoading.value = false;

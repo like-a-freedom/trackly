@@ -260,7 +260,7 @@ describe('GeolocationButton.vue', () => {
             expect(wrapper.emitted('location-found')).toBeTruthy();
             expect(wrapper.emitted('location-found')![0]).toEqual([
                 {
-                    error: 'Location access denied by user'
+                    error: 'Location access is off for this site'
                 }
             ]);
         });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { nextTick, computed, defineComponent, h, onMounted, ref } from 'vue';
 import ToastNotification from '../ToastNotification.vue';
 
 describe('ToastNotification', () => {
@@ -100,5 +100,89 @@ describe('ToastNotification', () => {
         await nextTick();
         const toast = wrapper.find('.toast');
         expect(toast.exists()).toBe(true);
+    });
+
+    it('should apply warning class', async () => {
+        const wrapper = mount(ToastNotification, {
+            props: { message: '', type: 'warning', duration: 3000 },
+        });
+        await wrapper.setProps({ message: 'Heads up' });
+        await nextTick();
+        expect(wrapper.find('.toast').classes()).toContain('warning');
+    });
+
+    it('announces politely and names its dismiss control', async () => {
+        const wrapper = mount(ToastNotification, {
+            props: { message: '', type: 'error', duration: 3000 },
+        });
+        await wrapper.setProps({ message: 'Upload failed' });
+        await nextTick();
+        expect(wrapper.attributes('role')).toBe('status');
+        expect(wrapper.attributes('aria-live')).toBe('polite');
+        expect(wrapper.find('.toast-close').attributes('aria-label')).toBe('Dismiss notification');
+    });
+
+    it('hides when the user dismisses it', async () => {
+        const wrapper = mount(ToastNotification, {
+            props: { message: '', type: 'success', duration: 100000 },
+        });
+        await wrapper.setProps({ message: 'Track uploaded successfully!' });
+        await nextTick();
+        expect(wrapper.find('.toast').exists()).toBe(true);
+        await wrapper.find('.toast-close').trigger('click');
+        expect(wrapper.find('.toast').exists()).toBe(false);
+    });
+});
+
+/**
+ * Regression guard for a real defect on the home surface: HomeView and
+ * TrackView bound the toast props as `toast.value && toast.value.message`.
+ * A template auto-unwraps a top-level ref, so `toast.value` was always
+ * `undefined` and the message never reached this component — no toast ever
+ * appeared. Reading the unwrapped computed is what renders.
+ */
+describe('ToastNotification host binding', () => {
+    const makeHost = (readUnwrapped: boolean) =>
+        defineComponent({
+            components: { ToastNotification },
+            setup() {
+                const store = ref({ message: '', type: 'info', duration: 3000 });
+                const toast = computed(() => store.value);
+                onMounted(() => {
+                    store.value = {
+                        message: 'Track uploaded successfully!',
+                        type: 'success',
+                        duration: 3000,
+                    };
+                });
+                return { toast, store };
+            },
+            render() {
+                const t = this.toast as unknown as Record<string, string | number>;
+                // When readUnwrapped is false the template shape is simulated:
+                // Vue would have unwrapped the ref already, so `.value` is
+                // undefined and the message arrives empty.
+                const message = readUnwrapped
+                    ? (t.message as string)
+                    : ((t as { value?: { message: string } }).value?.message ?? '');
+                return h(ToastNotification, {
+                    message,
+                    type: 'success',
+                    duration: 3000,
+                });
+            },
+        });
+
+    it('renders nothing when read as toast.value (the original defect)', async () => {
+        const wrapper = mount(makeHost(false));
+        await new Promise((r) => setTimeout(r, 40));
+        expect(wrapper.find('.toast').exists()).toBe(false);
+    });
+
+    it('renders the message when read as the unwrapped computed', async () => {
+        const wrapper = mount(makeHost(true));
+        await new Promise((r) => setTimeout(r, 40));
+        expect(wrapper.find('.toast').exists()).toBe(true);
+        expect(wrapper.text()).toContain('Track uploaded successfully!');
     });
 });

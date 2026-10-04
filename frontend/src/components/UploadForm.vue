@@ -364,17 +364,19 @@ async function copyTrackUrl() {
   box-shadow: none;
 }
 .upload-label {
-  font-size: 15px;
-  margin-bottom: 2px;
-  color: #222;
+  font-size: var(--text-xs);
+  margin-bottom: 4px;
+  color: #555;
   cursor: pointer;
-  font-weight: 400;
+  font-weight: var(--weight-medium);
   padding: 0 2px;
-  line-height: 1.3;
+  line-height: var(--leading-snug);
 }
 .upload-input {
-  font-size: 14px;
-  padding: 3px 2px;
+  /* 16px minimum: anything smaller makes iOS Safari zoom the viewport on
+     focus, which breaks the bottom-anchored form out of the screen. */
+  font-size: 1rem;
+  padding: 6px 8px;
   border: 1px solid #d0d0d0;
   border-radius: 4px;
   background: #fafbfc;
@@ -382,23 +384,26 @@ async function copyTrackUrl() {
 }
 .upload-btn {
   margin-top: 4px;
-  padding: 7px 0;
-  background: linear-gradient(90deg, #1976d2 60%, #2196f3 100%);
+  padding: 8px 0;
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 4px;
-  font-size: 14px;
-  font-weight: 400;
+  font-size: 1rem;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: background 0.2s;
   box-shadow: 0 1px 4px rgba(25, 118, 210, 0.08);
+}
+.upload-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 .upload-btn:disabled {
   background: #b0b0b0;
   cursor: not-allowed;
 }
 .drop-area {
-  border: 2px dashed #1976d2;
+  border: 2px dashed var(--accent);
   border-radius: 6px;
   padding: 12px 4px;
   text-align: center;
@@ -410,13 +415,13 @@ async function copyTrackUrl() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
   color: #222;
-  font-weight: 400;
-  line-height: 1.3;
+  font-weight: var(--weight-normal);
 }
 .drop-area.drag-active {
-  border-color: #2196f3;
+  border-color: var(--accent);
   background: #e3f2fd;
 }
 .upload-label input[type="file"] {
@@ -428,7 +433,8 @@ async function copyTrackUrl() {
   padding: 6px 8px;
   border: 1px solid #d0d0d0;
   border-radius: 4px;
-  font-size: 14px;
+  /* 16px for the same iOS zoom reason as .upload-input */
+  font-size: 1rem;
 }
 .track-category-select {
   margin-bottom: 6px;
@@ -436,9 +442,10 @@ async function copyTrackUrl() {
   --ms-tag-bg: #10B981;
   --ms-tag-color: #fff;
   --ms-tag-radius: 4px;
-  --ms-tag-font-size: 0.87rem;
+  --ms-tag-font-size: 0.8125rem;
   --ms-tag-font-weight: 600;
-  font-size: 0.87rem;
+  /* 16px: this is a form field, and iOS Safari zooms below that */
+  font-size: 1rem;
   padding: 0;
   border: none;
   border-radius: 4px;
@@ -451,15 +458,17 @@ async function copyTrackUrl() {
   align-items: center;
   gap: 8px;
   background: #fff4f4;
-  color: #c00;
+  color: var(--danger);
   border: 1px solid #f3bcbc;
   border-radius: 5px;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
   margin-bottom: 2px;
   margin-top: 2px;
   min-height: 32px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
+  text-wrap: pretty;
   box-shadow: 0 1px 2px rgba(200,0,0,0.04);
 }
 
@@ -480,11 +489,13 @@ async function copyTrackUrl() {
   border: 1px solid #d9f0e0;
   border-radius: 5px;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
   margin-top: 2px;
   margin-bottom: 2px;
   min-height: 32px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
+  text-wrap: pretty;
   box-shadow: 0 1px 2px rgba(21,122,58,0.04);
 }
 
@@ -496,7 +507,7 @@ async function copyTrackUrl() {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 .track-link-btn {
   background: #16a34a;
@@ -504,8 +515,8 @@ async function copyTrackUrl() {
   border: none;
   border-radius: 4px;
   padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: background 0.15s ease;
   text-decoration: none;

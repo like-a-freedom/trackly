@@ -1,11 +1,13 @@
-/* Track clustering styles */
+/* Cluster counts are read as a column across the map, so they use tabular
+   figures and step with the scale rather than with the circle diameter. */
 .track-cluster {
   background-color: rgba(181, 226, 140, 0.6);
   border: 1px solid rgba(181, 226, 140, 0.8);
   border-radius: 50%;
   text-align: center;
   color: #1a1a1a;
-  font-weight: bold;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -21,7 +23,7 @@
 .track-cluster-small {
   width: 30px;
   height: 30px;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .track-cluster-medium {
@@ -29,7 +31,7 @@
   border-color: rgba(241, 211, 87, 0.8);
   width: 36px;
   height: 36px;
-  font-size: 13px;
+  font-size: var(--text-xs);
 }
 
 .track-cluster-medium:hover {
@@ -41,7 +43,7 @@
   border-color: rgba(253, 156, 115, 0.8);
   width: 42px;
   height: 42px;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .track-cluster-large:hover {

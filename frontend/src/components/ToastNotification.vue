@@ -4,10 +4,14 @@
       v-if="internalVisible"
       class="toast"
       :class="type"
+      role="status"
+      aria-live="polite"
     >
       <span>{{ message }}</span>
       <button
         class="toast-close"
+        type="button"
+        aria-label="Dismiss notification"
         @click="close"
       >
         &times;
@@ -65,7 +69,8 @@ onUnmounted(() => { if (timer) clearTimeout(timer); });
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.18);
   padding: 12px 24px 12px 16px;
-  font-size: 15px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
   z-index: 3000;
   display: flex;
   align-items: center;
@@ -73,16 +78,24 @@ onUnmounted(() => { if (timer) clearTimeout(timer); });
   border: 1px solid #e0e0e0;
   animation: toast-in 0.22s;
 }
-.toast.info { border-left: 4px solid #1976d2; }
-.toast.success { border-left: 4px solid #43a047; }
-.toast.error { border-left: 4px solid #c00; }
+.toast.info { border-left: 4px solid var(--accent); }
+.toast.success { border-left: 4px solid var(--success); }
+.toast.warning { border-left: 4px solid var(--warning); }
+.toast.error { border-left: 4px solid var(--danger); }
 .toast-close {
   background: none;
   border: none;
   color: #888;
   font-size: 18px;
+  line-height: 1;
   cursor: pointer;
   margin-left: 8px;
+  padding: 2px;
+  border-radius: 4px;
+}
+.toast-close:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.06);
 }
 .toast-fade-enter-active, .toast-fade-leave-active { transition: opacity 0.22s; }
 .toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; }

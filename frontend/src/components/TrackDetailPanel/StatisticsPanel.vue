@@ -38,10 +38,12 @@ function handleDistanceMarkersToggle(event) {
         <div class="section-header">
             <h3>Basic info</h3>
             <div class="header-actions">
-                <div class="unit-toggles">
+                <div class="unit-toggles" role="group" aria-label="Distance unit">
                     <button
                         class="unit-toggle"
                         :class="{ active: speedUnit === 'kmh' }"
+                        type="button"
+                        :aria-pressed="speedUnit === 'kmh'"
                         @click="handleSpeedUnitChange('kmh')"
                     >
                         km
@@ -49,6 +51,8 @@ function handleDistanceMarkersToggle(event) {
                     <button
                         class="unit-toggle"
                         :class="{ active: speedUnit === 'mph' }"
+                        type="button"
+                        :aria-pressed="speedUnit === 'mph'"
                         @click="handleSpeedUnitChange('mph')"
                     >
                         miles

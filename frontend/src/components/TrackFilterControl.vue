@@ -1,19 +1,18 @@
 <template>
   <div class="track-filter-wrapper">
-    <!-- Compact button is always present to avoid flicker; just hidden while expanded -->
-    <div
+    <!-- Collapsed toggle. A real <button>, so it inherits Enter and Space,
+         the disabled and focus states, and the platform's hit behaviour
+         without a hand-rolled keydown handler. It used to be a role="button"
+         div carrying aria-hidden while still holding tabindex="0" — focusable
+         but hidden from assistive tech. -->
+    <button
+      v-show="!isOpen"
       class="filter-button-compact"
-      :class="{ hidden: isOpen }"
+      type="button"
       title="Show filters"
-      role="button"
-      tabindex="0"
-      :aria-pressed="String(!isOpen)"
-      :aria-expanded="String(!isOpen)"
-      :aria-hidden="String(isOpen)"
+      :aria-expanded="isOpen"
       aria-controls="track-filter-panel"
       @click="toggleOpen"
-      @keydown.enter.prevent="toggleOpen"
-      @keydown.space.prevent="toggleOpen"
     >
       <!-- Funnel icon for filters (collapsed state) -->
       <svg
@@ -24,7 +23,7 @@
       >
         <path d="M3 5h18v2H3V5zm3 6h12v2H6v-2zm4 6h4v2h-4v-2z" />
       </svg>
-    </div>
+    </button>
 
     <!-- Sliding panel when expanded -->
     <transition name="filter-slide-fade">
@@ -32,6 +31,8 @@
         v-show="isOpen"
         id="track-filter-panel"
         class="track-filter-control"
+        role="group"
+        aria-label="Track filters"
       >
         <div class="panel-header">
           <span class="panel-title">Filters</span>
@@ -277,12 +278,29 @@
             v-else-if="showMyTracks"
             class="no-tracks-placeholder"
           >
-            <div class="placeholder-icon">
-              🔍
+            <div class="placeholder-icon"
+                 aria-hidden="true">
+              <svg viewBox="0 0 24 24"
+                   fill="none"
+                   stroke="currentColor"
+                   stroke-width="1.5">
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="7"
+                />
+                <path d="M21 21l-4.35-4.35" />
+                <line
+                  x1="8.5"
+                  y1="11"
+                  x2="13.5"
+                  y2="11"
+                />
+              </svg>
             </div>
             <div class="placeholder-text">
-              <h3>No matching tracks</h3>
-              <p>Try disabling "My tracks" filter</p>
+              <h3>No tracks match these filters</h3>
+              <p>Turn off "My tracks" to see everything here.</p>
             </div>
           </div>
         </template>
@@ -292,12 +310,23 @@
           v-else
           class="no-tracks-placeholder"
         >
-          <div class="placeholder-icon">
-            📍
+          <div class="placeholder-icon"
+               aria-hidden="true">
+            <svg viewBox="0 0 24 24"
+                 fill="none"
+                 stroke="currentColor"
+                 stroke-width="1.5">
+              <path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z" />
+              <circle
+                cx="12"
+                cy="10"
+                r="2.5"
+              />
+            </svg>
           </div>
           <div class="placeholder-text">
-            <h3>No tracks in this area yet</h3>
-            <p>Wanna add one?</p>
+            <h3>No tracks here yet</h3>
+            <p>Upload a file or draw one with Create Track.</p>
           </div>
         </div>
       </div>
@@ -826,37 +855,41 @@ onUnmounted(() => {
   z-index: 1300; /* Higher than SearchButton's 1200 */
 }
 
+/* The collapsed toggle is a real button now, so it needs the same reset a
+   native control gets — no inherited background, border, or padding. */
 .filter-button-compact {
   position: absolute;
   top: 0;
   right: 0;
   width: 40px;
   height: 40px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.95);
+  padding: 0;
+  border-radius: var(--control-radius);
+  background: var(--control-bg);
   backdrop-filter: blur(10px);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
   user-select: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  color: #666;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: var(--control-shadow);
+  color: var(--control-icon);
+  border: 1px solid var(--control-border);
   /* Force layer creation for better rendering */
   transform: translateZ(0);
   will-change: transform;
 }
 
 .filter-button-compact:hover {
+  background: var(--control-bg-solid);
+  color: var(--control-icon-hover);
+  box-shadow: var(--control-shadow-hover);
   transform: translateY(-1px);
-  color: #333;
 }
 
-.filter-button-compact.hidden {
-  pointer-events: none;
-  opacity: 0;
+.filter-button-compact:active {
+  transform: translateY(0);
 }
 
 .filter-icon { 
@@ -896,8 +929,9 @@ onUnmounted(() => {
 }
 
 .panel-title {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
   color: #333;
 }
 
@@ -944,8 +978,8 @@ onUnmounted(() => {
 }
 
 .options-title {
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: #495057;
 }
 
@@ -978,9 +1012,8 @@ onUnmounted(() => {
 }
 
 .disabled-hint {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: #999;
-  font-style: italic;
 }
 
 @keyframes fadeInDown {
@@ -1013,18 +1046,18 @@ onUnmounted(() => {
   width: 95%;
   min-width: 0;
   box-sizing: border-box;
-  padding-left: 15px;
-  padding-right: 15px;
-  margin-left: auto;
-  margin-right: auto;
+  padding-inline-start: 15px;
+  padding-inline-end: 15px;
+  margin-inline-start: auto;
+  margin-inline-end: auto;
   margin-top: 40px;
   margin-bottom: 20px;
 }
 
 /* Make slider tooltips smaller and more compact */
 :deep(.slider-tooltip) {
-  font-size: 0.87rem !important; /* Harmonize with form text */
-  font-weight: 500 !important;
+  font-size: var(--text-sm) !important; /* Harmonize with form text */
+  font-weight: var(--weight-medium) !important;
   min-width: 14px !important;
   padding: 2px 4px !important;
   border-radius: 3px !important;
@@ -1061,26 +1094,28 @@ onUnmounted(() => {
 }
 
 .checkbox-label {
-  font-size: 0.87rem;
-  font-weight: 400;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-normal);
   cursor: pointer;
   margin: 0;
   padding: 0;
   flex: 1;
-  line-height: 1.4; /* Natural line height for better readability */
+  line-height: var(--leading-snug);
   padding-top: 0;
 }
 
+/* Reset button sizing for the panel's own controls. The header buttons set
+   their own size above, so this must not cascade over them. */
 .track-filter-control,
 .filter-section label,
-button {
-  font-size: 0.87rem;
+.track-filter-control .filter-actions button {
+  font-size: var(--text-sm);
 }
 
 .filter-actions {
   text-align: right;
 }
-button {
+.track-filter-control .filter-actions button {
   background: #eee;
   border: none;
   border-radius: 4px;
@@ -1088,7 +1123,7 @@ button {
   cursor: pointer;
   transition: background 0.2s;
 }
-button:hover {
+.track-filter-control .filter-actions button:hover {
   background: #ddd;
 }
 
@@ -1106,23 +1141,40 @@ button:hover {
 }
 
 .placeholder-icon {
-  font-size: 2rem;
   margin-bottom: 12px;
-  opacity: 0.7;
+  color: #999;
+  opacity: 0.8;
+}
+
+/* Empty-state glyphs are stroke SVGs like the rest of the icon set —
+   they used to be platform emoji, which render differently per OS and
+   read as an error state when coloured red. */
+.placeholder-icon svg {
+  width: 32px;
+  height: 32px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .placeholder-text h3 {
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin: 0 0 8px 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  margin: 0 0 6px 0;
   color: #555;
+  text-wrap: balance;
 }
 
 .placeholder-text p {
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   margin: 0;
   color: #777;
-  font-weight: 400;
+  font-weight: var(--weight-normal);
+  max-width: 34ch;
+  text-wrap: pretty;
 }
 
 /* Transition for panel */
@@ -1136,11 +1188,12 @@ button:hover {
   transform: translateY(-8px);
 }
 
-/* Mobile adjustments */
-@media (max-width: 640px) {
+/* Touch sizing keys on the input mode, not the viewport — a touch iPad is
+   768px wide and still needs 44px targets. */
+@media (max-width: 640px), (pointer: coarse) {
   .track-filter-wrapper {
-    top: 12px;
-    right: 12px;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
   }
   .filter-button-compact {
     top: 0;
@@ -1148,47 +1201,44 @@ button:hover {
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    /* Solid background for better visibility */
     background: #ffffff;
     backdrop-filter: none;
     border: 1px solid rgba(0, 0, 0, 0.12);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
-  
+
   .filter-icon {
     width: 22px;
     height: 22px;
   }
-  
-  .track-filter-control {
-    width: calc(100vw - 24px) !important;
-    max-width: calc(100vw - 24px);
-  }
-  .collapse-btn {
-    width: 36px;
-    height: 36px;
-  }
-}
 
-/* Safari-specific fixes for mobile */
-@supports (-webkit-appearance: none) {
-  @media (max-width: 640px) {
-    .filter-button-compact {
-      /* Ensure visibility in Safari with stronger visual styling */
-      background: #ffffff !important;
-      backdrop-filter: none !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-      transform: translate3d(0, 0, 0);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-    }
-    
-    .track-filter-control {
-      /* Stronger shadow for Safari */
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
-      border: 1px solid rgba(0, 0, 0, 0.05);
-    }
+  /* On phones the panel is full-bleed, so it cannot also sit beside the
+     map-tool stack in the same corner. It opens into the free band between
+     the map-tool stack (top-left, four 44px controls ending at y=212) and
+     the track-adding cluster (bottom-right, two controls starting at
+     y=734). Both bounds hold it clear of each cluster, and the panel
+     scrolls inside the band rather than growing past it. */
+  .track-filter-control {
+    position: fixed !important;
+    top: calc(220px + env(safe-area-inset-top, 0px)) !important;
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    width: auto !important;
+    max-width: none;
+    margin-top: 0;
+    /* Hugs the top of the band and grows only as far as its content: an
+       empty panel stretched to 500px of dead white is worse than a short
+       one. The max-height keeps tall filter content inside the band, where
+       it scrolls instead of growing into the track-adding cluster. */
+    max-height: calc(100dvh - 344px - env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  .collapse-btn {
+    width: 44px;
+    height: 44px;
   }
 }
 </style>

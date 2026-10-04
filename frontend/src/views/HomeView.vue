@@ -31,33 +31,66 @@
         :data="tooltip.data"
       />
       <div class="upload-form-container">
+        <!-- Track-adding cluster: create + upload live together, bottom-right -->
+        <button
+          v-if="featureFlags.isEditorEnabled"
+          class="create-track-btn"
+          title="Create new track"
+          aria-label="Create new track"
+          @click="router.push({ name: 'TrackCreate' })"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span class="create-track-label">Create Track</span>
+        </button>
         <div
           class="collapsible-upload"
           :class="{ expanded: uploadFormExpanded }"
+          @dragover.prevent="handleDragOver"
+          @dragleave.prevent="handleDragLeave"
+          @drop.prevent="handleDrop"
         >
-          <!-- Collapsed state: compact upload button -->
-          <div
+          <!-- Collapsed state: a real button, so it opens the form with
+               Enter or Space. The drag handlers sit on the wrapper because a
+               <button> cannot reliably receive a drop in every browser. -->
+          <button
             v-if="!uploadFormExpanded"
             class="upload-button-compact"
             :class="{ 'drag-active': dragActive }"
+            type="button"
             title="Upload track file"
+            :aria-expanded="uploadFormExpanded"
+            aria-label="Upload track file"
             @click="toggleUploadForm"
-            @dragover.prevent="handleDragOver"
-            @dragleave.prevent="handleDragLeave"
-            @drop.prevent="handleDrop"
           >
-            <svg class="upload-icon" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              class="upload-icon"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
               <path
                 d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
               />
               <path d="M12,11L16,15H13V19H11V15H8L12,11Z" />
             </svg>
-          </div>
+          </button>
 
           <!-- Expanded state: full upload form -->
           <div v-if="uploadFormExpanded" class="upload-form-expanded">
             <div class="upload-form-header">
-              <span class="upload-form-title">Upload Track</span>
+              <span class="upload-form-title">Upload track</span>
               <button
                 class="collapse-button"
                 title="Collapse upload form"
@@ -82,41 +115,18 @@
       </div>
 
       <Toast
-        :message="(toast.value && toast.value.message) || ''"
-        :type="(toast.value && toast.value.type) || 'info'"
-        :duration="(toast.value && toast.value.duration) || 3000"
+        :message="toast.message"
+        :type="toast.type"
+        :duration="toast.duration"
       />
     </TrackMap>
 
-    <!-- Map controls overlay - positioned outside TrackMap for proper z-index -->
+    <!-- Map tools: search, geolocation, zoom — one vertical stack, top-left -->
     <div class="map-controls-overlay">
       <SearchButton @open-search="openSearch" />
       <GeolocationButton @location-found="onLocationFound" />
+      <MapZoomControl :map="mapInstance" />
     </div>
-
-    <!-- Create track button — top right -->
-    <button
-      v-if="featureFlags.isEditorEnabled"
-      class="create-track-btn"
-      title="Create new track"
-      aria-label="Create new track"
-      @click="router.push({ name: 'TrackCreate' })"
-    >
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-      <span class="create-track-label">Create Track</span>
-    </button>
 
     <!-- Auth button - positioned in bottom left -->
     <div v-if="featureFlags.isAuthEnabled" class="auth-button-overlay">
@@ -155,6 +165,7 @@ import Toast from "../components/ToastNotification.vue";
 import TrackSearch from "../components/TrackSearch.vue";
 import SearchButton from "../components/SearchButton.vue";
 import GeolocationButton from "../components/GeolocationButton.vue";
+import MapZoomControl from "../components/MapZoomControl.vue";
 import LoginButton from "../components/LoginButton.vue";
 import { useTracks } from "../composables/useTracks";
 import { useToastStore } from "../stores/toast.js";
@@ -395,7 +406,7 @@ onDeactivated(() => {
 });
 
 watch(error, (val) => {
-  if (val) showToast("Error: " + val, "error");
+  if (val) showToast(val, "error");
 });
 
 // Clear tooltip when navigating away from this route
@@ -580,7 +591,7 @@ async function handleUpload({ file, name, categories }) {
     showToast("Track uploaded successfully!", "success");
     refreshTracks();
   } catch (e) {
-    showToast("Upload error: " + e.message, "error");
+    showToast("Upload failed: " + e.message, "error");
   }
 }
 
@@ -865,55 +876,67 @@ body,
   pointer-events: auto; /* Re-enable pointer events for buttons */
 }
 
-/* Create Track button - top right */
+/* Create Track — sits in the bottom-right track-adding cluster, directly above
+   the upload control. Shares the floating-control surface with search and
+   geolocation so no single button claims to be the primary action. */
 .create-track-btn {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 1200;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: #1976d2;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
+  background: var(--control-bg);
+  backdrop-filter: blur(10px);
+  color: var(--control-icon);
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
   cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  box-shadow: var(--control-shadow);
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
   user-select: none;
   white-space: nowrap;
 }
 
 .create-track-btn:hover {
-  background: #1565c0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
-  transform: translateY(-1px);
+  background: var(--control-bg-solid);
+  color: var(--control-icon-hover);
+  box-shadow: var(--control-shadow-hover);
 }
 
 .create-track-btn:active {
-  background: #0d47a1;
-  transform: translateY(0);
+  box-shadow: var(--control-shadow);
 }
 
 .create-track-btn svg {
   flex-shrink: 0;
+  stroke: var(--accent);
+  transition: stroke 0.2s;
 }
 
-@media (max-width: 640px) {
+.create-track-btn:hover svg {
+  stroke: var(--accent-hover);
+}
+
+/* Touch sizing keys on the input mode, not the viewport — a touch iPad is
+   768px wide and still needs a 44px target. */
+@media (max-width: 640px), (pointer: coarse) {
   .create-track-btn {
-    top: 12px;
-    right: 12px;
-    padding: 10px;
+    /* Icon only when the label will not fit the target comfortably */
+    padding: 0;
+    width: 44px;
+    height: 44px;
+    justify-content: center;
     border-radius: 10px;
+    background: #ffffff;
+    backdrop-filter: none;
+    border: 1px solid var(--control-border-strong);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   .create-track-label {
-    display: none; /* Icon only on mobile */
+    display: none;
   }
 }
 
@@ -926,29 +949,19 @@ body,
   pointer-events: auto;
 }
 
-/* Mobile adjustments for auth button */
-@media (max-width: 640px) {
+/* Safe-area offsets for the fixed corner clusters. Logical properties so
+   the clusters follow the writing direction if the app ever ships RTL. */
+@media (max-width: 640px), (pointer: coarse) {
   .auth-button-overlay {
-    bottom: 12px;
-    left: 12px;
-    /* Safe area support */
-    bottom: calc(12px + constant(safe-area-inset-bottom));
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    left: calc(12px + constant(safe-area-inset-left));
-    left: calc(12px + env(safe-area-inset-left));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
   }
 }
 
-/* Mobile adjustments for map controls overlay */
-@media (max-width: 640px) {
+@media (max-width: 640px), (pointer: coarse) {
   .map-controls-overlay {
-    top: 12px;
-    left: 12px;
-    /* Safe area support */
-    top: calc(12px + constant(safe-area-inset-top));
-    top: calc(12px + env(safe-area-inset-top));
-    left: calc(12px + constant(safe-area-inset-left));
-    left: calc(12px + env(safe-area-inset-left));
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
   }
 }
 
@@ -963,6 +976,11 @@ body,
   bottom: calc(16px + constant(safe-area-inset-bottom));
   bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 2000; /* Above map panes and controls */
+  /* Track-adding cluster: create and upload stack upward from the corner */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
   /* Optimize for smooth animations */
   will-change: transform;
   backface-visibility: hidden;
@@ -993,18 +1011,19 @@ body,
 .upload-button-compact {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.95);
+  padding: 0;
+  border-radius: var(--control-radius);
+  background: var(--control-bg);
   backdrop-filter: blur(10px);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: background 0.2s, box-shadow 0.2s;
+  border: 1px solid var(--control-border);
   user-select: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  color: #666;
+  box-shadow: var(--control-shadow);
+  color: var(--control-icon);
   /* Ensure visibility across different zoom levels */
   position: relative;
   z-index: 1100;
@@ -1020,9 +1039,9 @@ body,
 }
 
 .upload-button-compact.drag-active {
-  border-color: #2196f3;
+  border-color: var(--accent);
   background: rgba(227, 242, 253, 0.95);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.25);
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.25);
 }
 
 .upload-icon {
@@ -1047,7 +1066,7 @@ body,
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   animation: expandForm 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
-  font-size: 0.87rem;
+  font-size: var(--text-sm);
 }
 
 @keyframes expandForm {
@@ -1071,8 +1090,9 @@ body,
 }
 
 .upload-form-title {
-  font-size: 0.87rem;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
   color: #333;
 }
 
@@ -1102,20 +1122,17 @@ body,
 }
 
 /* Responsive design for smaller screens - matching other components */
-@media (max-width: 640px) {
+@media (max-width: 640px), (pointer: coarse) {
   .upload-form-container {
     /* Safe-area aware offsets on small screens */
-    right: calc(12px + constant(safe-area-inset-right));
-    right: calc(12px + env(safe-area-inset-right));
-    bottom: calc(12px + constant(safe-area-inset-bottom));
-    bottom: calc(12px + env(safe-area-inset-bottom));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .upload-button-compact {
     width: 44px; /* Same as other buttons */
     height: 44px;
     border-radius: 10px;
-    /* Solid background for better visibility */
     background: #ffffff;
     backdrop-filter: none;
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -1125,37 +1142,12 @@ body,
   .upload-icon {
     width: 22px; /* Match other icons */
     height: 22px;
-    color: #1976d2 !important;
+    color: var(--accent) !important;
   }
 
   .upload-form-expanded {
     min-width: 260px;
-    max-width: calc(100vw - 32px);
-  }
-}
-
-/* Safari-specific mobile fixes */
-@supports (-webkit-appearance: none) {
-  @media (max-width: 640px) {
-    .upload-button-compact {
-      /* Force visibility in Safari mobile with solid background */
-      background: #ffffff !important;
-      backdrop-filter: none !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-      /* Prevent Safari rendering issues */
-      transform: translate3d(0, 0, 0);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-      /* Ensure proper layer composition */
-      isolation: isolate;
-    }
-
-    .upload-button-compact .upload-icon {
-      /* Make icon more prominent in Safari */
-      color: #1976d2 !important;
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
-    }
+    max-width: calc(100vw - 24px);
   }
 }
 </style>

@@ -68,7 +68,7 @@ const getCurrentLocation = async () => {
 
     switch (error.code) {
       case error.PERMISSION_DENIED:
-        errorMessage = "Location access denied by user";
+        errorMessage = "Location access is off for this site";
         break;
       case error.POSITION_UNAVAILABLE:
         errorMessage = "Location information is unavailable";
@@ -149,13 +149,13 @@ const getCurrentLocation = async () => {
   }
 }
 
-/* Mobile adjustments to match other buttons */
-@media (max-width: 640px) {
+/* Touch sizing keys on the input mode, not the viewport — a touch iPad is
+   768px wide and still needs 44px targets. */
+@media (max-width: 640px), (pointer: coarse) {
   .geolocation-button {
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    /* Solid background for better visibility */
     background: #ffffff;
     backdrop-filter: none;
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -166,21 +166,6 @@ const getCurrentLocation = async () => {
     width: 22px;
     height: 22px;
     stroke: #666 !important;
-  }
-}
-
-/* Safari-specific mobile fixes */
-@supports (-webkit-appearance: none) {
-  @media (max-width: 640px) {
-    .geolocation-button {
-      background: #ffffff !important;
-      backdrop-filter: none !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-      transform: translate3d(0, 0, 0);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-    }
   }
 }
 </style>

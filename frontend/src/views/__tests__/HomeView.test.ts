@@ -248,7 +248,7 @@ describe('HomeView', () => {
             
             const title = wrapper.find('.upload-form-title');
             expect(title.exists()).toBe(true);
-            expect(title.text()).toBe('Upload Track');
+            expect(title.text()).toBe('Upload track');
         });
 
         it('should have proper header layout with title and collapse button', async () => {

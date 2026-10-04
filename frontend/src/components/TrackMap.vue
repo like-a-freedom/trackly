@@ -968,16 +968,17 @@ watch(
 }
 
 :deep(.marker-tooltip) {
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
   min-width: 80px;
+  font-variant-numeric: tabular-nums;
 }
 
 :deep(.marker-tooltip .fixed-hint) {
-  font-size: 10px;
+  /* 13px floor: this was 10px, which is unreadable on a tile background */
+  font-size: var(--text-xs);
   color: #666;
   margin-top: 4px;
-  font-style: italic;
 }
 
 /* Performance optimizations for smooth map rendering */

@@ -146,34 +146,43 @@ function formatDataset(dataset: string | undefined): string {
 }
 .custom-tooltip > div { pointer-events: none; }
 .upload-form { background: none; box-shadow: none; border-radius: 0; padding: 0; gap: 0; height: auto; }
+
+/* Metric rows: distance, elevation, dates. Distances and elevations are
+   read against each other, so they get tabular figures — proportional
+   digits make two values of equal length look different widths. */
 .upload-label {
-  font-size: 13px;
-  margin-bottom: 4px; /* increased space between attributes */
-  line-height: 1.35; /* more readable line height */
+  font-size: var(--text-xs);
+  margin-bottom: 4px;
+  line-height: var(--leading-snug);
   padding: 0 1px;
-  word-wrap: break-word;
   overflow-wrap: break-word;
+  font-variant-numeric: tabular-nums;
 }
 .upload-label:last-child { margin-bottom: 0; }
 .upload-label.name {
-  font-weight: 600;
-  font-size: 16px;
-  margin-top: 4px; /* more space from top */
-  margin-bottom: 10px; /* more space below header */
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+  line-height: var(--leading-tight);
+  text-wrap: balance;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  font-variant-numeric: normal;
 }
 .upload-label.description {
-  font-size: 14px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   color: #444;
-  margin-bottom: 10px; /* more space below description */
+  margin-bottom: 10px;
+  text-wrap: pretty;
 }
 .upload-label.meta {
-  font-size: 13px;
-  color: #000000;
+  font-size: var(--text-xs);
+  color: #666;
   margin-bottom: 4px;
 }
 .upload-label.categories-section {
   margin-bottom: 4px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 .upload-label.share-section {
   margin-top: 8px;
@@ -183,26 +192,27 @@ function formatDataset(dataset: string | undefined): string {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-left: 4px;
+  margin-inline-start: 4px;
   vertical-align: middle;
 }
 .category-tag {
   display: inline-block;
   background: #e3f2fd;
-  color: #1976d2;
+  color: var(--accent);
   border-radius: 6px;
   padding: 2px 10px 2px 8px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.2;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1.3;
   border: 1px solid #bbdefb;
   box-shadow: 0 1px 2px rgba(25,118,210,0.04);
   user-select: none;
+  white-space: nowrap;
   transition: background 0.18s, color 0.18s;
 }
 .category-tag:hover {
   background: #bbdefb;
-  color: #0d47a1;
+  color: var(--accent-active);
 }
 @media (max-width: 600px) {
   .custom-tooltip {

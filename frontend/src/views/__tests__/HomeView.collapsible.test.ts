@@ -138,7 +138,7 @@ describe('HomeView - Collapsible Upload Form', () => {
 
             // Now header should be visible
             expect(wrapper.find('.upload-form-header').exists()).toBe(true);
-            expect(wrapper.find('.upload-form-title').text()).toBe('Upload Track');
+            expect(wrapper.find('.upload-form-title').text()).toBe('Upload track');
             expect(wrapper.find('.collapse-button').exists()).toBe(true);
         });
 

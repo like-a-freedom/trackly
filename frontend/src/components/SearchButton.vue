@@ -74,13 +74,15 @@ const openSearch = () => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* Mobile adjustments to match other buttons */
-@media (max-width: 640px) {
+/* Touch sizing keys on the input mode, not the viewport: a touch iPad is
+   768px wide and still needs 44px targets. The width arm keeps a narrow
+   desktop window correct. The solid background also replaces the
+   backdrop blur, which Safari drops on a fixed element anyway. */
+@media (max-width: 640px), (pointer: coarse) {
   .search-button {
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    /* Solid background for better visibility */
     background: #ffffff;
     backdrop-filter: none;
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -91,21 +93,6 @@ const openSearch = () => {
     width: 22px;
     height: 22px;
     stroke: #666 !important;
-  }
-}
-
-/* Safari-specific mobile fixes */
-@supports (-webkit-appearance: none) {
-  @media (max-width: 640px) {
-    .search-button {
-      background: #ffffff !important;
-      backdrop-filter: none !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-      transform: translate3d(0, 0, 0);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-    }
   }
 }
 </style>

@@ -69,6 +69,99 @@ function getComponentKey(route) {
 </script>
 
 <style>
+/* ============================================================
+   Shared map-control tokens
+   Map controls float over arbitrary tile imagery, so surfaces and
+   focus rings must stay legible against light AND dark backgrounds.
+   ============================================================ */
+:root {
+  /* Accent — one hue, three states. Replaces the four competing blues. */
+  --accent: #1976d2;
+  --accent-hover: #1565c0;
+  --accent-active: #0d47a1;
+
+  /* Floating control surface */
+  --control-bg: rgba(255, 255, 255, 0.95);
+  --control-bg-solid: #ffffff;
+  --control-border: rgba(0, 0, 0, 0.08);
+  --control-border-strong: rgba(0, 0, 0, 0.12);
+  --control-icon: #666;
+  --control-icon-hover: #333;
+  --control-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --control-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --control-radius: 8px;
+
+  /* Focus ring. The control plane is white cards floating on map tiles, so a
+     dark ring is the one colour that reads on both. box-shadow is not usable
+     here: every control declares its own box-shadow in scoped styles and
+     those declarations win over a global rule. */
+  --focus-ring: #10151c;
+  --focus-ring-offset: 2px;
+
+  /* Type scale. Five steps on a 1.25 modular ratio (1.2 base, floored at
+     13px because this is a map UI read at arm's length, not long-form).
+     Before this the reachable surface carried thirteen sizes from 10px to
+     18px, where adjacent steps differed by 1px and read as noise. */
+  --text-xs: 0.8125rem; /* 13px — map badges, hints, metadata floor */
+  --text-sm: 0.9375rem; /* 15px — labels, values, body */
+  --text-md: 1.125rem; /* 18px — result titles, panel headings */
+  --text-lg: 1.4063rem; /* 22px — track name in the tooltip */
+  --text-xl: 1.75rem; /* 28px — reserved for the editor title only */
+
+  /* Weight ladder. Nothing below 18px goes under 400, where the stroke
+     disappears at map-control sizes. */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
+  /* Line height by role. Unitless so it scales with the size it sits on;
+     microcopy runs tight, body runs open. */
+  --leading-tight: 1.25; /* titles and single-line labels */
+  --leading-snug: 1.4; /* two-line values */
+  --leading-normal: 1.55; /* descriptions and empty-state copy */
+
+  /* Semantic status. Toast borders already carried these three; they are
+     named here so a component never re-invents a success or error hue. */
+  --success: #43a047;
+  --warning: #f9a825;
+  --danger: #c62828;
+}
+
+/* One focus treatment for the whole control plane. Custom controls ship
+   :hover and :active styles but no ring of their own, so this is the only
+   keyboard affordance they get. */
+:where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Interactive controls should act on the first tap, not wait out the
+   double-tap-zoom delay. `manipulation` keeps pinch-to-zoom intact while
+   removing the ~300ms tap lag on every control on the surface. */
+:where(button, [role="button"], .collapse-btn, .collapse-button, .filter-button-compact) {
+  touch-action: manipulation;
+}
+
+@media (forced-colors: active) {
+  :where(button, a, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
+
+/* Nothing on a map surface needs to animate for a user who has asked the
+   system not to move things: the transitions here are decoration and
+   affordance, never the communication of state. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 html,
 body,
 #app {
@@ -77,6 +170,10 @@ body,
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
     "Helvetica Neue", Arial, sans-serif;
+  /* One declaration, applied once. Every component inherits these rather than
+     re-declaring smoothing locally. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 

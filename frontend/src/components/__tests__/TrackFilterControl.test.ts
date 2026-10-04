@@ -234,7 +234,7 @@ describe('TrackFilterControl', () => {
 
             expect(wrapper.find('.no-tracks-placeholder').exists()).toBe(true);
             expect(wrapper.find('.filter-section').exists()).toBe(false);
-            expect(wrapper.text()).toContain('No tracks in this area yet');
+            expect(wrapper.text()).toContain('No tracks here yet');
         });
 
         it('shows filters when hasTracksInViewport is true', () => {
@@ -303,8 +303,8 @@ describe('TrackFilterControl', () => {
             expect(wrapper.find('.category-checkboxes').exists()).toBe(false);
             // Should show special message for no matching tracks
             expect(wrapper.find('.no-tracks-placeholder').exists()).toBe(true);
-            expect(wrapper.text()).toContain('No matching tracks');
-            expect(wrapper.text()).toContain('Try disabling "My tracks" filter');
+            expect(wrapper.text()).toContain('No tracks match these filters');
+            expect(wrapper.text()).toContain('Turn off "My tracks"');
         });
 
         it('shows My tracks checkbox even when hasTracksInViewport is false but has stable categories', async () => {

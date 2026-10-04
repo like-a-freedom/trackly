@@ -109,7 +109,8 @@ describe('TrackSearch', () => {
     await flushPromises()
 
     expect(wrapper.find('.no-results').exists()).toBe(true)
-    expect(wrapper.text()).toContain('No tracks found. Please, refine your query.')
+    expect(wrapper.text()).toContain('No tracks match "nonexistent"')
+    expect(wrapper.text()).toContain('Try a shorter name')
   })
 
   it('emits track-selected when track is clicked', async () => {
