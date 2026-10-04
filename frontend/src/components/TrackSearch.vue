@@ -413,29 +413,37 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* macOS Spotlight: a compact floating panel near the top of the screen, the
+   whole rest of the map dimmed by a vignette, and a single dense input row
+   with no visible field border. The browser's own field chrome is suppressed
+   so the row reads as one object rather than a box inside a box. */
 .search-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
+  inset: 0;
+  /* A radial vignette rather than a flat wash: it darkens the corners the
+     user is not looking at and leaves the panel area legible. */
+  background: radial-gradient(
+    ellipse at center top,
+    rgba(0, 0, 0, 0.28) 0%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+  backdrop-filter: blur(3px);
   z-index: 1000;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 20vh;
+  padding-top: 18vh;
 }
 
 .search-modal {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
+  background: rgba(38, 38, 41, 0.72);
+  backdrop-filter: blur(40px) saturate(180%);
   border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.14),
+    0 24px 60px rgba(0, 0, 0, 0.5);
   width: 90%;
-  max-width: 600px;
+  max-width: 640px;
   max-height: 70vh;
   overflow: hidden;
   /* Prevent touch actions from propagating to map */
@@ -446,12 +454,14 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 14px 18px;
+  /* A hairline rather than a 1px rule: it separates the input row from the
+     results without reading as a second card edge. */
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.14);
 }
 
 .search-icon {
-  color: #666;
+  color: rgba(255, 255, 255, 0.55);
   margin-inline-end: 12px;
   flex-shrink: 0;
 }
@@ -464,26 +474,31 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   line-height: var(--leading-snug);
   background: transparent;
-  color: #333;
+  color: rgba(255, 255, 255, 0.95);
   min-width: 0;
+  caret-color: var(--accent);
 }
 
-/* The field is borderless by design, so focus needs an explicit ring.
-   It used to be `outline: none` with nothing in its place. */
+/* The field is borderless by design, so focus needs an explicit indicator.
+   The container highlight carries it rather than an outline on the input:
+   an outline here would draw a box inside the panel's own rounded edge. */
 .search-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-  border-radius: 4px;
+  outline: none;
+}
+
+.search-input-container:has(.search-input:focus-visible) {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .search-input::placeholder {
-  color: #999;
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .clear-button {
   background: none;
   border: none;
-  color: #666;
+  color: rgba(255, 255, 255, 0.55);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -494,7 +509,8 @@ onBeforeUnmount(() => {
 }
 
 .clear-button:hover {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .search-loading {
@@ -502,15 +518,18 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  color: #666;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .loading-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #ddd;
-  border-top: 2px solid #666;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.75);
   border-radius: 50%;
+  /* Explicit box and no flex: without both the ring flexes and drags the
+     "Searching..." label around with it. */
+  flex: 0 0 auto;
   animation: spin 1s linear infinite;
   margin-inline-end: 12px;
 }
@@ -536,25 +555,32 @@ onBeforeUnmount(() => {
 .search-result-item {
   display: flex;
   align-items: center;
-  padding: 16px 20px;
+  padding: 12px 18px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  transition: background-color 0.2s;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+  transition: background-color 0.15s;
 }
 
 .search-result-item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* Keyboard selection. Distinguished by a left bar as well as the tint,
-   so it never depends on colour alone. */
+/* Keyboard selection. Marked by an accent fill plus a left bar, so the
+   current row never depends on colour alone. */
 .search-result-item.is-active {
-  background: rgba(25, 118, 210, 0.08);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--accent);
+  box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.9);
 }
 
 .search-result-item:last-child {
   border-bottom: none;
+}
+
+/* On the selected row the text sits on the accent fill, so it inverts */
+.search-result-item.is-active .track-name,
+.search-result-item.is-active .track-description,
+.search-result-item.is-active .track-meta {
+  color: #fff;
 }
 
 .track-info {
@@ -564,19 +590,19 @@ onBeforeUnmount(() => {
 
 /* hook */
 .track-name {
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
-  margin: 0 0 4px 0;
-  color: #333;
+  margin: 0 0 2px 0;
+  color: rgba(255, 255, 255, 0.95);
   text-wrap: balance;
 }
 
 /* bridge */
 .track-description {
-  font-size: var(--text-sm);
-  color: #666;
-  margin: 0 0 8px 0;
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 4px 0;
   line-height: var(--leading-normal);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -591,7 +617,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 12px;
   font-size: var(--text-xs);
-  color: #888;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .track-length {
@@ -613,31 +639,31 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  color: #666;
+  padding: 48px 20px;
+  color: rgba(255, 255, 255, 0.5);
   text-align: center;
 }
 
 .no-results-icon {
   margin-bottom: 16px;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .no-results p {
   margin: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
-  color: #333;
+  color: rgba(255, 255, 255, 0.85);
   text-wrap: balance;
 }
 
 .no-results-hint {
   margin-top: 8px !important;
-  font-size: var(--text-sm) !important;
+  font-size: var(--text-xs) !important;
   font-weight: var(--weight-normal) !important;
   line-height: var(--leading-normal) !important;
-  color: #777 !important;
+  color: rgba(255, 255, 255, 0.45) !important;
   max-width: 40ch;
   text-wrap: pretty;
 }

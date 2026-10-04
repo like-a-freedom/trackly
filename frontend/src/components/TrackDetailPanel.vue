@@ -3054,38 +3054,41 @@ defineExpose({
 }
 
 /* Stats Sections */
-.stats-section {
+:deep(.stats-section) {
   margin-bottom: 24px;
   padding-bottom: 20px;
   border-bottom: 1px solid #eee;
 }
 
-.stats-section:last-of-type {
+:deep(.stats-section:last-of-type) {
   border-bottom: none;
 }
 
-.stats-section h3 {
+:deep(.stats-section h3) {
   margin: 0 0 12px 0;
   font-size: 1.3em;
   color: #1a1a1a;
   font-weight: 600;
 }
 
-.section-header-with-tooltip {
+:deep(.section-header-with-tooltip) {
   display: flex;
   align-items: center;
   gap: 4px;
   margin-bottom: 12px;
 }
 
-.section-header-with-tooltip h3 {
+:deep(.section-header-with-tooltip h3) {
   margin: 0;
   font-size: 1.3em;
   color: #1a1a1a;
   font-weight: 600;
 }
 
-.info-icon {
+/* The info icon renders inside CategoriesPanel and StatisticsPanel, so every
+   rule here needs :deep() — without it the scoped selector never matched
+   and the icon rendered as bare text with no tooltip. */
+:deep(.info-icon) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3099,24 +3102,26 @@ defineExpose({
   position: relative;
 }
 
-.info-icon:hover {
+:deep(.info-icon:hover) {
   opacity: 1;
   color: var(--accent-hover);
   background-color: rgba(33, 150, 243, 0.1);
 }
 
 /* Ensure tooltips work correctly for custom tooltip attr */
-.info-icon[data-tooltip] {
+:deep(.info-icon[data-tooltip]) {
   position: relative;
 }
 
 /* Custom CSS tooltip */
-.info-icon::after {
+:deep(.info-icon::after) {
   content: attr(data-tooltip);
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
+  /* Anchored below the icon rather than above it: these hints sit inside a
+     panel header where "above" would cover the track name and description. */
+  top: calc(100% + 8px);
+  left: 0;
+  transform: none;
   background: #fff;
   color: #333;
   padding: 8px 12px;
@@ -3139,33 +3144,21 @@ defineExpose({
   border: 1px solid #e0e0e0;
 }
 
-.info-icon:hover::after,
-.info-icon:focus::after {
+:deep(.info-icon:hover::after),
+:deep(.info-icon:focus-visible::after) {
   opacity: 1;
   visibility: visible;
 }
 
-/* When tooltip doesn't fit above, show under the element */
-.info-icon.tooltip-bottom::after {
-  top: calc(100% + 8px);
-  bottom: auto;
-}
-.info-icon.tooltip-bottom::before {
-  top: calc(100% + 2px);
-  bottom: auto;
-  border-top-color: transparent;
-  border-bottom-color: #fff;
-}
-
-/* Tooltip arrow */
-.info-icon::before {
+/* Tooltip arrow. Matches the bubble below the icon: the arrow sits directly
+   under the icon, pointing up at it. */
+:deep(.info-icon::before) {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 2px);
-  transform: translateX(-50%);
+  left: 8px;
+  top: calc(100% + 2px);
   border: 6px solid transparent;
-  border-top-color: #fff;
+  border-bottom-color: #fff;
   z-index: 10001;
   pointer-events: none;
   opacity: 0;
@@ -3174,13 +3167,13 @@ defineExpose({
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
 }
 
-.info-icon:hover::before,
-.info-icon:focus::before {
+:deep(.info-icon:hover::before),
+:deep(.info-icon:focus-visible::before) {
   opacity: 1;
   visibility: visible;
 }
 
-.info-icon:focus-visible {
+:deep(.info-icon:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
@@ -3216,7 +3209,9 @@ defineExpose({
   box-sizing: border-box;
 }
 
-.section-header {
+/* Unit and chart toggles live in StatisticsPanel, so they need :deep() for
+   the same scope reason as the stat rows above. */
+:deep(.section-header) {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -3224,14 +3219,14 @@ defineExpose({
 }
 
 /* Unit Toggles */
-.unit-toggles {
+:deep(.unit-toggles) {
   display: flex;
   background: #f0f0f0;
   border-radius: 6px;
   padding: 2px;
 }
 
-.unit-toggle {
+:deep(.unit-toggle) {
   background: transparent;
   border: none;
   padding: 6px 12px;
@@ -3243,25 +3238,25 @@ defineExpose({
   color: #666;
 }
 
-.unit-toggle.active {
+:deep(.unit-toggle.active) {
   background: #fff;
   color: #1a1a1a;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.unit-toggle:hover:not(.active) {
+:deep(.unit-toggle:hover:not(.active)) {
   background: rgba(255, 255, 255, 0.7);
 }
 
 /* Chart Toggles */
-.chart-toggles {
+:deep(.chart-toggles) {
   display: flex;
   background: #f0f0f0;
   border-radius: 6px;
   padding: 2px;
 }
 
-.chart-toggle {
+:deep(.chart-toggle) {
   background: transparent;
   border: none;
   padding: 6px 12px;
@@ -3273,17 +3268,17 @@ defineExpose({
   color: #666;
 }
 
-.chart-toggle.active {
+:deep(.chart-toggle.active) {
   background: #fff;
   color: #1a1a1a;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.chart-toggle:hover:not(.active):not(:disabled) {
+:deep(.chart-toggle:hover:not(.active):not(:disabled)) {
   background: rgba(255, 255, 255, 0.7);
 }
 
-.chart-toggle:disabled {
+:deep(.chart-toggle:disabled) {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -3377,7 +3372,12 @@ defineExpose({
   gap: 12px;
 }
 
-.stat-item {
+/* The Basic info / Elevation panels and the categories tags render inside
+   CategoriesPanel and StatisticsPanel. Those child components carry their own
+   scope id, so a bare selector in this scoped block never matched them and the
+   stats, tabs and tags all fell back to unstyled defaults. :deep() crosses
+   that boundary while keeping these rules in one place. */
+:deep(.stats-section .stat-item) {
   background: #f8f9fa;
   border-radius: 6px;
   padding: 12px;
@@ -3386,20 +3386,20 @@ defineExpose({
   gap: 4px;
 }
 
-.stat-label {
+:deep(.stats-section .stat-label) {
   font-size: 0.85em;
   color: #666;
   font-weight: 500;
 }
 
-.stat-value {
+:deep(.stats-section .stat-value) {
   font-size: 1.1em;
   font-weight: 600;
   color: #1a1a1a;
 }
 
 /* Elevation Stats */
-.elevation-stats {
+:deep(.stats-section .elevation-stats) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
@@ -3407,34 +3407,36 @@ defineExpose({
 }
 
 /* Slope Stats Grid */
-.slope-stats-grid {
+:deep(.stats-section .slope-stats-grid) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
 /* Chart Section within stats */
-.stats-section .chart-section {
+:deep(.stats-section .chart-section) {
   margin: 16px 0;
   border-radius: 8px;
   overflow: hidden;
 }
 
 /* Heart Rate Stats */
-.hr-stats {
+:deep(.stats-section .hr-stats) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-/* Categories */
-.categories {
+/* Categories. The read-only tag list renders inside .stats-section, so the
+   selector keys off that rather than a .categories-section that does not
+   exist in the DOM. */
+:deep(.categories) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.category-tag {
+:deep(.category-tag) {
   background: #e3f2fd;
   color: #1565c0;
   padding: 4px 12px;
@@ -3548,6 +3550,9 @@ defineExpose({
   margin-right: 0 !important;
 }
 
+/* The saving indicator pairs a spinner with the word "Saving...". Without an
+   explicit box and flex-shrink: 0 the SVG flexes to fill the row and the text
+   ends up riding along inside the rotating element. */
 .saving-indicator {
   display: flex;
   align-items: center;
@@ -3557,7 +3562,10 @@ defineExpose({
   padding: 4px 0;
 }
 
-.spinner {
+:deep(.saving-indicator .spinner) {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
   animation: spin 1s linear infinite;
 }
 
@@ -3617,7 +3625,7 @@ defineExpose({
   font-style: italic;
 }
 
-.toggle-row {
+:deep(.toggle-row) {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3625,36 +3633,30 @@ defineExpose({
   color: #2d3748;
 }
 
-.toggle-row input {
+:deep(.toggle-row input) {
   width: 16px;
   height: 16px;
 }
 
-.toggle-help {
-  margin-top: 6px;
-  font-size: 0.85em;
-  color: #718096;
-}
-
-/* Track Metadata */
-.track-metadata {
+/* Track Metadata — rendered by TrackInfoPanel, same scope reason as above. */
+:deep(.track-metadata) {
   margin-top: 24px;
 }
 
-.track-metadata h3 {
+:deep(.track-metadata h3) {
   margin: 0 0 16px 0;
   font-size: 1.3em;
   color: #1a1a1a;
   font-weight: 600;
 }
 
-.metadata-grid {
+:deep(.metadata-grid) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
 }
 
-.metadata-item {
+:deep(.metadata-item) {
   background: #f8f9fa;
   border-radius: 6px;
   padding: 12px;
@@ -3663,13 +3665,13 @@ defineExpose({
   gap: 4px;
 }
 
-.metadata-label {
+:deep(.metadata-label) {
   font-size: 0.85em;
   color: #666;
   font-weight: 500;
 }
 
-.metadata-value {
+:deep(.metadata-value) {
   font-size: 1.1em;
   font-weight: 600;
   color: #1a1a1a;

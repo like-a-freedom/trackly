@@ -92,10 +92,17 @@ function handleDistanceMarkersToggle(event) {
                 @change="handleDistanceMarkersToggle"
             />
             <span>Distance markers</span>
+            <!-- A tooltip on the label explains the disabled state in place.
+                 The paragraph below repeated it as body copy, which read as a
+                 rule rather than as help. -->
+            <span
+                v-if="!isOwner"
+                class="info-icon"
+                tabindex="0"
+                data-tooltip="Only the track owner can change overlay settings"
+                aria-label="Only the track owner can change overlay settings"
+            >?</span>
         </label>
-        <p v-if="!isOwner" class="toggle-help">
-            Only the track owner can change overlay settings.
-        </p>
     </div>
 
     <!-- Speed and Pace Section -->
