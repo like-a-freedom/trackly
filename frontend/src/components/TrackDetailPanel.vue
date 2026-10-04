@@ -2640,7 +2640,7 @@ defineExpose({
 
 .share-track-btn:hover {
   background: rgba(33, 150, 243, 0.1);
-  color: #1976d2;
+  color: var(--accent);
   transform: scale(1.05);
 }
 
@@ -2667,7 +2667,7 @@ defineExpose({
 
 .export-gpx-btn:hover {
   background: rgba(33, 150, 243, 0.1);
-  color: #1976d2;
+  color: var(--accent);
   transform: scale(1.05);
 }
 
@@ -2701,7 +2701,7 @@ defineExpose({
 .edit-track-geometry-btn {
   background: none;
   border: none;
-  color: #1976d2;
+  color: var(--accent);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -2788,7 +2788,7 @@ defineExpose({
 
 .edit-name-btn:hover {
   background: #f0f0f0;
-  color: #2196f3;
+  color: var(--accent-hover);
   transform: scale(1.05);
 }
 
@@ -2817,11 +2817,14 @@ defineExpose({
   box-sizing: border-box;
 }
 
-.edit-name-input:focus {
-  outline: none;
-  border-color: #2196f3;
-  background: #fcfdff;
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+.edit-name-input:focus-visible {
+  /* A border-colour shift alone is not a focus indicator. The ring carries
+     the state; the tint and lift are supporting cues. */
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+  background: var(--control-bg-solid);
+  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
 }
 
 .edit-name-actions {
@@ -2886,7 +2889,7 @@ defineExpose({
 }
 
 .track-description-block.empty:hover {
-  border-color: #2196f3;
+  border-color: var(--accent-hover);
   background: #f8fbff;
 }
 
@@ -2966,11 +2969,12 @@ defineExpose({
   overflow-y: auto;
 }
 
-.edit-description-input:focus {
-  outline: none;
-  border-color: #2196f3;
-  background: #fcfdff;
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+.edit-description-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+  background: var(--control-bg-solid);
+  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
 }
 
 .edit-description-input::placeholder {
@@ -3000,7 +3004,7 @@ defineExpose({
 }
 
 .save-btn {
-  background: #2196f3;
+  background: var(--accent-hover);
   color: #fff;
   box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
 }
@@ -3013,7 +3017,7 @@ defineExpose({
 }
 
 .save-btn:not(:disabled):hover {
-  background: #1976d2;
+  background: var(--accent);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
 }
@@ -3097,7 +3101,7 @@ defineExpose({
 
 .info-icon:hover {
   opacity: 1;
-  color: #2196f3;
+  color: var(--accent-hover);
   background-color: rgba(33, 150, 243, 0.1);
 }
 
@@ -3176,11 +3180,12 @@ defineExpose({
   visibility: visible;
 }
 
-.info-icon:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.12);
-  color: #2196f3;
-  background-color: rgba(33, 150, 243, 0.08);
+.info-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
+  color: var(--accent);
+  background-color: rgba(25, 118, 210, 0.08);
 }
 
 .info-icon svg {
@@ -3309,7 +3314,7 @@ defineExpose({
 
 .force-update-btn:hover:not(:disabled) {
   background: rgba(33, 150, 243, 0.1);
-  color: #1976d2;
+  color: var(--accent);
   transform: scale(1.05);
 }
 

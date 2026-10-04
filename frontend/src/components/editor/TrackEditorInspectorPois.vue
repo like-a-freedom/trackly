@@ -254,10 +254,11 @@ watch(
   box-sizing: border-box;
 }
 
-.form-input:focus {
-  outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+.form-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
 }
 
 .form-textarea {

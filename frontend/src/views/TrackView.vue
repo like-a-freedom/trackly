@@ -1145,7 +1145,7 @@ defineExpose({
 }
 
 .btn-home {
-  background: #2196f3;
+  background: var(--accent-hover);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -1156,6 +1156,6 @@ defineExpose({
 }
 
 .btn-home:hover {
-  background: #1976d2;
+  background: var(--accent);
 }
 </style>

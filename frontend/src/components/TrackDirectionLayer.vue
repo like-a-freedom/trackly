@@ -22,7 +22,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  color: '#3498db'
+  // Matches --accent. This default lives in JS, so it cannot use var().
+  color: '#1976d2'
 });
 
 // Try to get map instance from parent

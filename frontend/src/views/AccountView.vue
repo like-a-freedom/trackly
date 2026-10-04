@@ -900,10 +900,11 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
-.form-input:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+.form-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
 }
 
 .form-input:disabled {
@@ -946,7 +947,7 @@ onMounted(() => {
 
 .btn-primary {
   padding: 10px 20px;
-  background: #3498db;
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -979,7 +980,7 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border: 3px solid #e0e0e0;
-  border-top-color: #3498db;
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -988,7 +989,7 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border: 2px solid #e0e0e0;
-  border-top-color: #3498db;
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1065,17 +1066,16 @@ onMounted(() => {
 }
 
 .search-box:focus-within {
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.16);
 }
 
 .search-input {
   flex: 1;
   border: none;
-  outline: none;
-  font-size: 0.9em;
-  color: #374151;
   background: transparent;
+  color: #374151;
+  font-size: 1rem; /* 16px: iOS Safari zooms below this */
 }
 
 .search-input::placeholder {

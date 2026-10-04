@@ -235,7 +235,10 @@ body,
   width: 32px;
   height: 32px;
   border: 3px solid #e5e7eb;
-  border-top-color: #3b82f6;
+  /* Literal rather than var(--accent): this rule sits outside :root, and
+     keeping the one literal next to its token definition makes the pairing
+     easy to audit. Both are #1976d2. */
+  border-top-color: #1976d2;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }

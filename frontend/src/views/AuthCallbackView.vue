@@ -234,7 +234,7 @@ onMounted(() => {
   width: 48px;
   height: 48px;
   border: 4px solid #e0e0e0;
-  border-top-color: #3498db;
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -286,7 +286,7 @@ p {
 
 .btn-primary {
   margin-top: 8px;
-  background: #3498db;
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 8px;

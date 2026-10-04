@@ -992,7 +992,17 @@ watch([
       // Distance information
       if (dataPoints.length > 0) {
         const xValue = dataPoints[0].label;
-        innerHtml += `<div class="tooltip-distance">📍 ${xValue}</div>`;
+        // An inline SVG rather than the 📍 emoji: emoji render at different
+        // sizes and colours per OS and sit outside the stroke-icon language
+        // used everywhere else on the map.
+        innerHtml +=
+          `<div class="tooltip-distance">` +
+          `<svg class="tooltip-distance-icon" viewBox="0 0 24 24" fill="none" ` +
+          `stroke="currentColor" stroke-width="2" stroke-linecap="round" ` +
+          `stroke-linejoin="round" aria-hidden="true">` +
+          `<path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/>` +
+          `<circle cx="12" cy="10" r="2.5"/></svg>` +
+          `<span>${xValue}</span></div>`;
         
         const pointIndex = dataPoints[0].dataIndex;
         hoverPayload = buildPayloadForIndex(pointIndex, isChartPointFixed.value);
@@ -1408,9 +1418,22 @@ defineExpose({
 }
 
 .tooltip-distance {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-weight: 500;
   color: #1a1a1a;
   font-size: 12px;
+}
+
+.tooltip-distance-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .tooltip-time {
