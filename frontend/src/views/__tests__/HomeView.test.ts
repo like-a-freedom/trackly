@@ -322,6 +322,38 @@ describe('HomeView', () => {
             const geoButton = wrapper.find('.geolocation-button-mock');
             expect(geoButton.exists()).toBe(true);
         });
+
+        it('should render Create Track inside the map controls overlay', () => {
+            const overlay = wrapper.find('.map-controls-overlay');
+            const createTrack = wrapper.find('.create-track-btn');
+
+            expect(createTrack.exists()).toBe(true);
+            // Drawing a track belongs with the other map commands, not across
+            // the map in the upload cluster.
+            expect(overlay.find('.create-track-btn').exists()).toBe(true);
+        });
+
+        it('should keep Create Track out of the upload container', () => {
+            const uploadContainer = wrapper.find('.upload-form-container');
+            expect(uploadContainer.find('.create-track-btn').exists()).toBe(false);
+        });
+
+        it('should order Create Track last in the tool stack', () => {
+            const children = [...wrapper.find('.map-controls-overlay').element.children];
+            const last = children[children.length - 1];
+
+            expect(last.classList.contains('create-track-btn')).toBe(true);
+        });
+
+        it('should use a distinct icon, not the zoom plus', () => {
+            const createTrack = wrapper.find('.create-track-btn');
+            // A plus would read as "zoom in" next to the zoom control.
+            const lines = createTrack.findAll('line');
+            const circles = createTrack.findAll('circle');
+
+            expect(lines).toHaveLength(0);
+            expect(circles.length).toBeGreaterThan(0);
+        });
     });
 
     describe('Toast Component', () => {

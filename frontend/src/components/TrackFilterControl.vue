@@ -1214,13 +1214,13 @@ onUnmounted(() => {
 
   /* On phones the panel is full-bleed, so it cannot also sit beside the
      map-tool stack in the same corner. It opens into the free band between
-     the map-tool stack (top-left, four 44px controls ending at y=212) and
-     the track-adding cluster (bottom-right, two controls starting at
-     y=734). Both bounds hold it clear of each cluster, and the panel
-     scrolls inside the band rather than growing past it. */
+     the map-tool stack (top-left) and the upload control (bottom-right).
+     The stack is now five 44px controls with 8px gaps — search 12-56,
+     geolocation 64-108, zoom-in 116-160, zoom-out 168-212, create 220-264 —
+     so the panel starts below 264 and stays clear of both corners. */
   .track-filter-control {
     position: fixed !important;
-    top: calc(220px + env(safe-area-inset-top, 0px)) !important;
+    top: calc(272px + env(safe-area-inset-top, 0px)) !important;
     left: calc(12px + env(safe-area-inset-left, 0px));
     right: calc(12px + env(safe-area-inset-right, 0px));
     width: auto !important;
@@ -1229,8 +1229,10 @@ onUnmounted(() => {
     /* Hugs the top of the band and grows only as far as its content: an
        empty panel stretched to 500px of dead white is worse than a short
        one. The max-height keeps tall filter content inside the band, where
-       it scrolls instead of growing into the track-adding cluster. */
-    max-height: calc(100dvh - 344px - env(safe-area-inset-top, 0px));
+       it scrolls instead of growing down into the upload control. 376 is the
+       sum of both bounds: 272px above (the tool stack) and 104px below (the
+       upload control plus its safe-area inset). */
+    max-height: calc(100dvh - 376px - env(safe-area-inset-top, 0px));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;

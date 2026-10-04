@@ -31,29 +31,6 @@
         :data="tooltip.data"
       />
       <div class="upload-form-container">
-        <!-- Track-adding cluster: create + upload live together, bottom-right -->
-        <button
-          v-if="featureFlags.isEditorEnabled"
-          class="create-track-btn"
-          title="Create new track"
-          aria-label="Create new track"
-          @click="router.push({ name: 'TrackCreate' })"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          <span class="create-track-label">Create Track</span>
-        </button>
         <div
           class="collapsible-upload"
           :class="{ expanded: uploadFormExpanded }"
@@ -121,11 +98,37 @@
       />
     </TrackMap>
 
-    <!-- Map tools: search, geolocation, zoom — one vertical stack, top-left -->
+    <!-- Map tools: search, geolocation, zoom, create — one vertical stack, top-left -->
     <div class="map-controls-overlay">
       <SearchButton @open-search="openSearch" />
       <GeolocationButton @location-found="onLocationFound" />
       <MapZoomControl :map="mapInstance" />
+      <button
+        v-if="featureFlags.isEditorEnabled"
+        class="create-track-btn"
+        type="button"
+        title="Create new track"
+        aria-label="Create new track"
+        @click="router.push({ name: 'TrackCreate' })"
+      >
+        <!-- A route between two endpoints, not a plus: a plus would read as
+             "zoom in" next to the zoom control. Geometry matches the lucide
+             "route" icon (ISC), already a project dependency, and is inlined
+             to stay consistent with the hand-written SVGs used elsewhere. -->
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="6" cy="19" r="3" />
+          <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+          <circle cx="18" cy="5" r="3" />
+        </svg>
+      </button>
     </div>
 
     <!-- Auth button - positioned in bottom left -->
@@ -876,40 +879,45 @@ body,
   pointer-events: auto; /* Re-enable pointer events for buttons */
 }
 
-/* Create Track — sits in the bottom-right track-adding cluster, directly above
-   the upload control. Shares the floating-control surface with search and
-   geolocation so no single button claims to be the primary action. */
+/* Create Track — the last item in the top-left map-tool stack, so drawing a
+   track sits with the other map commands instead of across the map. It uses
+   the same square floating-control surface as search, geolocation and zoom,
+   which is why it carries no text label: a labelled pill in a column of
+   squares would be the odd one out. */
 .create-track-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   background: var(--control-bg);
   backdrop-filter: blur(10px);
   color: var(--control-icon);
   border: 1px solid var(--control-border);
   border-radius: var(--control-radius);
   cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-tight);
   box-shadow: var(--control-shadow);
   transition: background 0.2s, box-shadow 0.2s, color 0.2s;
   user-select: none;
-  white-space: nowrap;
+  pointer-events: auto;
 }
 
 .create-track-btn:hover {
   background: var(--control-bg-solid);
   color: var(--control-icon-hover);
   box-shadow: var(--control-shadow-hover);
+  transform: translateY(-1px);
 }
 
 .create-track-btn:active {
+  transform: translateY(0);
   box-shadow: var(--control-shadow);
 }
 
 .create-track-btn svg {
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   stroke: var(--accent);
   transition: stroke 0.2s;
@@ -923,11 +931,8 @@ body,
    768px wide and still needs a 44px target. */
 @media (max-width: 640px), (pointer: coarse) {
   .create-track-btn {
-    /* Icon only when the label will not fit the target comfortably */
-    padding: 0;
     width: 44px;
     height: 44px;
-    justify-content: center;
     border-radius: 10px;
     background: #ffffff;
     backdrop-filter: none;
@@ -935,8 +940,9 @@ body,
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
-  .create-track-label {
-    display: none;
+  .create-track-btn svg {
+    width: 22px;
+    height: 22px;
   }
 }
 
@@ -976,11 +982,12 @@ body,
   bottom: calc(16px + constant(safe-area-inset-bottom));
   bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 2000; /* Above map panes and controls */
-  /* Track-adding cluster: create and upload stack upward from the corner */
+  /* Only the upload control lives here now; Create Track moved to the
+     top-left map-tool stack. Right-aligned so the compact button keeps the
+     corner position the expanded form grows from. */
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
   /* Optimize for smooth animations */
   will-change: transform;
   backface-visibility: hidden;
