@@ -10,6 +10,9 @@ jobs:
   backend:
     name: Backend (Rust)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         working-directory: ./backend
@@ -19,10 +22,11 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-audit
+      - name: Security audit (cargo-audit)
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: ./backend
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - name: Check for orphan symbols
