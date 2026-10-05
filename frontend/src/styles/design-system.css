@@ -1,0 +1,23 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@theme {
+  --color-ink: #17283d;
+  --color-muted: #52647a;
+  --color-surface: #ffffff;
+  --color-canvas: #f3f6fa;
+  --color-line: #d6dfe9;
+  --color-action: #245bd7;
+}
+@media (max-width: 900px) {
+  .track-editor-view input:not([type="checkbox"]):not([type="color"]), .track-editor-view select, .track-editor-view textarea,
+  .upload-form input:not([type="file"]), .upload-form select, .account-view input { font-size:16px; min-height:44px; }
+  .track-editor-view .btn-icon, .track-editor-view .btn-icon-sm, .track-editor-view .poi-actions button { min-width:44px; min-height:44px; }
+}
+@layer base {
+  :root { color: var(--color-ink); font-family: system-ui, sans-serif; }
+  :focus-visible { outline: 3px solid #245bd7; outline-offset: 3px; }
+  button, input, select, textarea { font: inherit; }
+  button, a, input, select, textarea { touch-action: manipulation; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+}

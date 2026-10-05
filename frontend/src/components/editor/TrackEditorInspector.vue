@@ -91,22 +91,22 @@ const modeCopy = {
   edit: {
     label: "Draw",
     headline: "Add or adjust route points",
-    body: "Click the map to place points and use the bottom deck for the heavy editing controls.",
+    body: "Click the map to place points and use the Route and Review tabs for the heavy editing controls.",
   },
   fragment: {
     label: "Fragments",
     headline: "Work with the current fragment",
-    body: "Select fragment points on the map, then use the bottom deck for reroute, split, reverse, or export actions.",
+    body: "Select fragment points on the map, then use the Route and Review tabs for reroute, split, reverse, or export actions.",
   },
   routing: {
     label: "Routing",
     headline: "Routing controls stay close by",
-    body: "Use the top context overflow for routing options and the deck for broader route edits.",
+    body: "Use More for routing options and Review for advanced route edits.",
   },
   trace: {
     label: "Trace",
     headline: "Trace over an existing line",
-    body: "Stay focused on the map surface while the deck keeps the detailed editing modules ready below.",
+    body: "Stay focused on the map surface while the Route tab keeps the editing controls ready.",
   },
 };
 

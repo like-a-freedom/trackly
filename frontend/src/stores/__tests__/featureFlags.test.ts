@@ -16,6 +16,18 @@ describe('useFeatureFlagsStore', () => {
     expect(store.isLoaded).toBe(false);
   });
 
+  it('shares a pending flags request between startup and navigation', async () => {
+    let complete: (value: unknown) => void = () => {};
+    globalThis.fetch = vi.fn(() => new Promise(resolve => { complete = resolve; }));
+    const store = useFeatureFlagsStore();
+    const first = store.fetchFlags();
+    const second = store.fetchFlags();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    complete({ ok:true, json:async () => ({auth:false,editor:false}) });
+    await Promise.all([first,second]);
+    expect(store.isEditorEnabled).toBe(false);
+  });
+
   it('fetches flags from backend', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

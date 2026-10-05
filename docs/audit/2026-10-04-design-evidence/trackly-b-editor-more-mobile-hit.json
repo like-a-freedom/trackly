@@ -1,0 +1,126 @@
+{
+  "controls": [
+    {
+      "box": {
+        "bottom": 164,
+        "height": 13,
+        "left": 38,
+        "right": 51,
+        "top": 151,
+        "width": 13,
+        "x": 38,
+        "y": 151
+      },
+      "hit": "",
+      "hitTag": "INPUT",
+      "hitWithin": true,
+      "text": "top-bar-routing-toggle"
+    },
+    {
+      "box": {
+        "bottom": 215,
+        "height": 36,
+        "left": 24,
+        "right": 330,
+        "top": 179,
+        "width": 306,
+        "x": 24,
+        "y": 179
+      },
+      "hit": "leaflet-zoom-animated",
+      "hitTag": "CANVAS",
+      "hitWithin": false,
+      "text": "Snap: Auto\nSnap: On\nSnap: Off"
+    },
+    {
+      "box": {
+        "bottom": 255,
+        "height": 36,
+        "left": 24,
+        "right": 330,
+        "top": 219,
+        "width": 306,
+        "x": 24,
+        "y": 219
+      },
+      "hit": "leaflet-zoom-animated",
+      "hitTag": "CANVAS",
+      "hitWithin": false,
+      "text": "Hiking\nWalking\nRunning\nCycling\nMTB\nDriving"
+    },
+    {
+      "box": {
+        "bottom": 290,
+        "height": 31,
+        "left": 24,
+        "right": 330,
+        "top": 259,
+        "width": 306,
+        "x": 24,
+        "y": 259
+      },
+      "hit": "leaflet-zoom-animated",
+      "hitTag": "CANVAS",
+      "hitWithin": false,
+      "text": "Distance markers"
+    },
+    {
+      "box": {
+        "bottom": 325,
+        "height": 31,
+        "left": 24,
+        "right": 330,
+        "top": 294,
+        "width": 306,
+        "x": 24,
+        "y": 294
+      },
+      "hit": "leaflet-zoom-animated",
+      "hitTag": "CANVAS",
+      "hitWithin": false,
+      "text": "GPX"
+    },
+    {
+      "box": {
+        "bottom": 360,
+        "height": 31,
+        "left": 24,
+        "right": 330,
+        "top": 329,
+        "width": 306,
+        "x": 24,
+        "y": 329
+      },
+      "hit": "leaflet-zoom-animated",
+      "hitTag": "CANVAS",
+      "hitWithin": false,
+      "text": "KML"
+    },
+    {
+      "box": {
+        "bottom": 395,
+        "height": 31,
+        "left": 24,
+        "right": 330,
+        "top": 364,
+        "width": 306,
+        "x": 24,
+        "y": 364
+      },
+      "hit": "leaflet-zoom-animated",
+      "hitTag": "CANVAS",
+      "hitWithin": false,
+      "text": "GeoJSON"
+    }
+  ],
+  "menu": {
+    "bottom": 402,
+    "height": 269,
+    "left": 17,
+    "right": 337,
+    "top": 133,
+    "width": 320,
+    "x": 17,
+    "y": 133
+  }
+}

@@ -61,6 +61,7 @@
               ref="nameInput"
               v-model="editedName"
               class="edit-name-input"
+              aria-label="Track name"
               placeholder="Enter track name..."
               maxlength="255"
               @keydown.enter="saveName"
@@ -297,6 +298,21 @@
             </div>
           </div>
 
+        <!-- Basic Track Info, Map Overlays, Statistics (extracted to StatisticsPanel) -->
+        <StatisticsPanel
+          :track="track"
+          :is-owner="isOwner"
+          :speed-unit="speedUnit"
+          :formatted-distance="formattedDistance"
+          :formatted-duration="formattedDuration"
+          :formatted-moving-avg-speed="formattedMovingAvgSpeed"
+          :formatted-moving-avg-pace="formattedMovingAvgPace"
+          :distance-markers-enabled="distanceMarkersEnabled"
+          @speed-unit-change="setSpeedUnit"
+          @distance-markers-toggle="handleDistanceMarkersToggle"
+        />
+
+
           <!-- Description Edit Mode -->
           <div
             v-if="isEditingDescription"
@@ -470,20 +486,6 @@
           </div>
         </div>
 
-        <!-- Basic Track Info, Map Overlays, Statistics (extracted to StatisticsPanel) -->
-        <StatisticsPanel
-          :track="track"
-          :is-owner="isOwner"
-          :speed-unit="speedUnit"
-          :formatted-distance="formattedDistance"
-          :formatted-duration="formattedDuration"
-          :formatted-moving-avg-speed="formattedMovingAvgSpeed"
-          :formatted-moving-avg-pace="formattedMovingAvgPace"
-          :distance-markers-enabled="distanceMarkersEnabled"
-          @speed-unit-change="setSpeedUnit"
-          @distance-markers-toggle="handleDistanceMarkersToggle"
-        />
-
         <!-- Elevation Stats with Chart (extracted to ElevationPanel) -->
         <ElevationPanel
           :track="track"
@@ -586,6 +588,7 @@
 </template>
 
 <script setup>
+import { TRACK_CATEGORIES } from "../domain/trackCategories";
 import {
   ref,
   computed,
@@ -672,14 +675,7 @@ const { showToast } = toastStore;
 // Use confirm dialogs
 const { showConfirm } = useConfirm();
 
-const categoriesList = [
-    { value: "hiking", label: "Hiking" },
-    { value: "running", label: "Running" },
-    { value: "walking", label: "Walking" },
-    { value: "cycling", label: "Cycling" },
-    { value: "skiing", label: "Skiing" },
-    { value: "other", label: "Other" },
-];
+const categoriesList = TRACK_CATEGORIES;
 const chartMode = ref("elevation");
 const chartUpdateKey = ref(Date.now()); // Force chart updates
 const flyoutContent = ref(null);
@@ -2424,7 +2420,7 @@ defineExpose({
   flex-direction: column;
   color: #333;
   box-sizing: border-box;
-  transition: transform 0.3s cubic-bezier(0.4, 1.4, 0.6, 1), opacity 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
   /* Prevent touch actions from propagating to map */
   touch-action: none;
 }
@@ -2855,7 +2851,7 @@ defineExpose({
   padding: 8px 12px;
   background: #ffebee;
   border-radius: 6px;
-  border-left: 4px solid #d32f2f;
+  border: 1px solid #d32f2f;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3047,7 +3043,7 @@ defineExpose({
   padding: 8px 12px;
   background: #ffebee;
   border-radius: 6px;
-  border-left: 4px solid #d32f2f;
+  border: 1px solid #d32f2f;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3778,6 +3774,19 @@ defineExpose({
     height: 44px;
   }
 }
+@media(min-width:901px) {
+ .track-detail-flyout { left:auto; right:0; top:0; bottom:0; width:380px; min-width:0; max-width:380px; min-height:0; max-height:100dvh; padding:20px 0 0; border-radius:0; box-shadow:none; border-left:1px solid var(--color-line); background:var(--color-surface); }
+ .track-detail-flyout.collapsed { top:auto; width:44px; max-height:0; }
+ .flyout-content { padding:0 20px 24px; }
+ :deep(.basic-info-grid), :deep(.speed-pace-grid) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:640px) {
+ .track-name-block { flex-wrap:wrap; align-items:flex-start; }
+ .title-with-edit { min-width:0; max-width:100%; flex:1 1 100%; }
+ .track-header .title-with-edit h2 { overflow-wrap:anywhere; }
+ .track-name-block .header-actions { flex:1 1 100%; width:100%; justify-content:flex-end; gap:4px; }
+ .header-actions.grouped { gap:8px; }
+}
 </style>
 
 <style>
@@ -3826,4 +3835,5 @@ defineExpose({
     padding: 0 14px;
   }
 }
+
 </style>

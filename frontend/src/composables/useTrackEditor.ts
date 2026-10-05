@@ -3,7 +3,7 @@
  * Composes specialized sub-modules and exposes a unified API.
  * Each sub-module owns a single concern; this facade wires cross-module dependencies.
  */
-import { ref, computed, type Ref } from 'vue';
+import { ref, computed, watch, type Ref } from 'vue';
 import { getSessionId } from '../utils/session';
 import { haversineDistance } from '../utils/haversine';
 import { useAuth } from './useAuth';
@@ -43,16 +43,28 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     const { getAuthHeader, user } = useAuth();
     const routing = useRouting();
     const undoRedo = useUndoRedo(50);
-    const draftSave = useDraftSave();
+    const draftSave = useDraftSave({ trackId });
+    const viewport = ref<{lat: number; lng: number; zoom: number} | null>(null);
+    function setViewport(value: {lat: number; lng: number; zoom: number}): void {
+        if (!Number.isFinite(value.lat) || !Number.isFinite(value.lng) || !Number.isFinite(value.zoom) || Math.abs(value.lat) > 90 || Math.abs(value.lng) > 180 || value.zoom < 0 || value.zoom > 22) return;
+        viewport.value = value;
+        autosave(false);
+    }
+    const recordedSeries = ref<{speed: (number | null)[]; pace: (number | null)[]; heartRate: (number | null)[]; temperature: (number | null)[]; time: (number | null)[]; coordinates: number[][]; distance: number} | null>(null);
 
     // ── Sub-modules ──────────────────────────────────────────
     const geometry = useTrackGeometry();
+    const loadedDistance = ref<number | null>(null);
+    let loadedPoints = '';
+    const pointsIdentity = () => JSON.stringify(geometry.segments.value.map(s => s.points.map(p => p.map(n => Math.round(n * 1e9) / 1e9))));
+    const canonicalDistanceKm = computed(() => loadedDistance.value !== null && pointsIdentity() === loadedPoints ? loadedDistance.value : geometry.totalDistanceKm.value);
     const pois = useTrackPois();
     const fragments = useTrackFragments();
     const optimizer = useTrackOptimizer();
     const persistence = useTrackPersistence();
 
     // ── Metadata state (inlined from useTrackMetadata) ────────
+    const createRequestId = ref<string>(crypto.randomUUID());
     const trackName = ref<string>('');
     const trackDescription = ref<string>('');
     const trackCategories = ref<string[]>([]);
@@ -181,27 +193,55 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         undoRedo.pushState(getGeometrySnapshot());
     }
 
-    function autosave() {
+    let revision = 0;
+    let restoring = false;
+    function autosave(dirty = true) {
+        if (restoring) return;
         const draftState: DraftState = {
             track: {
                 name: trackName.value,
                 description: trackDescription.value,
                 categories: trackCategories.value,
-                segments: geometry.segments.value.map(s => ({ points: s.points })),
-                pois: pois.pois.value,
+                segments: JSON.parse(JSON.stringify(geometry.segments.value)),
+                pois: JSON.parse(JSON.stringify(pois.pois.value)),
             },
             editingState: {
                 mode: editorMode.value,
                 activeSegmentIndex: geometry.activeSegmentIndex.value,
+                routingMode: routing.mode.value,
+                routingProfile: routing.profile.value,
+                snapToRoadMode: snapToRoadMode.value,
+                createRequestId: createRequestId.value,
+                contentDirty: dirty || draftSave.isDirty.value,
+                viewport: viewport.value ?? undefined,
             },
         };
-        draftSave.debouncedSave(draftState);
+        if (dirty) revision += 1;
+        draftSave.debouncedSave(draftState, dirty);
     }
+
+    watch([trackName, trackDescription, trackCategories, () => geometry.segments.value.map(s => [s.name, s.color])], () => autosave(), { deep: true, flush: 'sync' });
+    watch([editorMode, geometry.activeSegmentIndex, routing.mode, routing.profile, snapToRoadMode], () => autosave(false), {flush:'sync'});
 
     // ── Waypoint operations (delegated to useTrackWaypoints) ──
 
     function addWaypoint(lat: number, lng: number, options?: { onRoutingNotAvailable?: (msg: string) => void }): boolean {
         return waypointOps.addWaypoint(lat, lng, options);
+    }
+
+    function appendTrace(points: LatLngTuple[]): void {
+        const valid = points.filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180);
+        if (valid.length < 2 || geometry.totalPoints.value + valid.length > 100000) return;
+        saveUndoState();
+        const segment = geometry.segments.value[geometry.activeSegmentIndex.value];
+        segment.surfaceTypes ??= [];
+        for (const point of valid) {
+            segment.points.push(point);
+            segment.waypoints.push(segment.points.length - 1);
+            segment.surfaceTypes.push('unknown');
+        }
+        scheduleGeometryUpdates();
+        autosave();
     }
 
     function moveWaypoint(segIndex: number, pointIndex: number, lat: number, lng: number, options?: { onRoutingNotAvailable?: (msg: string) => void }): boolean {
@@ -471,21 +511,6 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         const nextDescription = updates.description !== undefined ? (updates.description ?? '').trim() : (poi.description ?? '');
         const nextCategory = updates.category !== undefined ? updates.category : (poi.category ?? '');
 
-        if (persistence.savedTrackId.value && poi.id) {
-            try {
-                const headers = { 'Content-Type': 'application/json', ...(await getAuthHeader()) };
-                const resp = await fetch(`/api/pois/${poi.id}`, {
-                    method: 'PATCH', headers,
-                    body: JSON.stringify({ name: nextName, description: nextDescription, category: nextCategory, session_id: getSessionId() }),
-                });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : 'Unknown error';
-                persistence.error.value = `POI update error: ${msg}`;
-                return { ok: false, error: persistence.error.value };
-            }
-        }
-
         saveUndoState();
         poi.name = nextName;
         poi.description = nextDescription;
@@ -497,19 +522,6 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     async function deletePoi(poiIndex: number): Promise<{ ok: boolean; error?: string }> {
         if (poiIndex < 0 || poiIndex >= pois.pois.value.length) {
             return { ok: false, error: 'POI not found' };
-        }
-
-        const poi = pois.pois.value[poiIndex];
-        if (persistence.savedTrackId.value && poi.id) {
-            try {
-                const headers = { ...(await getAuthHeader()) };
-                const resp = await fetch(`/api/tracks/${persistence.savedTrackId.value}/pois/${poi.id}`, { method: 'DELETE', headers });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : 'Unknown error';
-                persistence.error.value = `POI delete error: ${msg}`;
-                return { ok: false, error: persistence.error.value };
-            }
         }
 
         saveUndoState();
@@ -568,6 +580,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     // ── Server operations ────────────────────────────────────
 
     async function loadTrack(id: string): Promise<void> {
+        restoring = true;
         const store = {
             trackName: trackName.value,
             trackDescription: trackDescription.value,
@@ -582,8 +595,13 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
             getAuthHeader,
             id,
             (feature: any) => {
+                const properties = feature.properties ?? feature;
+                const series = (key: string): (number | null)[] => Array.isArray(properties[key]) ? properties[key] : [];
+                recordedSeries.value = {speed:series('speed_data'),pace:series('pace_data'),heartRate:series('hr_data'),temperature:series('temp_data'),time:series('time_data'),coordinates:feature.geometry.type === 'LineString' ? feature.geometry.coordinates.map((p:number[]) => [p[1],p[0]]) : feature.geometry.coordinates.flat().map((p:number[]) => [p[1],p[0]]),distance:properties.length_km ?? 0};
                 const segmentMeta = feature.segment_meta ?? feature.properties?.segment_meta ?? [];
                 geometry.fromGeoJSON(feature.geometry, feature.properties?.waypoints ?? [], segmentMeta);
+                loadedDistance.value = typeof properties.length_km === 'number' && Number.isFinite(properties.length_km) ? properties.length_km : null;
+                loadedPoints = pointsIdentity();
                 const elevationProfileData = feature.elevation_profile || feature.properties?.elevation_profile;
                 if (Array.isArray(elevationProfileData)) {
                     elevationProfile.value = elevationProfileData;
@@ -617,12 +635,16 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         // Don't overwrite segments - they were already set by fromGeoJSON in the callback
         // geometry.segments.value = store.segments;
         pois.pois.value = store.pois;
+        restoring = false;
+        draftSave.markClean();
     }
 
     async function saveTrack(): Promise<string | null> {
-        if (!trackName.value.trim() || geometry.totalPoints.value < 2) return null;
+        if (!canSave.value) return null;
+        const savedRevision = revision;
         return persistence.saveTrack(
             {
+                requestId: createRequestId.value,
                 trackName: trackName.value,
                 trackDescription: trackDescription.value,
                 trackCategories: trackCategories.value,
@@ -633,7 +655,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
             },
             getAuthHeader,
             toGeoJSON,
-            draftSave,
+            { ...draftSave, isCurrentRevision: () => revision === savedRevision && !draftSave.conflict.value },
         );
     }
 
@@ -715,17 +737,22 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         const draft = draftSave.loadDraft();
         if (!draft?.track) return false;
 
+        draftSave.acceptIncoming();
+        restoring = true;
         trackName.value = draft.track.name ?? '';
         trackDescription.value = draft.track.description ?? '';
         trackCategories.value = draft.track.categories ?? [];
         geometry.segments.value = draft.track.segments?.length
-            ? draft.track.segments.map((s, idx) => ({ points: s.points, waypoints: s.waypoints ?? [], surfaceTypes: s.surfaceTypes ?? [], name: null, color: getDefaultSegmentColor(idx) }))
+            ? draft.track.segments.map((s, idx) => ({ points: s.points, waypoints: s.waypoints ?? [], surfaceTypes: s.surfaceTypes ?? [], name: s.name ?? null, color: s.color ?? getDefaultSegmentColor(idx) }))
             : [{ points: [], waypoints: [], surfaceTypes: [], name: null, color: getDefaultSegmentColor(0) }];
         if (draft.track.pois) {
             pois.pois.value = draft.track.pois as typeof pois.pois.value;
         }
         // Support both old draft format (activeSegment) and new format (activeSegmentIndex)
         geometry.activeSegmentIndex.value = draft.editingState?.activeSegmentIndex ?? draft.editingState?.activeSegment ?? 0;
+        if (draft.editingState?.createRequestId) createRequestId.value = draft.editingState.createRequestId;
+        if (draft.editingState?.viewport) setViewport(draft.editingState.viewport);
+        if (draft.editingState?.mode) setMode(draft.editingState.mode as EditorMode);
 
         // Restore routing state from draft (stored as extra properties)
         if (draft.editingState?.routingMode) routing.setMode(draft.editingState.routingMode);
@@ -734,6 +761,8 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
 
         undoRedo.clear();
         scheduleGeometryUpdates();
+        restoring = false;
+        autosave(draft.editingState?.contentDirty ?? true);
         return true;
     }
 
@@ -751,13 +780,13 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         if (['auto', 'on', 'off'].includes(newMode)) {
             snapToRoadMode.value = newMode;
         }
-        autosave();
+        autosave(false);
     }
 
     // ── Computed ─────────────────────────────────────────────
 
     const canSave = computed(
-        () => trackName.value.trim().length > 0 && geometry.totalPoints.value >= 2,
+        () => !draftSave.conflict.value && !persistence.loading.value && !persistence.loadFailed.value && trackName.value.trim().length > 0 && geometry.totalPoints.value >= 2 && geometry.segments.value.every(s => s.points.length === 0 || s.points.length >= 2),
     );
 
     const isNewTrack = computed(() => !persistence.savedTrackId.value);
@@ -777,9 +806,9 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     });
 
     const estimatedTimeMinutes = computed(() => {
-        const dist = geometry.totalDistanceKm.value;
+        const dist = canonicalDistanceKm.value;
         if (dist <= 0) return 0;
-        const cat = trackCategories.value[0];
+        const cat = routing.profile.value;
         const baseSpeed = CATEGORY_SPEEDS[cat] ?? 5;
         let speed = baseSpeed;
 
@@ -810,6 +839,8 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         // Mode
         editorMode: editorMode,
         setMode,
+        viewport,
+        setViewport,
         snapToRoadMode: snapToRoadMode,
         setSnapToRoadMode,
 
@@ -823,7 +854,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         activeSegmentIndex: geometry.activeSegmentIndex,
         activeSegment: geometry.activeSegment,
         totalPoints: geometry.totalPoints,
-        totalDistanceKm: geometry.totalDistanceKm,
+        totalDistanceKm: canonicalDistanceKm,
         coordinateData: geometry.coordinateData,
         segmentStats: geometry.segmentStats,
         SEGMENT_COLORS,
@@ -842,6 +873,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
 
         // Waypoint ops
         addWaypoint,
+        appendTrace,
         moveWaypoint,
         deleteWaypoint,
         insertWaypoint,
@@ -879,6 +911,11 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         loadTrack,
         saveTrack,
         savedTrackId: persistence.savedTrackId,
+        recordedTrack: persistence.recordedTrack,
+        recordedSeries,
+        draftStorageError: draftSave.storageError,
+        draftConflict: draftSave.conflict,
+        keepLocalDraft: draftSave.resumeWrites,
         saving: persistence.saving,
         loading: persistence.loading,
         error: persistence.error,

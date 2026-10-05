@@ -80,11 +80,12 @@ const router = createRouter({
 });
 
 // SOTA: Type the navigation guard
-router.beforeEach((to: RouteLocationNormalized) => {
+router.beforeEach(async (to: RouteLocationNormalized) => {
   const feature = to.meta.feature;
   if (!feature) return true;
 
   const flags = useFeatureFlagsStore();
+  await flags.fetchFlags();
 
   if (feature === 'auth' && !flags.isAuthEnabled) return '/';
   if (feature === 'editor' && !flags.isEditorEnabled) return '/';

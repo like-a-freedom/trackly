@@ -9,7 +9,15 @@ export const useFeatureFlagsStore = defineStore('featureFlags', () => {
     const isAuthEnabled = computed(() => auth.value);
     const isEditorEnabled = computed(() => editor.value);
 
-    async function fetchFlags(): Promise<void> {
+    let pending: Promise<void> | null = null;
+    function fetchFlags(): Promise<void> {
+        if (isLoaded.value) return Promise.resolve();
+        if (pending) return pending;
+        pending = loadFlags();
+        return pending;
+    }
+
+    async function loadFlags(): Promise<void> {
         try {
             const res = await fetch('/api/feature-flags');
             if (!res.ok) return;

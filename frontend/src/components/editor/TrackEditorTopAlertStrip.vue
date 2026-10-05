@@ -159,4 +159,8 @@ defineEmits(["restoreDraft", "deleteDraft"]);
     margin-bottom: 2px;
   }
 }
+
+@media(max-width:900px) { .info-banner { padding:6px 12px; } .info-banner p { margin:0; font-size:13px; } .info-banner strong { display:none; } }
+
+@media(max-width:900px) { .top-alert--info { padding:6px 12px; } .top-alert--info p { margin:0; font-size:13px; } .top-alert--info strong { display:none; } }
 </style>

@@ -9,6 +9,12 @@ describe('useTrackGeometry', () => {
         geometry = useTrackGeometry();
     });
 
+    it('restores sparse anchor indices rather than promoting every route vertex', () => {
+        const geometry = useTrackGeometry();
+        geometry.fromGeoJSON({ type:'LineString', coordinates:[[30,50],[30.1,50.1],[30.2,50.2]] }, [{lat:50,lon:30,index:0},{lat:50.2,lon:30.2,index:2}]);
+        expect(geometry.segments.value[0].waypoints).toEqual([0,2]);
+    });
+
     it('initializes with one empty segment', () => {
         expect(geometry.segments.value).toHaveLength(1);
         expect(geometry.segments.value[0].points).toEqual([]);

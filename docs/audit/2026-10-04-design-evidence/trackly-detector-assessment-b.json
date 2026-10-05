@@ -1,0 +1,236 @@
+[
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/ElevationChart.vue",
+    "line": 1046,
+    "snippet": "border-left: 3px solid ${slopeColor}",
+    "importedBy": [
+      "ElevationPanel.vue",
+      "TrackDetailPanel.vue",
+      "ElevationChart.test.ts",
+      "TrackDetailPanel.test.ts",
+      "TrackEditorInspectorElevation.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/ToastNotification.vue",
+    "line": 81,
+    "snippet": "border-left: 4px solid var(--accent)",
+    "importedBy": [
+      "ToastNotification.test.ts",
+      "HomeView.vue",
+      "TrackEditorView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/ToastNotification.vue",
+    "line": 82,
+    "snippet": "border-left: 4px solid var(--success)",
+    "importedBy": [
+      "ToastNotification.test.ts",
+      "HomeView.vue",
+      "TrackEditorView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/ToastNotification.vue",
+    "line": 83,
+    "snippet": "border-left: 4px solid var(--warning)",
+    "importedBy": [
+      "ToastNotification.test.ts",
+      "HomeView.vue",
+      "TrackEditorView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/ToastNotification.vue",
+    "line": 84,
+    "snippet": "border-left: 4px solid var(--danger)",
+    "importedBy": [
+      "ToastNotification.test.ts",
+      "HomeView.vue",
+      "TrackEditorView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackDetailPanel.vue",
+    "line": 2858,
+    "snippet": "border-left: 4px solid #d32f2f",
+    "importedBy": [
+      "TrackDetailPanel.spec.js",
+      "TrackDetailPanel.test.ts",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackDetailPanel.vue",
+    "line": 3050,
+    "snippet": "border-left: 4px solid #d32f2f",
+    "importedBy": [
+      "TrackDetailPanel.spec.js",
+      "TrackDetailPanel.test.ts",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "bounce-easing",
+    "name": "Bounce or elastic easing",
+    "description": "Bounce and elastic easing feel dated and tacky. Real objects decelerate smoothly — use exponential easing (ease-out-quart/quint/expo) instead.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackDetailPanel.vue",
+    "line": 2427,
+    "snippet": "cubic-bezier(0.4, 1.4, 0.6, 1)",
+    "importedBy": [
+      "TrackDetailPanel.spec.js",
+      "TrackDetailPanel.test.ts",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "layout-transition",
+    "name": "Layout property animation",
+    "description": "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackFilterControl.vue",
+    "line": 910,
+    "snippet": "transition: height",
+    "importedBy": [
+      "TrackMap.vue",
+      "TrackFilterControl.test.ts"
+    ]
+  },
+  {
+    "antipattern": "bounce-easing",
+    "name": "Bounce or elastic easing",
+    "description": "Bounce and elastic easing feel dated and tacky. Real objects decelerate smoothly — use exponential easing (ease-out-quart/quint/expo) instead.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackMap.vue",
+    "line": 903,
+    "snippet": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    "importedBy": [
+      "TrackMap.test.ts",
+      "E2ETrackTest.vue",
+      "HomeView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "layout-transition",
+    "name": "Layout property animation",
+    "description": "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackMap.vue",
+    "line": 903,
+    "snippet": "transition: width",
+    "importedBy": [
+      "TrackMap.test.ts",
+      "E2ETrackTest.vue",
+      "HomeView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "layout-transition",
+    "name": "Layout property animation",
+    "description": "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackMap.vue",
+    "line": 959,
+    "snippet": "transition: width",
+    "importedBy": [
+      "TrackMap.test.ts",
+      "E2ETrackTest.vue",
+      "HomeView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "layout-transition",
+    "name": "Layout property animation",
+    "description": "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
+    "severity": "warning",
+    "category": "quality",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackMap.vue",
+    "line": 1008,
+    "snippet": "transition: width",
+    "importedBy": [
+      "TrackMap.test.ts",
+      "E2ETrackTest.vue",
+      "HomeView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "bounce-easing",
+    "name": "Bounce or elastic easing",
+    "description": "Bounce and elastic easing feel dated and tacky. Real objects decelerate smoothly — use exponential easing (ease-out-quart/quint/expo) instead.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackMap.vue",
+    "line": 906,
+    "snippet": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    "importedBy": [
+      "TrackMap.test.ts",
+      "E2ETrackTest.vue",
+      "HomeView.vue",
+      "TrackView.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/editor/TrackEditorInspectorSegments.vue",
+    "line": 168,
+    "snippet": ".segment-item.highlighted — inset box-shadow 3px stripe (left)",
+    "importedBy": [
+      "TrackEditorInspectorSegments.test.ts",
+      "TrackEditorSegmentsCard.vue"
+    ]
+  }
+]

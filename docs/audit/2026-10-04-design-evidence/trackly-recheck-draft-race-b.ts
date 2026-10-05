@@ -1,0 +1,11 @@
+import { useDraftSave } from '/Users/solovey/Documents/dev/trackly/frontend/src/composables/useDraftSave.ts';
+const store = new Map<string,string>();
+Object.assign(globalThis, {localStorage: {getItem:(k:string)=>store.get(k)??null,setItem:(k:string,v:string)=>store.set(k,v),removeItem:(k:string)=>store.delete(k)},window:{addEventListener:()=>{},removeEventListener:()=>{}}});
+const draft = useDraftSave({debounceMs:20});
+draft.debouncedSave({track:{name:'mock pending save',description:'',categories:[],segments:[{points:[[0,0],[1,1]]}]},editingState:{mode:'edit',activeSegmentIndex:0}});
+draft.markClean();
+draft.deleteDraft();
+const before={hasDraft:draft.hasDraft.value,dirty:draft.isDirty.value,stored:store.has('trackly_draft')};
+await Bun.sleep(50);
+const after={hasDraft:draft.hasDraft.value,dirty:draft.isDirty.value,stored:store.has('trackly_draft')};
+console.log(JSON.stringify({test:'in-memory localStorage simulation, no HTTP or persistent browser data',before,after}));

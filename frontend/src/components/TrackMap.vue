@@ -520,9 +520,15 @@ function initializeClustering(map) {
   }
 }
 
+let mapResizeObserver;
 async function onMapReady(e) {
   try {
     const map = e; // Leaflet map instance
+    if (map?.getContainer && typeof ResizeObserver !== 'undefined') {
+      mapResizeObserver?.disconnect();
+      mapResizeObserver = new ResizeObserver(() => map.invalidateSize({pan:false}));
+      mapResizeObserver.observe(map.getContainer());
+    }
     if (!map || typeof map.getZoom !== "function") {
       console.error(
         "[TrackMap] Error in onMapReady: Invalid map instance received.",
@@ -813,6 +819,7 @@ function cleanup() {
 
 // Cleanup on unmount
 onUnmounted(() => {
+  mapResizeObserver?.disconnect();
   // Set unmounting flag to prevent further operations
   setUnmounting(true);
 
@@ -1019,7 +1026,7 @@ watch(
   text-align: center;
 }
 
-:deep(.chart-fixed-marker) :deep(.fixed-icon) {
+:deep(.chart-fixed-marker .fixed-icon) {
   transform: translateY(-2px);
 }
 </style>

@@ -70,6 +70,7 @@ mod tests {
                 "coordinates": [[[37.61, 55.75], [37.62, 55.76]]]
             }),
             segment_meta: None,
+            waypoints: None,
             segment_gaps: None,
             pause_gaps: None,
             length_km: 1.5,

@@ -1,6 +1,6 @@
 <template>
   <aside
-    class="track-editor-left-panel"
+    class="track-editor-left-panel flex h-full min-h-0 flex-col bg-surface"
     data-testid="track-editor-left-panel"
   >
     <!-- ─── Tabs ─── -->
@@ -13,6 +13,7 @@
         :key="tab.id"
         class="panel-tab"
         :class="{ 'panel-tab--active': activeTab === tab.id }"
+        :aria-pressed="activeTab === tab.id"
         :data-testid="`panel-tab-${tab.id}`"
         @click="activeTab = tab.id"
       >
@@ -24,7 +25,7 @@
     <div class="panel-content">
       <!-- Segments tab -->
       <div
-        v-show="activeTab === 'segments'"
+        v-show="activeTab === 'route'"
         class="panel-tab-body"
       >
         <div
@@ -49,11 +50,12 @@
           @reverse-segment="$emit('reverseSegment', $event)"
           @delete-segment="$emit('deleteSegment', $event)"
         />
+        <slot name="context" />
       </div>
 
       <!-- Info tab: metadata + actions -->
       <div
-        v-show="activeTab === 'info'"
+        v-show="activeTab === 'description'"
         class="panel-tab-body"
       >
         <TrackEditorMetaCard
@@ -64,6 +66,25 @@
           @update:track-name="$emit('update:trackName', $event)"
           @update:track-description="$emit('update:trackDescription', $event)"
           @update:track-categories="$emit('update:trackCategories', $event)"
+        />
+      </div>
+
+      <!-- Elevation tab -->
+      <div
+        v-show="activeTab === 'review'"
+        class="panel-tab-body"
+      >
+        <TrackEditorChartCard
+          :recorded-series="recordedSeries"
+          :elevation-profile="elevationProfile"
+          :elevation-stats="elevationStats"
+          :total-distance-km="totalDistanceKm"
+          :coordinate-data="coordinateData"
+          :elevation-loading="elevationLoading"
+          :elevation-error="elevationError"
+          @chart-point-hover="$emit('chart-point-hover', $event)"
+          @chart-point-leave="$emit('chart-point-leave', $event)"
+          @chart-point-click="$emit('chart-point-click', $event)"
         />
         <div class="panel-inner-divider" />
         <TrackEditorActionsCard
@@ -98,24 +119,6 @@
           @export-fragment="$emit('exportFragment')"
         />
       </div>
-
-      <!-- Elevation tab -->
-      <div
-        v-show="activeTab === 'elevation'"
-        class="panel-tab-body"
-      >
-        <TrackEditorChartCard
-          :elevation-profile="elevationProfile"
-          :elevation-stats="elevationStats"
-          :total-distance-km="totalDistanceKm"
-          :coordinate-data="coordinateData"
-          :elevation-loading="elevationLoading"
-          :elevation-error="elevationError"
-          @chart-point-hover="$emit('chart-point-hover', $event)"
-          @chart-point-leave="$emit('chart-point-leave', $event)"
-          @chart-point-click="$emit('chart-point-click', $event)"
-        />
-      </div>
     </div>
   </aside>
 </template>
@@ -128,6 +131,7 @@ import TrackEditorMetaCard from "./TrackEditorMetaCard.vue";
 import TrackEditorSegmentsCard from "./TrackEditorSegmentsCard.vue";
 
 const props = defineProps({
+  recordedSeries: { type: Object, default: null },
   // Track identity
   trackName: { type: String, default: "" },
   trackDescription: { type: String, default: "" },
@@ -191,118 +195,21 @@ const emit = defineEmits([
   "chart-point-click",
 ]);
 
-const activeTab = ref("segments");
+const activeTab = ref("route");
 
 const tabs = [
-  { id: "segments", label: "Segments" },
-  { id: "info", label: "Info" },
-  { id: "elevation", label: "Elevation" },
+  { id: "route", label: "Route" },
+  { id: "description", label: "Description" },
+  { id: "review", label: "Review" },
 ];
 </script>
 
 <style scoped>
-/* ── Container ── */
-.track-editor-left-panel {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.97);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.1),
-    0 2px 8px rgba(15, 23, 42, 0.04);
-  overflow: hidden;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* ── Tabs ── */
-.panel-tabs {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: row;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
-  background: rgba(248, 250, 252, 0.6);
-}
-
-.panel-tab {
-  flex: 1;
-  height: 37px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  font-size: 0.79rem;
-  font-weight: 500;
-  cursor: pointer;
-  position: relative;
-  transition: color 0.12s;
-  letter-spacing: -0.01em;
-}
-
-.panel-tab:hover {
-  color: #334155;
-}
-
-.panel-tab--active {
-  color: #2563eb;
-  font-weight: 650;
-}
-
-.panel-tab--active::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 12%;
-  right: 12%;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: #2563eb;
-}
-
-/* ── Content ── */
-.panel-content {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-.panel-tab-body {
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 10px 10px 14px;
-  box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
-}
-
-.panel-tab-body::-webkit-scrollbar {
-  width: 4px;
-}
-
-.panel-tab-body::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.4);
-  border-radius: 4px;
-}
-
-.panel-inner-divider {
-  height: 1px;
-  background: rgba(226, 232, 240, 0.8);
-  margin: 8px 0;
-}
-
-.panel-empty-tip {
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-size: 0.78rem;
-  font-weight: 500;
-  text-align: center;
-}
+.panel-tabs { display:flex; flex-shrink:0; border-bottom:1px solid var(--color-line); }
+.panel-tab { flex:1; min-height:44px; background:transparent; border:0; border-bottom:3px solid transparent; color:var(--color-muted); cursor:pointer; }
+.panel-tab--active { color:var(--color-action); border-bottom-color:var(--color-action); font-weight:600; }
+.panel-content { flex:1; min-height:0; overflow:hidden; }
+.panel-tab-body { height:100%; overflow:auto; padding:16px; box-sizing:border-box; }
+.panel-inner-divider { border-top:1px solid var(--color-line); margin:20px 0; }
+.panel-empty-tip { padding:12px; margin-bottom:16px; background:#eff6ff; color:#194aa5; line-height:1.5; }
 </style>

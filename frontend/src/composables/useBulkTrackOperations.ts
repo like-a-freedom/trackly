@@ -8,6 +8,7 @@ interface TrackItem {
 
 interface UseBulkOperationsOptions {
   tracks: Ref<TrackItem[]>;
+  visibleTracks?: Ref<TrackItem[]>;
   selectedIds: Ref<string[]>;
   allVisibleSelected: Ref<boolean>;
   someSelected: Ref<boolean>;
@@ -17,6 +18,7 @@ interface UseBulkOperationsOptions {
 
 interface BulkOperationsState {
   bulkOperating: Ref<boolean>;
+  error: Ref<string | null>;
   toggleSelectAll: () => void;
   toggleSelection: (trackId: string) => void;
   bulkToggleVisibility: () => Promise<void>;
@@ -27,12 +29,13 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
   const { tracks, selectedIds, allVisibleSelected, someSelected, removeTracks, confirm } = options;
 
   const bulkOperating = ref(false);
+  const error = ref<string | null>(null);
 
   function toggleSelectAll(): void {
     if (allVisibleSelected.value || someSelected.value) {
       selectedIds.value = [];
     } else {
-      selectedIds.value = tracks.value.map((t) => t.id);
+      selectedIds.value = (options.visibleTracks ?? tracks).value.map((t) => t.id);
     }
   }
 
@@ -46,55 +49,62 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
   }
 
   async function bulkToggleVisibility(): Promise<void> {
-    if (selectedIds.value.length === 0) return;
+    if (selectedIds.value.length === 0 || bulkOperating.value) return;
+    const operationIds = [...selectedIds.value];
 
     bulkOperating.value = true;
+    error.value = null;
     try {
       const response = await http('/api/users/me/tracks/visibility', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ track_ids: selectedIds.value }),
+        body: JSON.stringify({ track_ids: operationIds }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (response.ok) {
         const data: { is_public: boolean } = await response.json();
         tracks.value.forEach((track) => {
-          if (selectedIds.value.includes(track.id)) {
+          if (operationIds.includes(track.id)) {
             track.is_public = data.is_public;
           }
         });
-        selectedIds.value = [];
+        selectedIds.value = selectedIds.value.filter(id => !operationIds.includes(id));
       }
-    } catch (error) {
-      console.error('Failed to bulk toggle visibility:', error);
+    } catch (cause) {
+      error.value = 'Could not complete this action. Your selection is retained; please retry.';
+      console.error('Failed to bulk toggle visibility:', cause);
     } finally {
       bulkOperating.value = false;
     }
   }
 
   async function bulkDelete(): Promise<void> {
-    if (selectedIds.value.length === 0) return;
+    if (selectedIds.value.length === 0 || bulkOperating.value) return;
+    const operationIds = [...selectedIds.value];
 
+    bulkOperating.value = true;
+    error.value = null;
+    try {
     const confirmed = await confirm({
       title: 'Delete Tracks',
-      message: `Are you sure you want to delete ${selectedIds.value.length} track(s)? This action cannot be undone.`,
+      message: `Are you sure you want to delete ${operationIds.length} track(s)? This action cannot be undone.`,
       confirmText: 'Delete',
     });
 
     if (!confirmed) return;
-
-    bulkOperating.value = true;
-    try {
       const response = await http('/api/users/me/tracks', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ track_ids: selectedIds.value }),
+        body: JSON.stringify({ track_ids: operationIds }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (response.ok) {
-        removeTracks(selectedIds.value);
-        selectedIds.value = [];
+        removeTracks(operationIds);
+        selectedIds.value = selectedIds.value.filter(id => !operationIds.includes(id));
       }
-    } catch (error) {
-      console.error('Failed to bulk delete tracks:', error);
+    } catch (cause) {
+      error.value = 'Could not complete this action. Your selection is retained; please retry.';
+      console.error('Failed to bulk delete tracks:', cause);
     } finally {
       bulkOperating.value = false;
     }
@@ -102,6 +112,7 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
 
   return {
     bulkOperating,
+    error,
     toggleSelectAll,
     toggleSelection,
     bulkToggleVisibility,

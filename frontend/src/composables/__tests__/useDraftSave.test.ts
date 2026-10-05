@@ -67,11 +67,16 @@ describe('useDraftSave', () => {
         });
     });
 
+    it('rejects a draft with invalid coordinates before restoring it', () => {
+        storage['trackly_draft']=JSON.stringify({version:1,track:{name:'Broken',segments:[{points:[[91,30]]}]},editingState:{}});
+        const draft=createDraft(); expect(draft.loadDraft()).toBeNull();
+    });
+
     describe('saveDraft / loadDraft', () => {
         it('saves and loads a draft correctly', () => {
             const ds = createDraft();
             const state = {
-                track: { name: 'My Track', segments: [[1, 2]] },
+                track: { name: 'My Track', segments: [{points:[[1,2]],waypoints:[0]}] },
                 editingState: { activeSegment: 0 },
             };
 
@@ -91,7 +96,29 @@ describe('useDraftSave', () => {
         });
     });
 
+    it('pauses automatic writes when another tab changes this draft', () => {
+        const ds = createDraft();
+        ds.install();
+        const incoming = JSON.stringify({ version:1, timestamp:new Date().toISOString(), writerId:'another-tab', origin:{kind:'new'}, track:{name:'Other tab'}, editingState:{} });
+        localStorage.setItem('trackly_draft', incoming);
+        const listener = vi.mocked(window.addEventListener).mock.calls.find(([name]) => name === 'storage')?.[1];
+        listener(new StorageEvent('storage', { key:'trackly_draft', newValue:incoming }));
+        ds.debouncedSave({track:{name:'This tab'},editingState:{}});
+        vi.advanceTimersByTime(200);
+        expect(ds.conflict.value).toBe(true);
+        expect(ds.loadDraft()?.track.name).toBe('Other tab');
+        ds.uninstall();
+    });
+
     describe('deleteDraft', () => {
+        it('does not restore a discarded draft when a pending save expires', () => {
+            const ds = createDraft();
+            ds.debouncedSave({ track: { name: 'discarded' }, editingState: {} });
+            ds.deleteDraft();
+            vi.advanceTimersByTime(200);
+            expect(ds.loadDraft()).toBeNull();
+            expect(ds.hasDraft.value).toBe(false);
+        });
         it('removes draft from storage', () => {
             const ds = createDraft();
             ds.saveDraft({ track: { name: 'del' }, editingState: {} });

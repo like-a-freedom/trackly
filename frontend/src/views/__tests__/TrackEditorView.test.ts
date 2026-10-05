@@ -15,10 +15,13 @@ const mockRoute = {
 };
 
 vi.mock('vue-router', () => ({
+    onBeforeRouteLeave: vi.fn(),
+    onBeforeRouteUpdate: vi.fn(),
     useRouter: () => mockRouter,
     useRoute: () => mockRoute,
 }));
 
+vi.mock('../../composables/useConfirm', () => ({useConfirm: () => ({showConfirm:vi.fn().mockResolvedValue(false)})}));
 const showToast = vi.fn();
 
 vi.mock('../../stores/toast.js', () => ({
@@ -229,6 +232,7 @@ function createMockEditor() {
         canRedo: ref(false),
         canSave: ref(true),
         saving: ref(false),
+        isDirty: ref(false),
         totalPoints: ref(2),
         totalDistanceKm: ref(1.2),
         estimatedTimeMinutes: ref(10),
@@ -376,8 +380,8 @@ describe('TrackEditorView keyboard shortcuts', () => {
         expect(leftPanel.exists()).toBe(true);
         expect(leftRail.exists()).toBe(true);
         expect(mapRegion.exists()).toBe(true);
-        expect(inspector.exists()).toBe(true);
-        expect(bottomDeck.exists()).toBe(true);
+        expect(inspector.exists()).toBe(false);
+        expect(bottomDeck.exists()).toBe(false);
     });
 
     it('mounts the editor as a full-screen map stage with a dedicated overlay layer', () => {
@@ -390,7 +394,7 @@ describe('TrackEditorView keyboard shortcuts', () => {
 
         expect(overlayLayer.find('[data-testid="editor-left-panel"]').exists()).toBe(true);
         expect(overlayLayer.find('[data-testid="editor-left-rail"]').exists()).toBe(true);
-        expect(overlayLayer.find('[data-testid="editor-right-inspector"]').exists()).toBe(true);
+        expect(overlayLayer.find('[data-testid="editor-right-inspector"]').exists()).toBe(false);
     });
 
     it('zooms map with + and - hotkeys', () => {
@@ -453,13 +457,13 @@ describe('TrackEditorView keyboard shortcuts', () => {
         expect(mockEditor.deleteLastPoint).toHaveBeenCalledTimes(1);
     });
 
-    it('forwards bottom deck segment actions to editor logic', async () => {
+    it('forwards working pane segment actions to editor logic', async () => {
         await wrapper.find('[data-testid="track-editor-left-panel-add-segment"]').trigger('click');
 
         expect(mockEditor.addSegment).toHaveBeenCalledTimes(1);
     });
 
-    it('routes chart clicks from the bottom deck back to the map-facing shell', async () => {
+    it('routes chart clicks from the working pane back to the map-facing shell', async () => {
         await wrapper.find('[data-testid="track-editor-left-panel-chart-click"]').trigger('click');
 
         expect(mockEditor.setFragmentPoint).toHaveBeenCalledWith(0, 1);

@@ -32,7 +32,7 @@ pub struct WaypointInput {
 }
 
 /// A POI to associate with the track.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PoiInput {
     /// Existing POI id (if linking to an existing one).
     pub id: Option<i32>,
@@ -46,6 +46,8 @@ pub struct PoiInput {
 /// Request payload for creating a track from editor geometry.
 #[derive(Debug, Deserialize)]
 pub struct CreateTrackFromEditorRequest {
+    #[serde(default)]
+    pub request_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     #[serde(default)]
@@ -70,6 +72,8 @@ pub struct UpdateTrackGeometryRequest {
     pub waypoints: Vec<WaypointInput>,
     #[serde(default)]
     pub segment_meta: Option<serde_json::Value>,
+    #[serde(default)]
+    pub pois: Option<Vec<PoiInput>>,
     /// Session ID for anonymous ownership verification.
     /// Required for anonymous users updating their own tracks.
     pub session_id: Option<Uuid>,
@@ -100,7 +104,24 @@ pub async fn create_track(
     // Compute hash from geometry
     let hash = compute_geometry_hash(&geojson);
 
-    let track_id = Uuid::new_v4();
+    let track_id = request.request_id.unwrap_or_else(Uuid::new_v4);
+    if request.request_id.is_some()
+        && let Some(existing) = db::get_track_detail(pool, track_id)
+            .await
+            .map_err(|e| AppError::Internal(e.into()))?
+    {
+        let owns = user_id.is_some() && existing.user_id == user_id
+            || request.session_id.is_some() && existing.session_id == request.session_id;
+        if !owns {
+            return Err(AppError::BadRequest(
+                "Create request identity is unavailable".into(),
+            ));
+        }
+        return Ok(TrackUploadResponse {
+            id: track_id,
+            url: format!("/track/{track_id}"),
+        });
+    }
     let waypoints_json = if request.waypoints.is_empty() {
         None
     } else {
@@ -125,6 +146,7 @@ pub async fn create_track(
         length_km,
         waypoints: waypoints_json,
         segment_meta: request.segment_meta.clone(),
+        pois: serde_json::to_value(&request.pois).map_err(|e| AppError::Internal(e.into()))?,
         hash: &hash,
         session_id: request.session_id,
         user_id,
@@ -150,7 +172,7 @@ pub async fn create_track(
 
     Ok(TrackUploadResponse {
         id: track_id,
-        url: format!("/tracks/{track_id}"),
+        url: format!("/track/{track_id}"),
     })
 }
 
@@ -163,8 +185,31 @@ pub async fn update_track_geometry(
 ) -> Result<()> {
     let start = Instant::now();
 
-    let (geojson, length_km) = validate_geometry(&request.geometry)?;
+    let (mut geojson, mut length_km) = validate_geometry(&request.geometry)?;
+    if let Some(original) = db::get_track_detail(pool, track_id)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?
+    {
+        let recorded = original.time_data.is_some()
+            || original.hr_data.is_some()
+            || original.speed_data.is_some()
+            || original.temp_data.is_some()
+            || original.recorded_at.is_some();
+        if recorded {
+            let (normalized, _) = validate_geometry(&original.geom_geojson)?;
+            if normalized != geojson {
+                return Err(AppError::BadRequest(
+                    "Recorded GPS geometry is immutable. Save a derived route instead.".into(),
+                ));
+            }
+            geojson = original.geom_geojson;
+            length_km = original.length_km;
+        }
+    }
     validate_segment_meta(&request.segment_meta)?;
+    if let Some(pois) = &request.pois {
+        validate_editor_pois(pois)?;
+    }
 
     let waypoints_json = if request.waypoints.is_empty() {
         None
@@ -182,8 +227,17 @@ pub async fn update_track_geometry(
         track_id,
         &geojson,
         length_km,
-        waypoints_json,
-        request.segment_meta.clone(),
+        db::GeometryUpdateOptions {
+            waypoints: waypoints_json,
+            segment_meta: request.segment_meta.clone(),
+            pois: request
+                .pois
+                .as_ref()
+                .map(serde_json::to_value)
+                .transpose()
+                .map_err(|e| AppError::Internal(e.into()))?,
+            session_id: request.session_id,
+        },
         &hash,
     )
     .await
@@ -223,7 +277,28 @@ pub async fn duplicate_track(
     })
 }
 
+fn validate_editor_pois(pois: &[PoiInput]) -> Result<()> {
+    if pois.len() > 1000 {
+        return Err(AppError::BadRequest("too many POIs".into()));
+    }
+    for poi in pois {
+        if !poi.lat.is_finite()
+            || !poi.lon.is_finite()
+            || !(-90.0..=90.0).contains(&poi.lat)
+            || !(-180.0..=180.0).contains(&poi.lon)
+            || poi.name.trim().is_empty()
+            || poi.name.len() > 200
+            || poi.description.as_ref().is_some_and(|s| s.len() > 10000)
+            || poi.category.as_ref().is_some_and(|s| s.len() > 50)
+        {
+            return Err(AppError::BadRequest("invalid POI".into()));
+        }
+    }
+    Ok(())
+}
+
 fn validate_create_request(request: &CreateTrackFromEditorRequest) -> Result<()> {
+    validate_editor_pois(&request.pois)?;
     // Name is required
     if request.name.trim().is_empty() {
         warn!("track name is empty");

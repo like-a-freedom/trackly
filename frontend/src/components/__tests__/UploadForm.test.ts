@@ -78,7 +78,7 @@ describe('UploadForm', () => {
         it('shows initial file selection message', () => {
             wrapper = mount(UploadForm);
 
-            expect(wrapper.text()).toContain('Drag and drop a GPX track file or click to select it');
+            expect(wrapper.text()).toContain('Choose a GPX or KML file, or drop it here');
         });
 
         it('does not show upload button initially', () => {
@@ -273,6 +273,20 @@ describe('UploadForm', () => {
             const dropArea = wrapper.find('.drop-area');
             expect(dropArea.classes()).toContain('drag-active');
         });
+    });
+
+    it('ignores a duplicate response for a file that has been replaced', async () => {
+        wrapper=mount(UploadForm);
+        let finishFirst: (result:unknown)=>void=()=>{};
+        mockCheckTrackDuplicate.mockReturnValueOnce(new Promise(resolve=>{finishFirst=resolve;})).mockResolvedValueOnce({alreadyExists:false,warning:''});
+        const input=wrapper.find('#track-upload');
+        Object.defineProperty(input.element,'files',{value:[new File(['a'],'first.gpx')],configurable:true});
+        await input.trigger('change');
+        Object.defineProperty(input.element,'files',{value:[new File(['b'],'second.gpx')],configurable:true});
+        await input.trigger('change'); await flushPromises();
+        finishFirst({alreadyExists:true,id:'older-file',warning:'Duplicate'}); await flushPromises();
+        expect(wrapper.vm.trackExists).toBe(false);
+        expect(wrapper.vm.warning).toBe('');
     });
 
     describe('Track duplicate checking', () => {
@@ -605,7 +619,7 @@ describe('UploadForm', () => {
             expect(wrapper.find('.upload-success').exists()).toBe(true);
             expect(wrapper.text()).toContain('Track uploaded successfully!');
         });
-        it('hides success message after timeout', async () => {
+        it('does not schedule removal of the permanent upload link', async () => {
             // Test that setTimeout is called with the correct timeout duration
             const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
 
@@ -627,7 +641,7 @@ describe('UploadForm', () => {
             expect(wrapper.vm.uploadSuccess).toBe(true);
 
             // Verify that setTimeout was called with 5000ms timeout (updated from 3000ms)
-            expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
+            expect(setTimeoutSpy).not.toHaveBeenCalledWith(expect.any(Function), 5000);
 
             // Test that setting uploadSuccess to false hides the message (validates reactive behavior)
             wrapper.vm.uploadSuccess = false;
@@ -1151,7 +1165,7 @@ describe('UploadForm', () => {
             expect(wrapper.vm.linkCopied).toBe(false);
         });
 
-        it('automatically clears upload data after extended timeout', async () => {
+        it('retains upload data after extended timeout', async () => {
             vi.useFakeTimers();
 
             wrapper = mount(UploadForm);
@@ -1170,8 +1184,8 @@ describe('UploadForm', () => {
             // Fast-forward time past the 5 second timeout
             vi.advanceTimersByTime(5000);
 
-            expect(wrapper.vm.uploadSuccess).toBe(false);
-            expect(wrapper.vm.uploadedTrackData).toBe(null);
+            expect(wrapper.vm.uploadSuccess).toBe(true);
+            expect(wrapper.vm.uploadedTrackData).not.toBe(null);
 
             vi.useRealTimers();
         });

@@ -152,13 +152,16 @@
         @click="nicknameEdit.close"
       >
         <div
+          ref="nicknameModalElement"
           class="modal-content"
+          role="dialog" aria-modal="true" aria-label="Edit nickname" tabindex="-1"
           @click.stop
         >
           <div class="modal-header">
             <h3>Edit Nickname</h3>
             <button
               class="modal-close"
+              aria-label="Close nickname editor"
               @click="nicknameEdit.close"
             >
               <svg
@@ -249,7 +252,7 @@
       <section class="account-section tracks-section">
         <div class="section-header">
           <h2>My Tracks</h2>
-          <span class="track-count">{{ search.filteredTracks.value.length }} tracks</span>
+          <span class="track-count" title="Search and selection apply to loaded tracks">{{ search.filteredTracks.value.length }} loaded tracks</span>
         </div>
 
         <!-- Search and Bulk Actions Bar -->
@@ -257,6 +260,8 @@
           v-if="trackList.tracks.value.length > 0"
           class="tracks-toolbar"
         >
+          <p class="text-sm text-muted">Search and selection apply to the tracks loaded below. Use Load more to include more tracks.</p>
+          <p v-if="bulkOps.error.value" class="text-sm text-red-800" role="alert">{{ bulkOps.error.value }}</p>
           <div class="search-box">
             <svg
               width="16"
@@ -288,7 +293,7 @@
                 :indeterminate="bulkOps.someSelected.value && !bulkOps.allVisibleSelected.value"
                 @change="bulkOps.toggleSelectAll"
               >
-              <span>Select all</span>
+              <span>Select shown tracks</span>
             </label>
             <button
               v-if="selectedTrackIds.length > 0"
@@ -345,6 +350,7 @@
           <span>Loading tracks...</span>
         </div>
 
+        <div v-else-if="trackList.error.value" class="tracks-empty" role="alert"><p>{{ trackList.error.value }}</p><button class="btn-secondary" @click="trackList.loadTracks()">Retry loading tracks</button></div>
         <div
           v-else-if="trackList.tracks.value.length === 0"
           class="tracks-empty"
@@ -544,6 +550,7 @@ import { useAuth } from "../composables/useAuth";
 import { useConfirm } from "../composables/useConfirm";
 import { http } from "../http-instance";
 import { useTrackList } from "../composables/useTrackList";
+import { useModalFocus } from "../composables/useModalFocus";
 import { useBulkTrackOperations } from "../composables/useBulkTrackOperations";
 import { useSettingsMenu } from "../composables/useSettingsMenu";
 import { useNicknameEdit } from "../composables/useNicknameEdit";
@@ -562,6 +569,8 @@ const settingsMenu = useSettingsMenu();
 const trackList = useTrackList({ limit: 20 });
 const search = useTrackSearch(trackList.tracks);
 const nicknameEdit = useNicknameEdit(computed(() => user.value?.nickname || ""));
+const nicknameModalElement = ref(null);
+useModalFocus(nicknameEdit.showModal, nicknameModalElement, nicknameEdit.close);
 
 const selectedTrackIds = ref([]);
 const togglingVisibility = ref(null);
@@ -584,6 +593,7 @@ const someSelected = computed(() => {
 
 const bulkOps = useBulkTrackOperations({
   tracks: trackList.tracks,
+  visibleTracks: search.filteredTracks,
   selectedIds: selectedTrackIds,
   allVisibleSelected,
   someSelected,
@@ -1033,7 +1043,7 @@ onMounted(() => {
 
 .track-count {
   font-size: 0.9em;
-  color: #6b7280;
+  color: #52647a;
   background: #f3f4f6;
   padding: 4px 10px;
   border-radius: 12px;

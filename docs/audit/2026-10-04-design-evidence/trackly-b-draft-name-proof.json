@@ -1,0 +1,35 @@
+{
+  "draft": {
+    "editingState": {
+      "activeSegmentIndex": 0,
+      "mode": "edit"
+    },
+    "timestamp": "2026-10-04T20:10:39.958Z",
+    "track": {
+      "categories": [],
+      "description": "",
+      "name": "",
+      "pois": [],
+      "segments": [
+        {
+          "points": [
+            [
+              50.45876815605789,
+              30.51186561584473
+            ],
+            [
+              50.457747816432494,
+              30.526992244720457
+            ]
+          ]
+        }
+      ]
+    },
+    "version": 1
+  },
+  "renderedNames": [
+    "Design audit draft title",
+    "Design audit draft title"
+  ],
+  "topName": "Design audit draft title"
+}

@@ -76,8 +76,8 @@ function getComponentKey(route) {
    ============================================================ */
 :root {
   /* Accent — one hue, three states. Replaces the four competing blues. */
-  --accent: #1976d2;
-  --accent-hover: #1565c0;
+  --accent: var(--color-action);
+  --accent-hover: #194aa5;
   --accent-active: #0d47a1;
 
   /* Floating control surface */
@@ -85,7 +85,7 @@ function getComponentKey(route) {
   --control-bg-solid: #ffffff;
   --control-border: rgba(0, 0, 0, 0.08);
   --control-border-strong: rgba(0, 0, 0, 0.12);
-  --control-icon: #666;
+  --control-icon: var(--color-muted);
   --control-icon-hover: #333;
   --control-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   --control-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);

@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-04",
+  "scope": "Read-only validation of audit and mitigation plan; no server writes",
+  "responses": [
+    {
+      "kind": "detail",
+      "path": "/api/tracks/049dbd57-8949-4b07-b505-0c1a45955840",
+      "status": 200,
+      "id": "049dbd57-8949-4b07-b505-0c1a45955840",
+      "length_km": 129.58285790482407,
+      "shape": {
+        "hasRootName": true,
+        "hasRootDescription": false,
+        "hasRootCategories": true,
+        "hasProperties": false,
+        "hasFeatures": false,
+        "hasGeometry": false,
+        "hasGeomGeojson": true,
+        "geomGeojsonType": "MultiLineString"
+      }
+    },
+    {
+      "kind": "list",
+      "path": "/api/tracks?bbox=30,54,33,57&zoom=10&mode=tracks",
+      "status": 200,
+      "found": true,
+      "id": "049dbd57-8949-4b07-b505-0c1a45955840",
+      "length_km": 244.3621861748915
+    },
+    {
+      "kind": "flags",
+      "path": "/api/feature-flags",
+      "status": 200,
+      "auth": false,
+      "editor": true
+    }
+  ],
+  "git_head": "cd01ffb84e66f809cd152381de49dc140e2390f2",
+  "source_sha256_at_contract_check": {
+    "frontend/src/views/TrackEditorView.vue": "9b5aff02a24e840c01288251eaaa0c8cb2d44752f0e8df759522e2b4b847e236",
+    "frontend/src/composables/useTrackEditor.ts": "6abe9f4aa7735bc1cbd1f5223262ab159399826fe547183f689933678712416c",
+    "frontend/src/composables/useDraftSave.ts": "a1d3ffe4786d815a30e6ba3837fe9578dd750c548237dd47eb3033a81bfcd2b1",
+    "frontend/src/composables/editor/useTrackPersistence.ts": "ce20f307b6e24a2acaea31fe5776ae64c7b8f6d28ac7d766e2aee92a0695dee8",
+    "frontend/src/composables/editor/useTrackGeometry.ts": "b2252dc6db027f7f013be3b066ceab0d3de9e3c7a13d49a9a18e3d58224594d7",
+    "frontend/src/composables/useTrackList.ts": "1385ec988466dfac9aa45b20211ef79775469a89ed54ab027ff785332285a4df",
+    "frontend/src/composables/useTrackSearch.ts": "60962592593d89d00d32eac23a97b844fc1bea43dd3a75dcc4e626c37a273f5f",
+    "frontend/src/stores/featureFlags.ts": "7cf3f0f602832e0e1c7a558553f5384cc2dbaf900e1993d9245cf47d3dc8b43d",
+    "frontend/src/router/index.ts": "f44c618af250053b00faadc21fc0ef25edd28d508adf10d683f14e678452f291",
+    "frontend/src/components/TrackDetailPanel.vue": "99a89d00ab141ff155eae2dc2d8905054d75f95eea7611d9792d68e12cabba31",
+    "frontend/src/components/TrackDetailPanel/StatisticsPanel.vue": "0bc53399101bf029ce1fed42fe6be181a0bf56d6c5f68904897996fc02eb72d7",
+    "backend/src/services/track_editor.rs": "0b65acdb5b8125935d9c22fe9dc05c10e992a1a405675a907e656319230108e3",
+    "backend/src/db/tracks/editor.rs": "7f88986b01a2f4288b7282ca1678272623a7a2689e3ee09e408bb259c23e077c",
+    "backend/src/handlers/tracks/export.rs": "a869177dc4af9ca0ff74d593b255f16d6d223c3360b4f53a949f25dee9958f96"
+  },
+  "source_sha256_at_document_validation": {
+    "frontend/src/views/TrackEditorView.vue": "9b5aff02a24e840c01288251eaaa0c8cb2d44752f0e8df759522e2b4b847e236",
+    "frontend/src/composables/useTrackEditor.ts": "6abe9f4aa7735bc1cbd1f5223262ab159399826fe547183f689933678712416c",
+    "frontend/src/composables/useDraftSave.ts": "a1d3ffe4786d815a30e6ba3837fe9578dd750c548237dd47eb3033a81bfcd2b1",
+    "frontend/src/composables/editor/useTrackPersistence.ts": "ce20f307b6e24a2acaea31fe5776ae64c7b8f6d28ac7d766e2aee92a0695dee8",
+    "frontend/src/composables/editor/useTrackGeometry.ts": "b2252dc6db027f7f013be3b066ceab0d3de9e3c7a13d49a9a18e3d58224594d7",
+    "frontend/src/composables/useTrackList.ts": "1385ec988466dfac9aa45b20211ef79775469a89ed54ab027ff785332285a4df",
+    "frontend/src/composables/useTrackSearch.ts": "60962592593d89d00d32eac23a97b844fc1bea43dd3a75dcc4e626c37a273f5f",
+    "frontend/src/stores/featureFlags.ts": "7cf3f0f602832e0e1c7a558553f5384cc2dbaf900e1993d9245cf47d3dc8b43d",
+    "frontend/src/router/index.ts": "f44c618af250053b00faadc21fc0ef25edd28d508adf10d683f14e678452f291",
+    "frontend/src/components/TrackDetailPanel.vue": "5975d866149707499a59e4d00701ce4c7c34f748e51b4ab87171b9ca19207867",
+    "frontend/src/components/TrackDetailPanel/StatisticsPanel.vue": "4748b568d21ac116fa15e8bb16dcb885e1bc0157fa9d1e32fc35eec595a0c2c3",
+    "backend/src/services/track_editor.rs": "0b65acdb5b8125935d9c22fe9dc05c10e992a1a405675a907e656319230108e3",
+    "backend/src/db/tracks/editor.rs": "7f88986b01a2f4288b7282ca1678272623a7a2689e3ee09e408bb259c23e077c",
+    "backend/src/handlers/tracks/export.rs": "a869177dc4af9ca0ff74d593b255f16d6d223c3360b4f53a949f25dee9958f96"
+  },
+  "concurrent_source_changes": [
+    "frontend/src/components/TrackDetailPanel.vue",
+    "frontend/src/components/TrackDetailPanel/StatisticsPanel.vue"
+  ],
+  "concurrent_source_change_note": "Changes to TrackDetailPanel.vue and StatisticsPanel.vue were made outside the audit. Tooltip freshness was checked after the update; other initial visual evidence remains historical."
+}

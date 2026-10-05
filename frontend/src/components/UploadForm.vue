@@ -17,23 +17,26 @@
         class="upload-label drop-area"
         :class="{ 'drag-active': dragActive }"
       >
-        <span v-if="!selectedFile">Drag and drop a GPX track file or click to select it</span>
+        <span v-if="!selectedFile">Choose a GPX or KML file, or drop it here</span>
         <span v-else>File: {{ selectedFile.name }}</span>
         <input
           id="track-upload"
           type="file"
           accept=".gpx,.kml"
           class="upload-input"
-          style="display: none;"
+          aria-label="Choose GPX or KML track"
+          :disabled="uploading"
           @change="onFileChange"
         >
       </label>
       <template v-if="selectedFile && !trackExists">
+        <label for="track-name-input">Track name</label>
         <input
           id="track-name-input"
           v-model="trackName"
           class="track-name-input"
           type="text"
+          :disabled="uploading"
           placeholder="Track name"
           autocomplete="off"
           @mousedown.stop
@@ -45,6 +48,8 @@
         >
         <Multiselect
           v-model="trackCategories"
+          aria-label="Track categories"
+          :disabled="uploading"
           mode="tags"
           :close-on-select="false"
           :searchable="true"
@@ -70,9 +75,9 @@
           class="upload-warning upload-warning-centered"
         >
           <span>Track already exists</span>
-          <button 
+          <button
             v-if="existingTrackId"
-            class="track-link-btn" 
+            type="button" class="track-link-btn"
             title="View existing track"
             aria-label="View existing track"
             @click="navigateToExistingTrack"
@@ -107,16 +112,16 @@
             v-if="uploadedTrackData"
             class="success-actions"
           >
-            <button 
-              class="track-link-btn" 
+            <button
+              type="button" class="track-link-btn"
               title="View uploaded track"
               aria-label="View track"
               @click="navigateToTrack"
             >
               Show track
             </button>
-            <button 
-              class="copy-link-btn" 
+            <button
+              type="button" class="copy-link-btn"
               :disabled="copyingLink"
               :title="copyingLink ? 'Copying...' : linkCopied ? 'Link copied!' : 'Copy track link'"
               aria-label="Copy track link"
@@ -169,14 +174,16 @@
         v-if="selectedFile"
         type="submit"
         class="upload-btn"
-        :disabled="!selectedFile || trackExists || checkingExists || trackCategories.length === 0"
+        :disabled="uploading || !selectedFile || !trackName.trim() || trackExists || checkingExists || trackCategories.length === 0"
       >
-        Upload
+        {{ uploading ? 'Uploading…' : 'Upload track' }}
       </button>
+      <p v-if="uploading" role="status">Uploading your file. Keep this window open.</p>
     </form>
   </div>
 </template>
 <script setup>
+import { TRACK_CATEGORIES } from "../domain/trackCategories";
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import Multiselect from '@vueform/multiselect';
@@ -195,39 +202,40 @@ const existingTrackId = ref(null); // Store existing track ID for duplicate case
 const checkingExists = ref(false);
 const warning = ref("");
 const uploadSuccess = ref(false);
+const uploading = ref(false);
 const uploadedTrackData = ref(null); // Store uploaded track data (id, url)
 const copyingLink = ref(false);
 const linkCopied = ref(false);
-const categoriesList = [
-  { value: 'hiking', label: 'Hiking' },
-  { value: 'running', label: 'Running' },
-  { value: 'walking', label: 'Walking' },
-  { value: 'cycling', label: 'Cycling' },
-  { value: 'skiing', label: 'Skiing' },
-  { value: 'other', label: 'Other' },
-];
+const categoriesList = TRACK_CATEGORIES;
 watch(() => props.dragActive, v => dragActive.value = v);
-watch(selectedFile, async () => {
+watch(selectedFile, async (file) => {
   warning.value = "";
   trackExists.value = false;
   existingTrackId.value = null;
   // Do not reset uploadSuccess here, so the message stays visible after upload
-  if (selectedFile.value) {
+  if (file) {
     checkingExists.value = true;
+    try {
     const { alreadyExists, id, warning: warnMsg } = await checkTrackDuplicate({
-      file: selectedFile.value
+      file
     });
+    if (selectedFile.value !== file) return;
     trackExists.value = alreadyExists;
     existingTrackId.value = id || null;
     warning.value = warnMsg || "";
-    checkingExists.value = false;
-  }
+    } catch {
+      if (selectedFile.value === file) warning.value = 'Could not check for duplicates. Please retry.';
+    } finally {
+      if (selectedFile.value === file) checkingExists.value = false;
+    }
+  } else checkingExists.value = false;
 });
 function setDragActive(val) {
   dragActive.value = val;
   emit('update:dragActive', val);
 }
 function onFileChange(event) {
+  if (uploading.value) return;
   const file = event.target.files[0];
   selectedFile.value = file || null;
   if (file) {
@@ -241,6 +249,7 @@ function onFileChange(event) {
   }
 }
 function onDrop(event) {
+  if (uploading.value) return;
   setDragActive(false);
   const file = event.dataTransfer.files[0];
   if (file) {
@@ -260,11 +269,12 @@ function onDrop(event) {
   }
 }
 async function handleUpload() {
-  if (!selectedFile.value || trackExists.value || checkingExists.value) return;
+  if (uploading.value || !selectedFile.value || trackExists.value || checkingExists.value) return;
   if (trackCategories.value.length === 0) {
     warning.value = 'Please select at least one category.';
     return;
   }
+  uploading.value = true;
   try {
     const response = await uploadTrack({
       file: selectedFile.value,
@@ -273,20 +283,14 @@ async function handleUpload() {
         ? trackCategories.value.map(obj => obj.value)
         : []
     });
-    
+
     // Store the upload response data
     uploadedTrackData.value = response;
-    
+
     selectedFile.value = null;
     trackName.value = "";
     trackCategories.value = [];
     uploadSuccess.value = true;
-    setTimeout(() => { 
-      uploadSuccess.value = false; 
-      uploadedTrackData.value = null; // Clear after timeout
-      copyingLink.value = false; // Reset copying state
-      linkCopied.value = false; // Reset copied state
-    }, 5000); // Increased to 5 seconds for better UX
     emit('uploaded');
   } catch (e) {
     if (e && e.message && e.message.includes('10 seconds')) {
@@ -294,6 +298,8 @@ async function handleUpload() {
     } else {
       warning.value = (e && e.message) || 'Error uploading track';
     }
+  } finally {
+    uploading.value = false;
   }
 }
 
@@ -314,15 +320,15 @@ function navigateToExistingTrack() {
 // Function to copy track URL to clipboard
 async function copyTrackUrl() {
   if (!uploadedTrackData.value) return;
-  
+
   copyingLink.value = true;
   try {
     // Create the shareable URL
     const trackUrl = `${window.location.origin}/track/${uploadedTrackData.value.id}`;
-    
+
     // Copy to clipboard
     await navigator.clipboard.writeText(trackUrl);
-    
+
     // Show success feedback
     linkCopied.value = true;
     setTimeout(() => {
@@ -338,7 +344,7 @@ async function copyTrackUrl() {
       textArea.select();
       document.execCommand('copy');
       document.body.removeChild(textArea);
-      
+
       // Show success feedback for fallback too
       linkCopied.value = true;
       setTimeout(() => {
@@ -425,8 +431,9 @@ async function copyTrackUrl() {
   background: #e3f2fd;
 }
 .upload-label input[type="file"] {
-  display: none;
+  position: absolute; width:1px; height:1px; opacity:0;
 }
+.upload-label:focus-within { outline:3px solid var(--color-action); outline-offset:3px; }
 .track-name-input {
   margin-top: 6px;
   margin-bottom: 6px;

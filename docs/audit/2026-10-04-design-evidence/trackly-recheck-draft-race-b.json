@@ -1,0 +1,13 @@
+{
+  "test": "in-memory localStorage simulation, no HTTP or persistent browser data",
+  "before": {
+    "hasDraft": false,
+    "dirty": false,
+    "stored": false
+  },
+  "after": {
+    "hasDraft": true,
+    "dirty": false,
+    "stored": true
+  }
+}

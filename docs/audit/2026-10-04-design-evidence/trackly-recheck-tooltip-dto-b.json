@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-10-04T20:39:50.253Z",
+  "viewport": {
+    "width": 1280,
+    "height": 577
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36",
+  "tooltip": {
+    "outerHTML": "<span class=\"info-icon\" tabindex=\"0\" role=\"img\" aria-label=\"Only the track owner can change overlay settings\">?</span>",
+    "dataTooltip": null,
+    "after": {
+      "content": "\"\"",
+      "opacity": "0.235608",
+      "visibility": "visible"
+    },
+    "active": true
+  },
+  "dto": {
+    "status": 200,
+    "keys": [
+      "id",
+      "name",
+      "description",
+      "categories",
+      "distance_markers_enabled",
+      "geom_geojson",
+      "segment_meta",
+      "segment_gaps",
+      "pause_gaps",
+      "length_km",
+      "elevation_profile",
+      "hr_data",
+      "temp_data",
+      "time_data",
+      "elevation_gain",
+      "elevation_loss",
+      "elevation_min",
+      "elevation_max",
+      "elevation_enriched",
+      "elevation_enriched_at",
+      "elevation_dataset",
+      "slope_min",
+      "slope_max",
+      "slope_avg",
+      "slope_histogram",
+      "slope_segments",
+      "avg_speed",
+      "avg_hr",
+      "hr_min",
+      "hr_max",
+      "moving_time",
+      "pause_time",
+      "moving_avg_speed",
+      "moving_avg_pace",
+      "duration_seconds",
+      "recorded_at",
+      "created_at",
+      "updated_at",
+      "session_id",
+      "user_id",
+      "speed_data",
+      "pace_data"
+    ],
+    "hasProperties": false,
+    "hasGeometry": false,
+    "hasGeomGeojson": true,
+    "geometryType": "MultiLineString",
+    "hasRootName": true,
+    "rootNameNonempty": true,
+    "ownership": {
+      "sessionPresent": false,
+      "userPresent": false
+    }
+  },
+  "loadContractInputs": {
+    "trackName": "",
+    "geometryPresent": false,
+    "waypointsPresent": false
+  }
+}

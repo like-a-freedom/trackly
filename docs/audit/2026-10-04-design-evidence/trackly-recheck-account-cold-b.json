@@ -1,0 +1,12 @@
+{
+  "path": "/account",
+  "accountPresent": true,
+  "profileText": "Back\nUser\nMy Tracks\n0 tracks\n\nYou don't have any tracks yet\n\nUpload a track",
+  "globals": [
+    "$pinia",
+    "$router",
+    "$route",
+    "$unhead",
+    "$head"
+  ]
+}

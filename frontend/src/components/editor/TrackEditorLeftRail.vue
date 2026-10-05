@@ -3,7 +3,8 @@
     class="track-editor-left-rail"
     aria-label="Editor tools"
   >
-    <div class="left-rail-group">
+    <select class="mode-select min-h-11 min-w-0 rounded border border-line bg-white text-sm text-ink" :value="mode" aria-label="Drawing tool" @change="$emit('setMode', ($event.target as HTMLSelectElement).value)"><option v-for="item in modeItems" :key="item.id" :value="item.id">{{ item.label }}</option></select>
+    <div class="left-rail-group left-rail-group--modes">
       <button
         v-for="item in modeItems"
         :key="item.id"
@@ -14,7 +15,7 @@
         :title="`${item.label} (${item.key})`"
         @click="$emit('setMode', item.id)"
       >
-        <span class="left-rail-btn-icon">{{ item.icon }}</span>
+        <component :is="item.icon" :size="18" aria-hidden="true" />
         <span class="sr-only">{{ item.label }}</span>
       </button>
     </div>
@@ -29,7 +30,7 @@
         title="Undo"
         @click="$emit('undo')"
       >
-        <span class="left-rail-btn-icon">↶</span>
+        <Undo2 :size="18" aria-hidden="true" />
         <span class="sr-only">Undo</span>
       </button>
       <button
@@ -39,7 +40,7 @@
         title="Redo"
         @click="$emit('redo')"
       >
-        <span class="left-rail-btn-icon">↷</span>
+        <Redo2 :size="18" aria-hidden="true" />
         <span class="sr-only">Redo</span>
       </button>
     </div>
@@ -55,14 +56,15 @@
         title="POI mode"
         @click="$emit('togglePoiMode')"
       >
-        <span class="left-rail-btn-icon">📍</span>
+        <MapPin :size="18" aria-hidden="true" />
         <span class="sr-only">Toggle POI mode</span>
       </button>
     </div>
   </nav>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import { Eye, Pencil, Scissors, Route, PenTool, Undo2, Redo2, MapPin } from 'lucide-vue-next';
 const props = defineProps({
   mode: { type: String, default: "edit" },
   canUndo: { type: Boolean, default: false },
@@ -73,133 +75,28 @@ const props = defineProps({
 defineEmits(["setMode", "undo", "redo", "togglePoiMode"]);
 
 const modeItems = [
-  { id: "view", label: "View", key: "F1", icon: "👁" },
-  { id: "edit", label: "Draw", key: "F2", icon: "✏️" },
-  { id: "fragment", label: "Fragments", key: "F3", icon: "✂️" },
-  { id: "routing", label: "Routing", key: "F4", icon: "🗺️" },
-  { id: "trace", label: "Trace", key: "T", icon: "🖊️" },
+  { id: "view", label: "View", key: "F1", icon: Eye },
+  { id: "edit", label: "Draw", key: "F2", icon: Pencil },
+  { id: "fragment", label: "Fragments", key: "F3", icon: Scissors },
+  { id: "routing", label: "Routing", key: "F4", icon: Route },
+  { id: "trace", label: "Trace", key: "T", icon: PenTool },
 ];
 </script>
 
 <style scoped>
-.track-editor-left-rail {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 8px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-}
+.track-editor-left-rail { display:flex; flex-direction:row; gap:8px; padding:6px; border:1px solid var(--color-line); background:var(--color-surface); border-radius:8px; overflow-x:auto; }
+.left-rail-group { display:flex; gap:4px; flex-shrink:0; }
+.left-rail-divider { width:1px; background:var(--color-line); }
+.left-rail-btn { display:flex; align-items:center; justify-content:center; width:44px; height:44px; border:0; background:transparent; color:var(--color-ink); border-radius:4px; cursor:pointer; flex-shrink:0; }
+.left-rail-btn.active { background:var(--color-action); color:white; }
+.left-rail-btn:disabled { color:#75859a; cursor:not-allowed; }
+.left-rail-btn:hover:not(:disabled):not(.active) { background:#eff6ff; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
 
-.left-rail-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  align-items: center;
-}
-
-.left-rail-group--footer {
-  margin-top: auto;
-}
-
-.left-rail-divider {
-  width: 28px;
-  height: 1px;
-  background: rgba(148, 163, 184, 0.5);
-}
-
-.left-rail-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  border-radius: 14px;
-  background: #fff;
-  color: #0f172a;
-  cursor: pointer;
-  transition: background-color 0.16s ease, border-color 0.16s ease,
-    transform 0.16s ease;
-}
-
-.left-rail-btn:hover:not(:disabled) {
-  background: #eef4ff;
-  border-color: #93c5fd;
-  transform: translateY(-1px);
-}
-
-.left-rail-btn.active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-
-.left-rail-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.left-rail-btn-icon {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-@media (max-width: 768px) {
-  .track-editor-left-rail {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 6px;
-    overflow-x: hidden;
-    padding: 8px;
-  }
-
-  .left-rail-group {
-    flex-direction: row;
-    width: auto;
-    flex-shrink: 0;
-    gap: 6px;
-  }
-
-  .left-rail-group--footer {
-    margin-top: 0;
-    margin-left: 0;
-  }
-
-  .left-rail-divider {
-    width: 1px;
-    height: 20px;
-    flex-shrink: 0;
-  }
-
-  .left-rail-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-  }
-
-  .left-rail-btn-icon {
-    font-size: 16px;
-  }
+.mode-select { display:none; }
+@media(max-width:900px) {
+ .mode-select { display:block; flex:1; width:76px; }
+ .left-rail-group--modes,.left-rail-divider { display:none; }
+ .track-editor-left-rail { gap:4px; padding:4px; }
 }
 </style>

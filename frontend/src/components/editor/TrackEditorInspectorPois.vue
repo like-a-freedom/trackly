@@ -34,6 +34,7 @@
           class="poi-edit"
         >
           <input
+            aria-label="Place name"
             v-model="poiEditDraft.name"
             class="form-input"
             type="text"
@@ -42,6 +43,7 @@
             data-testid="poi-edit-name"
           >
           <textarea
+            aria-label="Place description"
             v-model="poiEditDraft.description"
             class="form-input form-textarea"
             rows="2"
@@ -49,7 +51,7 @@
             placeholder="Description (optional)"
             data-testid="poi-edit-description"
           />
-          <select
+          <select aria-label="POI category"
             v-model="poiEditDraft.category"
             class="form-input"
             data-testid="poi-edit-category"

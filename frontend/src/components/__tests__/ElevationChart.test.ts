@@ -584,6 +584,7 @@ describe('ElevationChart', () => {
                 container.element.focus();
 
                 await container.trigger('keydown', { key: 'ArrowRight' });
+                expect(wrapper.find('[aria-live="polite"]').text()).toContain('Point');
 
                 expect(wrapper.emitted()['chart-point-hover']).toBeTruthy();
                 const payload = wrapper.emitted()['chart-point-hover'][0][0];

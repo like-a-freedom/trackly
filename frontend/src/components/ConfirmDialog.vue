@@ -6,7 +6,13 @@
       @click="onOverlayClick"
     >
       <div
+        ref="dialogElement"
         class="dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="title || 'Confirm action'"
+        tabindex="-1"
+        @keydown="handleKeydown"
         @click.stop
       >
         <div class="dialog-content">
@@ -40,7 +46,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, nextTick, onBeforeUnmount } from 'vue';
+import { useModalIsolation } from '../composables/useModalIsolation';
 
 interface Props {
   title?: string;
@@ -64,13 +71,35 @@ const emit = defineEmits<{
 }>();
 
 const visible = ref(false);
+const dialogElement = ref<HTMLElement | null>(null);
+useModalIsolation(visible, dialogElement);
+let previousFocus: HTMLElement | null = null;
+let previousOverflow = '';
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') { event.preventDefault(); onCancel(); return; }
+  if (event.key !== 'Tab') return;
+  const focusable = Array.from(dialogElement.value?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input, select, textarea, [tabindex="0"]') ?? []);
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first) { event.preventDefault(); dialogElement.value?.focus(); return; }
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+
 
 function show() {
+  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
   visible.value = true;
+  nextTick(() => dialogElement.value?.querySelector<HTMLElement>('button')?.focus());
 }
 
 function hide() {
   visible.value = false;
+  document.body.style.overflow = previousOverflow;
+  previousFocus?.focus();
 }
 
 function onConfirm() {
@@ -88,6 +117,8 @@ function onOverlayClick() {
     onCancel();
   }
 }
+
+onBeforeUnmount(() => { if (visible.value) hide(); });
 
 defineExpose({
   show,

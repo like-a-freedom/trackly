@@ -105,15 +105,25 @@
               :data-testid="`category-input-${cat.id}`"
               @change="handleCategoryToggle(cat.id)"
             >
-            <span>{{ cat.icon }} {{ cat.label }}</span>
+            <span>{{ cat.label }}</span>
           </label>
         </div>
+        <div v-if="trackCategories.some(category => !availableCategories.some(option => option.id === category))" class="mt-2 flex flex-wrap gap-2">
+          <button v-for="category in trackCategories.filter(category => !availableCategories.some(option => option.id === category))" :key="category" type="button" class="min-h-11 rounded border border-line bg-white px-3" :aria-label="`Remove category ${category}`" @click="handleCategoryToggle(category)">{{ category }} ×</button>
+        </div>
+        <form class="mt-3 flex gap-2" @submit.prevent="handleAddCategory">
+          <input v-model="customCategory" aria-label="Custom category" maxlength="100" placeholder="Custom category" class="min-h-11 min-w-0 flex-1 rounded border border-line px-3 text-base" />
+          <button type="submit" class="min-h-11 rounded border border-line bg-white px-3" :disabled="!customCategory.trim() || trackCategories.length >= 50">Add</button>
+        </form>
       </div>
     </section>
   </div>
 </template>
 
 <script setup>
+import { TRACK_CATEGORIES } from "../../domain/trackCategories";
+import { ref } from "vue";
+const customCategory = ref("");
 const props = defineProps({
   showContextAlerts: { type: Boolean, default: true },
   showDraftBanner: { type: Boolean, default: false },
@@ -132,12 +142,14 @@ const emit = defineEmits([
   "update:trackCategories",
 ]);
 
-const availableCategories = [
-  { id: "hiking", label: "Hiking", icon: "🥾" },
-  { id: "walking", label: "Walking", icon: "🚶" },
-  { id: "running", label: "Running", icon: "🏃" },
-  { id: "cycling", label: "Cycling", icon: "🚴" },
-];
+const availableCategories = TRACK_CATEGORIES.map(category => ({id:category.value,label:category.label}));
+
+function handleAddCategory() {
+  const category = customCategory.value.trim().normalize('NFC');
+  if (!category || category.length > 100 || props.trackCategories.length >= 50) return;
+  if (!props.trackCategories.includes(category)) emit('update:trackCategories', [...props.trackCategories, category]);
+  customCategory.value = '';
+}
 
 function handleCategoryToggle(catId) {
   const current = [
@@ -270,8 +282,9 @@ function handleCategoryToggle(catId) {
 }
 
 .category-chip input {
-  display: none;
+  position:absolute; width:1px; height:1px; opacity:0;
 }
+.category-chip:focus-within { outline:3px solid var(--color-action); outline-offset:2px; }
 
 .category-chip:hover {
   border-color: var(--accent);

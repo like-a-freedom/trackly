@@ -61,10 +61,11 @@ describe('StatisticsPanel', () => {
         expect(wrapper.text()).toContain('1h 0m 0s');
     });
 
-    it('hides duration when not available', () => {
+    it('explains when duration was not recorded', () => {
         props.track.duration_seconds = 0;
+        props.formattedDuration = 'N/A';
         const wrapper = mount(StatisticsPanel, { props });
-        expect(wrapper.text()).not.toContain('Duration');
+        expect(wrapper.text()).toContain('Not recorded');
     });
 
     it('renders map overlays section', () => {

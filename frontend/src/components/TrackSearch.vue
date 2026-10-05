@@ -188,7 +188,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onBeforeUnmount } from "vue";
+import { ref, computed, watch, nextTick, onBeforeUnmount, toRef } from "vue";
+import { useModalIsolation } from "../composables/useModalIsolation";
 import { storeToRefs } from "pinia";
 import { useSearchStore } from "../stores/search";
 import { capitalize } from "../utils/string";
@@ -216,6 +217,7 @@ const emit = defineEmits<{
 
 const searchInput = ref<HTMLInputElement | null>(null);
 const searchModal = ref<HTMLElement | null>(null);
+useModalIsolation(toRef(props, 'isVisible'), searchModal);
 const isLoading = ref(false);
 const searchTimeout = ref<ReturnType<typeof setTimeout> | null>(null);
 const activeIndex = ref(-1);
@@ -428,7 +430,7 @@ onBeforeUnmount(() => {
     rgba(0, 0, 0, 0.45) 100%
   );
   backdrop-filter: blur(3px);
-  z-index: 1000;
+  z-index: 3500;
   display: flex;
   align-items: flex-start;
   justify-content: center;

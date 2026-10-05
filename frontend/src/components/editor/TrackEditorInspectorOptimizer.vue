@@ -13,6 +13,7 @@
     </p>
     <input
       type="range"
+      aria-label="Optimization target ratio"
       min="1"
       max="100"
       step="1"

@@ -19,6 +19,8 @@
         attribution="&copy; OpenStreetMap contributors"
       />
 
+      <l-polyline v-if="tracePoints.length > 1" :lat-lngs="tracePoints" color="#245bd7" :weight="4" />
+
       <!-- Snap-to-road preview -->
       <l-polyline
         v-if="snapPreview && snapPreview.snappedLatLng"
@@ -435,6 +437,7 @@ const SEGMENT_COLORS = [
 ];
 
 const props = defineProps({
+  viewport: {type:Object, default:null},
   segments: { type: Array, default: () => [] },
   activeSegmentIndex: { type: Number, default: 0 },
   editorMode: { type: String, default: "edit" },
@@ -454,6 +457,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
+  "viewportChange",
+  "traceStroke",
   "addWaypoint",
   "moveWaypoint",
   "deleteWaypoint",
@@ -476,7 +481,11 @@ const emit = defineEmits([
 
 const mapRef = ref(null);
 const mapInstance = ref(null);
-const mapCenter = ref([50.45, 30.52]); // Default to Kyiv
+const mapCenter = ref([56.04028, 37.83185]);
+try {
+  const position = JSON.parse(localStorage.getItem('trackly_map_position') ?? 'null');
+  if (Array.isArray(position?.center) && position.center.length === 2 && position.center.every(Number.isFinite)) mapCenter.value = position.center;
+} catch { /* Use the shared default when stored position is invalid. */ }
 const mapZoom = ref(14);
 const mapOptions = {
   ...OPTIMIZED_MAP_OPTIONS,
@@ -975,17 +984,22 @@ function startTrace(latlng) {
   if (!map) return;
 
   traceActive.value = true;
+  tracePoints.value = [];
   lastTraceTime = 0;
 
   const resolved = resolveClickLatLng(latlng) || latlng;
   lastTraceLatLng.value = resolved;
-  emit("addWaypoint", resolved.lat, resolved.lng);
+  tracePoints.value.push([resolved.lat, resolved.lng]);
 
   map.dragging.disable();
   map.on("mousemove", onTraceMove);
   map.on("mouseup", stopTrace);
   map.on("touchmove", onTraceMove);
   map.on("touchend", stopTrace);
+  document.addEventListener("touchcancel", cancelTrace);
+  document.addEventListener("pointercancel", cancelTrace);
+  window.addEventListener("blur", cancelTrace);
+  document.addEventListener("mouseup", stopTrace);
 }
 
 function onTraceMove(e) {
@@ -1010,13 +1024,21 @@ function onTraceMove(e) {
   const resolved = resolveClickLatLng(latlng) || latlng;
   lastTraceLatLng.value = resolved;
   lastTraceTime = now;
-  emit("addWaypoint", resolved.lat, resolved.lng);
+  tracePoints.value.push([resolved.lat, resolved.lng]);
 }
 
-function stopTrace() {
+const tracePoints = ref([]);
+function cancelTrace() { stopTrace(false); }
+function stopTrace(commit = true) {
   if (!traceActive.value) return;
   traceActive.value = false;
   lastTraceLatLng.value = null;
+  if (commit !== false && tracePoints.value.length >= 2) emit("traceStroke", tracePoints.value);
+  tracePoints.value = [];
+  document.removeEventListener("touchcancel", cancelTrace);
+  document.removeEventListener("pointercancel", cancelTrace);
+  window.removeEventListener("blur", cancelTrace);
+  document.removeEventListener("mouseup", stopTrace);
 
   const map = mapInstance.value;
   if (!map) return;
@@ -1028,8 +1050,16 @@ function stopTrace() {
 }
 
 // ── Event handlers ──────────────────────────────────────
+let mapResizeObserver;
 function onMapReady(mapObj) {
+  if (mapObj?.getContainer && typeof ResizeObserver !== 'undefined') {
+    mapResizeObserver?.disconnect();
+    mapResizeObserver = new ResizeObserver(() => mapObj.invalidateSize({pan:false}));
+    mapResizeObserver.observe(mapObj.getContainer());
+  }
   mapInstance.value = mapObj;
+  if (props.viewport && mapObj.setView) mapObj.setView([props.viewport.lat,props.viewport.lng],props.viewport.zoom,{animate:false});
+  mapObj.on("moveend", () => { const center=mapObj.getCenter(); emit("viewportChange", {lat:center.lat,lng:center.lng,zoom:mapObj.getZoom()}); });
   mapZoom.value = mapObj.getZoom();
   mapObj.on("zoomend", () => {
     mapZoom.value = mapObj.getZoom();
@@ -1039,6 +1069,13 @@ function onMapReady(mapObj) {
     handleSnapMove(e.latlng);
   });
 }
+
+watch(() => props.viewport, viewport => {
+  const map=mapInstance.value;
+  if (!map || !viewport || !map.getCenter) return;
+  const center=map.getCenter();
+  if (Math.abs(center.lat-viewport.lat)>1e-8 || Math.abs(center.lng-viewport.lng)>1e-8 || map.getZoom()!==viewport.zoom) map.setView([viewport.lat,viewport.lng],viewport.zoom,{animate:false});
+});
 
 function onMapMouseDown(e) {
   if (props.editorMode !== "trace" || props.poiMode) return;
@@ -1493,6 +1530,7 @@ function onDragEnd(e) {
 function onKeyDown(e) {
   // Close context menu on Escape
   if (e.key === "Escape") {
+    cancelTrace();
     closeContextMenu();
     if (joinCursorOrigin.value) cancelJoin();
     if (shortcutOrigin.value) cancelShortcut();
@@ -1591,7 +1629,7 @@ watch(
       clearSnapPreview();
     }
     if (mode !== "trace") {
-      stopTrace();
+      cancelTrace();
     }
   }
 );
@@ -1602,9 +1640,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  mapResizeObserver?.disconnect();
   document.removeEventListener("keydown", onKeyDown);
   document.removeEventListener("click", closeContextMenu);
-  stopTrace();
+  cancelTrace();
   cancelJoin();
   cancelShortcut();
   if (mapInstance.value) {

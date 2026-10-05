@@ -1,5 +1,5 @@
 <template>
-  <div v-if="!loading" class="app-container">
+  <div v-if="!loading" class="app-container track-details-layout">
     <TrackMap
       v-if="track && polylines.length > 0 && trackBounds"
       key="track-detail-map"
@@ -100,21 +100,22 @@
         :type="toast.type"
         :duration="toast.duration"
       />
-      <TrackDetailPanel
-        v-if="track"
-        :track="track"
-        :is-owner="isOwner"
-        :session-id="sessionId"
-        :coordinate-data="coordinateData"
-        @close="goHome"
-        @description-updated="handleDescriptionUpdated"
-        @name-updated="handleNameUpdated"
-        @distance-markers-updated="handleDistanceMarkersUpdated"
-        @chart-point-hover="handleChartPointHover"
-        @chart-point-leave="handleChartPointLeave"
-        @chart-point-click="handleChartPointClick"
-      />
+
     </TrackMap>
+    <TrackDetailPanel
+      v-if="track"
+      :track="track"
+      :is-owner="isOwner"
+      :session-id="sessionId"
+      :coordinate-data="coordinateData"
+      @close="goHome"
+      @description-updated="handleDescriptionUpdated"
+      @name-updated="handleNameUpdated"
+      @distance-markers-updated="handleDistanceMarkersUpdated"
+      @chart-point-hover="handleChartPointHover"
+      @chart-point-leave="handleChartPointLeave"
+      @chart-point-click="handleChartPointClick"
+    />
     <div v-if="track && polylines.length === 0" class="error-message">
       <h2>Loading track data...</h2>
       <p>Processing track geometry, please wait...</p>
@@ -1157,5 +1158,11 @@ defineExpose({
 
 .btn-home:hover {
   background: var(--accent);
+}
+
+@media(min-width:901px) {
+  /* Leaflet supplies an inline width; reserve the panel's actual workspace. */
+  .track-details-layout :deep(.fullscreen-map) { width:calc(100vw - 380px) !important; height:100dvh; }
+  .track-details-layout:has(.track-detail-flyout.collapsed) :deep(.fullscreen-map) { width:100vw !important; }
 }
 </style>

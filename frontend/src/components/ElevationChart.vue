@@ -3,6 +3,8 @@
     ref="chartContainer"
     class="elevation-chart-container"
     tabindex="0"
+    role="group"
+    :aria-label="`${chartMode} profile. Use arrow keys to explore points; Enter pins a point.`"
     @touchstart="onTouchStart"
     @touchmove="onTouchMove"
     @touchend="onTouchEnd"
@@ -51,6 +53,7 @@
     <p v-else>
       No elevation, pulse, or temperature data available for this track.
     </p>
+    <output class="block text-sm text-muted" aria-live="polite">{{ keyboardReadout }}</output>
   </div>
 </template>
 
@@ -207,6 +210,16 @@ const chartContainer = ref(null);
 const lastTouchInfo = ref({ time: 0, x: 0, y: 0, moved: false });
 const lastTouchedIndex = ref(null);
 const activeKeyboardIndex = ref(null);
+const keyboardReadout = computed(() => {
+  const index = activeKeyboardIndex.value;
+  if (index === null) return '';
+  const values = (chartData.value.datasets ?? []).map(dataset => {
+    const raw = dataset.data?.[index];
+    const value = typeof raw === 'object' && raw !== null ? raw.y : raw;
+    return typeof value === 'number' && Number.isFinite(value) ? `${dataset.label}: ${value.toFixed(2)}` : '';
+  }).filter(Boolean);
+  return `Point ${index + 1}, ${chartData.value.labels?.[index] ?? ''}. ${values.join('. ')}`;
+});
 
 function parseDistanceLabel(label) {
   const distanceMatch = String(label).match(/([\d.]+)\s*(km|mi)/);

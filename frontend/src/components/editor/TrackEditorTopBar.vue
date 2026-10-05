@@ -4,19 +4,20 @@
     class="track-editor-top-bar"
   >
     <div class="top-bar-context">
+      <RouterLink to="/" class="min-h-11 inline-flex items-center px-2 text-action" aria-label="Back to map">Back</RouterLink>
       <div class="top-bar-track-copy">
-        <span class="top-bar-eyebrow">Track editor</span>
         <strong data-testid="top-bar-track-name">{{
           resolvedTrackName
         }}</strong>
       </div>
       <span
-        v-if="savedTrackId"
+        v-if="savedTrackId && !isDirty"
         class="top-bar-badge"
         data-testid="top-bar-saved-badge"
       >
         Saved
       </span>
+      <span v-else class="text-sm text-muted" role="status">{{ isDirty ? 'Unsaved changes' : 'New route' }}</span>
     </div>
 
     <div class="top-bar-metrics">
@@ -31,7 +32,7 @@
         data-testid="top-bar-time"
       >{{
         timeDisplay
-      }}</span>
+      }} estimated</span>
       <span
         class="metric-chip"
         data-testid="top-bar-points"
@@ -59,6 +60,7 @@
           More
         </button>
 
+        <Teleport to="body">
         <div
           v-if="showOverflowMenu"
           id="track-editor-top-bar-overflow"
@@ -84,6 +86,7 @@
 
           <select
             class="top-bar-select"
+            aria-label="Snap to roads"
             :value="snapToRoadMode"
             data-testid="top-bar-snap-mode"
             @change="$emit('setSnapToRoadMode', $event.target.value)"
@@ -101,6 +104,7 @@
 
           <select
             class="top-bar-select"
+            aria-label="Routing activity"
             :value="routingProfile"
             data-testid="top-bar-routing-profile"
             @change="$emit('setRoutingProfile', $event.target.value)"
@@ -159,6 +163,7 @@
             GeoJSON
           </button>
         </div>
+        </Teleport>
       </div>
 
       <button
@@ -169,6 +174,7 @@
       >
         {{ saving ? "Saving..." : "Save" }}
       </button>
+      <span v-if="!canSave && !saving" class="text-sm text-muted" data-testid="save-requirements">{{ !trackName.trim() ? 'Add a name in Description' : 'Add at least two route points' }}</span>
     </div>
 
     <div
@@ -216,6 +222,7 @@ const props = defineProps({
   manualRoutingPercent: { type: Number, default: 0 },
   canSave: { type: Boolean, default: false },
   saving: { type: Boolean, default: false },
+  isDirty: { type: Boolean, default: false },
   savedTrackId: { type: [String, null], default: null },
   routingMode: { type: String, default: "manual" },
   snapToRoadMode: { type: String, default: "auto" },
@@ -257,7 +264,7 @@ const distanceDisplay = computed(() => {
 
 const timeDisplay = computed(() => {
   const mins = props.estimatedTimeMinutes;
-  if (mins <= 0) return "0 min";
+  if (mins <= 0) return "—";
   if (mins < 60) return `${Math.round(mins)} min`;
   const hours = Math.floor(mins / 60);
   const rest = Math.round(mins % 60);
@@ -344,7 +351,7 @@ function handleDocumentPointerDown(event) {
     return;
   }
 
-  if (!rootElement.value?.contains(event.target)) {
+  if (!rootElement.value?.contains(event.target) && !overflowPanel.value?.contains(event.target)) {
     handleCloseOverflow();
   }
 }
@@ -375,11 +382,11 @@ onBeforeUnmount(() => {
   gap: 10px 14px;
   align-items: center;
   padding: 12px 16px;
-  border-radius: 22px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(226, 232, 240, 0.9);
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(16px);
+
 }
 
 .top-bar-context {
@@ -403,12 +410,7 @@ onBeforeUnmount(() => {
   color: #0f172a;
 }
 
-.top-bar-eyebrow {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #64748b;
-}
+
 
 .top-bar-badge {
   display: inline-flex;
@@ -495,7 +497,7 @@ onBeforeUnmount(() => {
   background: #fff;
   border: 1px solid rgba(203, 213, 225, 0.9);
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
-  z-index: 20;
+  z-index: 3000;
   box-sizing: border-box;
 }
 
@@ -612,5 +614,17 @@ onBeforeUnmount(() => {
     min-width: 0;
     max-width: calc(100vw - 32px);
   }
+}
+
+@media(max-width:1100px) {
+ .track-editor-top-bar { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"context controls" "metrics metrics" "status status"; padding:8px 12px; gap:6px; }
+ .top-bar-controls { justify-content:flex-end; gap:6px; }
+ .top-bar-controls > span { display:none; }
+ .top-bar-context { gap:6px; }
+ .top-bar-eyebrow { display:none; }
+ .top-bar-metrics { gap:6px; }
+ .metric-chip { background:transparent; padding:0 6px; font-size:12px; }
+ .top-bar-ghost-btn,.top-bar-save-btn { min-height:44px; padding:6px 10px; }
+ .top-bar-badge { padding:4px; font-size:12px; }
 }
 </style>

@@ -6,6 +6,7 @@ import TrackEditorTopBar from '../editor/TrackEditorTopBar.vue';
 describe('TrackEditorTopBar', () => {
     it('renders track context live metrics and save action', async () => {
         const wrapper = mount(TrackEditorTopBar, {
+            global: { stubs: { teleport: true, RouterLink: true } },
             props: {
                 trackName: 'Morning Ride',
                 totalPoints: 24,
@@ -49,6 +50,7 @@ describe('TrackEditorTopBar', () => {
 
     it('shows retry controls when graph error exists and auto routing is enabled', async () => {
         const wrapper = mount(TrackEditorTopBar, {
+            global: { stubs: { teleport: true, RouterLink: true } },
             props: {
                 routingMode: 'auto',
                 graphError: 'Failed to load graph',
@@ -68,6 +70,7 @@ describe('TrackEditorTopBar', () => {
     });
     it('does not show routing error status for an empty manual track', () => {
         const wrapper = mount(TrackEditorTopBar, {
+            global: { stubs: { teleport: true, RouterLink: true } },
             props: {
                 trackName: '',
                 totalPoints: 0,

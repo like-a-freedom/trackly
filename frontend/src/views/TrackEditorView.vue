@@ -1,5 +1,5 @@
 <template>
-  <div class="track-editor-view">
+  <div class="track-editor-view flex h-dvh min-h-0 flex-col bg-canvas">
     <!-- Top bar: track context + save/export + routing controls -->
     <TrackEditorTopBar
       :track-name="editor.trackName.value"
@@ -9,6 +9,7 @@
       :manual-routing-percent="editor.manualRoutingPercent.value"
       :can-save="editor.canSave.value"
       :saving="editor.saving.value"
+      :is-dirty="editor.isDirty.value"
       :saved-track-id="editor.savedTrackId.value"
       :routing-mode="editor.routing.mode.value"
       :snap-to-road-mode="editor.snapToRoadMode.value"
@@ -27,6 +28,8 @@
       @switch-to-manual="handleSwitchToManual"
     />
 
+    <button v-if="trackId && editor.error.value" class="min-h-11 border-0 bg-surface px-4 text-action" @click="editor.loadTrack(trackId)">Retry loading track</button>
+
     <!-- Alert strip: draft banner, errors, quick-start tips -->
     <TrackEditorTopAlertStrip
       :show-draft-banner="showDraftBanner"
@@ -36,6 +39,13 @@
       @delete-draft="handleDeleteDraft"
     />
 
+    <p v-if="editor.recordedTrack?.value" class="m-0 bg-blue-50 px-4 py-2 text-sm text-ink" role="note">This is a GPS recording. Description changes keep its measurements; changing the route creates a separate copy when you save.</p>
+    <p v-if="editor.draftStorageError?.value" class="m-0 bg-amber-50 px-4 py-2 text-sm text-ink" role="alert">{{ editor.draftStorageError.value }}</p>
+    <div v-if="editor.draftConflict?.value" class="bg-amber-50 px-4 py-2 text-sm" role="alert">
+      This draft changed in another tab. Automatic backup is paused.
+      <button class="min-h-11 border-0 bg-transparent px-3 text-action" @click="handleRestoreDraft">Use other tab's draft</button>
+      <button class="min-h-11 border-0 bg-transparent px-3 text-action" @click="editor.keepLocalDraft">Keep this tab's work</button>
+    </div>
     <section class="editor-map-stage" data-testid="editor-map-stage">
         <section class="editor-map-region" data-testid="editor-map-region">
           <TrackEditorMap
@@ -59,6 +69,9 @@
             :show-distance-markers="showDistanceMarkers"
             :estimated-time-minutes="editor.estimatedTimeMinutes.value"
             @add-waypoint="handleAddWaypoint"
+            @trace-stroke="editor.appendTrace"
+            :viewport="editor.viewport?.value"
+            @viewport-change="editor.setViewport"
             @move-waypoint="handleMoveWaypoint"
             @delete-waypoint="handleDeleteWaypoint"
             @insert-waypoint="handleInsertWaypoint"
@@ -95,7 +108,8 @@
           </nav>
 
           <!-- Left panel: tabbed content (no header/alerts) -->
-          <aside class="editor-left-panel" data-testid="editor-left-panel">
+          <aside class="editor-left-panel" :data-sheet="sheetState" data-testid="editor-left-panel">
+            <button class="sheet-toggle min-h-11 w-full border-0 bg-surface px-4 text-left text-ink" :aria-expanded="sheetState !== 'collapsed'" @click="sheetState = sheetState === 'collapsed' ? 'medium' : sheetState === 'medium' ? 'full' : 'collapsed'">{{ sheetState === 'collapsed' ? 'Open route panel' : sheetState === 'medium' ? 'Expand route panel' : 'Collapse route panel' }}</button>
             <TrackEditorLeftPanel
               :track-name="editor.trackName.value"
               :track-description="editor.trackDescription.value"
@@ -109,6 +123,7 @@
               :highlighted-segment-index="highlightedSegmentIndex"
               :pois="editor.pois.value"
               :elevation-profile="editor.elevationProfile.value"
+              :recorded-series="editor.recordedSeries?.value"
               :elevation-stats="editor.elevationStats.value"
               :elevation-loading="editor.elevationLoading.value"
               :elevation-error="editor.elevationError.value"
@@ -151,13 +166,14 @@
               @chart-point-click="handleElevationPointClick"
               @hover-segment="(i) => (highlightedSegmentIndex = i)"
               @leave-segment="() => (highlightedSegmentIndex = null)"
-            />
-          </aside>
-
-          <aside
-            class="editor-right-inspector"
-            data-testid="editor-right-inspector"
-          >
+            >
+              <template #context>
+                <TrackEditorPointControls :points="editor.segments.value[editor.activeSegmentIndex.value]?.points || []" :anchors="editor.segments.value[editor.activeSegmentIndex.value]?.waypoints || []"
+                  @add="handleAddWaypoint" @focus="handleFocusWaypoint(editor.activeSegmentIndex.value, $event)"
+                  @promote="editor.promoteToWaypoint(editor.activeSegmentIndex.value, $event)"
+                  @move="(index, lat, lon) => handleMoveWaypoint(editor.activeSegmentIndex.value, index, lat, lon)"
+                  @delete="handleDeleteWaypoint(editor.activeSegmentIndex.value, $event)"
+                  @fragment="handleSelectFragmentPoint(editor.activeSegmentIndex.value, $event)" />
             <TrackEditorInspector
               :editor-mode="editor.editorMode.value"
               :total-points="editor.totalPoints.value"
@@ -169,66 +185,13 @@
               @delete-poi="handleDeletePoi"
               @update-poi="handleUpdatePoi"
             />
+              </template>
+            </TrackEditorLeftPanel>
           </aside>
+
+
         </div>
       </section>
-
-    <!-- Bottom deck: horizontal card overview -->
-    <TrackEditorBottomDeck
-      :track-name="editor.trackName.value"
-      :track-description="editor.trackDescription.value"
-      :track-categories="editor.trackCategories.value"
-      :segment-stats="editor.segmentStats.value"
-      :active-segment-index="editor.activeSegmentIndex.value"
-      :total-distance-km="editor.totalDistanceKm.value"
-      :total-points="editor.totalPoints.value"
-      :estimated-time-minutes="editor.estimatedTimeMinutes.value"
-      :pois="editor.pois.value"
-      :elevation-profile="editor.elevationProfile.value"
-      :elevation-stats="editor.elevationStats.value"
-      :elevation-loading="editor.elevationLoading.value"
-      :elevation-error="editor.elevationError.value"
-      :coordinate-data="editor.coordinateData.value"
-      :highlighted-segment-index="highlightedSegmentIndex"
-      :fragment-info="fragmentInfo"
-      :optimizer-target-ratio="editor.optimizerTargetRatio.value"
-      :optimizer-preview="editor.optimizerPreview.value"
-      :optimizer-stats="editor.optimizerStats.value"
-      :optimizer-loading="editor.optimizerLoading.value"
-      :optimizer-error="editor.optimizerError.value"
-      @update:track-name="editor.trackName.value = $event"
-      @update:track-description="editor.trackDescription.value = $event"
-      @update:track-categories="editor.trackCategories.value = $event"
-      @update-segment-name="editor.setSegmentName"
-      @update-segment-color="editor.setSegmentColor"
-      @add-segment="editor.addSegment"
-      @delete-segment="editor.deleteSegment"
-      @reverse-segment="editor.reverseSegment"
-      @set-active-segment="editor.setActiveSegment"
-      @join-segments="handleJoinSegments"
-      @new-track-from-segment="handleNewTrackFromSegment"
-      @clear-fragment="editor.clearFragmentSelection"
-      @delete-fragment-connect="handleDeleteFragmentConnect"
-      @delete-fragment-split="handleDeleteFragmentSplit"
-      @reverse-fragment="handleReverseFragment"
-      @reroute-fragment="handleRerouteFragment"
-      @export-fragment="handleExportFragment"
-      @close-loop="handleCloseLoop"
-      @close-loop-same-way="handleCloseLoopSameWay"
-      @close-loop-different-route="handleCloseLoopDifferentRoute"
-      @reverse-track="handleReverseTrack"
-      @duplicate-track="handleDuplicateTrack"
-      @update:optimizer-target-ratio="editor.setOptimizerTargetRatio"
-      @preview-optimization="editor.previewOptimization"
-      @apply-optimization="handleApplyOptimization"
-      @clear-optimization="editor.clearOptimizationPreview"
-      @download-optimization="editor.downloadOptimizationPreview"
-      @chart-point-hover="handleElevationPointHover"
-      @chart-point-leave="handleElevationPointLeave"
-      @chart-point-click="handleElevationPointClick"
-      @hover-segment="(i) => (highlightedSegmentIndex = i)"
-      @leave-segment="() => (highlightedSegmentIndex = null)"
-    />
 
     <!-- Toast notifications -->
     <Toast
@@ -241,16 +204,17 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from "vue-router";
+import { useConfirm } from "../composables/useConfirm";
 import { useTrackEditor } from "../composables/useTrackEditor";
 import { useToastStore } from "../stores/toast.js";
 import TrackEditorMap from "../components/TrackEditorMap.vue";
+import TrackEditorPointControls from "../components/editor/TrackEditorPointControls.vue";
 import TrackEditorLeftPanel from "../components/editor/TrackEditorLeftPanel.vue";
 import TrackEditorInspector from "../components/editor/TrackEditorInspector.vue";
 import TrackEditorTopBar from "../components/editor/TrackEditorTopBar.vue";
 import TrackEditorTopAlertStrip from "../components/editor/TrackEditorTopAlertStrip.vue";
 import TrackEditorLeftRail from "../components/editor/TrackEditorLeftRail.vue";
-import TrackEditorBottomDeck from "../components/editor/TrackEditorBottomDeck.vue";
 import Toast from "../components/ToastNotification.vue";
 
 const route = useRoute();
@@ -265,7 +229,15 @@ const toast = computed(() => ({
 
 // Determine if editing existing track
 const trackId = computed(() => route.params.id ?? null);
+const sheetState = ref("medium");
 const editor = useTrackEditor({ trackId: trackId.value });
+const { showConfirm } = useConfirm();
+async function confirmEditorLeave() {
+  if (!editor.isDirty.value) return true;
+  return showConfirm({title:'Leave editor?',message:editor.draftStorageError?.value ? 'Your changes are not backed up on this device. Leaving may lose them.' : 'Your changes are not saved to the track. A local draft is kept on this device.',confirmText:'Leave editor',cancelText:'Keep editing'});
+}
+onBeforeRouteLeave(confirmEditorLeave);
+onBeforeRouteUpdate(confirmEditorLeave);
 
 const editorMap = ref(null);
 const showDraftBanner = ref(false);
@@ -597,6 +569,7 @@ function handleReverseTrack() {
 }
 
 async function handleDuplicateTrack() {
+  if (editor.isDirty.value) { showToast('Save your changes before making a copy.', 'warning'); return; }
   const result = await editor.duplicateTrack();
   if (!result?.ok) {
     showToast(result?.error || "Unable to duplicate track", "error", 5000);
@@ -626,9 +599,13 @@ function handleApplyOptimization() {
 }
 
 async function handleExport(format) {
+  if (editor.isDirty.value) {
+    showToast('Save your changes before exporting this track.', 'warning');
+    return;
+  }
   try {
-    await editor.exportTrack(format);
-    showToast(`Export ${format.toUpperCase()} started`, "success");
+    const exported = await editor.exportTrack(format);
+    showToast(exported ? `Export ${format.toUpperCase()} started` : 'Export failed. Please retry.', exported ? 'success' : 'error');
   } catch {
     showToast("Export error", "error");
   }
@@ -894,11 +871,13 @@ onMounted(async () => {
   if (trackId.value) {
     // Editing existing track
     await editor.loadTrack(trackId.value);
+    if (editor.error.value) return;
     if (!editor.isOwner.value) {
       showToast("You do not have permission to edit this track.", "error");
       router.replace({ name: "Track", params: { id: trackId.value } });
       return;
     }
+    showDraftBanner.value = editor.hasDraft.value;
     // Fit map after load
     setTimeout(() => editorMap.value?.fitBounds(), 300);
   } else {
@@ -915,139 +894,19 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.track-editor-view {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  height: 100vh;
-  width: 100%;
-  overflow: hidden;
-}
-
-.editor-map-stage {
-  position: relative;
-  flex: 1;
-  width: 100%;
-  overflow: hidden;
-  --overlay-pad: 12px;
-  --overlay-gap: 12px;
-  --rail-width: 52px;
-  --panel-width: 288px;
-  --inspector-width: 280px;
-  --content-left: calc(
-    var(--overlay-pad) + var(--rail-width) + var(--overlay-gap)
-  );
-  --content-right: calc(
-    var(--overlay-pad) + var(--inspector-width) + var(--overlay-gap)
-  );
-}
-
-.editor-map-region {
-  position: absolute;
-  inset: 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-.editor-overlay-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  pointer-events: none;
-}
-
-.editor-left-rail,
-.editor-left-panel,
-.editor-right-inspector {
-  position: absolute;
-  min-width: 0;
-  pointer-events: auto;
-}
-
-/* Left rail: vertical icon rail */
-.editor-left-rail {
-  top: var(--overlay-pad);
-  left: var(--overlay-pad);
-  width: var(--rail-width);
-  height: calc(100% - var(--overlay-pad) * 2);
-  z-index: 5;
-  display: flex;
-  align-items: center;
-}
-
-/* Left panel: full-height sidebar */
-.editor-left-panel {
-  top: var(--overlay-pad);
-  left: var(--content-left);
-  width: var(--panel-width);
-  height: calc(100% - var(--overlay-pad) * 2);
-  z-index: 3;
-}
-
-/* Right inspector: full-height column */
-.editor-right-inspector {
-  top: var(--overlay-pad);
-  right: var(--overlay-pad);
-  width: var(--inspector-width);
-  max-height: calc(100% - var(--overlay-pad) * 2);
-  overflow: auto;
-  z-index: 3;
-}
-
-/* Bottom deck: hidden on narrow screens */
-.editor-bottom-deck {
-  flex-shrink: 0;
-}
-
-@media (max-width: 1180px) {
-  .editor-map-stage {
-    --panel-width: 264px;
-    --inspector-width: 248px;
-  }
-}
-
-@media (max-width: 980px) {
-  .editor-map-stage {
-    --panel-width: 240px;
-    --inspector-width: 220px;
-  }
-}
-
-@media (max-width: 768px) {
-  .editor-map-stage {
-    --overlay-pad: 8px;
-    --overlay-gap: 8px;
-    --rail-width: 0px;
-    --panel-width: 0px;
-    --inspector-width: 0px;
-    --content-left: var(--overlay-pad);
-    --content-right: var(--overlay-pad);
-  }
-
-  /* Rail hidden on mobile */
-  .editor-left-rail {
-    display: none;
-  }
-
-  /* Panel becomes a bottom sheet on mobile */
-  .editor-left-panel {
-    top: auto;
-    left: var(--overlay-pad);
-    right: var(--overlay-pad);
-    bottom: var(--overlay-pad);
-    width: auto;
-    height: 240px;
-    z-index: 4;
-  }
-
-  /* Inspector hidden on mobile to preserve map space */
-  .editor-right-inspector {
-    display: none;
-  }
-
-  /* Bottom deck hidden on mobile */
-  .editor-bottom-deck {
-    display: none;
-  }
+.track-editor-view { height:100vh; height:100dvh; overflow:hidden; }
+.editor-map-stage { position:relative; flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 360px; }
+.editor-map-region { min-width:0; min-height:0; position:relative; }
+.editor-overlay-layer { display:contents; }
+.editor-left-panel { min-height:0; min-width:0; background:var(--color-surface); border-left:1px solid var(--color-line); overflow:hidden; }
+.editor-left-rail { position:absolute; z-index:500; top:12px; left:60px; max-width:calc(100% - 440px); }
+.sheet-toggle { display:none; }
+@media(max-width:900px) {
+ .editor-map-stage { grid-template-columns:minmax(0,1fr); }
+ .editor-left-rail { left:60px; right:12px; max-width:none; }
+ .editor-left-panel { position:absolute; z-index:600; bottom:0; left:0; right:0; height:min(36%,280px); display:flex; flex-direction:column; border-top:1px solid var(--color-line); padding-bottom:env(safe-area-inset-bottom); }
+ .editor-left-panel[data-sheet="collapsed"] { height:44px; }
+ .editor-left-panel[data-sheet="full"] { height:calc(100% - 80px); }
+ .sheet-toggle { display:block; flex-shrink:0; }
 }
 </style>

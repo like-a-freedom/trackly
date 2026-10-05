@@ -1,3 +1,4 @@
+import './styles/design-system.css';
 import 'leaflet/dist/leaflet.css';
 // Import Leaflet patches to fix zoom animation errors
 import './leaflet-patch';

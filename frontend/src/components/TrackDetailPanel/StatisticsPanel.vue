@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { formatDuration } from '../../utils/format';
 
 const props = defineProps({
     track: { type: Object, required: true },
@@ -66,43 +67,13 @@ function handleDistanceMarkersToggle(event) {
                 <span class="stat-value">{{ formattedDistance }}</span>
             </div>
             <div
-                v-if="
-                    track.duration_seconds !== undefined &&
-                    track.duration_seconds !== null &&
-                    track.duration_seconds > 0
-                "
+
                 class="stat-item"
             >
                 <span class="stat-label">Duration</span>
-                <span class="stat-value">{{ formattedDuration }}</span>
+                <span class="stat-value">{{ formattedDuration && formattedDuration !== 'N/A' ? formattedDuration : 'Not recorded' }}</span>
             </div>
         </div>
-    </div>
-
-    <!-- Map Overlays -->
-    <div class="stats-section">
-        <div class="section-header">
-            <h3>Map overlays</h3>
-        </div>
-        <label class="toggle-row" data-testid="distance-markers-toggle">
-            <input
-                type="checkbox"
-                :checked="distanceMarkersEnabled"
-                :disabled="!isOwner"
-                @change="handleDistanceMarkersToggle"
-            />
-            <span>Distance markers</span>
-            <!-- A tooltip on the label explains the disabled state in place.
-                 The paragraph below repeated it as body copy, which read as a
-                 rule rather than as help. -->
-            <span
-                v-if="!isOwner"
-                class="info-icon"
-                tabindex="0"
-                data-tooltip="Only the track owner can change overlay settings"
-                aria-label="Only the track owner can change overlay settings"
-            >?</span>
-        </label>
     </div>
 
     <!-- Speed and Pace Section -->
@@ -134,14 +105,14 @@ function handleDistanceMarkersToggle(event) {
                 class="stat-item"
             >
                 <span class="stat-label">Moving time</span>
-                <span class="stat-value">{{ track.moving_time }}</span>
+                <span class="stat-value">{{ formatDuration(track.moving_time) }}</span>
             </div>
             <div
                 v-if="track.pause_time !== undefined && track.pause_time !== null"
                 class="stat-item"
             >
                 <span class="stat-label">Pause time</span>
-                <span class="stat-value">{{ track.pause_time }}</span>
+                <span class="stat-value">{{ formatDuration(track.pause_time) }}</span>
             </div>
             <div
                 v-if="track.avg_hr !== undefined && track.avg_hr !== null"
@@ -166,4 +137,28 @@ function handleDistanceMarkersToggle(event) {
             </div>
         </div>
     </div>
+    <!-- Map Overlays -->
+    <details class="stats-section">
+        <summary class="min-h-11 cursor-pointer font-medium">Map overlays</summary>
+        <label class="toggle-row" data-testid="distance-markers-toggle">
+            <input
+                type="checkbox"
+                :checked="distanceMarkersEnabled"
+                :disabled="!isOwner"
+                @change="handleDistanceMarkersToggle"
+            />
+            <span>Distance markers</span>
+            <!-- A tooltip on the label explains the disabled state in place.
+                 The paragraph below repeated it as body copy, which read as a
+                 rule rather than as help. -->
+            <span
+                v-if="!isOwner"
+                class="info-icon"
+                tabindex="0"
+                data-tooltip="Only the track owner can change overlay settings"
+                aria-label="Only the track owner can change overlay settings"
+            >?</span>
+        </label>
+    </details>
+
 </template>

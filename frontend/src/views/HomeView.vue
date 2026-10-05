@@ -30,67 +30,6 @@
         :y="tooltip.y"
         :data="tooltip.data"
       />
-      <div class="upload-form-container">
-        <div
-          class="collapsible-upload"
-          :class="{ expanded: uploadFormExpanded }"
-          @dragover.prevent="handleDragOver"
-          @dragleave.prevent="handleDragLeave"
-          @drop.prevent="handleDrop"
-        >
-          <!-- Collapsed state: a real button, so it opens the form with
-               Enter or Space. The drag handlers sit on the wrapper because a
-               <button> cannot reliably receive a drop in every browser. -->
-          <button
-            v-if="!uploadFormExpanded"
-            class="upload-button-compact"
-            :class="{ 'drag-active': dragActive }"
-            type="button"
-            title="Upload track file"
-            :aria-expanded="uploadFormExpanded"
-            aria-label="Upload track file"
-            @click="toggleUploadForm"
-          >
-            <svg
-              class="upload-icon"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
-              />
-              <path d="M12,11L16,15H13V19H11V15H8L12,11Z" />
-            </svg>
-          </button>
-
-          <!-- Expanded state: full upload form -->
-          <div v-if="uploadFormExpanded" class="upload-form-expanded">
-            <div class="upload-form-header">
-              <span class="upload-form-title">Upload track</span>
-              <button
-                class="collapse-button"
-                title="Collapse upload form"
-                type="button"
-                @click="toggleUploadForm"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"
-                  />
-                </svg>
-              </button>
-            </div>
-            <UploadForm
-              :drag-active="dragActive"
-              @upload="handleUpload"
-              @uploaded="handleUploadCompleted"
-              @update:drag-active="dragActive = $event"
-            />
-          </div>
-        </div>
-      </div>
-
       <Toast
         :message="toast.message"
         :type="toast.type"
@@ -128,8 +67,72 @@
           <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
           <circle cx="18" cy="5" r="3" />
         </svg>
+        <span>Create route</span>
       </button>
     </div>
+
+      <div class="upload-form-container">
+        <div
+          class="collapsible-upload"
+          :class="{ expanded: uploadFormExpanded }"
+          @dragover.prevent="handleDragOver"
+          @dragleave.prevent="handleDragLeave"
+          @drop.prevent="handleDrop"
+        >
+          <!-- Collapsed state: a real button, so it opens the form with
+               Enter or Space. The drag handlers sit on the wrapper because a
+               <button> cannot reliably receive a drop in every browser. -->
+          <button
+            v-if="!uploadFormExpanded"
+            class="upload-button-compact"
+            :class="{ 'drag-active': dragActive }"
+            type="button"
+            title="Upload track file"
+            :aria-expanded="uploadFormExpanded"
+            aria-label="Upload track file"
+            @click="toggleUploadForm"
+          >
+            <svg
+              class="upload-icon"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"
+              />
+              <path d="M12,11L16,15H13V19H11V15H8L12,11Z" />
+            </svg>
+            <span>Import GPX / KML</span>
+          </button>
+
+          <!-- Expanded state: full upload form -->
+          <div v-if="uploadFormExpanded" class="upload-form-expanded">
+            <div class="upload-form-header">
+              <span class="upload-form-title">Upload track</span>
+              <button
+                class="collapse-button"
+                title="Collapse upload form"
+                type="button"
+                @click="toggleUploadForm"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"
+                  />
+                </svg>
+              </button>
+            </div>
+            <UploadForm
+              :drag-active="dragActive"
+              @upload="handleUpload"
+              @uploaded="handleUploadCompleted"
+              @update:drag-active="dragActive = $event"
+            />
+          </div>
+        </div>
+      </div>
+
 
     <!-- Auth button - positioned in bottom left -->
     <div v-if="featureFlags.isAuthEnabled" class="auth-button-overlay">
@@ -1157,4 +1160,12 @@ body,
     max-width: calc(100vw - 24px);
   }
 }
+
+.create-track-btn { position:fixed; top:12px; left:64px; width:auto; min-height:44px; display:flex; gap:8px; padding:0 12px; font-size:14px; color:var(--color-ink); }
+.create-track-btn svg { width:20px; height:20px; flex-shrink:0; }
+.upload-form-container { top:64px; bottom:auto; left:64px; right:auto; max-width:calc(100vw - 80px); }
+.upload-button-compact { width:auto; min-height:44px; display:flex; gap:8px; padding:0 12px; font-size:14px; color:var(--color-ink); }
+.upload-button-compact .upload-icon { width:20px; height:20px; }
+.collapsible-upload.expanded .upload-form-expanded { width:100%; min-width:0; max-width:100%; }
+.collapsible-upload.expanded { width:min(360px,calc(100vw - 80px)); max-height:calc(100dvh - 100px); overflow-y:auto; }
 </style>

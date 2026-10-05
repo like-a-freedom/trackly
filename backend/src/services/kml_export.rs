@@ -69,6 +69,7 @@ mod tests {
             distance_markers_enabled: None,
             geom_geojson: coords,
             segment_meta: None,
+            waypoints: None,
             segment_gaps: None,
             pause_gaps: None,
             length_km: 1.0,

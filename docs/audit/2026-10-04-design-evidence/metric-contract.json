@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-04",
+  "read_only": true,
+  "track_id": "049dbd57-8949-4b07-b505-0c1a45955840",
+  "track_name": "Смоленское поозерье - разведка",
+  "list_request": "GET /api/tracks?bbox=30,54,33,57&zoom=10&mode=tracks",
+  "list_length_km": 244.3621861748915,
+  "detail_request": "GET /api/tracks/049dbd57-8949-4b07-b505-0c1a45955840",
+  "detail_length_km": 129.58285790482407,
+  "correct_value": null,
+  "conclusion": "Несогласованность подтверждена. Причина и корректное значение не установлены этим дизайн-аудитом.",
+  "playwright": {
+    "command": "bun run test:e2e --grep 'map stage fills available space|keeps the new shell usable|keeps first-level controls visible' --reporter=line --workers=1",
+    "passed": 3,
+    "failed": 0,
+    "note": "Первый запуск Chromium был заблокирован sandbox; повторный разрешенный запуск завершился успешно. Новые серверы не запускались."
+  }
+}

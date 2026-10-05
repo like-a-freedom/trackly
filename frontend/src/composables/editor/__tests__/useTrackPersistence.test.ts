@@ -316,22 +316,34 @@ describe('useTrackPersistence', () => {
             mockFetch.mockResolvedValue({ ok: false });
 
             const store = createTestStore({ pois: [{ id: 'existing', name: 'Existing', lat: 50, lng: 30 }] });
-            await persistence.loadTrackPois(store, 'track-123');
+            await expect(persistence.loadTrackPois(store, 'track-123')).rejects.toThrow('Places could not be loaded');
             // POIs should remain unchanged
             expect(store.pois).toHaveLength(1);
         });
 
-        it('handles network error silently', async () => {
+        it('reports network error rather than replacing places', async () => {
             mockFetch.mockRejectedValue(new Error('Network error'));
 
             const store = createTestStore();
-            await persistence.loadTrackPois(store, 'track-123');
-            // Should not throw
+            await expect(persistence.loadTrackPois(store, 'track-123')).rejects.toThrow('Network error');
+            // Preserve current places
             expect(store.pois).toEqual([]);
         });
     });
 
     describe('loadTrack', () => {
+        it('loads metadata from the current flat Track Detail response', async () => {
+            mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({
+                id: 'track-123', name: 'Coastal route', description: 'Cliff path', categories: ['walking'],
+                geom_geojson: { type: 'MultiLineString', coordinates: [[[30, 50], [31, 51]]] },
+                segment_meta: [{ name: 'Coast', color: '#1976d2' }],
+            }) }).mockResolvedValueOnce({ ok: true, json: async () => [] });
+            const store = createTestStore();
+            await persistence.loadTrack(store, mockGetAuthHeader, 'track-123', () => {});
+            expect(store.trackName).toBe('Coastal route');
+            expect(store.trackDescription).toBe('Cliff path');
+            expect(store.trackCategories).toEqual(['walking']);
+        });
         it('loads track data', async () => {
             const mockOnLoaded = vi.fn();
             mockFetch.mockResolvedValue({
@@ -386,6 +398,23 @@ describe('useTrackPersistence', () => {
         });
     });
 
+    it('confirms API coordinate rounding and escaped text without losing the draft contract', async () => {
+        mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : {name:'River &amp; forest',description:'Rock &amp; water',categories:[],geom_geojson:{type:'LineString',coordinates:[[30.123456789,50],[31,51]]}}}));
+        const draft={markClean:vi.fn(),deleteDraft:vi.fn()};
+        const store=createTestStore({trackName:'River & forest',trackDescription:'Rock & water',savedTrackId:'existing',segments:[{points:[[50,30.123456789123],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:null,color:'#2196F3'}]});
+        expect(await persistence.saveTrack(store,mockGetAuthHeader,()=>({type:'LineString',coordinates:[[30.123456789123,50],[31,51]]}),draft)).toBe('existing');
+        expect(draft.markClean).toHaveBeenCalled();
+    });
+
+    it('keeps recovery data when the final server readback disagrees', async () => {
+        mockFetch.mockResolvedValue({ok:true,json:async () => ({name:'Older server revision',description:'',categories:[],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]}})});
+        const draft = {markClean:vi.fn(),deleteDraft:vi.fn()};
+        const store = createTestStore({trackName:'Current revision',savedTrackId:'existing',segments:[{points:[[50,30],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:null,color:'#2196F3'}]});
+        expect(await persistence.saveTrack(store,mockGetAuthHeader,() => ({type:'LineString',coordinates:[[30,50],[31,51]]}),draft)).toBeNull();
+        expect(draft.deleteDraft).not.toHaveBeenCalled();
+        expect(persistence.error.value).toContain('readback');
+    });
+
     describe('saveTrack', () => {
         it('fails when track name is empty', async () => {
             const store = createTestStore({ trackName: '' });
@@ -411,7 +440,7 @@ describe('useTrackPersistence', () => {
         it('creates new track', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
-                json: () => Promise.resolve({ id: 'new-track' }),
+                json: () => Promise.resolve({ id: 'new-track', name:'New Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]} }),
             });
 
             const draftSave = { markClean: vi.fn(), deleteDraft: vi.fn() };
@@ -426,6 +455,8 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
+            const defaultResponse = mockFetch.getMockImplementation()!;
+            mockFetch.mockImplementation((url: string, ...args: unknown[]) => url.endsWith('/pois') ? Promise.resolve({ok:true,json:async()=>[]}) : defaultResponse(url,...args));
             const result = await persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'MultiLineString', coordinates: [[[30, 50], [31, 51]]] } as GeoJSON.MultiLineString), draftSave);
 
             expect(result).toBe('new-track');
@@ -436,7 +467,7 @@ describe('useTrackPersistence', () => {
         it('updates existing track', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
-                json: () => Promise.resolve({}),
+                json: () => Promise.resolve({name:'Updated Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]} }),
             });
 
             const draftSave = { markClean: vi.fn(), deleteDraft: vi.fn() };
@@ -452,9 +483,34 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
+            const defaultResponse = mockFetch.getMockImplementation()!;
+            mockFetch.mockImplementation((url: string, ...args: unknown[]) => url.endsWith('/pois') ? Promise.resolve({ok:true,json:async()=>[]}) : defaultResponse(url,...args));
             const result = await persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'MultiLineString', coordinates: [[[30, 50], [31, 51]]] } as GeoJSON.MultiLineString), draftSave);
 
             expect(result).toBe('existing-track');
+        });
+
+        it('does not clear a newer revision while the save is in flight', async () => {
+            let complete: (value: unknown) => void = () => {};
+            mockFetch.mockReturnValueOnce(new Promise(resolve => { complete = resolve; })).mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : ({name:'Route',description:'',categories:[],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]}})}));
+            const draft = { markClean: vi.fn(), deleteDraft: vi.fn(), isCurrentRevision: () => false };
+            const store = createTestStore({ trackName: 'Route', savedTrackId: 'existing', segments: [{ points: [[50, 30], [51, 31]], waypoints: [0, 1], surfaceTypes: ['unknown', 'unknown'], name: null, color: '#2196F3' }] });
+            const pending = persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'LineString', coordinates: [[30, 50], [31, 51]] }), draft);
+            await Promise.resolve();
+            complete({ ok: true });
+            expect(await pending).toBe('existing');
+            expect(draft.deleteDraft).not.toHaveBeenCalled();
+            expect(draft.markClean).not.toHaveBeenCalled();
+        });
+
+        it('retains the draft when a metadata request is rejected', async () => {
+            mockFetch.mockResolvedValueOnce({ ok: true }).mockResolvedValue({ ok: false, status: 403 });
+            const draft = { markClean: vi.fn(), deleteDraft: vi.fn() };
+            const store = createTestStore({ trackName: 'Route', savedTrackId: 'existing', segments: [{ points: [[50, 30], [51, 31]], waypoints: [0, 1], surfaceTypes: ['unknown', 'unknown'], name: null, color: '#2196F3' }] });
+            expect(await persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'LineString', coordinates: [[30, 50], [31, 51]] }), draft)).toBeNull();
+            expect(draft.deleteDraft).not.toHaveBeenCalled();
+            expect(draft.markClean).not.toHaveBeenCalled();
+            expect(persistence.error.value).toContain('403');
         });
 
         it('handles HTTP error', async () => {

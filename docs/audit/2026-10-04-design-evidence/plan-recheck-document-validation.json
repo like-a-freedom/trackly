@@ -1,0 +1,30 @@
+{
+  "scope": "Document consistency checks, not application acceptance",
+  "reports": [
+    {
+      "path": "docs/audit/2026-10-04-ui-ux-audit.md",
+      "bytes": 47351,
+      "findings": 27,
+      "localLinks": 17,
+      "missingLinks": 0
+    },
+    {
+      "path": "docs/audit/2026-10-04-design-mitigation-plan.md",
+      "bytes": 72500,
+      "findings": 27,
+      "localLinks": 3,
+      "missingLinks": 0
+    }
+  ],
+  "severity": {
+    "P0": 1,
+    "P1": 20,
+    "P2": 6,
+    "P3": 0
+  },
+  "concurrentSourceChanges": [
+    "frontend/src/components/TrackDetailPanel.vue",
+    "frontend/src/components/TrackDetailPanel/StatisticsPanel.vue"
+  ],
+  "applicationFilesEditedByAudit": false
+}

@@ -1,0 +1,126 @@
+{
+  "controls": [
+    {
+      "box": {
+        "bottom": 89,
+        "height": 13,
+        "left": 1055,
+        "right": 1068,
+        "top": 76,
+        "width": 13,
+        "x": 1055,
+        "y": 76
+      },
+      "hit": "",
+      "hitTag": "INPUT",
+      "hitWithin": true,
+      "text": "top-bar-routing-toggle"
+    },
+    {
+      "box": {
+        "bottom": 140,
+        "height": 36,
+        "left": 1041,
+        "right": 1347,
+        "top": 104,
+        "width": 306,
+        "x": 1041,
+        "y": 104
+      },
+      "hit": "inspector-card",
+      "hitTag": "SECTION",
+      "hitWithin": false,
+      "text": "Snap: Auto\nSnap: On\nSnap: Off"
+    },
+    {
+      "box": {
+        "bottom": 180,
+        "height": 36,
+        "left": 1041,
+        "right": 1347,
+        "top": 144,
+        "width": 306,
+        "x": 1041,
+        "y": 144
+      },
+      "hit": "inspector-panel",
+      "hitTag": "DIV",
+      "hitWithin": false,
+      "text": "Hiking\nWalking\nRunning\nCycling\nMTB\nDriving"
+    },
+    {
+      "box": {
+        "bottom": 215,
+        "height": 31,
+        "left": 1041,
+        "right": 1347,
+        "top": 184,
+        "width": 306,
+        "x": 1041,
+        "y": 184
+      },
+      "hit": "",
+      "hitTag": "STRONG",
+      "hitWithin": false,
+      "text": "Distance markers"
+    },
+    {
+      "box": {
+        "bottom": 250,
+        "height": 31,
+        "left": 1041,
+        "right": 1347,
+        "top": 219,
+        "width": 306,
+        "x": 1041,
+        "y": 219
+      },
+      "hit": "inspector-panel",
+      "hitTag": "DIV",
+      "hitWithin": false,
+      "text": "GPX"
+    },
+    {
+      "box": {
+        "bottom": 285,
+        "height": 31,
+        "left": 1041,
+        "right": 1347,
+        "top": 254,
+        "width": 306,
+        "x": 1041,
+        "y": 254
+      },
+      "hit": "inspector-kicker",
+      "hitTag": "SPAN",
+      "hitWithin": false,
+      "text": "KML"
+    },
+    {
+      "box": {
+        "bottom": 320,
+        "height": 31,
+        "left": 1041,
+        "right": 1347,
+        "top": 289,
+        "width": 306,
+        "x": 1041,
+        "y": 289
+      },
+      "hit": "",
+      "hitTag": "P",
+      "hitWithin": false,
+      "text": "GeoJSON"
+    }
+  ],
+  "menu": {
+    "bottom": 327,
+    "height": 269,
+    "left": 1034,
+    "right": 1354,
+    "top": 58,
+    "width": 320,
+    "x": 1034,
+    "y": 58
+  }
+}

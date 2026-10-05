@@ -1,0 +1,55 @@
+[
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/editor/TrackEditorInspectorSegments.vue",
+    "line": 174,
+    "snippet": ".segment-item.highlighted — inset box-shadow 3px stripe (left)",
+    "importedBy": [
+      "TrackEditorSegmentsCard.vue"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackDetailPanel.vue",
+    "line": 2860,
+    "snippet": "border-left: 4px solid #d32f2f"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackDetailPanel.vue",
+    "line": 3052,
+    "snippet": "border-left: 4px solid #d32f2f"
+  },
+  {
+    "antipattern": "bounce-easing",
+    "name": "Bounce or elastic easing",
+    "description": "Bounce and elastic easing feel dated and tacky. Real objects decelerate smoothly — use exponential easing (ease-out-quart/quint/expo) instead.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/components/TrackDetailPanel.vue",
+    "line": 2429,
+    "snippet": "cubic-bezier(0.4, 1.4, 0.6, 1)"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "category": "slop",
+    "file": "/Users/solovey/Documents/dev/trackly/frontend/src/styles/design-system.css",
+    "line": 18,
+    "snippet": "font-family: Inter"
+  }
+]

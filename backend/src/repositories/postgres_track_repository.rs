@@ -90,8 +90,12 @@ impl TrackRepository for PostgresTrackRepository {
             id,
             &params.geom_geojson,
             params.length_km,
-            None, // waypoints
-            params.segment_meta,
+            crate::db::GeometryUpdateOptions {
+                waypoints: None,
+                segment_meta: params.segment_meta,
+                pois: None,
+                session_id: None,
+            },
             "", // hash - empty for updates
         )
         .await

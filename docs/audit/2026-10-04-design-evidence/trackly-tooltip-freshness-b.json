@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-10-04T20:50:01.495Z",
+  "path": "/track/049dbd57-8949-4b07-b505-0c1a45955840",
+  "viewport": {
+    "width": 1280,
+    "height": 577
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36",
+  "outerHTML": "<span class=\"info-icon tooltip-active\" tabindex=\"0\" data-tooltip=\"Only the track owner can change overlay settings\" aria-label=\"Only the track owner can change overlay settings\">?</span>",
+  "focused": true,
+  "focusVisible": true,
+  "tooltip": {
+    "attribute": "Only the track owner can change overlay settings",
+    "content": "\"Only the track owner can change overlay settings\"",
+    "visibility": "visible",
+    "opacity": "1"
+  },
+  "touch": "physical/touch emulation not exercised in this freshness check"
+}

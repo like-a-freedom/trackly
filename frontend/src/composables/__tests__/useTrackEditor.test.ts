@@ -45,7 +45,33 @@ describe('useTrackEditor', () => {
         editor.routing.setMode('manual');
     });
 
+    it('restores map context without marking a clean route as changed', async () => {
+        editor.setViewport({lat:56,lng:37,zoom:12});
+        expect(editor.isDirty.value).toBe(false);
+        await new Promise(resolve => setTimeout(resolve, 550));
+        const restored=useTrackEditor(); restored.restoreDraft();
+        expect(restored.viewport.value).toEqual({lat:56,lng:37,zoom:12});
+    });
+
+    it('undoes a completed trace as one action', () => {
+        editor.appendTrace([[50,30],[50.01,30.01],[50.02,30.02]]);
+        expect(editor.totalPoints.value).toBe(3);
+        editor.handleUndo();
+        expect(editor.totalPoints.value).toBe(0);
+        editor.handleRedo();
+        expect(editor.totalPoints.value).toBe(3);
+    });
+
     describe('initial state', () => {
+        it('restores a name-only change from its local draft', () => {
+            vi.useFakeTimers();
+            editor.trackName.value = 'Forest day';
+            vi.advanceTimersByTime(600);
+            editor.trackName.value = '';
+            expect(editor.restoreDraft()).toBe(true);
+            expect(editor.trackName.value).toBe('Forest day');
+            vi.useRealTimers();
+        });
         it('starts in edit mode', () => {
             expect(editor.editorMode.value).toBe('edit');
         });
@@ -486,14 +512,14 @@ describe('useTrackEditor', () => {
             expect(editor.segments.value[0].points).toHaveLength(0);
         });
 
-        it('all points become waypoints when no explicit waypoints', () => {
+        it('only endpoints become anchors when no explicit waypoints', () => {
             const geojson: GeoJSON.MultiLineString = {
                 type: 'MultiLineString',
                 coordinates: [[[30, 50], [31, 51], [32, 52]]],
             };
 
             editor.fromGeoJSON(geojson);
-            expect(editor.segments.value[0].waypoints).toEqual([0, 1, 2]);
+            expect(editor.segments.value[0].waypoints).toEqual([0, 2]);
         });
     });
 
@@ -548,11 +574,8 @@ describe('useTrackEditor', () => {
 
     describe('saveTrack — create new track', () => {
         it('sends POST to /api/tracks/create', async () => {
-            const mockResponse = { id: 'new-track-123' };
-            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve(mockResponse),
-            }));
+            const mockResponse = { id: 'new-track-123',name:'Test Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}};
+            vi.stubGlobal('fetch', vi.fn().mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : mockResponse})));
 
             editor.trackName.value = 'Test Track';
             editor.addWaypoint(50.0, 30.0);
@@ -598,10 +621,7 @@ describe('useTrackEditor', () => {
 
     describe('saveTrack — update existing track', () => {
         it('sends PUT to /api/tracks/{id}/geometry', async () => {
-            vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({}),
-            }));
+            vi.stubGlobal('fetch', vi.fn().mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : ({name:'Existing Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}})})));
 
             // Simulate loaded track
             editor.savedTrackId.value = 'existing-123';
@@ -645,6 +665,13 @@ describe('useTrackEditor', () => {
     });
 
     describe('loadTrack', () => {
+        it('uses the canonical stored distance until the route geometry changes', async () => {
+            vi.stubGlobal('fetch',vi.fn().mockImplementation((url:string)=>Promise.resolve({ok:true,json:async()=>url.endsWith('/pois')?[]:{name:'Canonical recording',length_km:1.25,session_id:'test-session-id',geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}}})));
+            await editor.loadTrack('canonical'); expect(editor.totalDistanceKm.value).toBe(1.25);
+            editor.addWaypoint(52,32); expect(editor.totalDistanceKm.value).toBeGreaterThan(1.25);
+            editor.handleUndo(); expect(editor.totalDistanceKm.value).toBe(1.25);
+        });
+
         it('loads track data from server', async () => {
             const geojson = {
                 type: 'FeatureCollection',
@@ -996,12 +1023,13 @@ describe('useTrackEditor', () => {
             expect(editor.estimatedTimeMinutes.value).toBeCloseTo(expected, 1);
         });
 
-        it('uses category-specific speed', () => {
+        it('uses explicitly selected routing activity speed', () => {
             editor.addWaypoint(50.0, 30.0);
             editor.addWaypoint(50.009, 30.0);
             const dist = editor.totalDistanceKm.value;
 
-            editor.trackCategories.value = ['cycling'];
+            editor.routing.profile.value = 'cycling';
+            editor.trackCategories.value = ['hiking', 'cycling'];
             // Cycling = 20 km/h
             const expected = (dist / 20) * 60;
             expect(editor.estimatedTimeMinutes.value).toBeCloseTo(expected, 1);

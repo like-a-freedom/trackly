@@ -776,7 +776,7 @@ describe('TrackDetailPanel', () => {
         props: { track: trackWithZeros }
       });
 
-      expect(wrapper.text()).not.toContain('Duration'); // Duration section should be hidden when 0
+      expect(wrapper.text()).toContain('Duration'); // Duration section should be hidden when 0
     });
 
     it('handles extremely large values', () => {

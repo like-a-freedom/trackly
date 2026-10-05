@@ -566,3 +566,17 @@ describe('ConfirmDialogProvider.vue', () => {
         expect(confirmDialogs.value).toHaveLength(0);
     });
 });
+
+describe('confirmation dialog', () => {
+ it('opens with an accessible name and allows cancellation with Escape', async () => {
+  const wrapper = mount(ConfirmDialog, { props:{title:'Delete track', message:'This removes the track.'}, attachTo:document.body });
+  wrapper.vm.show();
+  await wrapper.vm.$nextTick();
+  const dialog = wrapper.get('[role="dialog"]');
+  expect(dialog.attributes('aria-modal')).toBe('true');
+  expect(dialog.attributes('aria-label')).toBe('Delete track');
+  await dialog.trigger('keydown', { key:'Escape' });
+  expect(wrapper.emitted('cancel')).toHaveLength(1);
+  wrapper.unmount();
+ });
+});

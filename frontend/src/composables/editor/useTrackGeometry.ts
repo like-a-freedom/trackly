@@ -246,7 +246,7 @@ export function useTrackGeometry({ initialSegments = null }: { initialSegments?:
         };
     }
 
-    function fromGeoJSON(geojson: GeoJSON.Geometry | null, _waypoints: number[] = [], segmentMeta: Array<{ name?: string; color?: string }> = []): void {
+    function fromGeoJSON(geojson: GeoJSON.Geometry | null, anchors: Array<number | { lat: number; lon: number; index?: number; segment_index?: number }> = [], segmentMeta: Array<{ name?: string; color?: string }> = []): void {
         if (!geojson || !('coordinates' in geojson)) return;
 
         const coords = geojson.type === 'MultiLineString'
@@ -256,13 +256,26 @@ export function useTrackGeometry({ initialSegments = null }: { initialSegments?:
                 : [];
 
         const metaList = Array.isArray(segmentMeta) ? segmentMeta : [];
+        let pointOffset = 0;
         segments.value = coords.map((line, index) => {
             const points = line.map(([lng, lat]) => [lat, lng] as LatLngTuple);
-            const waypointIndices = Array.from({ length: points.length }, (_, i) => i);
+            const waypointIndices = anchors.flatMap(anchor => {
+                if (typeof anchor === 'number') {
+                    const local = anchor - pointOffset;
+                    return local >= 0 && local < points.length ? [local] : [];
+                }
+                if (anchor.segment_index !== undefined && anchor.segment_index !== index) return [];
+                const local = anchor.index === undefined ? -1 : anchor.segment_index === undefined ? anchor.index - pointOffset : anchor.index;
+                if (local >= 0 && local < points.length && Math.abs(points[local][0] - anchor.lat) < 1e-6 && Math.abs(points[local][1] - anchor.lon) < 1e-6) return [local];
+                const match = points.findIndex(([lat, lon]) => Math.abs(lat - anchor.lat) < 1e-6 && Math.abs(lon - anchor.lon) < 1e-6);
+                return match >= 0 ? [match] : [];
+            });
+            if (points.length) waypointIndices.push(0, points.length - 1);
+            pointOffset += points.length;
             const meta = metaList[index] || {};
             return {
                 points,
-                waypoints: waypointIndices,
+                waypoints: [...new Set(waypointIndices)].sort((a,b) => a-b),
                 surfaceTypes: points.map(() => SURFACE_UNKNOWN),
                 name: typeof meta.name === 'string' ? meta.name : null,
                 color: typeof meta.color === 'string' ? meta.color : getDefaultSegmentColor(index),

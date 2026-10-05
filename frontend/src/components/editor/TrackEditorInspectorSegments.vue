@@ -27,6 +27,10 @@
           highlighted: i === highlightedSegmentIndex,
         }"
         data-testid="segment-item"
+        tabindex="0"
+        :aria-label="`Select ${stat.displayName}`"
+        @keydown.enter.self="$emit('setActiveSegment', i)"
+        @keydown.space.self.prevent="$emit('setActiveSegment', i)"
         @click="$emit('setActiveSegment', i)"
         @mouseenter="$emit('hoverSegment', i)"
         @mouseleave="$emit('leaveSegment')"
@@ -44,6 +48,7 @@
               class="form-input segment-name-input"
               type="text"
               :value="stat.name"
+              :aria-label="`Segment ${i + 1} name`"
               :placeholder="`Day ${i + 1}`"
               maxlength="80"
               @click.stop
@@ -52,6 +57,7 @@
             <input
               class="segment-color-input"
               type="color"
+              :aria-label="`Segment ${i + 1} color`"
               :value="stat.color"
               @click.stop
               @input="$emit('updateSegmentColor', i, $event.target.value)"
@@ -167,7 +173,7 @@ function formatDistance(km) {
 
 .segment-item.highlighted {
   background: #fff9c4;
-  box-shadow: inset 3px 0 0 #ffd600;
+  outline:2px solid #9b7900; outline-offset:-2px;
 }
 
 .segment-color {

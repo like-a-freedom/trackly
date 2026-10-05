@@ -2,7 +2,7 @@ use crate::metrics;
 use crate::models::*;
 use crate::track_utils::{
     extract_segments_from_geojson, geojson_from_segments, get_simplification_params,
-    length_km_for_segments, simplify_track_for_zoom, split_points_by_gap,
+    simplify_track_for_zoom, split_points_by_gap,
 };
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
@@ -179,7 +179,7 @@ pub async fn get_track_detail(
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
+        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, waypoints, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -201,6 +201,7 @@ pub async fn get_track_detail(
             categories: row.try_get("categories")?,
             distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
             geom_geojson: row.try_get::<serde_json::Value, _>("geom_geojson")?,
+            waypoints: row.try_get("waypoints").ok(),
             segment_meta: row.try_get("segment_meta").ok(),
             segment_gaps,
             pause_gaps,
@@ -265,7 +266,7 @@ pub async fn get_track_detail_adaptive(
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
     let row = sqlx::query(r#"
-        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
+        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, waypoints, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
         FROM tracks WHERE id = $1
     "#)
         .bind(id)
@@ -279,7 +280,6 @@ pub async fn get_track_detail_adaptive(
             .expect("Failed to get geom_geojson");
         let mut working_segments: Option<Vec<Vec<(f64, f64)>>> = None;
         let time_data_raw: Option<serde_json::Value> = row.try_get("time_data").ok();
-        let mut normalized_length_km: Option<f64> = None;
 
         // Normalize geometry by splitting teleport gaps for legacy records
         if let Ok(raw_segments) = extract_segments_from_geojson(&geom_geojson) {
@@ -302,7 +302,6 @@ pub async fn get_track_detail_adaptive(
 
             if !normalized_segments.is_empty() {
                 working_segments = Some(normalized_segments.clone());
-                normalized_length_km = Some(length_km_for_segments(&normalized_segments));
             }
         }
 
@@ -372,13 +371,11 @@ pub async fn get_track_detail_adaptive(
                 .expect("Failed to get categories: categories column missing or wrong type"),
             distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
             geom_geojson,
+            waypoints: row.try_get("waypoints").ok(),
             segment_meta: row.try_get("segment_meta").ok(),
             segment_gaps,
             pause_gaps,
-            length_km: normalized_length_km.unwrap_or_else(|| {
-                row.try_get("length_km")
-                    .expect("Failed to get length_km: length_km column missing or wrong type")
-            }),
+            length_km: row.try_get("length_km")?,
             elevation_profile,
             hr_data,
             temp_data,
