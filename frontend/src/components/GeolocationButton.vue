@@ -63,7 +63,7 @@ const getCurrentLocation = async () => {
     const { latitude, longitude } = position.coords;
     emit("location-found", { latitude, longitude });
   } catch (err: unknown) {
-    let errorMessage = "Unable to get your location";
+    let errorMessage: string;
     const error = err as { code?: number; PERMISSION_DENIED?: number; POSITION_UNAVAILABLE?: number; TIMEOUT?: number };
 
     switch (error.code) {

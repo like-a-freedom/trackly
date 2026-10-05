@@ -27,6 +27,11 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: ./backend
+          # RUSTSEC-2023-0071 is an unpatchable timing side-channel in the `rsa`
+          # crate, pulled in transitively by jsonwebtoken's `rust_crypto`
+          # backend. This service only issues/verifies HS256 (HMAC) tokens, so
+          # the RSA code path is never reachable.
+          ignore: RUSTSEC-2023-0071
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - name: Check for orphan symbols

@@ -89,7 +89,10 @@ test('non-owner cannot see owner controls (delete/edit)', async ({ page }) => {
             if (!created) throw new Error('Server-side upload failed after retries');
             createdId = created.id || created.track_id;
         } catch (err) {
-            throw new Error('Failed to create track for visibility test: ' + JSON.stringify(resp) + ' and fallback upload error: ' + String(err));
+            throw new Error(
+                'Failed to create track for visibility test: ' + JSON.stringify(resp) + ' and fallback upload error: ' + String(err),
+                { cause: err }
+            );
         }
     } else {
         createdId = resp!.body.id;

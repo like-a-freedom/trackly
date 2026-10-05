@@ -62,6 +62,9 @@ export async function logout(accessToken: string | null): Promise<void> {
         if (!response.ok) throw new Error(`Logout HTTP ${response.status}`);
     } catch (e) {
         console.error('Logout request failed:', e);
-        throw new Error('Signed out on this device, but server logout could not be confirmed. Retry to end the server session.');
+        throw new Error(
+            'Signed out on this device, but server logout could not be confirmed. Retry to end the server session.',
+            { cause: e }
+        );
     }
 }

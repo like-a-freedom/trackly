@@ -1000,9 +1000,6 @@ watch([
       
       let innerHtml = '<div class="tooltip-header">';
       
-      // Prepare payload for chart-point-hover event
-      let hoverPayload = null;
-      
       // Distance information
       if (dataPoints.length > 0) {
         const xValue = dataPoints[0].label;
@@ -1019,7 +1016,7 @@ watch([
           `<span>${xValue}</span></div>`;
         
         const pointIndex = dataPoints[0].dataIndex;
-        hoverPayload = buildPayloadForIndex(pointIndex, isChartPointFixed.value);
+        const hoverPayload = buildPayloadForIndex(pointIndex, isChartPointFixed.value);
         
         // Emit hover event with RAF throttling
         emitChartPointHover(hoverPayload);

@@ -58,6 +58,9 @@ axum-extra = { version = "0.12.6", features = [
 sha2 = "0.11.0"
 tokio-util = "0.7.19"
 # Authentication
+# `rust_crypto` pulls in the `rsa` crate, which carries the unpatchable
+# RUSTSEC-2023-0071 timing side-channel. This service uses HS256 (HMAC) only,
+# so the RSA path is unreachable and the advisory is ignored in CI (ci.yaml).
 jsonwebtoken = { version = "11.0.0", features = ["rust_crypto"] }
 oauth2 = "5.0.0"
 rand = "0.10.2"
