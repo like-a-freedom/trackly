@@ -5,11 +5,33 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  release:
+    types: [created]
+  workflow_dispatch:
+
+# The repository token is read-only by default; jobs that need more (the audit
+# check and the image push) opt in explicitly below.
+permissions:
+  contents: read
+
+# A newer push to a branch supersedes the run already in flight for it. A
+# release must not be cancelled by a later push, so its runs are never
+# cancelled by a newer one.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_TERM_COLOR: always
 
 jobs:
   backend:
     name: Backend (Rust)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       checks: write
@@ -21,7 +43,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # Point the cache at `backend` so rust-cache actually finds Cargo.lock and
+      # reuses the compiled dependency tree between runs.
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./backend
       - name: Security audit (cargo-audit)
         uses: rustsec/audit-check@v2
         with:
@@ -42,19 +68,24 @@ jobs:
   frontend:
     name: Frontend (Vue)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ./frontend
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v6
         with:
-          targets: wasm32-unknown-unknown
-      - run: cargo install wasm-pack --locked
-      - run: bun run build:wasm
-      - run: python3 scripts/prepare-routing.py
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      # The WASM bundle (`public/wasm`) and the routing packs (`public/graphs`)
+      # are runtime assets the app fetches from `/wasm` and `/graphs`. Lint,
+      # type checking, the bundle build and the tests do not read them, so they
+      # are produced once — by the `docker` job's image build — instead of being
+      # rebuilt here as well.
+      - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run build
       - run: bun run check:seo
@@ -64,9 +95,10 @@ jobs:
     name: E2E Tests
     if: contains(github.event.pull_request.labels.*.name, 'run-e2e')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
-        image: postgis/postgis:15-3.4
+        image: postgis/postgis:18-3.6-alpine
         env:
           POSTGRES_USER: trackly
           POSTGRES_PASSWORD: trackly
@@ -82,8 +114,11 @@ jobs:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./backend
       - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+        run: cargo install sqlx-cli --locked --no-default-features --features rustls,postgres
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: bun install --frozen-lockfile
@@ -97,15 +132,101 @@ jobs:
         working-directory: ./frontend
         run: bun run test:e2e
 
-  docker_build:
-    name: Docker Build
+  docker:
+    name: Docker images
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
+      # QEMU is only needed for the arm64 leg, which runs on branches and
+      # releases. Pull requests build amd64 alone: same Dockerfiles, same
+      # cache, minutes cheaper.
+      - uses: docker/setup-qemu-action@v4
+        if: github.event_name != 'pull_request'
       - uses: docker/setup-buildx-action@v4
-      - name: Test backend Docker build
-        run: docker build ./backend -t trackly-backend:test
-      - name: Test frontend Docker build
-        run: docker build ./frontend -t trackly-frontend:test
-      - name: Test docker-compose build
-        run: docker compose -f docker-compose.dev.yaml build
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Backend image metadata
+        id: meta-backend
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/trackly-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      # One build produces both the pull-request smoke check and the published
+      # image; the gha cache carries compiled layers between runs so a rebuild
+      # only redoes what actually changed.
+      - name: Build backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+      - name: Frontend image metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/trackly-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Build frontend image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+      # The images above are built from the same Dockerfiles the Compose files
+      # reference, so resolving the configuration is enough here — a second
+      # `compose build` would only rebuild them.
+      - name: Validate the development Compose configuration
+        run: docker compose -f docker-compose.dev.yaml config --quiet
+
+  passed:
+    name: CI passed
+    if: always()
+    needs: [backend, frontend, e2e, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every check this event runs
+        env:
+          BACKEND: ${{ needs.backend.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          E2E: ${{ needs.e2e.result }}
+          DOCKER: ${{ needs.docker.result }}
+        run: |
+          test "$BACKEND" = success || exit 1
+          test "$FRONTEND" = success || exit 1
+          test "$DOCKER" = success || exit 1
+          # E2E runs only for pull requests labelled `run-e2e`; a skip is the
+          # designed outcome there, a failure is not.
+          case "$E2E" in
+            success | skipped) ;;
+            *) exit 1 ;;
+          esac
