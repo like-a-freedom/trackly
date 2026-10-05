@@ -36,6 +36,20 @@ describe('useDraftSave', () => {
         return useDraftSave({ debounceMs: 100 });
     }
 
+    it('opens and persists a draft on LAN HTTP without randomUUID', () => {
+        const randomUUID = window.crypto.randomUUID;
+        Object.defineProperty(window.crypto, 'randomUUID', { configurable: true, value: undefined });
+        try {
+            const draft = createDraft();
+            draft.saveDraft({ track: { name: 'LAN', description: '', categories: [], segments: [] }, editingState: { mode: 'edit', activeSegmentIndex: 0 } });
+            vi.advanceTimersByTime(100);
+            expect(draft.loadDraft()?.track.name).toBe('LAN');
+            expect(JSON.parse(storage.trackly_draft).writerId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+        } finally {
+            Object.defineProperty(window.crypto, 'randomUUID', { configurable: true, value: randomUUID });
+        }
+    });
+
     describe('checkDraft', () => {
         it('returns false when nothing in localStorage', () => {
             const ds = createDraft();

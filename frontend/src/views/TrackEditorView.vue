@@ -18,6 +18,7 @@
       :graph-loading="editor.routing.graphLoading.value"
       :graph-error="editor.routing.graphError.value"
       :graph-progress="editor.routing.graphProgress.value"
+      :graph-coverage="editor.routing.graphCoverage?.value?.name ?? ''"
       @save="handleSave"
       @export="handleExport"
       @toggle-routing="editor.routing.toggleMode"

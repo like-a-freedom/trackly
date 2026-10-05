@@ -15,6 +15,7 @@
       :key="`chart-${props.chartMode}`"
       :data="chartData" 
       :options="chartOptions"
+      :aria-label="`${chartMode} profile`"
     />
     <div
       v-else-if="elevationStats.gain !== undefined || elevationStats.loss !== undefined"
@@ -1392,14 +1393,14 @@ defineExpose({
 
 .stat-label {
   font-size: 0.85em;
-  color: #666;
+  color: var(--color-muted);
   font-weight: 500;
 }
 
 .stat-value {
   font-size: 1.1em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 </style>
 
@@ -1435,7 +1436,7 @@ defineExpose({
   align-items: center;
   gap: 4px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-size: 12px;
 }
 
@@ -1451,7 +1452,7 @@ defineExpose({
 
 .tooltip-time {
   font-weight: 400;
-  color: #666;
+  color: var(--color-muted);
   font-size: 11px;
   margin-top: 2px;
 }
@@ -1518,14 +1519,14 @@ defineExpose({
 
 .tooltip-label {
   font-weight: 400;
-  color: #666;
+  color: var(--color-muted);
   flex: 1;
   font-size: 11px;
 }
 
 .tooltip-value {
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--color-ink);
   text-align: right;
   font-size: 11px;
   transition: color 0.1s ease;
@@ -1545,7 +1546,7 @@ defineExpose({
   font-size: 10px;
   font-weight: 600;
   text-align: center;
-  color: #1a1a1a;
+  color: var(--color-ink);
   transition: all 0.15s ease;
   text-transform: uppercase;
   letter-spacing: 0.5px;

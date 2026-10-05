@@ -4,7 +4,8 @@
  * Each sub-module owns a single concern; this facade wires cross-module dependencies.
  */
 import { ref, computed, watch, type Ref } from 'vue';
-import { getSessionId } from '../utils/session';
+import { generateSessionId, getSessionId } from '../utils/session';
+import { validateCategories } from '@/domain/trackCategories';
 import { haversineDistance } from '../utils/haversine';
 import { useAuth } from './useAuth';
 import { useUndoRedo } from './useUndoRedo';
@@ -64,7 +65,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     const persistence = useTrackPersistence();
 
     // ── Metadata state (inlined from useTrackMetadata) ────────
-    const createRequestId = ref<string>(crypto.randomUUID());
+    const createRequestId = ref<string>(generateSessionId());
     const trackName = ref<string>('');
     const trackDescription = ref<string>('');
     const trackCategories = ref<string[]>([]);
@@ -660,6 +661,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     }
 
     async function duplicateTrack(): Promise<{ ok: boolean; id?: string; error?: string }> {
+        if (draftSave.isDirty.value || draftSave.conflict.value) return {ok:false,error:'Save your current changes before making a server copy.'};
         return persistence.duplicateTrack(
             {
                 trackName: trackName.value,
@@ -692,6 +694,10 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     }
 
     async function exportTrack(format: 'gpx' | 'kml' | 'geojson'): Promise<boolean> {
+        if (draftSave.isDirty.value || draftSave.conflict.value) {
+            persistence.error.value = 'Save your current changes before exporting the saved track.';
+            return false;
+        }
         return persistence.exportTrack(
             {
                 trackName: trackName.value,
@@ -786,7 +792,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
     // ── Computed ─────────────────────────────────────────────
 
     const canSave = computed(
-        () => !draftSave.conflict.value && !persistence.loading.value && !persistence.loadFailed.value && trackName.value.trim().length > 0 && geometry.totalPoints.value >= 2 && geometry.segments.value.every(s => s.points.length === 0 || s.points.length >= 2),
+        () => !validateCategories(trackCategories.value) && !draftSave.conflict.value && !persistence.loading.value && !persistence.loadFailed.value && trackName.value.trim().length > 0 && geometry.totalPoints.value >= 2 && geometry.segments.value.every(s => s.points.length === 0 || s.points.length >= 2),
     );
 
     const isNewTrack = computed(() => !persistence.savedTrackId.value);

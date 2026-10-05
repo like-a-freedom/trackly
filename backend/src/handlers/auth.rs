@@ -87,7 +87,7 @@ fn set_auth_cookies(
         .http_only(true)
         .secure(true)
         .same_site(SameSite::Strict)
-        .path("/auth")
+        .path("/api/auth")
         .max_age(cookie::time::Duration::seconds(
             config.refresh_token_expiry_secs as i64,
         ))
@@ -124,7 +124,7 @@ fn clear_auth_cookies(headers: &mut HeaderMap) {
         .http_only(true)
         .secure(true)
         .same_site(SameSite::Strict)
-        .path("/auth")
+        .path("/api/auth")
         .max_age(cookie::time::Duration::ZERO)
         .build();
     headers.insert(

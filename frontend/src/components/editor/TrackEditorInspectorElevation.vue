@@ -64,13 +64,13 @@ defineEmits(["chart-point-hover", "chart-point-leave", "chart-point-click"]);
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-ink);
   margin: 0 0 8px;
 }
 
 .elevation-status {
   font-size: 12px;
-  color: #555;
+  color: var(--color-muted);
   padding: 6px 0;
 }
 

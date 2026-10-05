@@ -31,20 +31,24 @@ export const useAuthStore = defineStore('auth', () => {
         return Date.now() >= tokenExpiresAt.value - REFRESH_THRESHOLD_MS;
     });
 
+    let authGeneration = 0;
+    let initialization: Promise<void> | null = null;
     async function initialize(): Promise<void> {
         if (isInitialized.value) return;
-        isLoading.value = true;
-        error.value = null;
-        try {
-            if (await _doRefresh()) {
-                await _doFetchProfile();
+        if (initialization) return initialization;
+        initialization = (async () => {
+            isLoading.value = true;
+            error.value = null;
+            try {
+                if (await _doRefresh()) await _doFetchProfile();
+            } catch {
+                /* no session */
+            } finally {
+                isLoading.value = false;
+                isInitialized.value = true;
             }
-        } catch {
-            /* no session */
-        } finally {
-            isLoading.value = false;
-            isInitialized.value = true;
-        }
+        })();
+        try { await initialization; } finally { initialization = null; }
     }
 
     async function login(): Promise<void> {
@@ -67,10 +71,12 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     async function handleCallback(code: string, state: string): Promise<boolean> {
+        const generation = ++authGeneration;
         isLoading.value = true;
         error.value = null;
         try {
             const result = await oauthHandleCallback(code, state);
+            if (generation !== authGeneration) return false;
             accessToken.value = result.accessToken;
             tokenExpiresAt.value = result.expiresAt;
             if (result.user) {
@@ -90,6 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     async function logout(): Promise<void> {
+        authGeneration += 1;
         isLoading.value = true;
         error.value = null;
         try {
@@ -124,6 +131,7 @@ export const useAuthStore = defineStore('auth', () => {
     async function deleteAccount(): Promise<void> {
         await ensureValidToken();
         await authDeleteAccount(accessToken.value!);
+        authGeneration += 1;
         accessToken.value = null;
         tokenExpiresAt.value = null;
         user.value = null;
@@ -165,23 +173,36 @@ export const useAuthStore = defineStore('auth', () => {
         isInitialized.value = true;
     }
 
+    let refreshInFlight: Promise<boolean> | null = null;
     async function _doRefresh(): Promise<boolean> {
-        const result = await refreshToken();
-        if (!result) {
-            accessToken.value = null;
-            tokenExpiresAt.value = null;
-            user.value = null;
-            return false;
+        if (refreshInFlight) return refreshInFlight;
+        const generation = authGeneration;
+        const renewal = (async () => {
+            const result = await refreshToken();
+            if (generation !== authGeneration) return false;
+            if (!result) {
+                accessToken.value = null;
+                tokenExpiresAt.value = null;
+                user.value = null;
+                return false;
+            }
+            accessToken.value = result.accessToken;
+            tokenExpiresAt.value = result.expiresAt;
+            return true;
+        })();
+        refreshInFlight = renewal;
+        try { return await renewal; } finally {
+            if (refreshInFlight === renewal) refreshInFlight = null;
         }
-        accessToken.value = result.accessToken;
-        tokenExpiresAt.value = result.expiresAt;
-        return true;
     }
 
     async function _doFetchProfile(): Promise<User | null> {
         if (!accessToken.value) return null;
+        const generation = authGeneration;
         try {
-            user.value = await fetchProfile(accessToken.value);
+            const profile = await fetchProfile(accessToken.value);
+            if (generation !== authGeneration) return null;
+            user.value = profile;
             return user.value;
         } catch (e) {
             console.error('Failed to fetch user profile:', e);
@@ -191,6 +212,8 @@ export const useAuthStore = defineStore('auth', () => {
 
     // Custom $reset for setup store (required for testing)
     function $reset(): void {
+        authGeneration += 1;
+        refreshInFlight = null;
         accessToken.value = null;
         tokenExpiresAt.value = null;
         user.value = null;

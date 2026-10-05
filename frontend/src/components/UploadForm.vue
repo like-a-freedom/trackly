@@ -34,7 +34,7 @@
         <input
           id="track-name-input"
           v-model="trackName"
-          class="track-name-input"
+          class="track-name-input ui-field"
           type="text"
           :disabled="uploading"
           placeholder="Track name"
@@ -46,28 +46,7 @@
           @selectstart.stop
           @dragstart.prevent
         >
-        <Multiselect
-          v-model="trackCategories"
-          aria-label="Track categories"
-          :disabled="uploading"
-          mode="tags"
-          :close-on-select="false"
-          :searchable="true"
-          :create-option="true"
-          :options="categoriesList"
-          :object="true"
-          placeholder="Select or create categories"
-          class="track-category-select"
-          :append-to-body="true"
-          position="auto"
-          :max-height="220"
-          @mousedown.stop
-          @mouseup.stop
-          @click.stop
-          @dblclick.stop
-          @selectstart.stop
-          @dragstart.prevent
-        />
+        <TrackCategoryPicker v-model="categoryValues" :disabled="uploading" class="track-category-select" />
       </template>
       <transition name="fade-slide">
         <div
@@ -94,14 +73,7 @@
           {{ warning }}
         </div>
       </transition>
-      <transition name="fade-slide">
-        <div
-          v-if="selectedFile && !trackExists && trackCategories.length === 0 && !warning && !checkingExists"
-          class="upload-warning"
-        >
-          Please select at least one category.
-        </div>
-      </transition>
+
       <transition name="fade-slide">
         <div
           v-if="uploadSuccess"
@@ -173,8 +145,8 @@
       <button
         v-if="selectedFile"
         type="submit"
-        class="upload-btn"
-        :disabled="uploading || !selectedFile || !trackName.trim() || trackExists || checkingExists || trackCategories.length === 0"
+        class="upload-btn ui-primary"
+        :disabled="uploading || !selectedFile || !trackName.trim() || trackExists || checkingExists"
       >
         {{ uploading ? 'Uploading…' : 'Upload track' }}
       </button>
@@ -183,11 +155,10 @@
   </div>
 </template>
 <script setup>
-import { TRACK_CATEGORIES } from "../domain/trackCategories";
-import { ref, watch } from 'vue';
+import { TRACK_CATEGORIES, validateCategories } from "../domain/trackCategories";
+import { ref, watch, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import Multiselect from '@vueform/multiselect';
-import '@vueform/multiselect/themes/default.css';
+import TrackCategoryPicker from './TrackCategoryPicker.vue';
 import { useTracks } from '../composables/useTracks';
 const { uploadTrack, checkTrackDuplicate } = useTracks();
 const router = useRouter();
@@ -207,6 +178,7 @@ const uploadedTrackData = ref(null); // Store uploaded track data (id, url)
 const copyingLink = ref(false);
 const linkCopied = ref(false);
 const categoriesList = TRACK_CATEGORIES;
+const categoryValues = computed({get: () => trackCategories.value.map(option => option.value), set: values => { trackCategories.value = values.map(value => ({value, label: categoriesList.find(option => option.value === value)?.label ?? value})); }});
 watch(() => props.dragActive, v => dragActive.value = v);
 watch(selectedFile, async (file) => {
   warning.value = "";
@@ -270,10 +242,8 @@ function onDrop(event) {
 }
 async function handleUpload() {
   if (uploading.value || !selectedFile.value || trackExists.value || checkingExists.value) return;
-  if (trackCategories.value.length === 0) {
-    warning.value = 'Please select at least one category.';
-    return;
-  }
+  const categoryError = validateCategories(categoryValues.value);
+  if (categoryError) { warning.value = categoryError; return; }
   uploading.value = true;
   try {
     const response = await uploadTrack({
@@ -283,6 +253,11 @@ async function handleUpload() {
         ? trackCategories.value.map(obj => obj.value)
         : []
     });
+    if (response.alreadyExists) {
+      trackExists.value = true;
+      existingTrackId.value = response.id;
+      return;
+    }
 
     // Store the upload response data
     uploadedTrackData.value = response;
@@ -372,7 +347,7 @@ async function copyTrackUrl() {
 .upload-label {
   font-size: var(--text-xs);
   margin-bottom: 4px;
-  color: #555;
+  color: var(--color-muted);
   cursor: pointer;
   font-weight: var(--weight-medium);
   padding: 0 2px;
@@ -388,26 +363,9 @@ async function copyTrackUrl() {
   background: #fafbfc;
   margin-bottom: 1px;
 }
-.upload-btn {
-  margin-top: 4px;
-  padding: 8px 0;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition: background 0.2s;
-  box-shadow: 0 1px 4px rgba(25, 118, 210, 0.08);
-}
-.upload-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.upload-btn:disabled {
-  background: #b0b0b0;
-  cursor: not-allowed;
-}
+.upload-btn { margin-top: 4px; }
+
+
 .drop-area {
   border: 2px dashed var(--accent);
   border-radius: 6px;
@@ -423,7 +381,7 @@ async function copyTrackUrl() {
   justify-content: center;
   font-size: var(--text-sm);
   line-height: var(--leading-snug);
-  color: #222;
+  color: var(--color-ink);
   font-weight: var(--weight-normal);
 }
 .drop-area.drag-active {
@@ -434,32 +392,8 @@ async function copyTrackUrl() {
   position: absolute; width:1px; height:1px; opacity:0;
 }
 .upload-label:focus-within { outline:3px solid var(--color-action); outline-offset:3px; }
-.track-name-input {
-  margin-top: 6px;
-  margin-bottom: 6px;
-  padding: 6px 8px;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  /* 16px for the same iOS zoom reason as .upload-input */
-  font-size: 1rem;
-}
-.track-category-select {
-  margin-bottom: 6px;
-  width: 100%;
-  --ms-tag-bg: #10B981;
-  --ms-tag-color: #fff;
-  --ms-tag-radius: 4px;
-  --ms-tag-font-size: 0.8125rem;
-  --ms-tag-font-weight: 600;
-  /* 16px: this is a form field, and iOS Safari zooms below that */
-  font-size: 1rem;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: none;
-  /* slightly increase min-height to reduce vertical shift when tags are added */
-  min-height: 44px;
-}
+.track-name-input { margin-block: 6px; }
+
 .upload-warning {
   display: flex;
   align-items: center;
@@ -492,7 +426,7 @@ async function copyTrackUrl() {
   justify-content: center;
   gap: 8px;
   background: #f0fbf4;
-  color: #157a3a;
+  color: var(--color-success);
   border: 1px solid #d9f0e0;
   border-radius: 5px;
   padding: 8px 12px;
@@ -507,7 +441,7 @@ async function copyTrackUrl() {
 }
 
 .success-text {
-  color: #157a3a;
+  color: var(--color-success);
 }
 
 .success-actions {
@@ -539,7 +473,7 @@ async function copyTrackUrl() {
 
 .copy-link-btn {
   background: transparent;
-  color: #16a34a;
+  color: var(--color-success);
   border: 1px solid rgba(22, 163, 74, 0.4);
   border-radius: 4px;
   padding: 4px 6px;

@@ -30,7 +30,7 @@ pub async fn insert_track_from_editor(
     let sanitized_description = super::crud::sanitize_description(params.description.as_deref());
     let mut transaction = params.pool.begin().await?;
 
-    sqlx::query(
+    let inserted = sqlx::query(
         r#"
         INSERT INTO tracks (
             id, name, description, categories, geom,
@@ -42,6 +42,7 @@ pub async fn insert_track_from_editor(
             $6, $7, $8, $9, $10,
             $11, $12, $13, $14, DEFAULT
         )
+        ON CONFLICT (id) DO NOTHING
         "#,
     )
     .bind(params.id)
@@ -60,6 +61,23 @@ pub async fn insert_track_from_editor(
     .bind(!params.is_draft) // is_public = !is_draft by default
     .execute(&mut *transaction)
     .await?;
+
+    if inserted.rows_affected() == 0 {
+        let (session_id, user_id): (Option<Uuid>, Option<Uuid>) =
+            sqlx::query_as("SELECT session_id, user_id FROM tracks WHERE id=$1")
+                .bind(params.id)
+                .fetch_one(&mut *transaction)
+                .await?;
+        if !(params.user_id.is_some() && params.user_id == user_id
+            || params.session_id.is_some() && params.session_id == session_id)
+        {
+            return Err(sqlx::Error::Protocol(
+                "Create request identity is unavailable".into(),
+            ));
+        }
+        transaction.commit().await?;
+        return Ok(());
+    }
 
     replace_editor_pois(&mut transaction, params.id, &params.pois, params.session_id).await?;
     transaction.commit().await?;
@@ -99,7 +117,7 @@ pub async fn update_track_geometry(
             length_km = CASE WHEN time_data IS NOT NULL OR hr_data IS NOT NULL OR speed_data IS NOT NULL OR temp_data IS NOT NULL OR recorded_at IS NOT NULL THEN length_km ELSE $2 END,
             waypoints = $3,
             segment_meta = COALESCE($4, segment_meta),
-            hash = CASE WHEN time_data IS NOT NULL OR hr_data IS NOT NULL OR speed_data IS NOT NULL OR temp_data IS NOT NULL OR recorded_at IS NOT NULL THEN hash ELSE $5 END
+            hash = CASE WHEN source = 'duplicate' OR time_data IS NOT NULL OR hr_data IS NOT NULL OR speed_data IS NOT NULL OR temp_data IS NOT NULL OR recorded_at IS NOT NULL THEN hash ELSE $5 END
         WHERE id = $6
         "#,
     )
@@ -239,16 +257,19 @@ async fn replace_editor_pois(
     let mut links = Vec::new();
     for (order, poi) in pois.as_array().into_iter().flatten().enumerate() {
         let name = ammonia::clean(poi["name"].as_str().unwrap_or_default().trim());
-        let description = poi["description"].as_str().map(ammonia::clean);
-        let category = poi["category"].as_str();
+        let description = poi["description"]
+            .as_str()
+            .map(ammonia::clean)
+            .filter(|text| !text.is_empty());
+        let category = poi["category"].as_str().filter(|text| !text.is_empty());
         let lat = poi["lat"].as_f64().unwrap_or_default();
         let lon = poi["lon"].as_f64().unwrap_or_default();
         let existing: Option<i32> = sqlx::query_scalar("SELECT p.id FROM pois p JOIN track_pois tp ON tp.poi_id=p.id WHERE tp.track_id=$1 AND p.name=$2 AND p.description IS NOT DISTINCT FROM $3 AND p.category IS NOT DISTINCT FROM $4 AND ST_X(p.geom::geometry)=$5 AND ST_Y(p.geom::geometry)=$6 LIMIT 1")
             .bind(track_id).bind(&name).bind(&description).bind(category).bind(lon).bind(lat).fetch_optional(&mut **transaction).await?;
         let id = match existing {
             Some(id) => id,
-            None => sqlx::query_scalar("INSERT INTO pois (name, description, category, geom, session_id) VALUES ($1,$2,$3,ST_SetSRID(ST_MakePoint($4,$5),4326)::geography,$6) RETURNING id")
-                .bind(&name).bind(&description).bind(category).bind(lon).bind(lat).bind(session_id).fetch_one(&mut **transaction).await?,
+            None => sqlx::query_scalar("INSERT INTO pois (name, description, category, geom, session_id, editor_scope_id) VALUES ($1,$2,$3,ST_SetSRID(ST_MakePoint($4,$5),4326)::geography,$6,$7) RETURNING id")
+                .bind(&name).bind(&description).bind(category).bind(lon).bind(lat).bind(session_id).bind(Uuid::new_v4()).fetch_one(&mut **transaction).await?,
         };
         links.push((id, order as i32));
     }

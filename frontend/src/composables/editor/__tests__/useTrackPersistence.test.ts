@@ -71,7 +71,7 @@ describe('useTrackPersistence', () => {
         it('builds meta payload from segments', () => {
             const store = createTestStore({
                 segments: [{
-                    points: [[50, 30]] as LatLngTuple[],
+                    points: [[50, 30], [51,31]] as LatLngTuple[],
                     waypoints: [0],
                     surfaceTypes: ['unknown'],
                     name: 'Day 1',
@@ -86,7 +86,7 @@ describe('useTrackPersistence', () => {
         it('uses default color when segment has none', () => {
             const store = createTestStore({
                 segments: [{
-                    points: [[50, 30]] as LatLngTuple[],
+                    points: [[50, 30], [51,31]] as LatLngTuple[],
                     waypoints: [0],
                     surfaceTypes: ['unknown'],
                     name: null,
@@ -399,7 +399,7 @@ describe('useTrackPersistence', () => {
     });
 
     it('confirms API coordinate rounding and escaped text without losing the draft contract', async () => {
-        mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : {name:'River &amp; forest',description:'Rock &amp; water',categories:[],geom_geojson:{type:'LineString',coordinates:[[30.123456789,50],[31,51]]}}}));
+        mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : {name:'River &amp; forest',description:'Rock &amp; water',categories:[],waypoints:[{lat:50,lon:30.123456789,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#2196F3'}],geom_geojson:{type:'LineString',coordinates:[[30.123456789,50],[31,51]]}}}));
         const draft={markClean:vi.fn(),deleteDraft:vi.fn()};
         const store=createTestStore({trackName:'River & forest',trackDescription:'Rock & water',savedTrackId:'existing',segments:[{points:[[50,30.123456789123],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:null,color:'#2196F3'}]});
         expect(await persistence.saveTrack(store,mockGetAuthHeader,()=>({type:'LineString',coordinates:[[30.123456789123,50],[31,51]]}),draft)).toBe('existing');
@@ -411,6 +411,16 @@ describe('useTrackPersistence', () => {
         const draft = {markClean:vi.fn(),deleteDraft:vi.fn()};
         const store = createTestStore({trackName:'Current revision',savedTrackId:'existing',segments:[{points:[[50,30],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:null,color:'#2196F3'}]});
         expect(await persistence.saveTrack(store,mockGetAuthHeader,() => ({type:'LineString',coordinates:[[30,50],[31,51]]}),draft)).toBeNull();
+        expect(draft.deleteDraft).not.toHaveBeenCalled();
+        expect(persistence.error.value).toContain('readback');
+    });
+
+    it.each(['anchors', 'segment metadata'])('retains work when the server loses %s', async (missing) => {
+        const store = createTestStore({trackName:'Route',savedTrackId:'existing',segments:[{points:[[50,30],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:'Forest',color:'#2196F3'}]});
+        mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : {name:'Route',description:'',categories:[],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]},waypoints:missing==='anchors' ? [] : [{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:missing==='segment metadata' ? 'Lost' : 'Forest',color:'#2196F3'}]}}));
+        const draft = {markClean:vi.fn(),deleteDraft:vi.fn()};
+        expect(await persistence.saveTrack(store,mockGetAuthHeader,()=>({type:'LineString',coordinates:[[30,50],[31,51]]}),draft)).toBeNull();
+        expect(draft.markClean).not.toHaveBeenCalled();
         expect(draft.deleteDraft).not.toHaveBeenCalled();
         expect(persistence.error.value).toContain('readback');
     });
@@ -440,7 +450,7 @@ describe('useTrackPersistence', () => {
         it('creates new track', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
-                json: () => Promise.resolve({ id: 'new-track', name:'New Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]} }),
+                json: () => Promise.resolve({ id: 'new-track', name:'New Track',description:'',categories:[],waypoints:[{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#2196F3'}],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]} }),
             });
 
             const draftSave = { markClean: vi.fn(), deleteDraft: vi.fn() };
@@ -467,7 +477,7 @@ describe('useTrackPersistence', () => {
         it('updates existing track', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
-                json: () => Promise.resolve({name:'Updated Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]} }),
+                json: () => Promise.resolve({name:'Updated Track',description:'',categories:[],waypoints:[{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#2196F3'}],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]} }),
             });
 
             const draftSave = { markClean: vi.fn(), deleteDraft: vi.fn() };
@@ -492,7 +502,7 @@ describe('useTrackPersistence', () => {
 
         it('does not clear a newer revision while the save is in flight', async () => {
             let complete: (value: unknown) => void = () => {};
-            mockFetch.mockReturnValueOnce(new Promise(resolve => { complete = resolve; })).mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : ({name:'Route',description:'',categories:[],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]}})}));
+            mockFetch.mockReturnValueOnce(new Promise(resolve => { complete = resolve; })).mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : ({name:'Route',description:'',categories:[],waypoints:[{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#2196F3'}],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]}})}));
             const draft = { markClean: vi.fn(), deleteDraft: vi.fn(), isCurrentRevision: () => false };
             const store = createTestStore({ trackName: 'Route', savedTrackId: 'existing', segments: [{ points: [[50, 30], [51, 31]], waypoints: [0, 1], surfaceTypes: ['unknown', 'unknown'], name: null, color: '#2196F3' }] });
             const pending = persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'LineString', coordinates: [[30, 50], [31, 51]] }), draft);

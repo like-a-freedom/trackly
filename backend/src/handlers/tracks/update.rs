@@ -26,6 +26,33 @@ use crate::error::{AppError, Result};
 use crate::handlers::util::verify_track_owner;
 use crate::metrics;
 
+#[cfg(test)]
+mod category_contract_tests {
+    use super::*;
+    #[tokio::test]
+    async fn rejects_oversized_categories_before_database_access() {
+        let pool = Arc::new(
+            sqlx::postgres::PgPoolOptions::new()
+                .acquire_timeout(std::time::Duration::from_millis(10))
+                .connect_lazy("postgres://localhost/category_validation_only")
+                .unwrap(),
+        );
+        for categories in [vec!["hiking".to_string(); 51], vec!["я".repeat(51)]] {
+            let result = update_track_categories(
+                State(pool.clone()),
+                Path(Uuid::new_v4()),
+                OptionalAuthUser(None),
+                Json(crate::models::UpdateTrackCategoriesRequest {
+                    categories,
+                    session_id: Uuid::new_v4(),
+                }),
+            )
+            .await;
+            assert!(matches!(result, Err(AppError::Validation(_))));
+        }
+    }
+}
+
 // ─── Update handlers ────────────────────────────────────────────────────────
 
 /// Update track description.
@@ -80,11 +107,7 @@ pub async fn update_track_categories(
     auth_user: OptionalAuthUser,
     Json(request): Json<crate::models::UpdateTrackCategoriesRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    if request.categories.is_empty() {
-        return Err(AppError::Validation(
-            "At least one category is required".into(),
-        ));
-    }
+    crate::input_validation::validate_track_fields(None, None, &request.categories)?;
 
     verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
 

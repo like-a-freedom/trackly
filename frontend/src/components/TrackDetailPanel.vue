@@ -393,11 +393,6 @@
             v-else-if="track.description || isOwner"
             class="track-description-block"
             :class="{ editable: isOwner, empty: !track.description && isOwner }"
-            :tabindex="isOwner ? 0 : -1"
-            role="button"
-            @click="isOwner && startEditDescription()"
-            @keydown.enter.prevent="isOwner && startEditDescription()"
-            @keydown.space.prevent="isOwner && startEditDescription()"
           >
             <div class="description-content">
               <p
@@ -441,7 +436,7 @@
           :track="track"
           :is-owner="isOwner"
           :categories-list="categoriesList"
-          @categories-updated="handleCategoriesUpdated"
+          :save-categories="handleCategoriesUpdated"
         />
 
         <!-- Auto Classifications -->
@@ -2418,7 +2413,7 @@ defineExpose({
   max-height: 50vh;
   display: flex;
   flex-direction: column;
-  color: #333;
+  color: var(--color-ink);
   box-sizing: border-box;
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
   /* Prevent touch actions from propagating to map */
@@ -2516,7 +2511,7 @@ defineExpose({
   background: none;
   border: none;
   cursor: pointer;
-  color: #666;
+  color: var(--color-muted);
   padding: 6px;
   border-radius: 6px;
   display: flex;
@@ -2539,7 +2534,7 @@ defineExpose({
 .collapse-toggle-btn:hover {
   /* Use a subtle neutral hover similar to other icon buttons */
   background: rgba(0, 0, 0, 0.06);
-  color: #333;
+  color: var(--color-ink);
 }
 
 .collapse-toggle-btn:active {
@@ -2550,7 +2545,7 @@ defineExpose({
   background: none;
   border: none;
   cursor: pointer;
-  color: #dc2626;
+  color: var(--color-danger);
   padding: 6px;
   border-radius: 6px;
   transition: all 0.2s ease;
@@ -2564,14 +2559,14 @@ defineExpose({
 
 .close-button:hover {
   background: rgba(220, 38, 38, 0.1);
-  color: #b91c1c;
+  color: var(--color-danger);
   transform: scale(1.05);
 }
 
 .collapse-toggle-btn:hover {
   /* Neutral, subtle highlight to match other icon buttons */
   background: rgba(0, 0, 0, 0.06);
-  color: #333;
+  color: var(--color-ink);
   transform: scale(1.05);
 }
 
@@ -2620,7 +2615,7 @@ defineExpose({
 .share-track-btn {
   background: none;
   border: none;
-  color: #666;
+  color: var(--color-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -2649,7 +2644,7 @@ defineExpose({
 .export-gpx-btn {
   background: none;
   border: none;
-  color: #666;
+  color: var(--color-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -2676,7 +2671,7 @@ defineExpose({
 .delete-track-btn {
   background: none;
   border: none;
-  color: #dc2626;
+  color: var(--color-danger);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -2690,7 +2685,7 @@ defineExpose({
 
 .delete-track-btn:hover {
   background: rgba(220, 38, 38, 0.1);
-  color: #b91c1c;
+  color: var(--color-danger);
   transform: scale(1.05);
 }
 
@@ -2728,7 +2723,7 @@ defineExpose({
 .track-header h2 {
   margin: 0 0 8px 0;
   font-size: 1.6em;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
@@ -2752,7 +2747,7 @@ defineExpose({
   margin: 0;
   line-height: 1.2;
   font-size: 1.6em;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
@@ -2769,7 +2764,7 @@ defineExpose({
 .edit-name-btn {
   background: none;
   border: none;
-  color: #666;
+  color: var(--color-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -2802,7 +2797,7 @@ defineExpose({
   width: 100%;
   font-size: 1.6em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
   background: #fff;
   border: 2px solid #ddd;
   border-radius: 8px;
@@ -2903,7 +2898,7 @@ defineExpose({
 }
 
 .track-description-placeholder {
-  color: #888;
+  color: var(--color-muted);
   font-size: 1.08em;
   line-height: 1.6;
   margin: 0;
@@ -2957,7 +2952,7 @@ defineExpose({
   margin-bottom: 16px;
   resize: none;
   background: #fff;
-  color: #222;
+  color: var(--color-ink);
   font-family: inherit;
   box-sizing: border-box;
   transition: all 0.2s ease;
@@ -2974,7 +2969,7 @@ defineExpose({
 }
 
 .edit-description-input::placeholder {
-  color: #999;
+  color: var(--color-muted);
   font-style: italic;
 }
 
@@ -3020,7 +3015,7 @@ defineExpose({
 
 .cancel-btn {
   background: #f5f5f5;
-  color: #666;
+  color: var(--color-muted);
   border: 2px solid #ddd;
 }
 
@@ -3063,7 +3058,7 @@ defineExpose({
 :deep(.stats-section h3) {
   margin: 0 0 12px 0;
   font-size: 1.3em;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
@@ -3077,7 +3072,7 @@ defineExpose({
 :deep(.section-header-with-tooltip h3) {
   margin: 0;
   font-size: 1.3em;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
@@ -3088,7 +3083,7 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #888;
+  color: var(--color-muted);
   cursor: help;
   opacity: 0.7;
   transition: all 0.2s ease;
@@ -3119,7 +3114,7 @@ defineExpose({
   left: 0;
   transform: none;
   background: #fff;
-  color: #333;
+  color: var(--color-ink);
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -3191,7 +3186,7 @@ defineExpose({
   visibility: hidden;
   pointer-events: none;
   background: #fff;
-  color: #333;
+  color: var(--color-ink);
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 12px;
@@ -3231,12 +3226,12 @@ defineExpose({
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #666;
+  color: var(--color-muted);
 }
 
 :deep(.unit-toggle.active) {
   background: #fff;
-  color: #1a1a1a;
+  color: var(--color-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -3261,12 +3256,12 @@ defineExpose({
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #666;
+  color: var(--color-muted);
 }
 
 :deep(.chart-toggle.active) {
   background: #fff;
-  color: #1a1a1a;
+  color: var(--color-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -3290,7 +3285,7 @@ defineExpose({
 .force-update-btn {
   background: none;
   border: none;
-  color: #666;
+  color: var(--color-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -3331,7 +3326,7 @@ defineExpose({
 .stop-polling-btn-header {
   background: none;
   border: none;
-  color: #dc2626;
+  color: var(--color-danger);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -3346,7 +3341,7 @@ defineExpose({
 
 .stop-polling-btn-header:hover {
   background: rgba(220, 38, 38, 0.1);
-  color: #b91c1c;
+  color: var(--color-danger);
   transform: scale(1.05);
 }
 
@@ -3384,14 +3379,14 @@ defineExpose({
 
 :deep(.stats-section .stat-label) {
   font-size: 0.85em;
-  color: #666;
+  color: var(--color-muted);
   font-weight: 500;
 }
 
 :deep(.stats-section .stat-value) {
   font-size: 1.1em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 /* Elevation Stats */
@@ -3554,7 +3549,7 @@ defineExpose({
   align-items: center;
   gap: 6px;
   font-size: 0.85em;
-  color: #666;
+  color: var(--color-muted);
   padding: 4px 0;
 }
 
@@ -3617,7 +3612,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  color: #777;
+  color: var(--color-muted);
   font-style: italic;
 }
 
@@ -3642,7 +3637,7 @@ defineExpose({
 :deep(.track-metadata h3) {
   margin: 0 0 16px 0;
   font-size: 1.3em;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
@@ -3663,14 +3658,14 @@ defineExpose({
 
 :deep(.metadata-label) {
   font-size: 0.85em;
-  color: #666;
+  color: var(--color-muted);
   font-weight: 500;
 }
 
 :deep(.metadata-value) {
   font-size: 1.1em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 /* Panel controls responsive adjustments */
@@ -3780,13 +3775,11 @@ defineExpose({
  .flyout-content { padding:0 20px 24px; }
  :deep(.basic-info-grid), :deep(.speed-pace-grid) { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
-@media(max-width:640px) {
- .track-name-block { flex-wrap:wrap; align-items:flex-start; }
+.track-name-block { flex-wrap:wrap; align-items:flex-start; }
  .title-with-edit { min-width:0; max-width:100%; flex:1 1 100%; }
  .track-header .title-with-edit h2 { overflow-wrap:anywhere; }
  .track-name-block .header-actions { flex:1 1 100%; width:100%; justify-content:flex-end; gap:4px; }
- .header-actions.grouped { gap:8px; }
-}
+ .header-actions.grouped { gap:8px; flex-wrap:wrap; }
 </style>
 
 <style>

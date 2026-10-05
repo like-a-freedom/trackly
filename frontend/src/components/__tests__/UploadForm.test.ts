@@ -167,13 +167,7 @@ describe('UploadForm', () => {
             expect(wrapper.find('.track-name-input').exists()).toBe(true);
             expect(wrapper.find('.track-category-select').exists()).toBe(true);
 
-            // Ensure Multiselect receives stable placement props to avoid teleport-induced jumping
-            const ms = wrapper.findComponent({ name: 'Multiselect' });
-            expect(ms.exists()).toBe(true);
-            const props = ms.props();
-            expect(props.position).toBe('auto');
-            // camelCased prop name in props() is appendToBody
-            expect(props.appendToBody).toBe(true);
+            expect(wrapper.find('input[value="walking"]').exists()).toBe(true);
         });
 
         it('enables upload button after valid file selection', async () => {
@@ -196,8 +190,8 @@ describe('UploadForm', () => {
             await flushPromises();
 
             const uploadBtn = wrapper.find('.upload-btn');
-            // Button should be disabled because no categories are selected yet
-            expect(uploadBtn.attributes('disabled')).toBeDefined();
+            // Categories are optional across upload, editor and metadata updates.
+            expect(uploadBtn.attributes('disabled')).toBeUndefined();
         });
     });
 
@@ -498,10 +492,8 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
             await flushPromises();
 
-            // Should not be called because categories are required
-            expect(mockUploadTrack).not.toHaveBeenCalled();
-            expect(wrapper.emitted('uploaded')).toBeFalsy();
-            expect(wrapper.vm.warning).toBe('Please select at least one category.');
+            expect(mockUploadTrack).toHaveBeenCalledWith({file, name: 'My Custom Track', categories: []});
+            expect(wrapper.emitted('uploaded')).toBeTruthy();
         });
 
         it('calls uploadTrack with categories', async () => {

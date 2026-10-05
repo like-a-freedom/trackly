@@ -48,7 +48,7 @@ export function useNicknameEdit(currentNickname: Ref<string | null>): NicknameEd
     error.value = null;
 
     try {
-      const response = await http('/api/users/me/profile', {
+      const response = await http('/api/auth/me/nickname', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nickname }),

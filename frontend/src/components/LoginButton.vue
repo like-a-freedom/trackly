@@ -86,6 +86,7 @@
         />
       </svg>
     </button>
+    <p v-if="error" role="alert" class="fixed bottom-20 right-4 z-50 m-0 max-w-xs rounded border border-line bg-surface p-3 text-sm text-danger">{{ error }}</p>
   </div>
 </template>
 
@@ -94,7 +95,7 @@ import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
-const { isAuthenticated, isLoading, user, login } = useAuth();
+const { isAuthenticated, isLoading, user, login, error } = useAuth();
 
 async function handleLogin() {
   try {
@@ -132,7 +133,7 @@ function goToAccount() {
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  color: #666;
+  color: var(--color-muted);
   /* Force layer creation for better rendering */
   transform: translateZ(0);
   will-change: transform;
@@ -239,6 +240,6 @@ function goToAccount() {
   width: 100%;
   height: 100%;
   background: #e5e7eb;
-  color: #9ca3af;
+  color: var(--color-muted);
 }
 </style>

@@ -51,7 +51,7 @@
     </div>
     <div class="optimizer-actions">
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         :disabled="optimizerLoading || totalPoints < 2"
         data-testid="optimizer-preview-btn"
         @click="$emit('previewOptimization')"
@@ -59,7 +59,7 @@
         Preview
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         :disabled="!hasOptimizerPreview"
         data-testid="optimizer-apply-btn"
         @click="$emit('applyOptimization')"
@@ -67,7 +67,7 @@
         Apply
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         :disabled="!hasOptimizerPreview"
         data-testid="optimizer-clear-btn"
         @click="$emit('clearOptimization')"
@@ -75,7 +75,7 @@
         Cancel
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         :disabled="!hasOptimizerPreview"
         data-testid="optimizer-download-btn"
         @click="$emit('downloadOptimization')"
@@ -137,13 +137,13 @@ function handleOptimizerRatioInput(event) {
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-ink);
   margin: 0 0 8px;
 }
 
 .optimizer-meta {
   font-size: 12px;
-  color: #555;
+  color: var(--color-muted);
   margin: 4px 0 8px;
 }
 
@@ -164,26 +164,17 @@ function handleOptimizerRatioInput(event) {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: #555;
+  color: var(--color-muted);
   margin: 6px 0;
 }
 
 .optimizer-status {
   font-size: 12px;
-  color: #555;
+  color: var(--color-muted);
 }
 
 .optimizer-status.error {
   color: #c62828;
-}
-
-.btn-secondary {
-  background: #eee;
-  color: #333;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
 }
 
 .btn-sm {

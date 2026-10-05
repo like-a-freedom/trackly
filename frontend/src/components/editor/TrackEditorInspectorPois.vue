@@ -36,7 +36,7 @@
           <input
             aria-label="Place name"
             v-model="poiEditDraft.name"
-            class="form-input"
+            class="form-input ui-field"
             type="text"
             maxlength="80"
             placeholder="POI name"
@@ -45,7 +45,7 @@
           <textarea
             aria-label="Place description"
             v-model="poiEditDraft.description"
-            class="form-input form-textarea"
+            class="form-input form-textarea ui-field"
             rows="2"
             maxlength="500"
             placeholder="Description (optional)"
@@ -53,7 +53,7 @@
           />
           <select aria-label="POI category"
             v-model="poiEditDraft.category"
-            class="form-input"
+            class="form-input ui-field"
             data-testid="poi-edit-category"
           >
             <option value="">
@@ -69,14 +69,14 @@
           </select>
           <div class="poi-edit-actions">
             <button
-              class="btn-secondary btn-sm"
+              class="btn-secondary btn-sm ui-secondary"
               data-testid="poi-save-btn"
               @click.stop="savePoiEdit"
             >
               Save
             </button>
             <button
-              class="btn-secondary btn-sm"
+              class="btn-secondary btn-sm ui-secondary"
               data-testid="poi-cancel-btn"
               @click.stop="cancelPoiEdit"
             >
@@ -188,7 +188,7 @@ watch(
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-ink);
   margin: 0 0 8px;
 }
 
@@ -225,7 +225,7 @@ watch(
 
 .poi-info small {
   display: block;
-  color: #888;
+  color: var(--color-muted);
   font-size: 11px;
 }
 
@@ -246,22 +246,7 @@ watch(
   font-weight: 600;
 }
 
-.form-input {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 13px;
-  color: #333;
-  box-sizing: border-box;
-}
 
-.form-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
-}
 
 .form-textarea {
   resize: vertical;
@@ -275,7 +260,7 @@ watch(
   font-size: 12px;
   padding: 2px 4px;
   border-radius: 2px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .btn-icon-sm:hover {
@@ -285,15 +270,6 @@ watch(
 .btn-icon-sm.danger:hover {
   background: #fce4ec;
   color: #c62828;
-}
-
-.btn-secondary {
-  background: #eee;
-  color: #333;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
 }
 
 .btn-sm {

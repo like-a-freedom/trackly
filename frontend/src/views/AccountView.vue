@@ -1,5 +1,10 @@
 <template>
   <div class="account-page">
+    <div v-if="accountActionError" role="alert" class="mx-4 mt-4 flex items-center gap-3 rounded border border-danger bg-surface p-3 text-sm text-danger">
+      <span>{{ accountActionError }}</span>
+      <button v-if="failedAccountAction" type="button" class="min-h-11 shrink-0 rounded border border-line bg-surface px-3 text-ink" :disabled="!!accountActionPending" @click="handleRetryAccountAction">Retry</button>
+    </div>
+    <p v-if="accountActionPending" role="status" class="mx-4 text-sm text-muted">{{ accountActionPending === 'delete' ? 'Deleting account…' : accountActionPending === 'logout' ? 'Signing out…' : 'Confirm account deletion' }}</p>
     <!-- Header with profile and settings -->
     <header class="account-header">
       <button
@@ -46,9 +51,10 @@
 
       <div class="header-actions">
         <button
-          ref="settingsMenu.buttonRef"
+          :ref="el => { settingsMenu.buttonRef.value = el }"
           class="settings-btn"
           title="Settings"
+          :disabled="!!accountActionPending"
           @click="settingsMenu.toggle"
         >
           <svg
@@ -73,12 +79,12 @@
         <!-- Settings dropdown menu -->
         <div
           v-if="settingsMenu.showMenu.value"
-          ref="settingsMenu.menuRef"
+          :ref="el => { settingsMenu.menuRef.value = el }"
           class="settings-menu"
         >
           <button
             class="menu-item"
-            @click="nicknameEdit.open(user?.nickname || '')"
+            @click="handleEditNickname"
           >
             <svg
               width="16"
@@ -197,7 +203,7 @@
                 id="nickname-input"
                 v-model="nicknameEdit.editValue.value"
                 type="text"
-                class="form-input"
+                class="form-input ui-field"
                 placeholder="Enter a nickname..."
                 maxlength="50"
                 :disabled="nicknameEdit.saving.value"
@@ -216,14 +222,14 @@
           </div>
           <div class="modal-footer">
             <button
-              class="btn-cancel"
+              class="btn-cancel ui-secondary"
               :disabled="nicknameEdit.saving.value"
               @click="nicknameEdit.close"
             >
               Cancel
             </button>
             <button
-              class="btn-primary"
+              class="btn-primary ui-primary"
               :disabled="!nicknameEdit.hasChanged.value || nicknameEdit.saving.value"
               @click="nicknameEdit.save"
             >
@@ -242,6 +248,12 @@
       <div class="spinner" />
       <p>Loading account...</p>
     </div>
+
+    <section v-else-if="!user" class="mx-auto flex max-w-md flex-col items-center gap-4 px-6 py-12 text-center">
+      <h2 class="text-xl font-semibold">Sign in to view your tracks</h2>
+      <p>Access your saved collection and account settings.</p>
+      <LoginButton />
+    </section>
 
     <!-- Account content -->
     <div
@@ -281,6 +293,7 @@
             <input
               v-model="search.query.value"
               type="text"
+              aria-label="Search tracks"
               placeholder="Search tracks..."
               class="search-input"
             >
@@ -289,8 +302,8 @@
             <label class="select-all-label">
               <input
                 type="checkbox"
-                :checked="bulkOps.allVisibleSelected.value"
-                :indeterminate="bulkOps.someSelected.value && !bulkOps.allVisibleSelected.value"
+                :checked="allVisibleSelected"
+                :indeterminate="someSelected && !allVisibleSelected"
                 @change="bulkOps.toggleSelectAll"
               >
               <span>Select shown tracks</span>
@@ -350,7 +363,7 @@
           <span>Loading tracks...</span>
         </div>
 
-        <div v-else-if="trackList.error.value" class="tracks-empty" role="alert"><p>{{ trackList.error.value }}</p><button class="btn-secondary" @click="trackList.loadTracks()">Retry loading tracks</button></div>
+        <div v-else-if="trackList.error.value" class="tracks-empty" role="alert"><p>{{ trackList.error.value }}</p><button class="btn-secondary ui-secondary" @click="trackList.loadTracks()">Retry loading tracks</button></div>
         <div
           v-else-if="trackList.tracks.value.length === 0"
           class="tracks-empty"
@@ -377,7 +390,7 @@
           </div>
           <p>You don't have any tracks yet</p>
           <button
-            class="btn-secondary"
+            class="btn-secondary ui-secondary"
             @click="goToUpload"
           >
             Upload a track
@@ -390,7 +403,7 @@
         >
           <p>No tracks match your search</p>
           <button
-            class="btn-secondary"
+            class="btn-secondary ui-secondary"
             @click="search.clear"
           >
             Clear search
@@ -414,6 +427,7 @@
               >
                 <input
                   type="checkbox"
+                  :aria-label="`Select ${track.name || 'Unnamed Track'}`"
                   :checked="selectedTrackIds.includes(track.id)"
                   @change="bulkOps.toggleSelection(track.id)"
                 >
@@ -465,6 +479,7 @@
                 :class="{ public: track.is_public }"
                 :disabled="togglingVisibility === track.id"
                 :title="track.is_public ? 'Make private' : 'Make public'"
+                :aria-label="track.is_public ? 'Make private' : 'Make public'"
                 @click.stop="handleToggleVisibility(track)"
               >
                 <svg
@@ -546,6 +561,8 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import LoginButton from "../components/LoginButton.vue";
+import { useAuthStore } from "../stores/auth";
 import { useAuth } from "../composables/useAuth";
 import { useConfirm } from "../composables/useConfirm";
 import { http } from "../http-instance";
@@ -561,19 +578,28 @@ defineOptions({
 });
 
 const router = useRouter();
-const { user, isLoading, logout, deleteAccount } = useAuth();
+const { user, isLoading, logout, deleteAccount, initialize } = useAuth();
 const { confirm } = useConfirm();
 
 // Composables
 const settingsMenu = useSettingsMenu();
 const trackList = useTrackList({ limit: 20 });
 const search = useTrackSearch(trackList.tracks);
-const nicknameEdit = useNicknameEdit(computed(() => user.value?.nickname || ""));
+const nicknameEdit = useNicknameEdit(computed({ get: () => user.value?.nickname || "", set: value => { if (user.value) useAuthStore().user = { ...user.value, nickname: value }; } }));
+const handleEditNickname = () => {
+  settingsMenu.close();
+  settingsMenu.buttonRef.value?.focus();
+  nicknameEdit.open(user.value?.nickname || '');
+};
 const nicknameModalElement = ref(null);
 useModalFocus(nicknameEdit.showModal, nicknameModalElement, nicknameEdit.close);
 
 const selectedTrackIds = ref([]);
 const togglingVisibility = ref(null);
+const accountActionPending = ref(null);
+const accountActionError = ref('');
+const failedAccountAction = ref(null);
+const handleRetryAccountAction = () => failedAccountAction.value === 'delete' ? confirmDeleteAccount() : handleLogout();
 
 const allVisibleSelected = computed(() => {
   if (search.filteredTracks.value.length === 0) return false;
@@ -627,14 +653,26 @@ async function handleToggleVisibility(track) {
 }
 
 async function handleLogout() {
+  if (accountActionPending.value) return;
+  accountActionPending.value = 'logout';
+  accountActionError.value = '';
   settingsMenu.close();
-  await logout();
-  router.replace("/");
+  try {
+    await logout();
+    failedAccountAction.value = null;
+    await router.replace("/");
+  } catch (cause) {
+    accountActionError.value = cause instanceof Error ? cause.message : 'Could not confirm logout. Retry.';
+    failedAccountAction.value = 'logout';
+  } finally { accountActionPending.value = null; }
 }
 
 async function confirmDeleteAccount() {
+  if (accountActionPending.value) return;
+  accountActionPending.value = 'confirm-delete';
+  accountActionError.value = '';
   settingsMenu.close();
-
+  try {
   const confirmed = await confirm({
     title: "Delete Account?",
     message:
@@ -644,13 +682,17 @@ async function confirmDeleteAccount() {
   });
 
   if (confirmed) {
+    accountActionPending.value = 'delete';
     try {
       await deleteAccount();
-      router.replace("/");
+      failedAccountAction.value = null;
+      await router.replace("/");
     } catch (e) {
-      alert(e.message || "Failed to delete account");
+      accountActionError.value = e.message || 'Could not delete your account. Retry.';
+      failedAccountAction.value = 'delete';
     }
   }
+  } finally { accountActionPending.value = null; }
 }
 
 function goBack() {
@@ -665,8 +707,9 @@ function openTrack(trackId) {
   router.push(`/track/${trackId}`);
 }
 
-onMounted(() => {
-  trackList.loadTracks();
+onMounted(async () => {
+  await initialize();
+  if (user.value) await trackList.loadTracks();
 });
 </script>
 
@@ -697,7 +740,7 @@ onMounted(() => {
   background: transparent;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  color: #374151;
+  color: var(--color-ink);
   font-size: 0.9em;
   font-weight: 500;
   cursor: pointer;
@@ -727,7 +770,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #9ca3af;
+  color: var(--color-muted);
   flex-shrink: 0;
 }
 
@@ -740,7 +783,7 @@ onMounted(() => {
 .header-user-name {
   font-size: 1em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -760,7 +803,7 @@ onMounted(() => {
   background: transparent;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  color: #374151;
+  color: var(--color-ink);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -794,7 +837,7 @@ onMounted(() => {
   border-radius: 6px;
   font-size: 0.9em;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-ink);
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -805,7 +848,7 @@ onMounted(() => {
 }
 
 .menu-item-danger {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .menu-item-danger:hover {
@@ -853,7 +896,7 @@ onMounted(() => {
   margin: 0;
   font-size: 1.1em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 .modal-close {
@@ -865,14 +908,14 @@ onMounted(() => {
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #6b7280;
+  color: var(--color-muted);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .modal-close:hover {
   background: #f3f4f6;
-  color: #374151;
+  color: var(--color-ink);
 }
 
 .modal-body {
@@ -896,84 +939,23 @@ onMounted(() => {
   display: block;
   font-size: 0.9em;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-ink);
   margin-bottom: 8px;
 }
 
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95em;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-}
 
-.form-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
-}
 
-.form-input:disabled {
-  background: #f9fafb;
-  cursor: not-allowed;
-}
 
 .form-error {
   margin: 8px 0 0 0;
   font-size: 0.85em;
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .form-hint {
   margin: 8px 0 0 0;
   font-size: 0.8em;
-  color: #9ca3af;
-}
-
-.btn-cancel {
-  padding: 10px 20px;
-  background: transparent;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.9em;
-  font-weight: 600;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-cancel:hover:not(:disabled) {
-  background: #f3f4f6;
-}
-
-.btn-cancel:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  padding: 10px 20px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2980b9;
-}
-
-.btn-primary:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
+  color: var(--color-muted);
 }
 
 .loading-container {
@@ -983,7 +965,7 @@ onMounted(() => {
   justify-content: center;
   padding: 64px 24px;
   gap: 16px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .spinner {
@@ -1038,12 +1020,12 @@ onMounted(() => {
   margin: 0;
   font-size: 1.1em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 .track-count {
   font-size: 0.9em;
-  color: #52647a;
+  color: var(--color-muted);
   background: #f3f4f6;
   padding: 4px 10px;
   border-radius: 12px;
@@ -1072,7 +1054,7 @@ onMounted(() => {
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  color: #9ca3af;
+  color: var(--color-muted);
 }
 
 .search-box:focus-within {
@@ -1084,12 +1066,12 @@ onMounted(() => {
   flex: 1;
   border: none;
   background: transparent;
-  color: #374151;
+  color: var(--color-ink);
   font-size: 1rem; /* 16px: iOS Safari zooms below this */
 }
 
 .search-input::placeholder {
-  color: #9ca3af;
+  color: var(--color-muted);
 }
 
 .toolbar-actions {
@@ -1104,7 +1086,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 0.85em;
-  color: #6b7280;
+  color: var(--color-muted);
   cursor: pointer;
   user-select: none;
 }
@@ -1123,7 +1105,7 @@ onMounted(() => {
   border-radius: 6px;
   font-size: 0.8em;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-ink);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1139,7 +1121,7 @@ onMounted(() => {
 }
 
 .btn-bulk-danger {
-  color: #dc2626;
+  color: var(--color-danger);
   border-color: #fca5a5;
 }
 
@@ -1154,7 +1136,7 @@ onMounted(() => {
   justify-content: center;
   gap: 12px;
   padding: 32px;
-  color: #6b7280;
+  color: var(--color-muted);
 }
 
 .tracks-empty {
@@ -1172,24 +1154,7 @@ onMounted(() => {
 
 .tracks-empty p {
   margin: 0;
-  color: #6b7280;
-}
-
-.btn-secondary {
-  padding: 10px 20px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.9em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-  background: #e5e7eb;
-  border-color: #9ca3af;
+  color: var(--color-muted);
 }
 
 .tracks-list-container {
@@ -1243,7 +1208,7 @@ onMounted(() => {
   margin: 0 0 6px 0;
   font-size: 0.95em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1261,16 +1226,16 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   font-size: 0.85em;
-  color: #6b7280;
+  color: var(--color-muted);
 }
 
 .track-stat svg {
-  color: #9ca3af;
+  color: var(--color-muted);
 }
 
 .track-date {
   font-size: 0.8em;
-  color: #9ca3af;
+  color: var(--color-muted);
 }
 
 .visibility-toggle {
@@ -1283,7 +1248,7 @@ onMounted(() => {
   font-weight: 600;
   text-transform: uppercase;
   background: #f3f4f6;
-  color: #6b7280;
+  color: var(--color-muted);
   border: 1px solid #e5e7eb;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1302,7 +1267,7 @@ onMounted(() => {
 
 .visibility-toggle.public {
   background: #dcfce7;
-  color: #16a34a;
+  color: var(--color-success);
   border-color: #86efac;
 }
 
@@ -1325,7 +1290,7 @@ onMounted(() => {
   border-radius: 8px;
   font-size: 0.9em;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-ink);
   cursor: pointer;
   transition: all 0.2s ease;
 }

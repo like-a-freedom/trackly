@@ -1103,7 +1103,7 @@ body,
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
-  color: #333;
+  color: var(--color-ink);
 }
 
 .collapse-button {
@@ -1116,14 +1116,14 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--color-muted);
   transition: all 0.2s;
   padding: 0;
 }
 
 .collapse-button:hover {
   background: #f5f5f5;
-  color: #333;
+  color: var(--color-ink);
 }
 
 .collapse-button svg {

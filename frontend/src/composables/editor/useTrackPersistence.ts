@@ -63,7 +63,7 @@ ${trkpts}
     function buildSegmentMetaPayload(
         store: PersistenceStore,
     ): Array<{ name: string | null; color: string }> {
-        return store.segments.map((seg, index) => ({
+        return store.segments.filter(segment => segment.points.length >= 2).map((seg, index) => ({
             name: seg.name ?? null,
             color: seg.color || getDefaultSegmentColor(index),
         }));
@@ -375,7 +375,7 @@ ${trkpts}
 
                 // Also update metadata
                 await updateMetadata(store, headers);
-                await verifySavedTrack(store, headers, geojson);
+                await verifySavedTrack(store, headers, geojson, waypointsPayload);
 
                 if (draftSave.isCurrentRevision?.() ?? true) {
                     draftSave.deleteDraft();
@@ -423,7 +423,7 @@ ${trkpts}
                 });
                 if (!confirmation.ok) throw new Error(`Track created, but current route confirmation failed: HTTP ${confirmation.status}`);
                 await updateMetadata(store, headers);
-                await verifySavedTrack(store, headers, geojson);
+                await verifySavedTrack(store, headers, geojson, waypointsPayload);
                 if (draftSave.isCurrentRevision?.() ?? true) {
                     draftSave.deleteDraft();
                     draftSave.markClean();
@@ -441,7 +441,7 @@ ${trkpts}
 
     const textIdentity = (text: string): string => new DOMParser().parseFromString(text, 'text/html').body.textContent?.trim() ?? '';
 
-    async function verifySavedTrack(store: PersistenceStore, headers: Record<string, string>, geometry: GeoJSON.Geometry): Promise<void> {
+    async function verifySavedTrack(store: PersistenceStore, headers: Record<string, string>, geometry: GeoJSON.Geometry, anchors: Array<{lat:number;lon:number;index:number}>): Promise<void> {
         const [detailResponse, placesResponse] = await Promise.all([
             fetch(`${API_BASE}/api/tracks/${store.savedTrackId}/simplified`, { headers }),
             fetch(`${API_BASE}/api/tracks/${store.savedTrackId}/pois`, { headers }),
@@ -452,7 +452,16 @@ ${trkpts}
         const data = feature.properties ?? feature;
         const serverGeometry = feature.geometry ?? data.geom_geojson;
         const places = await placesResponse.json();
+        const serverAnchors = data.waypoints ?? [];
+        const serverMeta = data.segment_meta ?? [];
+        const expectedMeta = buildSegmentMetaPayload(store);
+        const anchorsMatch = Array.isArray(serverAnchors) && serverAnchors.length === anchors.length && anchors.every((anchor,index) => {
+            const saved = serverAnchors[index];
+            return saved?.index === anchor.index && Math.abs(saved.lat-anchor.lat) < 1e-8 && Math.abs(saved.lon-anchor.lon) < 1e-8;
+        });
+        const segmentMetaMatch = Array.isArray(serverMeta) && serverMeta.length === expectedMeta.length && expectedMeta.every((meta,index) => textIdentity(serverMeta[index]?.name ?? '') === textIdentity(meta.name ?? '') && serverMeta[index]?.color?.toLowerCase() === meta.color.toLowerCase());
         const mismatch = textIdentity(data.name ?? '') !== textIdentity(store.trackName) || textIdentity(data.description ?? '') !== textIdentity(store.trackDescription)
+            || !anchorsMatch || !segmentMetaMatch
             || JSON.stringify([...(data.categories ?? [])].sort()) !== JSON.stringify([...store.trackCategories].sort())
             || geometryIdentity(typeof serverGeometry === 'string' ? JSON.parse(serverGeometry) : serverGeometry) !== geometryIdentity(geometry)
             || !Array.isArray(places) || places.length !== store.pois.length

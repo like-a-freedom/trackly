@@ -6,6 +6,8 @@ import { ref } from 'vue';
 
 import HomeView from '../HomeView.vue';
 
+vi.mock('../../stores/featureFlags', () => ({ useFeatureFlagsStore: () => ({ isAuthEnabled: true, isEditorEnabled: true }) }));
+
 // Mock composables
 vi.mock('../composables/useTracks', () => ({
     useTracks: () => ({

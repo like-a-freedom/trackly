@@ -125,7 +125,7 @@ function formatDataset(dataset: string | undefined): string {
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.18);
   padding: 10px 16px 12px 16px; /* increased padding for better spacing */
-  color: #222;
+  color: var(--color-ink);
   font-size: 15px;
   min-width: 260px;
   max-width: 500px;
@@ -177,7 +177,7 @@ function formatDataset(dataset: string | undefined): string {
 }
 .upload-label.meta {
   font-size: var(--text-xs);
-  color: #666;
+  color: var(--color-muted);
   margin-bottom: 4px;
 }
 .upload-label.categories-section {

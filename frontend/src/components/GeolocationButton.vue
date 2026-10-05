@@ -102,7 +102,7 @@ const getCurrentLocation = async () => {
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  color: #666;
+  color: var(--color-muted);
   /* Force layer creation for better rendering */
   transform: translateZ(0);
   will-change: transform;

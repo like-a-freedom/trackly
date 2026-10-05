@@ -932,7 +932,7 @@ onUnmounted(() => {
   font-size: var(--text-md);
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
-  color: #333;
+  color: var(--color-ink);
 }
 
 .filter-options-btn,
@@ -945,7 +945,7 @@ onUnmounted(() => {
   border: none;
   border-radius: 6px;
   background: #fff;
-  color: #666;
+  color: var(--color-muted);
   cursor: pointer;
   transition: background 0.2s, transform 0.2s, color 0.2s;
 }
@@ -953,7 +953,7 @@ onUnmounted(() => {
 .filter-options-btn:hover,
 .collapse-btn:hover { 
   background: #f5f5f5; 
-  color: #333; 
+  color: var(--color-ink);
   transform: translateY(-1px); 
 }
 
@@ -1007,13 +1007,13 @@ onUnmounted(() => {
 }
 
 .checkbox-label.disabled {
-  color: #999;
+  color: var(--color-muted);
   cursor: not-allowed;
 }
 
 .disabled-hint {
   font-size: var(--text-xs);
-  color: #999;
+  color: var(--color-muted);
 }
 
 @keyframes fadeInDown {
@@ -1134,7 +1134,7 @@ onUnmounted(() => {
   justify-content: center;
   text-align: center;
   padding: 24px 16px;
-  color: #666;
+  color: var(--color-muted);
   width: 100%;
   box-sizing: border-box;
   min-height: 120px;
@@ -1142,7 +1142,7 @@ onUnmounted(() => {
 
 .placeholder-icon {
   margin-bottom: 12px;
-  color: #999;
+  color: var(--color-muted);
   opacity: 0.8;
 }
 
@@ -1163,7 +1163,7 @@ onUnmounted(() => {
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
   margin: 0 0 6px 0;
-  color: #555;
+  color: var(--color-muted);
   text-wrap: balance;
 }
 
@@ -1171,7 +1171,7 @@ onUnmounted(() => {
   font-size: var(--text-xs);
   line-height: var(--leading-normal);
   margin: 0;
-  color: #777;
+  color: var(--color-muted);
   font-weight: var(--weight-normal);
   max-width: 34ch;
   text-wrap: pretty;

@@ -49,7 +49,7 @@
           {{ error }}
         </p>
         <button
-          class="btn-primary"
+          class="btn-primary ui-primary"
           @click="goHome"
         >
           Return to Home
@@ -207,7 +207,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  background: var(--color-canvas);
   padding: 20px;
 }
 
@@ -249,23 +249,23 @@ onMounted(() => {
 }
 
 .error-icon {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .success-icon {
-  color: #10b981;
+  color: var(--color-success);
 }
 
 h2 {
   margin: 0;
   font-size: 1.4em;
-  color: #1a1a1a;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
 p {
   margin: 0;
-  color: #666;
+  color: var(--color-muted);
   font-size: 1em;
   line-height: 1.5;
 }
@@ -275,37 +275,20 @@ p {
   border: 1px solid #fecaca;
   border-radius: 8px;
   padding: 12px 16px;
-  color: #b91c1c;
+  color: var(--color-danger);
   font-size: 0.9em;
 }
 
 .redirect-message {
-  color: #9ca3af;
+  color: var(--color-muted);
   font-size: 0.9em;
 }
 
-.btn-primary {
-  margin-top: 8px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
+.btn-primary  { margin-top: 8px; }
 
-.btn-primary:hover {
-  background: #2980b9;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-}
 
-.btn-primary:active {
-  transform: translateY(0);
-}
+
+
 
 /* Mobile responsiveness */
 @media (max-width: 500px) {

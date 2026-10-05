@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-05T04:57:56.750Z",
+  "generatedAt": "2026-10-05T10:41:53.424Z",
   "title": "Design System: Trackly",
   "extensions": {
     "shadows": [
@@ -53,7 +53,7 @@
     ],
     "focus": {
       "shared-control": "2px solid var(--focus-ring), offset 2px",
-      "foundation": "3px solid var(--color-action), offset 3px",
+      "foundation": "3px solid var(--color-focus-ring), offset 3px",
       "forced-colors": "2px solid Highlight",
       "note": "App.vue unlayered control rule currently overrides the layered foundation on matching controls. Preserve this cascade until an explicit focus migration."
     },
@@ -65,227 +65,230 @@
         "frontend/src/components/editor/TrackEditorTopBar.vue",
         "frontend/src/components/editor/TrackEditorLeftRail.vue",
         "frontend/src/components/editor/TrackEditorPointControls.vue",
-        "frontend/src/views/TrackEditorView.vue"
+        "frontend/src/views/TrackEditorView.vue",
+        "frontend/src/composables/useRouting.ts",
+        "frontend/src/auth/pkce.ts"
       ],
       "evidence": "docs/audit/2026-10-04-design-evidence/implementation/editor-1280.png",
-      "migration": "Shared foundation and editor pane/tool/coordinate controls are documented. Top bar, nested inspector forms and other surfaces retain local styling. No complete application migration is claimed.",
+      "migration": "Shared ui-field/ui-primary/ui-secondary/ui-danger primitives have incremental adoption in editor, upload, account, authentication and confirmation flows. Local unlayered component styling coexists with layered primitives; complete migration or computed-style conformance is not claimed.",
       "typography": "App.vue role tokens coexist with local component sizes and an explicit native body stack.",
-      "browserLimits": "Evidence uses built-frontend interception and synthetic fixtures. Physical device keyboard, VoiceOver and touch remain external checks."
+      "browserLimits": "Evidence uses built-frontend interception and synthetic fixtures. Physical device keyboard, VoiceOver and touch remain external checks.",
+      "behaviorConstraints": "Auto-routing displays manifest coverage when present and rejects endpoints outside declared bounds with manual-mode guidance. Sign-in reports missing browser cryptography; HTTPS or localhost is required. These describe implementation constraints, not verified routing/auth acceptance."
     },
     "colorMeta": {
       "ink": {
         "role": "neutral",
         "displayName": "ink",
         "tonalRamp": [
-          "hsl(213.2 45.2% 15%)",
-          "hsl(213.2 45.2% 26%)",
-          "hsl(213.2 45.2% 38%)",
-          "hsl(213.2 45.2% 49%)",
-          "hsl(213.2 45.2% 61%)",
-          "hsl(213.2 45.2% 72%)",
-          "hsl(213.2 45.2% 84%)",
-          "hsl(213.2 45.2% 95%)"
+          "oklch(from #17283d 0.15 c h)",
+          "oklch(from #17283d 0.26 c h)",
+          "oklch(from #17283d 0.38 c h)",
+          "oklch(from #17283d 0.49 c h)",
+          "oklch(from #17283d 0.61 c h)",
+          "oklch(from #17283d 0.72 c h)",
+          "oklch(from #17283d 0.84 c h)",
+          "oklch(from #17283d 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "muted": {
         "role": "neutral",
         "displayName": "muted",
         "tonalRamp": [
-          "hsl(213.0 19.6% 15%)",
-          "hsl(213.0 19.6% 26%)",
-          "hsl(213.0 19.6% 38%)",
-          "hsl(213.0 19.6% 49%)",
-          "hsl(213.0 19.6% 61%)",
-          "hsl(213.0 19.6% 72%)",
-          "hsl(213.0 19.6% 84%)",
-          "hsl(213.0 19.6% 95%)"
+          "oklch(from #52647a 0.15 c h)",
+          "oklch(from #52647a 0.26 c h)",
+          "oklch(from #52647a 0.38 c h)",
+          "oklch(from #52647a 0.49 c h)",
+          "oklch(from #52647a 0.61 c h)",
+          "oklch(from #52647a 0.72 c h)",
+          "oklch(from #52647a 0.84 c h)",
+          "oklch(from #52647a 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "surface": {
         "role": "neutral",
         "displayName": "surface",
         "tonalRamp": [
-          "hsl(0.0 0.0% 15%)",
-          "hsl(0.0 0.0% 26%)",
-          "hsl(0.0 0.0% 38%)",
-          "hsl(0.0 0.0% 49%)",
-          "hsl(0.0 0.0% 61%)",
-          "hsl(0.0 0.0% 72%)",
-          "hsl(0.0 0.0% 84%)",
-          "hsl(0.0 0.0% 95%)"
+          "oklch(from #ffffff 0.15 c h)",
+          "oklch(from #ffffff 0.26 c h)",
+          "oklch(from #ffffff 0.38 c h)",
+          "oklch(from #ffffff 0.49 c h)",
+          "oklch(from #ffffff 0.61 c h)",
+          "oklch(from #ffffff 0.72 c h)",
+          "oklch(from #ffffff 0.84 c h)",
+          "oklch(from #ffffff 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "canvas": {
         "role": "neutral",
         "displayName": "canvas",
         "tonalRamp": [
-          "hsl(214.3 41.2% 15%)",
-          "hsl(214.3 41.2% 26%)",
-          "hsl(214.3 41.2% 38%)",
-          "hsl(214.3 41.2% 49%)",
-          "hsl(214.3 41.2% 61%)",
-          "hsl(214.3 41.2% 72%)",
-          "hsl(214.3 41.2% 84%)",
-          "hsl(214.3 41.2% 95%)"
+          "oklch(from #f3f6fa 0.15 c h)",
+          "oklch(from #f3f6fa 0.26 c h)",
+          "oklch(from #f3f6fa 0.38 c h)",
+          "oklch(from #f3f6fa 0.49 c h)",
+          "oklch(from #f3f6fa 0.61 c h)",
+          "oklch(from #f3f6fa 0.72 c h)",
+          "oklch(from #f3f6fa 0.84 c h)",
+          "oklch(from #f3f6fa 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "line": {
         "role": "neutral",
         "displayName": "line",
         "tonalRamp": [
-          "hsl(211.6 30.2% 15%)",
-          "hsl(211.6 30.2% 26%)",
-          "hsl(211.6 30.2% 38%)",
-          "hsl(211.6 30.2% 49%)",
-          "hsl(211.6 30.2% 61%)",
-          "hsl(211.6 30.2% 72%)",
-          "hsl(211.6 30.2% 84%)",
-          "hsl(211.6 30.2% 95%)"
+          "oklch(from #d6dfe9 0.15 c h)",
+          "oklch(from #d6dfe9 0.26 c h)",
+          "oklch(from #d6dfe9 0.38 c h)",
+          "oklch(from #d6dfe9 0.49 c h)",
+          "oklch(from #d6dfe9 0.61 c h)",
+          "oklch(from #d6dfe9 0.72 c h)",
+          "oklch(from #d6dfe9 0.84 c h)",
+          "oklch(from #d6dfe9 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "action": {
         "role": "primary",
         "displayName": "action",
         "tonalRamp": [
-          "hsl(221.6 71.3% 15%)",
-          "hsl(221.6 71.3% 26%)",
-          "hsl(221.6 71.3% 38%)",
-          "hsl(221.6 71.3% 49%)",
-          "hsl(221.6 71.3% 61%)",
-          "hsl(221.6 71.3% 72%)",
-          "hsl(221.6 71.3% 84%)",
-          "hsl(221.6 71.3% 95%)"
+          "oklch(from #245bd7 0.15 c h)",
+          "oklch(from #245bd7 0.26 c h)",
+          "oklch(from #245bd7 0.38 c h)",
+          "oklch(from #245bd7 0.49 c h)",
+          "oklch(from #245bd7 0.61 c h)",
+          "oklch(from #245bd7 0.72 c h)",
+          "oklch(from #245bd7 0.84 c h)",
+          "oklch(from #245bd7 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "action-hover": {
         "role": "primary",
         "displayName": "action hover",
         "tonalRamp": [
-          "hsl(219.0 73.7% 15%)",
-          "hsl(219.0 73.7% 26%)",
-          "hsl(219.0 73.7% 38%)",
-          "hsl(219.0 73.7% 49%)",
-          "hsl(219.0 73.7% 61%)",
-          "hsl(219.0 73.7% 72%)",
-          "hsl(219.0 73.7% 84%)",
-          "hsl(219.0 73.7% 95%)"
+          "oklch(from #194aa5 0.15 c h)",
+          "oklch(from #194aa5 0.26 c h)",
+          "oklch(from #194aa5 0.38 c h)",
+          "oklch(from #194aa5 0.49 c h)",
+          "oklch(from #194aa5 0.61 c h)",
+          "oklch(from #194aa5 0.72 c h)",
+          "oklch(from #194aa5 0.84 c h)",
+          "oklch(from #194aa5 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
-      "action-active": {
+      "active": {
         "role": "primary",
-        "displayName": "action active",
+        "displayName": "active",
         "tonalRamp": [
-          "hsl(216.5 85.1% 15%)",
-          "hsl(216.5 85.1% 26%)",
-          "hsl(216.5 85.1% 38%)",
-          "hsl(216.5 85.1% 49%)",
-          "hsl(216.5 85.1% 61%)",
-          "hsl(216.5 85.1% 72%)",
-          "hsl(216.5 85.1% 84%)",
-          "hsl(216.5 85.1% 95%)"
+          "oklch(from #0d47a1 0.15 c h)",
+          "oklch(from #0d47a1 0.26 c h)",
+          "oklch(from #0d47a1 0.38 c h)",
+          "oklch(from #0d47a1 0.49 c h)",
+          "oklch(from #0d47a1 0.61 c h)",
+          "oklch(from #0d47a1 0.72 c h)",
+          "oklch(from #0d47a1 0.84 c h)",
+          "oklch(from #0d47a1 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
-      "action-soft": {
+      "soft": {
         "role": "primary",
-        "displayName": "action soft",
+        "displayName": "soft",
         "tonalRamp": [
-          "hsl(213.8 100.0% 15%)",
-          "hsl(213.8 100.0% 26%)",
-          "hsl(213.8 100.0% 38%)",
-          "hsl(213.8 100.0% 49%)",
-          "hsl(213.8 100.0% 61%)",
-          "hsl(213.8 100.0% 72%)",
-          "hsl(213.8 100.0% 84%)",
-          "hsl(213.8 100.0% 95%)"
+          "oklch(from #eff6ff 0.15 c h)",
+          "oklch(from #eff6ff 0.26 c h)",
+          "oklch(from #eff6ff 0.38 c h)",
+          "oklch(from #eff6ff 0.49 c h)",
+          "oklch(from #eff6ff 0.61 c h)",
+          "oklch(from #eff6ff 0.72 c h)",
+          "oklch(from #eff6ff 0.84 c h)",
+          "oklch(from #eff6ff 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "success": {
         "role": "status",
         "displayName": "success",
         "tonalRamp": [
-          "hsl(122.6 41.0% 15%)",
-          "hsl(122.6 41.0% 26%)",
-          "hsl(122.6 41.0% 38%)",
-          "hsl(122.6 41.0% 49%)",
-          "hsl(122.6 41.0% 61%)",
-          "hsl(122.6 41.0% 72%)",
-          "hsl(122.6 41.0% 84%)",
-          "hsl(122.6 41.0% 95%)"
+          "oklch(from #15703e 0.15 c h)",
+          "oklch(from #15703e 0.26 c h)",
+          "oklch(from #15703e 0.38 c h)",
+          "oklch(from #15703e 0.49 c h)",
+          "oklch(from #15703e 0.61 c h)",
+          "oklch(from #15703e 0.72 c h)",
+          "oklch(from #15703e 0.84 c h)",
+          "oklch(from #15703e 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "warning": {
         "role": "status",
         "displayName": "warning",
         "tonalRamp": [
-          "hsl(37.1 94.6% 15%)",
-          "hsl(37.1 94.6% 26%)",
-          "hsl(37.1 94.6% 38%)",
-          "hsl(37.1 94.6% 49%)",
-          "hsl(37.1 94.6% 61%)",
-          "hsl(37.1 94.6% 72%)",
-          "hsl(37.1 94.6% 84%)",
-          "hsl(37.1 94.6% 95%)"
+          "oklch(from #8a5600 0.15 c h)",
+          "oklch(from #8a5600 0.26 c h)",
+          "oklch(from #8a5600 0.38 c h)",
+          "oklch(from #8a5600 0.49 c h)",
+          "oklch(from #8a5600 0.61 c h)",
+          "oklch(from #8a5600 0.72 c h)",
+          "oklch(from #8a5600 0.84 c h)",
+          "oklch(from #8a5600 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "danger": {
         "role": "status",
         "displayName": "danger",
         "tonalRamp": [
-          "hsl(0.0 66.4% 15%)",
-          "hsl(0.0 66.4% 26%)",
-          "hsl(0.0 66.4% 38%)",
-          "hsl(0.0 66.4% 49%)",
-          "hsl(0.0 66.4% 61%)",
-          "hsl(0.0 66.4% 72%)",
-          "hsl(0.0 66.4% 84%)",
-          "hsl(0.0 66.4% 95%)"
+          "oklch(from #c62828 0.15 c h)",
+          "oklch(from #c62828 0.26 c h)",
+          "oklch(from #c62828 0.38 c h)",
+          "oklch(from #c62828 0.49 c h)",
+          "oklch(from #c62828 0.61 c h)",
+          "oklch(from #c62828 0.72 c h)",
+          "oklch(from #c62828 0.84 c h)",
+          "oklch(from #c62828 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       },
       "focus-ring": {
         "role": "neutral",
         "displayName": "focus ring",
         "tonalRamp": [
-          "hsl(215.0 27.3% 15%)",
-          "hsl(215.0 27.3% 26%)",
-          "hsl(215.0 27.3% 38%)",
-          "hsl(215.0 27.3% 49%)",
-          "hsl(215.0 27.3% 61%)",
-          "hsl(215.0 27.3% 72%)",
-          "hsl(215.0 27.3% 84%)",
-          "hsl(215.0 27.3% 95%)"
+          "oklch(from #10151c 0.15 c h)",
+          "oklch(from #10151c 0.26 c h)",
+          "oklch(from #10151c 0.38 c h)",
+          "oklch(from #10151c 0.49 c h)",
+          "oklch(from #10151c 0.61 c h)",
+          "oklch(from #10151c 0.72 c h)",
+          "oklch(from #10151c 0.84 c h)",
+          "oklch(from #10151c 0.95 c h)"
         ],
-        "note": "Synthesized preview ramp; not application tokens."
+        "note": "Synthesized relative-OKLCH preview ramp; not application tokens."
       }
     }
   },
   "components": [
     {
-      "name": "Coordinate Primary Action",
+      "name": "Shared Primary Action",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Add a point using validated coordinates.",
-      "html": "<button class=\"ds-primary\">Add point</button>",
-      "css": ".ds-primary{min-height:44px;padding:0 12px;border:0;border-radius:4px;background:var(--color-action);color:var(--color-surface);font-family:system-ui,sans-serif}.ds-primary:hover:not(:disabled){cursor:pointer}.ds-primary:disabled{opacity:.5}.ds-primary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}"
+      "description": "Shared ui-primary primitive; local component rules may coexist.",
+      "html": "<button class=\"ds-primary\">Save</button>",
+      "css": ".ds-primary{font-family:system-ui,sans-serif;min-height:44px;border-radius:var(--radius-control);cursor:pointer;border:0;background:var(--color-action);color:white;padding:8px 16px;font-size:16px;font-weight:600}.ds-primary:hover:not(:disabled){background:var(--color-action-hover)}.ds-primary:disabled{background:var(--color-line);color:var(--color-muted);cursor:not-allowed}.ds-primary:focus-visible{outline:2px solid var(--color-focus-ring);outline-offset:2px}"
     },
     {
-      "name": "Coordinate Secondary Action",
+      "name": "Shared Secondary Action",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Contextual point operations in the task pane.",
-      "html": "<button class=\"ds-secondary\">Show on map</button>",
-      "css": ".ds-secondary{min-height:44px;padding:0 8px;border:1px solid var(--color-line);border-radius:4px;background:var(--color-surface);color:var(--color-ink);font-family:system-ui,sans-serif}.ds-secondary:hover:not(:disabled){cursor:pointer}.ds-secondary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}"
+      "description": "Shared ui-secondary primitive.",
+      "html": "<button class=\"ds-secondary\">Cancel</button>",
+      "css": ".ds-secondary{font-family:system-ui,sans-serif;min-height:44px;border-radius:var(--radius-control);cursor:pointer;border:1px solid var(--color-line);background:var(--color-surface);color:var(--color-ink);padding:8px 12px;font-size:14px;font-weight:600}.ds-secondary:hover:not(:disabled){background:var(--color-canvas)}.ds-secondary:disabled{background:var(--color-canvas);color:var(--color-muted);cursor:not-allowed}.ds-secondary:focus-visible{outline:2px solid var(--color-focus-ring);outline-offset:2px}"
     },
     {
       "name": "Selected Drawing Tool",
@@ -296,12 +299,12 @@
       "css": ".ds-tool{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;border-radius:4px;background:var(--color-action);color:white;cursor:pointer}.ds-tool:hover{cursor:pointer}.ds-tool:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}.ds-tool:disabled{color:#75859a;cursor:not-allowed}"
     },
     {
-      "name": "Coordinate Field",
+      "name": "Shared Field",
       "kind": "input",
-      "refersTo": "field-coordinate",
-      "description": "Explicitly labelled native coordinate input.",
-      "html": "<label class=\"ds-field-label\">Latitude<input class=\"ds-coordinate\" type=\"number\" min=\"-90\" max=\"90\" step=\"any\" /></label>",
-      "css": ".ds-field-label{display:grid;gap:4px;font-family:system-ui,sans-serif;font-size:14px;color:var(--color-ink)}.ds-coordinate{min-height:44px;padding:0 12px;border:1px solid var(--color-line);border-radius:4px;font-family:system-ui,sans-serif;font-size:16px}.ds-coordinate:hover{cursor:text}.ds-coordinate:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}"
+      "refersTo": "field-shared",
+      "description": "Shared ui-field primitive; native labels and validation remain contextual.",
+      "html": "<label class=\"ds-label\">Track name<input class=\"ds-field\" placeholder=\"Enter track name\" /></label>",
+      "css": ".ds-label{display:grid;gap:4px;font-family:system-ui,sans-serif;color:var(--color-ink)}.ds-field{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--color-line);border-radius:var(--radius-control);background:var(--color-surface);color:var(--color-ink);caret-color:var(--color-action);font-family:system-ui,sans-serif;font-size:16px}.ds-field::placeholder{color:var(--color-muted);opacity:1}.ds-field:disabled{background:var(--color-canvas);color:var(--color-muted);cursor:not-allowed}.ds-field:hover:not(:disabled){cursor:text}.ds-field:focus-visible{outline:2px solid var(--color-focus-ring);outline-offset:2px}"
     },
     {
       "name": "Task Tabs",
@@ -324,11 +327,19 @@
       "description": "Flat structural workspace container; width adapts to its host.",
       "html": "<section class=\"ds-pane\">Route details</section>",
       "css": ".ds-pane{width:360px;max-width:100%;padding:16px;border-left:1px solid var(--color-line);background:var(--color-surface);color:var(--color-ink);font-family:system-ui,sans-serif}"
+    },
+    {
+      "name": "Shared Destructive Action",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Shared ui-danger primitive used by confirmation controls.",
+      "html": "<button class=\"ds-danger\">Delete</button>",
+      "css": ".ds-danger{font-family:system-ui,sans-serif;min-height:44px;border-radius:var(--radius-control);cursor:pointer;border:1px solid var(--color-danger);background:var(--color-danger);color:white;padding:8px 16px;font-size:14px;font-weight:600}.ds-danger:hover:not(:disabled){background:#a71919}.ds-danger:disabled{border-color:var(--color-line);background:var(--color-line);color:var(--color-muted);cursor:not-allowed}.ds-danger:focus-visible{outline:2px solid var(--color-focus-ring);outline-offset:2px}"
     }
   ],
   "narrative": {
     "northStar": "The Map Workspace",
-    "overview": "Trackly uses white working surfaces, cool neutrals, dark ink and blue actions. Geography provides the visual content; controls provide a quiet structure around it. System typography keeps the interface familiar and compact.\n\nThis document captures the implemented shared foundation and the new editor workspace. It is not a claim that every surface has migrated. The editor top bar, nested inspector forms, track detail, upload, account and global dialogs retain local styling. Their literals, radii and typography remain compatibility details until a scoped migration replaces them.",
+    "overview": "Trackly uses white working surfaces, cool neutrals, dark ink and blue actions. Geography provides the visual content; controls provide a quiet structure around it. System typography keeps the interface familiar and compact.\n\nThis document captures the implemented shared foundation and the new editor workspace. It is not a claim that every surface has migrated. Shared field and button primitives now appear in the editor, upload, account, authentication and confirmation flows. Existing component classes and local layout styles coexist with them; track detail, map controls, nested sections and status chips still contain compatibility styling. This is a shared foundation with incremental adoption, not complete migration.",
     "keyCharacteristics": [
       "Calm neutral surfaces with a functional blue accent.",
       "Compact, readable system typography.",

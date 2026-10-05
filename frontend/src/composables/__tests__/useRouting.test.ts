@@ -56,6 +56,13 @@ describe('useRouting', () => {
     });
 
     describe('setProfile', () => {
+        it('invalidates the previous profile graph even when changed in manual mode', () => {
+            routing.__setTestGraph({testRouter:{calc_path:()=>[0,1]},testNodeCoords:new Float64Array([50,30,51,31]),testSurfaceTypes:null});
+            routing.setMode('manual');
+            routing.setProfile('cycling');
+            expect(routing.graphReady.value).toBe(false);
+            expect(routing.snapToPoint(50,30)).toBeNull();
+        });
         it('sets a valid profile', () => {
             routing.setProfile('cycling');
             expect(routing.profile.value).toBe('cycling');

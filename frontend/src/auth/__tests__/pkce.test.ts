@@ -1,9 +1,15 @@
 // @ts-nocheck - Test mocks don't need full type fidelity
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { generatePkce, generateState, parseJwt } from '../pkce';
 
 describe('pkce', () => {
     describe('generatePkce', () => {
+        it('explains how to recover when signing in on insecure LAN HTTP', async () => {
+            vi.stubGlobal('crypto', { subtle: undefined });
+            try {
+                await expect(generatePkce()).rejects.toThrow('Sign in requires HTTPS');
+            } finally { vi.unstubAllGlobals(); }
+        });
         it('generates a code verifier of correct length', async () => {
             const { codeVerifier } = await generatePkce();
             expect(typeof codeVerifier).toBe('string');

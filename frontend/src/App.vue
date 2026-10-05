@@ -1,6 +1,10 @@
 <template>
   <div id="app-container">
     <template v-if="featureFlags.isLoaded">
+      <div v-if="featureFlags.error" role="alert" class="fixed inset-x-3 top-3 z-[5000] flex items-center gap-3 rounded border border-line bg-surface p-3 text-sm text-ink shadow-md">
+        <span>{{ featureFlags.error }}</span>
+        <button type="button" class="min-h-11 shrink-0 rounded bg-action px-3 font-semibold text-white disabled:opacity-50" :disabled="featureFlags.isLoading" @click="handleRetrySettings">{{ featureFlags.isLoading ? 'Retrying…' : 'Retry settings' }}</button>
+      </div>
       <router-view v-slot="{ Component, route }">
         <transition
           name="page"
@@ -38,6 +42,10 @@ import { useFeatureFlagsStore } from "./stores/featureFlags";
 
 const featureFlags = useFeatureFlagsStore();
 const { initialize } = useAuth();
+const handleRetrySettings = async () => {
+  await featureFlags.fetchFlags();
+  if (featureFlags.isAuthEnabled) await initialize();
+};
 
 onMounted(async () => {
   await featureFlags.fetchFlags();
@@ -77,7 +85,7 @@ function getComponentKey(route) {
 :root {
   /* Accent — one hue, three states. Replaces the four competing blues. */
   --accent: var(--color-action);
-  --accent-hover: #194aa5;
+  --accent-hover: var(--color-action-hover);
   --accent-active: #0d47a1;
 
   /* Floating control surface */
@@ -122,9 +130,9 @@ function getComponentKey(route) {
 
   /* Semantic status. Toast borders already carried these three; they are
      named here so a component never re-invents a success or error hue. */
-  --success: #43a047;
-  --warning: #f9a825;
-  --danger: #c62828;
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --danger: var(--color-danger);
 }
 
 /* One focus treatment for the whole control plane. Custom controls ship

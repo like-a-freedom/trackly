@@ -39,6 +39,9 @@ pub enum AppError {
     #[error("conflict: {0}")]
     Conflict(String),
 
+    #[error("This file has already been imported")]
+    DuplicateTrack(Option<uuid::Uuid>),
+
     #[error("authentication required: {0}")]
     Unauthorized(String),
 
@@ -119,6 +122,9 @@ impl From<AuthError> for AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        if let AppError::DuplicateTrack(existing_track_id) = self {
+            return (StatusCode::CONFLICT, Json(json!({"error":"This file has already been imported.","code":409,"existing_track_id":existing_track_id}))).into_response();
+        }
         let (status, error_message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, "Resource not found"),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "Access denied"),
@@ -126,6 +132,9 @@ impl IntoResponse for AppError {
                 (StatusCode::BAD_REQUEST, msg.as_str())
             }
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.as_str()),
+            AppError::DuplicateTrack(_) => {
+                (StatusCode::CONFLICT, "This file has already been imported.")
+            }
             AppError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, "Authentication required"),
             AppError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded"),
             AppError::Database(_) => {

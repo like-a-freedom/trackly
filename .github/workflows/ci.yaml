@@ -45,6 +45,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - run: cargo install wasm-pack --locked
       - run: bun run build:wasm
+      - run: python3 scripts/prepare-routing.py
       - run: bun run lint
       - run: bun run build
       - run: bun run check:seo

@@ -17,6 +17,11 @@ if (typeof File === 'undefined') {
 }
 
 describe('useTracks.uploadTrack', () => {
+    it('returns the accessible existing track when the backend detects a duplicate', async () => {
+        global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'This file has already been imported.', existing_track_id: 'existing' }) });
+        const { uploadTrack } = useTracks();
+        expect(await uploadTrack({file: new File(['same'], 'same.gpx')})).toEqual({alreadyExists:true,id:'existing',url:'/track/existing'});
+    });
     beforeEach(() => {
         vi.restoreAllMocks();
         global.fetch = vi.fn(() =>

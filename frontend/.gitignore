@@ -1,0 +1,3 @@
+
+# Routing packs are reproduced by scripts/prepare-routing.py; manifest is tracked.
+/public/graphs/*.bin

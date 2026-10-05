@@ -1,141 +1,38 @@
-<script setup>
-import { ref, watch } from 'vue';
-import Multiselect from '@vueform/multiselect';
-
-const props = defineProps({
-    track: { type: Object, required: true },
-    isOwner: { type: Boolean, default: false },
-    categoriesList: { type: Array, default: () => [] },
-});
-
-const emit = defineEmits(['categories-updated']);
-
-const selectedCategories = ref([]);
-const savingCategories = ref(false);
-const categoriesError = ref('');
-
-function formatCategory(category) {
-    if (!category) return '';
-    return category.charAt(0).toUpperCase() + category.slice(1);
-}
-
-// Initialize selectedCategories from track.categories
-watch(
-    () => props.track?.categories,
-    (newCategories) => {
-        if (newCategories) {
-            selectedCategories.value = newCategories.map((cat) => {
-                const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
-                return found || { value: cat.toLowerCase(), label: cat };
-            });
-        } else {
-            selectedCategories.value = [];
-        }
-    },
-    { immediate: true }
-);
-
-function revertCategories() {
-    selectedCategories.value = (props.track.categories || []).map((cat) => {
-        const found = props.categoriesList.find((c) => c.value === cat.toLowerCase());
-        return found || { value: cat.toLowerCase(), label: cat };
-    });
-}
-
-async function onCategoriesChange(newValue) {
-    categoriesError.value = '';
-
-    if (!newValue || newValue.length === 0) {
-        categoriesError.value = 'At least one category is required.';
-        revertCategories();
-        return;
-    }
-
-    // Convert objects to strings
-    const categoryValues = newValue.map((c) => c.value);
-
-    savingCategories.value = true;
-    emit('categories-updated', categoryValues);
-    savingCategories.value = false;
-}
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import TrackCategoryPicker from "../TrackCategoryPicker.vue";
+const props = withDefaults(defineProps<{
+  track: { categories?: string[] };
+  isOwner?: boolean;
+  categoriesList?: {value:string;label:string}[];
+  saveCategories?: (categories: string[]) => Promise<void>;
+}>(), {isOwner:false});
+const emit = defineEmits<{ "categories-updated": [categories: string[]] }>();
+const selection = ref<string[]>([]);
+const saving = ref(false);
+const error = ref("");
+watch(() => props.track.categories, values => { if (!saving.value) selection.value = [...(values ?? [])]; }, {immediate:true});
+const changed = computed(() => JSON.stringify(selection.value) !== JSON.stringify(props.track.categories ?? []));
+const handleSave = async () => {
+  if (saving.value || !changed.value) return;
+  saving.value = true;
+  error.value = "";
+  const snapshot = [...selection.value];
+  try {
+    if (props.saveCategories) await props.saveCategories(snapshot);
+    emit("categories-updated", snapshot);
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : "Could not save categories. Retry.";
+  } finally { saving.value = false; }
+};
 </script>
 
 <template>
-    <div
-        v-if="isOwner || (track.categories && track.categories.length > 0)"
-        class="stats-section"
-    >
-        <div class="section-header-with-tooltip">
-            <h3>Categories</h3>
-            <span
-                class="info-icon"
-                tabindex="0"
-                data-tooltip="Categories that were added by the user during track upload"
-                aria-label="Categories that were added by the user during track upload"
-            >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-            </span>
-        </div>
-
-        <!-- Owner: inline editable Multiselect -->
-        <div
-            v-if="isOwner"
-            class="categories-inline-edit"
-            @mousedown.stop
-            @mouseup.stop
-            @click.stop
-            @dblclick.stop
-            @selectstart.stop
-            @dragstart.prevent
-        >
-            <Multiselect
-                v-model="selectedCategories"
-                mode="tags"
-                :close-on-select="false"
-                :searchable="true"
-                :create-option="false"
-                :options="categoriesList"
-                :object="true"
-                placeholder="Select categories"
-                class="track-category-select-inline"
-                :append-to-body="true"
-                position="bottom-start"
-                :max-height="220"
-                :disabled="savingCategories"
-                :style="{ margin: '0', marginLeft: '0', marginRight: '0' }"
-                @change="onCategoriesChange"
-                @mousedown.stop
-                @mouseup.stop
-                @click.stop
-                @dblclick.stop
-                @selectstart.stop
-                @dragstart.prevent
-            />
-            <transition name="fade-slide">
-                <div v-if="savingCategories" class="saving-indicator">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinner">
-                        <circle cx="12" cy="12" r="10" opacity="0.25" />
-                        <path d="M12 2 A10 10 0 0 1 22 12" stroke-linecap="round" />
-                    </svg>
-                    Saving...
-                </div>
-            </transition>
-            <transition name="fade-slide">
-                <div v-if="categoriesError" class="edit-error">
-                    {{ categoriesError }}
-                </div>
-            </transition>
-        </div>
-
-        <!-- Non-owner: read-only tags -->
-        <div v-else class="categories">
-            <span v-for="category in track.categories" :key="category" class="category-tag">
-                {{ formatCategory(category) }}
-            </span>
-        </div>
+  <section v-if="isOwner || track.categories?.length" class="stats-section">
+    <div :class="{ 'categories-inline-edit': isOwner }">
+      <TrackCategoryPicker v-model="selection" class="track-category-select-inline" :readonly="!isOwner" :disabled="saving" />
+      <button v-if="isOwner" type="button" data-testid="save-categories" class="mt-3 min-h-11 rounded bg-action px-4 text-sm font-semibold text-white disabled:opacity-50" :disabled="saving || !changed" @click="handleSave">{{ saving ? "Saving categories…" : "Save categories" }}</button>
+      <p v-if="error" role="alert" class="mt-2 text-sm text-danger">{{ error }}</p>
     </div>
+  </section>
 </template>

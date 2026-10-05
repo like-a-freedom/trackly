@@ -19,3 +19,17 @@ it('retains selection and reports a rejected bulk action', async () => {
  await ops.bulkToggleVisibility();
  expect(ids.value).toEqual(['one']); expect(ops.error.value).toContain('Could not');
 });
+
+it('sends selected IDs to the current account bulk endpoints',async()=>{
+ vi.mocked(http).mockClear();
+ vi.mocked(http).mockResolvedValue(new Response(JSON.stringify({updated:[{id:"one",is_public:true}],count:1}),{status:200}));
+ const ids=ref(['one']); const remove=vi.fn(); const tracks=ref([{id:'one',is_public:false}]);
+ const ops=useBulkTrackOperations({tracks,selectedIds:ids,allVisibleSelected:ref(true),someSelected:ref(true),removeTracks:remove,confirm:vi.fn().mockResolvedValue(true)});
+ await ops.bulkToggleVisibility();
+ expect(http).toHaveBeenCalledWith('/api/account/tracks/bulk/visibility',expect.objectContaining({method:'PATCH',body:JSON.stringify({track_ids:['one']})}));
+ expect(tracks.value[0].is_public).toBe(true);
+ vi.mocked(http).mockResolvedValue(new Response(JSON.stringify({deleted:['one'],count:1}),{status:200}));
+ ids.value=['one']; await ops.bulkDelete();
+ expect(http).toHaveBeenCalledWith('/api/account/tracks/bulk',expect.objectContaining({method:'DELETE'}));
+ expect(remove).toHaveBeenCalledWith(['one']);
+});

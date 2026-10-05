@@ -65,7 +65,7 @@ onUnmounted(() => { if (timer) clearTimeout(timer); });
   min-width: 180px;
   max-width: 90vw;
   background: #fff;
-  color: #222;
+  color: var(--color-ink);
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.18);
   padding: 12px 24px 12px 16px;
@@ -85,7 +85,7 @@ onUnmounted(() => { if (timer) clearTimeout(timer); });
 .toast-close {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-muted);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -94,7 +94,7 @@ onUnmounted(() => { if (timer) clearTimeout(timer); });
   border-radius: 4px;
 }
 .toast-close:hover {
-  color: #333;
+  color: var(--color-ink);
   background: rgba(0, 0, 0, 0.06);
 }
 .toast-fade-enter-active, .toast-fade-leave-active { transition: opacity 0.22s; }

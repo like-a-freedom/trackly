@@ -1120,7 +1120,7 @@ defineExpose({
 
 .loading-spinner {
   font-size: 18px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .error-message {
@@ -1136,12 +1136,12 @@ defineExpose({
 }
 
 .error-message h2 {
-  color: #333;
+  color: var(--color-ink);
   margin-bottom: 10px;
 }
 
 .error-message p {
-  color: #666;
+  color: var(--color-muted);
   margin-bottom: 20px;
 }
 

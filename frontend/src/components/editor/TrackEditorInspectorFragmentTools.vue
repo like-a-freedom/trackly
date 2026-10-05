@@ -27,35 +27,35 @@
       class="fragment-actions"
     >
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="fragment-reroute-btn"
         @click="$emit('rerouteFragment')"
       >
         Reroute
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="fragment-delete-connect-btn"
         @click="$emit('deleteFragmentConnect')"
       >
         Delete + Connect
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="fragment-delete-split-btn"
         @click="$emit('deleteFragmentSplit')"
       >
         Delete + Split
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="fragment-reverse-btn"
         @click="$emit('reverseFragment')"
       >
         Reverse
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="fragment-export-btn"
         @click="$emit('exportFragment')"
       >
@@ -95,13 +95,13 @@ defineEmits([
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-ink);
   margin: 0 0 8px;
 }
 
 .fragment-meta {
   font-size: 12px;
-  color: #555;
+  color: var(--color-muted);
   margin: 4px 0 8px;
 }
 
@@ -118,20 +118,11 @@ defineEmits([
   font-size: 12px;
   padding: 2px 4px;
   border-radius: 2px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .btn-icon-sm:hover {
   background: #e0e0e0;
-}
-
-.btn-secondary {
-  background: #eee;
-  color: #333;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
 }
 
 .btn-sm {

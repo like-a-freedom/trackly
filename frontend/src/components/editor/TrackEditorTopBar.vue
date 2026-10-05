@@ -50,7 +50,7 @@
       <div class="top-bar-overflow-group">
         <button
           ref="overflowToggle"
-          class="top-bar-ghost-btn"
+          class="top-bar-ghost-btn ui-secondary"
           :aria-expanded="showOverflowMenu ? 'true' : 'false'"
           aria-haspopup="dialog"
           aria-controls="track-editor-top-bar-overflow"
@@ -167,7 +167,7 @@
       </div>
 
       <button
-        class="top-bar-save-btn"
+        class="top-bar-save-btn ui-primary"
         :disabled="!canSave || saving"
         data-testid="top-bar-save"
         @click="$emit('save')"
@@ -177,6 +177,7 @@
       <span v-if="!canSave && !saving" class="text-sm text-muted" data-testid="save-requirements">{{ !trackName.trim() ? 'Add a name in Description' : 'Add at least two route points' }}</span>
     </div>
 
+    <p v-if="graphCoverage && routingMode === 'auto'" class="m-0 px-3 pb-2 text-sm text-muted" data-testid="routing-coverage">Road routing: {{ graphCoverage }}</p>
     <div
       v-if="shouldShowGraphStatus"
       class="top-bar-status"
@@ -231,6 +232,7 @@ const props = defineProps({
   graphLoading: { type: Boolean, default: false },
   graphError: { type: String, default: null },
   graphProgress: { type: Number, default: 0 },
+  graphCoverage: { type: String, default: '' },
 });
 
 const emit = defineEmits([
@@ -457,28 +459,6 @@ onBeforeUnmount(() => {
   align-self: stretch;
 }
 
-.top-bar-ghost-btn,
-.top-bar-save-btn {
-  border-radius: 12px;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  background: #fff;
-  color: #0f172a;
-  padding: 9px 12px;
-  font-size: 0.9rem;
-}
-
-.top-bar-ghost-btn,
-.top-bar-save-btn {
-  cursor: pointer;
-}
-
-.top-bar-save-btn {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-  font-weight: 600;
-}
-
 .top-bar-overflow-group {
   position: relative;
 }
@@ -532,12 +512,6 @@ onBeforeUnmount(() => {
 
 .top-bar-export-item:hover {
   background: #eff6ff;
-}
-
-.top-bar-ghost-btn:disabled,
-.top-bar-save-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .top-bar-status {
@@ -624,7 +598,6 @@ onBeforeUnmount(() => {
  .top-bar-eyebrow { display:none; }
  .top-bar-metrics { gap:6px; }
  .metric-chip { background:transparent; padding:0 6px; font-size:12px; }
- .top-bar-ghost-btn,.top-bar-save-btn { min-height:44px; padding:6px 10px; }
  .top-bar-badge { padding:4px; font-size:12px; }
 }
 </style>

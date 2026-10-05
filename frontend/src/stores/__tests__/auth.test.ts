@@ -183,3 +183,52 @@ describe('useAuthStore', () => {
         expect(store.error).toBeNull();
     });
 });
+
+it('shares concurrent initialization without replaying a refresh cookie',async()=>{
+ setActivePinia(createPinia());
+ const {refreshToken}=await import('../../auth/refresh.js');
+ const {fetchProfile}=await import('../../auth/profile.js');
+ let resolveRefresh!: (value: {accessToken:string;expiresAt:number})=>void;
+ vi.mocked(refreshToken).mockClear();
+ vi.mocked(refreshToken).mockImplementation(()=>new Promise(resolve=>{resolveRefresh=resolve;}));
+ vi.mocked(fetchProfile).mockResolvedValue({id:'user',name:'Test',email:'test@example.invalid'});
+ const store=useAuthStore();
+ const first=store.initialize(); const second=store.initialize();
+ expect(refreshToken).toHaveBeenCalledTimes(1);
+ resolveRefresh({accessToken:'token',expiresAt:Date.now()+60000});
+ await Promise.all([first,second]);
+ expect(store.isAuthenticated).toBe(true);
+});
+
+ it('shares concurrent token renewal for authenticated requests', async () => {
+ setActivePinia(createPinia());
+ const { refreshToken } = await import('../../auth/refresh.js');
+ let resolveRefresh!: (value: { accessToken: string; expiresAt: number }) => void;
+ vi.mocked(refreshToken).mockClear();
+ vi.mocked(refreshToken).mockImplementation(() => new Promise(resolve => { resolveRefresh = resolve; }));
+ const store = useAuthStore();
+ store.accessToken = 'expiring-token';
+ store.tokenExpiresAt = Date.now();
+ const first = store.ensureValidToken();
+ const second = store.ensureValidToken();
+ expect(refreshToken).toHaveBeenCalledTimes(1);
+ resolveRefresh({ accessToken: 'renewed-token', expiresAt: Date.now() + 3600000 });
+ await Promise.all([first, second]);
+ expect(store.accessToken).toBe('renewed-token');
+ });
+
+it('does not restore a session when refresh finishes after logout', async () => {
+ setActivePinia(createPinia());
+ const { refreshToken } = await import('../../auth/refresh.js');
+ let resolveRefresh!: (value: { accessToken: string; expiresAt: number }) => void;
+ vi.mocked(refreshToken).mockImplementation(() => new Promise(resolve => { resolveRefresh = resolve; }));
+ const store = useAuthStore();
+ store.accessToken = 'expiring-token';
+ store.user = { id: 'user', name: 'Test', email: 'test@example.invalid' };
+ const renewal = store.refresh();
+ await store.logout();
+ resolveRefresh({ accessToken: 'late-token', expiresAt: Date.now() + 3600000 });
+ expect(await renewal).toBe(false);
+ expect(store.accessToken).toBeNull();
+ expect(store.user).toBeNull();
+});

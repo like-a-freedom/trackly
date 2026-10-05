@@ -1,0 +1,9 @@
+{
+  "source": "tracks/gpx/uncurated/alol_ultra_trail/5км.gpx",
+  "sha256": "ebba06bd72b25ab4eb9b5193df53053cada78555c10d0fc6f41311001f8bb5b5",
+  "points": 46,
+  "segments": 1,
+  "independent_spherical_length_km": 5.434198128496304,
+  "method": "3D unit vectors; cross/dot central angle, R=6371000m; sum within source segments",
+  "time_samples": 46
+}

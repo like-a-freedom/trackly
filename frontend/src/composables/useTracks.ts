@@ -240,6 +240,14 @@ export function useTracks() {
         try {
             const response = await http('/api/tracks/upload', { method: 'POST', body: formData });
             if (!response.ok) {
+                if (response.status === 409) {
+                    const duplicate = await response.json();
+                    if ('existing_track_id' in duplicate) {
+                        const id = typeof duplicate.existing_track_id === 'string' ? duplicate.existing_track_id : null;
+                        return {alreadyExists:true,id,url:id ? `/track/${id}` : null};
+                    }
+                    throw new Error(duplicate.error || 'This file has already been imported.');
+                }
                 const text = await response.text();
                 if (response.status === 429) throw new Error('Please, wait 10 seconds between uploads.');
                 throw new Error(text || 'Unknown error uploading track');

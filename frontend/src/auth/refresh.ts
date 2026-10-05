@@ -52,15 +52,16 @@ export async function refreshToken(): Promise<RefreshResult | null> {
  */
 export async function logout(accessToken: string | null): Promise<void> {
     try {
-        await fetch(`${API_BASE}/api/auth/logout`, {
+        const response = await fetch(`${API_BASE}/api/auth/logout`, {
             method: 'POST',
             credentials: 'include',
             headers: accessToken
                 ? { Authorization: `Bearer ${accessToken}` }
                 : {}
         });
+        if (!response.ok) throw new Error(`Logout HTTP ${response.status}`);
     } catch (e) {
         console.error('Logout request failed:', e);
-        // Continue with local cleanup even if request fails
+        throw new Error('Signed out on this device, but server logout could not be confirmed. Retry to end the server session.');
     }
 }

@@ -45,7 +45,7 @@
             {{ formatDistance(stat.distanceKm) }}</small>
           <div class="segment-meta">
             <input
-              class="form-input segment-name-input"
+              class="form-input segment-name-input ui-field"
               type="text"
               :value="stat.name"
               :aria-label="`Segment ${i + 1} name`"
@@ -143,7 +143,7 @@ function formatDistance(km) {
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-ink);
   margin: 0 0 8px;
 }
 
@@ -190,7 +190,7 @@ function formatDistance(km) {
 
 .segment-info small {
   display: block;
-  color: #888;
+  color: var(--color-muted);
   font-size: 11px;
 }
 
@@ -201,22 +201,7 @@ function formatDistance(km) {
   margin-top: 6px;
 }
 
-.form-input {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 13px;
-  color: #333;
-  box-sizing: border-box;
-}
 
-.form-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
-}
 
 .segment-name-input {
   padding: 4px 6px;
@@ -264,7 +249,7 @@ function formatDistance(km) {
   font-size: 12px;
   padding: 2px 4px;
   border-radius: 2px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .btn-icon-sm:hover {

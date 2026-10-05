@@ -42,7 +42,7 @@ export function useTrackList(options: UseTrackListOptions = {}): TrackListState 
   const offset = ref(0);
 
   async function fetchTracks(currentOffset: number): Promise<TrackListResponse> {
-    const response = await http(`/api/users/me/tracks?offset=${currentOffset}&limit=${limit}`, {
+    const response = await http(`/api/account/tracks?offset=${currentOffset}&limit=${limit}`, {
       method: 'GET',
     });
     if (!response.ok) {
@@ -96,7 +96,7 @@ export function useTrackList(options: UseTrackListOptions = {}): TrackListState 
 
   async function toggleVisibility(trackId: string, isPublic: boolean): Promise<void> {
     try {
-      const response = await http(`/api/tracks/${trackId}`, {
+      const response = await http(`/api/tracks/${trackId}/visibility`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_public: isPublic }),

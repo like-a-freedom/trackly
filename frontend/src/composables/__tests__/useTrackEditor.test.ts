@@ -8,7 +8,8 @@ vi.mock('../useAuth', () => ({
     }),
 }));
 
-vi.mock('../../utils/session', () => ({
+vi.mock('../../utils/session', async (importOriginal) => ({
+    ...await importOriginal<typeof import('../../utils/session')>(),
     getSessionId: vi.fn(() => 'test-session-id'),
 }));
 
@@ -524,6 +525,16 @@ describe('useTrackEditor', () => {
     });
 
     describe('canSave', () => {
+        it('rejects categories beyond the server UTF-8 limit before sending save', async () => {
+            editor.trackName.value = 'Category contract';
+            editor.addWaypoint(50, 30);
+            editor.addWaypoint(50.01, 30.01);
+            editor.trackCategories.value = ['я'.repeat(51)];
+            expect(editor.canSave.value).toBe(false);
+            expect(await editor.saveTrack()).toBeNull();
+            editor.trackCategories.value = [];
+            expect(editor.canSave.value).toBe(true);
+        });
         it('requires name and at least 2 points', () => {
             expect(editor.canSave.value).toBe(false);
 
@@ -574,7 +585,7 @@ describe('useTrackEditor', () => {
 
     describe('saveTrack — create new track', () => {
         it('sends POST to /api/tracks/create', async () => {
-            const mockResponse = { id: 'new-track-123',name:'Test Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}};
+            const mockResponse = { id: 'new-track-123',name:'Test Track',description:'',categories:[],waypoints:[{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#1976D2'}],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}};
             vi.stubGlobal('fetch', vi.fn().mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : mockResponse})));
 
             editor.trackName.value = 'Test Track';
@@ -621,7 +632,7 @@ describe('useTrackEditor', () => {
 
     describe('saveTrack — update existing track', () => {
         it('sends PUT to /api/tracks/{id}/geometry', async () => {
-            vi.stubGlobal('fetch', vi.fn().mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : ({name:'Existing Track',description:'',categories:[],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}})})));
+            vi.stubGlobal('fetch', vi.fn().mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : ({name:'Existing Track',description:'',categories:[],waypoints:[{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#1976D2'}],geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}})})));
 
             // Simulate loaded track
             editor.savedTrackId.value = 'existing-123';
@@ -940,6 +951,15 @@ describe('useTrackEditor', () => {
     });
 
     describe('duplicateTrack', () => {
+        it('refuses server duplicate and export when the local revision is dirty', async () => {
+            const fetch = vi.fn().mockResolvedValue({ok:true,json:async()=>({id:'stale-copy'})});
+            vi.stubGlobal('fetch', fetch);
+            editor.savedTrackId.value = 'existing';
+            editor.trackName.value = 'Unsaved name';
+            expect((await editor.duplicateTrack()).ok).toBe(false);
+            expect(await editor.exportTrack('gpx')).toBe(false);
+            expect(fetch).not.toHaveBeenCalled();
+        });
         it('duplicates an existing track', async () => {
             vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
                 ok: true,

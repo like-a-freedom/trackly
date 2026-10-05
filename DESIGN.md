@@ -9,10 +9,10 @@ colors:
   line: "#d6dfe9"
   action: "#245bd7"
   action-hover: "#194aa5"
-  action-active: "#0d47a1"
-  action-soft: "#eff6ff"
-  success: "#43a047"
-  warning: "#f9a825"
+  active: "#0d47a1"
+  soft: "#eff6ff"
+  success: "#15703e"
+  warning: "#8a5600"
   danger: "#c62828"
   focus-ring: "#10151c"
 typography:
@@ -55,14 +55,26 @@ components:
   button-primary:
     backgroundColor: "{colors.action}"
     textColor: "{colors.surface}"
-    rounded: "{rounded.tool}"
-    padding: "0 12px"
+    rounded: "{rounded.control}"
+    padding: "8px 16px"
     height: "44px"
   button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.tool}"
-    padding: "0 8px"
+    rounded: "{rounded.control}"
+    padding: "8px 12px"
+    height: "44px"
+  button-danger:
+    backgroundColor: "{colors.danger}"
+    textColor: "{colors.surface}"
+    rounded: "{rounded.control}"
+    padding: "8px 16px"
+    height: "44px"
+  field-shared:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.control}"
+    padding: "8px 12px"
     height: "44px"
   tool-active:
     backgroundColor: "{colors.action}"
@@ -87,7 +99,7 @@ components:
 
 Trackly uses white working surfaces, cool neutrals, dark ink and blue actions. Geography provides the visual content; controls provide a quiet structure around it. System typography keeps the interface familiar and compact.
 
-This document captures the implemented shared foundation and the new editor workspace. It is not a claim that every surface has migrated. The editor top bar, nested inspector forms, track detail, upload, account and global dialogs retain local styling. Their literals, radii and typography remain compatibility details until a scoped migration replaces them.
+This document captures the implemented shared foundation and the new editor workspace. It is not a claim that every surface has migrated. Shared field and button primitives now appear in the editor, upload, account, authentication and confirmation flows. Existing component classes and local layout styles coexist with them; track detail, map controls, nested sections and status chips still contain compatibility styling. This is a shared foundation with incremental adoption, not complete migration.
 
 **Key Characteristics:**
 - Calm neutral surfaces with a functional blue accent.
@@ -101,8 +113,8 @@ The palette separates working surfaces from map imagery with cool neutral border
 
 ### Primary
 - **Action Blue** (`action`): new primary actions, selected drawing tools and active task tabs.
-- **Deep Action Blue** (`action-hover`, `action-active`): shared map-control interaction states.
-- **Pale Action Wash** (`action-soft`): tool hover, instructions and existing metric chips.
+- **Deep Action Blue** (`action-hover`, `active`): shared map-control interaction states.
+- **Pale Action Wash** (`soft`): tool hover, instructions and existing metric chips.
 
 ### Neutral
 - **Dark Ink** (`ink`): primary control text.
@@ -146,15 +158,15 @@ Shared floating controls use softly curved corners; individual tool and coordina
 
 ### Buttons
 
-Coordinate actions use blue primary buttons and white bordered secondary buttons. Tool buttons use dark ink on a transparent surface; selection fills them blue with white icons. Disabled tool icons become muted and disabled coordinate actions reduce opacity. Keep the 44px touch dimensions on these new controls. The top-bar Save button currently uses a local blue and a larger radius; it is not yet the shared primary primitive.
+Shared primary actions use blue, secondary actions use white with neutral borders, and destructive actions use the danger color. Their shared corners use the control radius. Primary hover deepens the blue; secondary hover uses the canvas; destructive hover uses its local darker red. Disabled shared actions replace accent fills with neutral backgrounds and muted text, and use a not-allowed cursor. Coordinate actions still use their tighter local controls. Tool buttons use dark ink on a transparent surface; selection fills them blue with white icons. Disabled tool icons become muted and disabled coordinate actions reduce opacity. Keep the 44px touch dimensions on these new controls. The top-bar Save and More actions now include the shared primary and secondary classes. Existing unlayered component rules coexist with these layered declarations; the frontmatter describes the shared primitive rather than certifying every resulting computed style.
 
 ### Inputs / Fields
 
-Coordinate fields are native numeric inputs with a thin neutral border, tight corners and horizontal inset. Native validation and explicit labels remain visible. The shared foundation increases mobile form controls to a minimum 44px height and 16px text. Nested metadata inputs still use inspector-local styles.
+The shared field primitive uses a surface background, neutral border, control radius, 16px text, muted placeholder and an action-colored caret. It spans its container; disabled fields use canvas and muted text. Coordinate fields are native numeric inputs with a thin neutral border, tight corners and horizontal inset. Native validation and explicit labels remain visible. The shared foundation increases mobile form controls to a minimum 44px height and 16px text. Metadata fields now include the shared field class alongside inspector-local styles.
 
 ### Navigation
 
-Task tabs divide available pane width equally. A blue bottom rule, blue text and heavier weight identify the selected tab. Map-tool buttons carry accessible names and selected state; the mobile mode select expresses the same tools with text. Preserve focus visibility rather than relying on color alone.
+Task tabs divide available pane width equally. A blue bottom rule, blue text and heavier weight identify the selected tab. Map-tool buttons carry accessible names and selected state; the mobile mode select expresses the same tools with text. Preserve focus visibility rather than relying on color alone. Auto-routing displays the manifest coverage name when available. Requests outside its declared bounds receive an explicit coverage message with manual-mode guidance; do not imply worldwide routing. Sign-in requires the browser cryptography capability provided by HTTPS or localhost; surface the explicit sign-in error rather than a silent failure. These constraints describe current behavior, not browser or routing acceptance evidence.
 
 ### Chips / Containers
 

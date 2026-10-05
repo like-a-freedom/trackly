@@ -21,7 +21,7 @@ describe('TrackEditorInspectorOverview', () => {
         expect(wrapper.find('[data-testid="editor-tips"]').exists()).toBe(true);
         expect(wrapper.find('[data-testid="track-name-input"]').element.value).toBe('Morning walk');
         expect(wrapper.find('[data-testid="track-desc-input"]').element.value).toBe('Easy route');
-        expect(wrapper.find('[data-testid="category-chip-hiking"]').classes()).toContain('selected');
+        expect(wrapper.find('[data-testid="category-input-hiking"]').element.checked).toBe(true);
 
         await wrapper.find('[data-testid="track-name-input"]').setValue('Updated track');
         await wrapper.find('[data-testid="track-desc-input"]').setValue('Updated description');

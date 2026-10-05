@@ -328,7 +328,7 @@ function handleExport(format) {
   background: #fafafa;
   cursor: pointer;
   font-size: 13px;
-  color: #333;
+  color: var(--color-ink);
   transition: all 0.15s;
   white-space: nowrap;
 }
@@ -371,7 +371,7 @@ function handleExport(format) {
   gap: 4px;
   cursor: pointer;
   font-size: 12px;
-  color: #555;
+  color: var(--color-muted);
 }
 
 .toolbar-spacer {
@@ -383,7 +383,7 @@ function handleExport(format) {
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  color: #555;
+  color: var(--color-muted);
   padding: 0 8px;
 }
 
@@ -413,7 +413,7 @@ function handleExport(format) {
 
 .toolbar-status {
   font-size: 11px;
-  color: #555;
+  color: var(--color-muted);
   margin-left: 6px;
 }
 
@@ -448,7 +448,7 @@ function handleExport(format) {
   text-align: left;
   font-size: 13px;
   cursor: pointer;
-  color: #333;
+  color: var(--color-ink);
 }
 
 .export-item:hover {

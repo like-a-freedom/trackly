@@ -1,0 +1,70 @@
+{
+  "coverage": {
+    "bounds": [
+      55.95,
+      37.3,
+      56.48,
+      38.03
+    ],
+    "name": "Dmitrov–Pravdinsky, Moscow region"
+  },
+  "graphs": {
+    "default": {
+      "cycling": {
+        "graph": "default_cycling_sha256-53eabfe0208af9919db1758e78ffacb0ed3880c6cbd0a36820ecf250a9c9a272.bin",
+        "nodes": "default_cycling_sha256-53eabfe0208af9919db1758e78ffacb0ed3880c6cbd0a36820ecf250a9c9a272_nodes.bin",
+        "nodes_format": "f64",
+        "surfaces": null,
+        "surfaces_format": "u8",
+        "version": "sha256-53eabfe0208af9919db1758e78ffacb0ed3880c6cbd0a36820ecf250a9c9a272"
+      },
+      "driving": {
+        "graph": "default_driving_sha256-9ec1a622cc3fc8e3a318331491cbb28488db3f0d499d91007d21be6cede41929.bin",
+        "nodes": "default_driving_sha256-9ec1a622cc3fc8e3a318331491cbb28488db3f0d499d91007d21be6cede41929_nodes.bin",
+        "nodes_format": "f64",
+        "surfaces": null,
+        "surfaces_format": "u8",
+        "version": "sha256-9ec1a622cc3fc8e3a318331491cbb28488db3f0d499d91007d21be6cede41929"
+      },
+      "hiking": {
+        "graph": "default_hiking_sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690.bin",
+        "nodes": "default_hiking_sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690_nodes.bin",
+        "nodes_format": "f64",
+        "surfaces": null,
+        "surfaces_format": "u8",
+        "version": "sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690"
+      },
+      "mtb": {
+        "graph": "default_mtb_sha256-53eabfe0208af9919db1758e78ffacb0ed3880c6cbd0a36820ecf250a9c9a272.bin",
+        "nodes": "default_mtb_sha256-53eabfe0208af9919db1758e78ffacb0ed3880c6cbd0a36820ecf250a9c9a272_nodes.bin",
+        "nodes_format": "f64",
+        "surfaces": null,
+        "surfaces_format": "u8",
+        "version": "sha256-53eabfe0208af9919db1758e78ffacb0ed3880c6cbd0a36820ecf250a9c9a272"
+      },
+      "running": {
+        "graph": "default_running_sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690.bin",
+        "nodes": "default_running_sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690_nodes.bin",
+        "nodes_format": "f64",
+        "surfaces": null,
+        "surfaces_format": "u8",
+        "version": "sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690"
+      },
+      "walking": {
+        "graph": "default_walking_sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690.bin",
+        "nodes": "default_walking_sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690_nodes.bin",
+        "nodes_format": "f64",
+        "surfaces": null,
+        "surfaces_format": "u8",
+        "version": "sha256-80570fff7958c788f72c2ddd8383ef4156b5682859f6c2f49a4c579017a4c690"
+      }
+    }
+  },
+  "routing_model": "Shortest distance with profile access and way direction; turn restrictions are not modelled.",
+  "source": {
+    "attribution_url": "https://www.openstreetmap.org/copyright",
+    "license": "ODbL-1.0",
+    "provider": "OpenStreetMap contributors",
+    "timestamp": "2026-10-05T09:53:01Z"
+  }
+}

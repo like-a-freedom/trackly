@@ -49,17 +49,7 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         total_elevation_loss: &mut f64,
     ) {
         match geom {
-            Geometry::Point(p) => {
-                let coord = &p.coord;
-                points.push((coord.y, coord.x));
-                elevations.push(coord.z);
-                update_elevation_stats(
-                    coord.z,
-                    last_elevation,
-                    total_elevation_gain,
-                    total_elevation_loss,
-                );
-            }
+            Geometry::Point(_) => {}
             Geometry::LineString(ls) => {
                 for coord in &ls.coords {
                     points.push((coord.y, coord.x));
@@ -389,4 +379,19 @@ pub fn parse_kml(bytes: &[u8]) -> Result<ParsedTrackData, String> {
         pace_data: None,       // KML typically doesn't contain pace data
         waypoints: Vec::new(), // KML waypoints support can be added later
     })
+}
+
+#[cfg(test)]
+mod source_geometry_tests {
+    use super::parse_kml;
+    #[test]
+    fn placemark_points_do_not_extend_a_route() {
+        let source = br#"<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><Point><coordinates>40,60,0</coordinates></Point></Placemark><Placemark><LineString><coordinates>0,0,0 1,0,0</coordinates></LineString></Placemark></Document></kml>"#;
+        let parsed = parse_kml(source).unwrap();
+        assert_eq!(
+            parsed.geom_geojson["coordinates"].as_array().unwrap().len(),
+            2
+        );
+        assert!((parsed.length_km - 111.19492664455873).abs() < 0.000001);
+    }
 }

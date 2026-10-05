@@ -306,13 +306,13 @@ onUnmounted(() => {
 }
 
 .poi-tooltip .poi-category {
-  color: #666;
+  color: var(--color-muted);
   font-style: italic;
 }
 
 .poi-tooltip .poi-elevation,
 .poi-tooltip .poi-distance {
-  color: #888;
+  color: var(--color-muted);
   font-size: 11px;
 }
 </style>

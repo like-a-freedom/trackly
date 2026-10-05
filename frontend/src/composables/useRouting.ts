@@ -54,6 +54,7 @@ interface GraphFiles {
 }
 
 interface GraphData {
+    coverage: { name: string; bounds: number[] } | null;
     graphBytes: ArrayBuffer;
     nodeBytes: ArrayBuffer;
     nodesFormat: string;
@@ -99,7 +100,7 @@ function buildSpatialIndex(coords: Float32Array | Float64Array, cellSize: number
 }
 
 function parseNodeCoords(buffer: ArrayBuffer, format: string): Float32Array | Float64Array {
-    if (format === 'f64' || buffer.byteLength % 16 === 0) {
+    if (format === 'f64') {
         return new Float64Array(buffer);
     }
     return new Float32Array(buffer);
@@ -205,6 +206,9 @@ function resolveGraphFiles({ mode, manifest }: { mode: string; manifest: Record<
 async function loadGraphData(mode: string, onProgress: ((pct: number) => void) | null): Promise<GraphData> {
     const db = await openGraphDb();
     const manifest = await fetchManifest();
+    const rawCoverage = manifest?.coverage as { name?: unknown; bounds?: unknown } | undefined;
+    const coverage = typeof rawCoverage?.name === 'string' && Array.isArray(rawCoverage.bounds) && rawCoverage.bounds.length === 4 && rawCoverage.bounds.every(n => typeof n === 'number' && Number.isFinite(n))
+        ? { name: rawCoverage.name, bounds: rawCoverage.bounds as number[] } : null;
     const files = resolveGraphFiles({ mode, manifest });
     const cacheKey = `${GRAPH_REGION}_${mode}_${files.version || GRAPH_VERSION}`;
     const cached = await db.get(GRAPH_STORE, cacheKey) as CachedGraphData | undefined;
@@ -217,6 +221,7 @@ async function loadGraphData(mode: string, onProgress: ((pct: number) => void) |
     ) {
         if (onProgress) onProgress(100);
         return {
+            coverage,
             graphBytes: cached.graphBytes,
             nodeBytes: cached.nodeBytes,
             nodesFormat: cached.nodesFormat || files.nodes_format || 'f32',
@@ -261,6 +266,7 @@ async function loadGraphData(mode: string, onProgress: ((pct: number) => void) |
     );
 
     return {
+        coverage,
         graphBytes,
         nodeBytes,
         nodesFormat: files.nodes_format || 'f32',
@@ -278,7 +284,9 @@ export function resetWasmCache(): void {
 
 async function loadWasmModule(): Promise<WasmModule> {
     if (!wasmModulePromise) {
-        wasmModulePromise = import(/* @vite-ignore */ WASM_MODULE_URL).then(async (mod) => {
+        // An absolute URL keeps Vite from treating this generated public module as source.
+        const moduleUrl = new URL(WASM_MODULE_URL, window.location.href).href;
+        wasmModulePromise = import(/* @vite-ignore */ moduleUrl).then(async (mod) => {
             if (typeof mod.default === 'function') {
                 await mod.default();
             }
@@ -304,6 +312,7 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
 
     /** Whether the WASM routing graph is loaded and ready. */
     const graphReady: Ref<boolean> = ref(false);
+    const graphCoverage = ref<{ name: string; bounds: number[] } | null>(null);
 
     /** Whether the graph is currently loading. */
     const graphLoading: Ref<boolean> = ref(false);
@@ -343,16 +352,20 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
     let nodeCoords: Float32Array | Float64Array | null = null;
     let spatialIndex: SpatialIndex | null = null;
     let surfaceByNode: Uint8Array | Uint16Array | null = null;
+    let loadGeneration = 0;
 
     async function ensureGraphLoaded(): Promise<void> {
         if (graphReady.value || graphLoading.value) return;
         if (typeof fetch !== 'function') return;
+        const generation = ++loadGeneration;
+        const requestedProfile = profile.value;
 
         graphLoading.value = true;
         graphError.value = null;
         graphProgress.value = 0;
 
         const updateProgress = (value: number) => {
+            if (generation !== loadGeneration) return;
             if (typeof value !== 'number') return;
             const next = Math.max(graphProgress.value, Math.min(100, Math.round(value)));
             graphProgress.value = next;
@@ -360,12 +373,13 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
 
         try {
             const wasm = await loadWasmModule();
+            if (generation !== loadGeneration) return;
             if (!wasm?.FastPathsRouter) {
                 throw new Error('Routing WASM module is unavailable');
             }
 
-            const { graphBytes, nodeBytes, nodesFormat, surfacesBytes, surfacesFormat } = await loadGraphData(
-                profile.value,
+            const { graphBytes, nodeBytes, nodesFormat, surfacesBytes, surfacesFormat, coverage } = await loadGraphData(
+                requestedProfile,
                 updateProgress
             );
             const graphArray = new Uint8Array(graphBytes);
@@ -373,8 +387,10 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
             if (typeof wasm.validate_graph_bytes === 'function') {
                 await wasm.validate_graph_bytes(graphArray);
             }
+            if (generation !== loadGeneration) return;
 
             router = new wasm.FastPathsRouter(graphArray);
+            graphCoverage.value = coverage;
             nodeCoords = parseNodeCoords(nodeBytes, nodesFormat);
             spatialIndex = buildSpatialIndex(nodeCoords);
             surfaceByNode = parseSurfaceData(surfacesBytes, surfacesFormat);
@@ -382,6 +398,7 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
             graphReady.value = true;
             graphProgress.value = 100;
         } catch (e: unknown) {
+            if (generation !== loadGeneration) return;
             graphReady.value = false;
             // Never surface the raw JS message. A failed dynamic import of the
             // WASM bundle reads as "Failed to fetch dynamically imported
@@ -390,7 +407,7 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
             graphError.value = describeGraphError(e);
             graphProgress.value = 0;
         } finally {
-            graphLoading.value = false;
+            if (generation === loadGeneration) graphLoading.value = false;
         }
     }
 
@@ -465,6 +482,14 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
         }
 
         const snapStart = nowMs();
+        const coverage = graphCoverage.value;
+        if (coverage) {
+            const [south, west, north, east] = coverage.bounds;
+            if ([from, to].some(point => point.lat < south || point.lat > north || point.lng < west || point.lng > east)) {
+                onNotAvailable?.(`Outside road graph coverage: ${coverage.name}. Move points inside the supported area or switch to manual mode.`);
+                return null;
+            }
+        }
         const snappedFrom = snapToNode(from.lat, from.lng);
         const snappedTo = snapToNode(to.lat, to.lng);
         const snapMs = nowMs() - snapStart;
@@ -575,6 +600,16 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
     function setProfile(newProfile: string): void {
         const validProfiles: RoutingProfile[] = ['hiking', 'walking', 'running', 'cycling', 'mtb', 'driving'];
         if (validProfiles.includes(newProfile as RoutingProfile)) {
+            if (newProfile === profile.value) return;
+            loadGeneration++;
+            graphReady.value = false;
+            graphLoading.value = false;
+            graphProgress.value = 0;
+            graphError.value = null;
+            router = null;
+            nodeCoords = null;
+            spatialIndex = null;
+            surfaceByNode = null;
             profile.value = newProfile as RoutingProfile;
             if (mode.value === 'auto' && autoLoad) {
                 graphReady.value = false;
@@ -610,6 +645,7 @@ export function useRouting({ autoLoad = true }: UseRoutingOptions = {}) {
         mode,
         profile,
         graphReady,
+        graphCoverage,
         graphLoading,
         graphError,
         graphProgress,

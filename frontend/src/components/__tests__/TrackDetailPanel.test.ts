@@ -2177,41 +2177,6 @@ describe('TrackDetailPanel', () => {
   });
 
   describe('Description Editing', () => {
-    it('starts editing when clicking description block', async () => {
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackComplete, isOwner: true }
-      });
-      await wrapper.vm.$nextTick();
-      const block = wrapper.find('.track-description-block');
-      expect(block.exists()).toBe(true);
-      await block.trigger('click');
-      await wrapper.vm.$nextTick();
-      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
-      expect(wrapper.find('.edit-description-input').exists()).toBe(true);
-    });
-
-    it('starts editing when pressing Enter on focused description block', async () => {
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackComplete, isOwner: true }
-      });
-      await wrapper.vm.$nextTick();
-      const block = wrapper.find('.track-description-block');
-      await block.trigger('keydown.enter');
-      await wrapper.vm.$nextTick();
-      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
-    });
-
-    it('starts editing when pressing Space on focused description block', async () => {
-      wrapper = mount(TrackDetailPanel, {
-        props: { track: mockTrackComplete, isOwner: true }
-      });
-      await wrapper.vm.$nextTick();
-      const block = wrapper.find('.track-description-block');
-      await block.trigger('keydown.space');
-      await wrapper.vm.$nextTick();
-      expect(wrapper.find('.description-edit-block').exists()).toBe(true);
-    });
-
     it('clicking edit button opens editor and repeated clicks are idempotent', async () => {
       wrapper = mount(TrackDetailPanel, {
         props: { track: mockTrackComplete, isOwner: true }

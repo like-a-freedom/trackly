@@ -55,20 +55,20 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
     bulkOperating.value = true;
     error.value = null;
     try {
-      const response = await http('/api/users/me/tracks/visibility', {
+      const response = await http('/api/account/tracks/bulk/visibility', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ track_ids: operationIds }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (response.ok) {
-        const data: { is_public: boolean } = await response.json();
-        tracks.value.forEach((track) => {
-          if (operationIds.includes(track.id)) {
-            track.is_public = data.is_public;
-          }
+        const data: { updated: TrackItem[] } = await response.json();
+        const updated = new Map(data.updated.map(track => [track.id, track.is_public]));
+        tracks.value.forEach(track => {
+          if (updated.has(track.id)) track.is_public = updated.get(track.id)!;
         });
-        selectedIds.value = selectedIds.value.filter(id => !operationIds.includes(id));
+        selectedIds.value = selectedIds.value.filter(id => !updated.has(id));
+        if (operationIds.some(id => !updated.has(id))) error.value = 'Some tracks could not be changed. Their selection is retained; please retry.';
       }
     } catch (cause) {
       error.value = 'Could not complete this action. Your selection is retained; please retry.';
@@ -92,15 +92,18 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
     });
 
     if (!confirmed) return;
-      const response = await http('/api/users/me/tracks', {
+      const response = await http('/api/account/tracks/bulk', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ track_ids: operationIds }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (response.ok) {
-        removeTracks(operationIds);
-        selectedIds.value = selectedIds.value.filter(id => !operationIds.includes(id));
+        const data: { deleted: string[] } = await response.json();
+        const deleted = new Set(data.deleted);
+        removeTracks(data.deleted);
+        selectedIds.value = selectedIds.value.filter(id => !deleted.has(id));
+        if (operationIds.some(id => !deleted.has(id))) error.value = 'Some tracks could not be deleted. Their selection is retained; please retry.';
       }
     } catch (cause) {
       error.value = 'Could not complete this action. Your selection is retained; please retry.';

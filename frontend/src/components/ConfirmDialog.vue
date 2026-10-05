@@ -28,13 +28,13 @@
         </div>
         <div class="dialog-actions">
           <button
-            class="dialog-btn dialog-btn-cancel"
+            class="dialog-btn dialog-btn-cancel ui-secondary"
             @click="onCancel"
           >
             {{ cancelText }}
           </button>
           <button
-            class="dialog-btn dialog-btn-confirm"
+            class="dialog-btn dialog-btn-confirm ui-danger"
             @click="onConfirm"
           >
             {{ confirmText }}
@@ -160,7 +160,7 @@ defineExpose({
   margin: 0 0 12px 0;
   font-size: 1.2em;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 
 .dialog-message {
@@ -177,40 +177,11 @@ defineExpose({
   justify-content: flex-end;
 }
 
-.dialog-btn {
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 80px;
-}
+.dialog-btn { min-width: 80px; }
 
-.dialog-btn-cancel {
-  background: #f5f5f5;
-  color: #666;
-  border: 2px solid #ddd;
-}
 
-.dialog-btn-cancel:hover {
-  background: #eeeeee;
-  border-color: #bbb;
-  color: #444;
-}
 
-.dialog-btn-confirm {
-  background: #dc2626;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
-}
 
-.dialog-btn-confirm:hover {
-  background: #b91c1c;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
-}
 
 .dialog-btn:active {
   transform: scale(0.98);

@@ -134,7 +134,7 @@ test('account distinguishes an empty collection from a loading failure and traps
  await page.route('**/api/auth/refresh',route => route.fulfill({json:{access_token:'fixture.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')+'.fixture'}}));
  await page.route('**/api/account/me',route => route.fulfill({json:{user_id:fixtureId,nickname:'Design fixture',email:'fixture@example.invalid',created_at:'2026-10-05T00:00:00Z'}}));
  let fail = true;
- await page.route('**/api/users/me/tracks?**', route => fail ? route.fulfill({status:503,json:{error:'fixture'}}) : route.fulfill({json:{tracks:[],total:0}}));
+ await page.route('**/api/account/tracks?**', route => fail ? route.fulfill({status:503,json:{error:'fixture'}}) : route.fulfill({json:{tracks:[],total:0}}));
  await page.goto('/account');
  await expect(page.getByText('Could not load your tracks. Please retry.',{exact:true})).toBeVisible();
  await expect(page.getByText("You don't have any tracks yet",{exact:true})).toHaveCount(0);

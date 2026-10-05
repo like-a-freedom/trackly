@@ -8,6 +8,44 @@
   --color-canvas: #f3f6fa;
   --color-line: #d6dfe9;
   --color-action: #245bd7;
+  --color-action-hover: #194aa5;
+  --color-active: #0d47a1;
+  --color-soft: #eff6ff;
+  --color-success: #15703e;
+  --color-warning: #8a5600;
+  --color-danger: #c62828;
+  --color-focus-ring: #10151c;
+  --radius-control: 8px;
+}
+@layer components {
+  .ui-field {
+    @apply min-h-11 w-full border border-line bg-surface px-3 py-2 text-base text-ink;
+    border-radius: var(--radius-control);
+    caret-color: var(--color-action);
+  }
+  .ui-field::placeholder { color: var(--color-muted); opacity: 1; }
+  .ui-field:disabled { @apply bg-canvas text-muted; cursor: not-allowed; }
+  .ui-primary {
+    @apply min-h-11 border-0 bg-action px-4 py-2 text-base font-semibold text-white;
+    border-radius: var(--radius-control);
+    cursor: pointer;
+  }
+  .ui-primary:hover:not(:disabled) { background: var(--color-action-hover); }
+  .ui-primary:disabled { @apply bg-line text-muted; cursor: not-allowed; }
+  .ui-secondary {
+    @apply min-h-11 border border-line bg-surface px-3 py-2 text-sm font-semibold text-ink;
+    border-radius: var(--radius-control);
+    cursor: pointer;
+  }
+  .ui-secondary:hover:not(:disabled) { @apply bg-canvas; }
+  .ui-secondary:disabled { @apply bg-canvas text-muted; cursor: not-allowed; }
+  .ui-danger {
+    @apply min-h-11 border border-danger bg-danger px-4 py-2 text-sm font-semibold text-white;
+    border-radius: var(--radius-control);
+    cursor: pointer;
+  }
+  .ui-danger:hover:not(:disabled) { background: #a71919; }
+  .ui-danger:disabled { @apply border-line bg-line text-muted; cursor: not-allowed; }
 }
 @media (max-width: 900px) {
   .track-editor-view input:not([type="checkbox"]):not([type="color"]), .track-editor-view select, .track-editor-view textarea,
@@ -16,8 +54,13 @@
 }
 @layer base {
   :root { color: var(--color-ink); font-family: system-ui, sans-serif; }
-  :focus-visible { outline: 3px solid #245bd7; outline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--color-focus-ring); outline-offset: 3px; }
+  ::selection { background: var(--color-action); color: var(--color-surface); }
+  * { scrollbar-color: var(--color-muted) var(--color-canvas); scrollbar-width: thin; }
   button, input, select, textarea { font: inherit; }
   button, a, input, select, textarea { touch-action: manipulation; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 }
+
+.leaflet-control-attribution { color: var(--color-muted) !important; background: var(--color-surface) !important; }
+.leaflet-control-attribution a { text-decoration: underline !important; color: var(--color-action) !important; }

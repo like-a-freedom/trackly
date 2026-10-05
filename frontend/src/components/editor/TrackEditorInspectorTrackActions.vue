@@ -10,14 +10,14 @@
     </div>
     <div class="track-actions">
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="duplicate-track-btn"
         @click="$emit('duplicateTrack')"
       >
         Duplicate track
       </button>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="reverse-track-btn"
         @click="$emit('reverseTrack')"
       >
@@ -46,7 +46,7 @@ defineEmits(["duplicateTrack", "reverseTrack"]);
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-ink);
   margin: 0 0 8px;
 }
 
@@ -54,15 +54,6 @@ defineEmits(["duplicateTrack", "reverseTrack"]);
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.btn-secondary {
-  background: #eee;
-  color: #333;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
 }
 
 .btn-sm {

@@ -1,6 +1,6 @@
 // @ts-nocheck - Test mocks don't need full type fidelity
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import CategoriesPanel from '../CategoriesPanel.vue';
 
 vi.mock('@vueform/multiselect', () => ({
@@ -15,6 +15,19 @@ vi.mock('@vueform/multiselect', () => ({
 vi.mock('@vueform/multiselect/themes/default.css', () => ({}));
 
 describe('CategoriesPanel', () => {
+    it('keeps pending until confirmation and retains edits after a failed save', async () => {
+        let rejectSave: (error: Error) => void;
+        const saveCategories = vi.fn(() => new Promise<void>((_, reject) => { rejectSave = reject; }));
+        const wrapper = mount(CategoriesPanel, {props: {track:{id:'t1',categories:['hiking']},isOwner:true,saveCategories}});
+        await wrapper.get('input[value="walking"]').setValue(true);
+        await wrapper.get('button[data-testid="save-categories"]').trigger('click');
+        expect(saveCategories).toHaveBeenCalledWith(['hiking','walking']);
+        expect(wrapper.get('button[data-testid="save-categories"]').attributes('disabled')).toBeDefined();
+        rejectSave!(new Error('Could not save categories. Retry.'));
+        await flushPromises();
+        expect(wrapper.get('[role="alert"]').text()).toContain('Retry');
+        expect((wrapper.get('input[value="walking"]').element as HTMLInputElement).checked).toBe(true);
+    });
     let props: {
         track: { id: string; categories: string[] };
         isOwner: boolean;
@@ -60,15 +73,16 @@ describe('CategoriesPanel', () => {
         const wrapper = mount(CategoriesPanel, {
             props: { ...props, isOwner: true },
         });
-        await wrapper.vm.onCategoriesChange([{ value: 'hiking', label: 'Hiking' }]);
+        await wrapper.get('input[value="running"]').setValue(false);
+        await wrapper.get('button[data-testid="save-categories"]').trigger('click');
+        await flushPromises();
         expect(wrapper.emitted('categories-updated')).toBeTruthy();
         expect(wrapper.emitted('categories-updated')[0]).toEqual([['hiking']]);
     });
 
     it('formats category names', () => {
         const wrapper = mount(CategoriesPanel, { props });
-        expect(wrapper.vm.formatCategory('hiking')).toBe('Hiking');
-        expect(wrapper.vm.formatCategory('')).toBe('');
-        expect(wrapper.vm.formatCategory(null)).toBe('');
+        expect(wrapper.text()).toContain('Hiking');
+        expect(wrapper.text()).toContain('Running');
     });
 });

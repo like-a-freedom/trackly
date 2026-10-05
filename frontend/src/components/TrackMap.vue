@@ -984,7 +984,7 @@ watch(
 :deep(.marker-tooltip .fixed-hint) {
   /* 13px floor: this was 10px, which is unreadable on a tile background */
   font-size: var(--text-xs);
-  color: #666;
+  color: var(--color-muted);
   margin-top: 4px;
 }
 

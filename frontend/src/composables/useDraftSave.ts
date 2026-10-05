@@ -1,4 +1,5 @@
 import { ref, onBeforeUnmount, type Ref } from 'vue';
+import { generateSessionId } from '@/utils/session';
 import type { LatLngTuple } from '@/types';
 
 const DRAFT_KEY = 'trackly_draft';
@@ -53,7 +54,7 @@ export function useDraftSave({ debounceMs = 500, trackId = null }: UseDraftSaveO
     const draftKey = trackId ? `${DRAFT_KEY}:${trackId}` : DRAFT_KEY;
     const storageError = ref<string | null>(null);
     const conflict = ref(false);
-    const writerId = crypto.randomUUID();
+    const writerId = generateSessionId();
     let pendingState: DraftState | null = null;
     const hasDraft: Ref<boolean> = ref(false);
     const isDirty: Ref<boolean> = ref(false);

@@ -449,3 +449,39 @@ fn test_callback_request_with_special_characters() {
     assert!(request.state.contains("-"));
     assert!(request.pkce_verifier.contains("_"));
 }
+
+#[test]
+fn refresh_cookie_targets_the_public_api_prefix() {
+    let config = crate::auth::AuthConfig {
+        google_client_id: "test".into(),
+        google_client_secret: "test".into(),
+        google_redirect_uri: "https://example.invalid/api/auth/callback".into(),
+        jwt_secret: "test-secret-with-more-than-thirty-two-bytes".into(),
+        jwt_expiry_secs: 1800,
+        access_token_expiry_secs: 1800,
+        refresh_token_expiry_secs: 604800,
+        refresh_token_absolute_secs: 2592000,
+        frontend_base_url: "https://example.invalid".into(),
+        login_attempts_retention_days: 90,
+        max_login_attempts_per_ip: 10,
+    };
+    let mut headers = HeaderMap::new();
+    set_auth_cookies(&mut headers, "access", "refresh", &config);
+    let cookies: Vec<_> = headers
+        .get_all(SET_COOKIE)
+        .iter()
+        .map(|value| value.to_str().unwrap())
+        .collect();
+    let refresh = cookies
+        .iter()
+        .find(|value| value.starts_with("refresh_token="))
+        .unwrap();
+    assert!(refresh.contains("Path=/api/auth"));
+    assert!(refresh.contains("HttpOnly"));
+    assert!(refresh.contains("Secure"));
+    clear_auth_cookies(&mut headers);
+    assert!(headers.get_all(SET_COOKIE).iter().any(|value| {
+        value.to_str().unwrap().starts_with("refresh_token=")
+            && value.to_str().unwrap().contains("Path=/api/auth")
+    }));
+}

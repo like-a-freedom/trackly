@@ -8,6 +8,9 @@
  * @returns Object containing codeVerifier and codeChallenge
  */
 export async function generatePkce(): Promise<{ codeVerifier: string; codeChallenge: string }> {
+    if (!globalThis.crypto?.subtle) {
+        throw new Error('Sign in requires HTTPS. Open Trackly over HTTPS or localhost and try again.');
+    }
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
     const codeVerifier = btoa(String.fromCharCode(...array))

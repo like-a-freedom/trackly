@@ -85,8 +85,12 @@ describe('refresh', () => {
     });
 
     describe('logout', () => {
+        it('reports an unsuccessful server logout rather than claiming success', async () => {
+            (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ok:false,status:503});
+            await expect(logout('test-token')).rejects.toThrow('Retry');
+        });
         it('should send logout request with auth header', async () => {
-            (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
+            (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ok:true,status:204});
 
             await logout('test-token');
 
@@ -100,7 +104,7 @@ describe('refresh', () => {
         });
 
         it('should send logout request without auth header when token is null', async () => {
-            (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
+            (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ok:true,status:204});
 
             await logout(null);
 
@@ -113,12 +117,12 @@ describe('refresh', () => {
             );
         });
 
-        it('should not throw on network error', async () => {
+        it('reports unconfirmed logout on network error', async () => {
             (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
                 new Error('Network error')
             );
 
-            await expect(logout('test-token')).resolves.toBeUndefined();
+            await expect(logout('test-token')).rejects.toThrow('Retry');
         });
     });
 });

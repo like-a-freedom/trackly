@@ -36,10 +36,10 @@ export default defineConfig({
     host: "0.0.0.0",
     proxy: {
       // All API endpoints are prefixed with /api
-      "/api": "http://localhost:8080",
+      "/api": "http://127.0.0.1:8080",
       // Health and metrics endpoints (no /api prefix)
-      "/health": "http://localhost:8080",
-      "/metrics": "http://localhost:8080",
+      "/health": "http://127.0.0.1:8080",
+      "/metrics": "http://127.0.0.1:8080",
     },
   },
   build: {

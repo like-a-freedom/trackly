@@ -60,7 +60,21 @@ pub async fn upload(pool: &Arc<PgPool>, request: UploadRequest) -> Result<TrackU
     validate_file_size(request.file_bytes.len())?;
     let extension = validate_file_extension(&request.file_name)?;
 
-    let parsed_data = parse_and_check_duplicates(pool, &request.file_bytes, &extension).await?;
+    let parsed_data = match parse_and_check_duplicates(pool, &request.file_bytes, &extension).await
+    {
+        Err(AppError::DuplicateTrack(Some(id))) => {
+            let (public, owner): (bool, Option<Uuid>) =
+                sqlx::query_as("SELECT is_public, session_id FROM tracks WHERE id=$1")
+                    .bind(id)
+                    .fetch_one(&**pool)
+                    .await?;
+            return Err(AppError::DuplicateTrack(
+                (public || request.session_id.is_some() && request.session_id == owner)
+                    .then_some(id),
+            ));
+        }
+        result => result?,
+    };
 
     let track_id = Uuid::new_v4();
     let sanitized_name = derive_track_name(request.name.as_deref(), &request.file_name);
@@ -205,14 +219,14 @@ async fn parse_and_check_duplicates(
             );
 
             let dedup_db_start = Instant::now();
-            if db::track_exists(pool, &minimal.hash).await?.is_some() {
+            if let Some(id) = db::track_exists(pool, &minimal.hash).await? {
                 metrics::record_track_deduplicated("gpx_hash_match");
                 warn!(
                     hash = %minimal.hash,
                     endpoint = "upload_track_service",
                     "duplicate track detected by hash"
                 );
-                return Err(AppError::Conflict("duplicate track detected".into()));
+                return Err(AppError::DuplicateTrack(Some(id)));
             }
             let dedup_elapsed = dedup_db_start.elapsed().as_secs_f64();
             metrics::observe_db_query("track_exists", dedup_elapsed);
@@ -263,14 +277,14 @@ async fn parse_and_check_duplicates(
             }
 
             let dedup_db_start = Instant::now();
-            if db::track_exists(pool, &parsed.hash).await?.is_some() {
+            if let Some(id) = db::track_exists(pool, &parsed.hash).await? {
                 metrics::record_track_deduplicated("kml_hash_match");
                 warn!(
                     hash = %parsed.hash,
                     endpoint = "upload_track_service",
                     "duplicate track detected by hash"
                 );
-                return Err(AppError::Conflict("duplicate track detected".into()));
+                return Err(AppError::DuplicateTrack(Some(id)));
             }
             metrics::observe_db_query("track_exists", dedup_db_start.elapsed().as_secs_f64());
 

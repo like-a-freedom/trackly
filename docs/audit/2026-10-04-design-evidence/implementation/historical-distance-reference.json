@@ -1,0 +1,22 @@
+{
+  "source": "tracks/kml/Смоленское поозерье - разведка.kml",
+  "sha256": "72ad2cf94271a0d18f101db3c30b1b4543af7c193f292740562044b0dbea009b",
+  "independent_spherical_length_km": 128.44642078202975,
+  "segments": 1,
+  "points": 1948,
+  "historical_track_id": "049dbd57-8949-4b07-b505-0c1a45955840",
+  "readbacks": {
+    "detail": {
+      "length_km": 128.44642078202992,
+      "name": "Смоленское поозерье - разведка"
+    },
+    "/simplified": {
+      "length_km": 128.44642078202992,
+      "name": "Смоленское поозерье - разведка"
+    },
+    "list": {
+      "length_km": 128.44642078202992
+    }
+  },
+  "method": "3D unit vectors; cross/dot central angle, R=6371000m; sum within source segments"
+}

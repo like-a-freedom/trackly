@@ -29,7 +29,7 @@
     <div class="summary-row">
       <span>Loop</span>
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="loop-btn"
         title="Connect last point to first (straight)"
         @click="$emit('closeLoop')"
@@ -40,7 +40,7 @@
     <div class="summary-row">
       <span />
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="loop-same-way-btn"
         title="Return the same way (duplicate in reverse)"
         @click="$emit('closeLoopSameWay')"
@@ -51,7 +51,7 @@
     <div class="summary-row">
       <span />
       <button
-        class="btn-secondary btn-sm"
+        class="btn-secondary btn-sm ui-secondary"
         data-testid="loop-different-route-btn"
         title="Return via different route (auto-route)"
         @click="$emit('closeLoopDifferentRoute')"
@@ -107,20 +107,11 @@ const timeDisplay = computed(() => {
   display: flex;
   justify-content: space-between;
   padding: 3px 0;
-  color: #555;
+  color: var(--color-muted);
 }
 
 .summary-row strong {
-  color: #333;
-}
-
-.btn-secondary {
-  background: #eee;
-  color: #333;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
+  color: var(--color-ink);
 }
 
 .btn-sm {
