@@ -1,7 +1,7 @@
 <template>
   <div id="app-container">
     <template v-if="featureFlags.isLoaded">
-      <div v-if="featureFlags.error" role="alert" class="fixed inset-x-3 top-3 z-[5000] flex items-center gap-3 rounded border border-line bg-surface p-3 text-sm text-ink shadow-md">
+      <div v-if="featureFlags.error" role="alert" class="fixed inset-x-3 inset-bs-3 z-[5000] flex items-center gap-3 rounded border border-line bg-surface p-3 text-sm text-ink shadow-md">
         <span>{{ featureFlags.error }}</span>
         <button type="button" class="min-h-11 shrink-0 rounded bg-action px-3 font-semibold text-white disabled:opacity-50" :disabled="featureFlags.isLoading" @click="handleRetrySettings">{{ featureFlags.isLoading ? 'Retrying…' : 'Retry settings' }}</button>
       </div>
@@ -86,24 +86,24 @@ function getComponentKey(route) {
   /* Accent — one hue, three states. Replaces the four competing blues. */
   --accent: var(--color-action);
   --accent-hover: var(--color-action-hover);
-  --accent-active: #0d47a1;
+  --accent-active: var(--color-active);
 
   /* Floating control surface */
-  --control-bg: rgba(255, 255, 255, 0.95);
-  --control-bg-solid: #ffffff;
-  --control-border: rgba(0, 0, 0, 0.08);
-  --control-border-strong: rgba(0, 0, 0, 0.12);
+  --control-bg: oklch(100% 0 none / 0.95);
+  --control-bg-solid: var(--color-surface);
+  --control-border: oklch(0% 0 none / 0.08);
+  --control-border-strong: oklch(0% 0 none / 0.12);
   --control-icon: var(--color-muted);
-  --control-icon-hover: #333;
-  --control-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --control-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --control-icon-hover: oklch(32.1% 0 none);
+  --control-shadow: 0 2px 8px oklch(0% 0 none / 0.08);
+  --control-shadow-hover: 0 4px 12px oklch(0% 0 none / 0.12);
   --control-radius: 8px;
 
   /* Focus ring. The control plane is white cards floating on map tiles, so a
      dark ring is the one colour that reads on both. box-shadow is not usable
      here: every control declares its own box-shadow in scoped styles and
      those declarations win over a global rule. */
-  --focus-ring: #10151c;
+  --focus-ring: var(--color-focus-ring);
   --focus-ring-offset: 2px;
 
   /* Type scale. Five steps on a 1.25 modular ratio (1.2 base, floored at
@@ -156,17 +156,21 @@ function getComponentKey(route) {
   }
 }
 
-/* Nothing on a map surface needs to animate for a user who has asked the
-   system not to move things: the transitions here are decoration and
-   affordance, never the communication of state. */
+/* Reduced motion is honored by authoring: every transition in the app is
+   opt-in under `prefers-reduced-motion: no-preference`, so none of ours
+   needs killing here. This net only neutralizes motion authored by
+   third-party libraries we do not restyle (Leaflet pan/zoom/popups, VueForm
+   multiselect and slider), which would otherwise keep moving. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  .leaflet-container *,
+  .leaflet-popup *,
+  .multiselect,
+  .multiselect *,
+  .slider,
+  .slider * {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
 
@@ -187,6 +191,7 @@ body,
 
 #app {
   height: 100vh;
+  height: 100dvh; /* dynamic viewport: nothing clipped behind mobile chrome */
   width: 100vw;
 }
 
@@ -198,7 +203,7 @@ body,
 /* Page transition styles for smooth route changes */
 .page-enter-active,
 .page-leave-active {
-  transition: opacity 0.15s ease-out;
+  transition: opacity 0.15s var(--ease-out, ease-out);
 }
 
 .page-enter-from {
@@ -236,19 +241,24 @@ body,
   align-items: center;
   justify-content: center;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
 }
 
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #e5e7eb;
-  /* Literal rather than var(--accent): this rule sits outside :root, and
-     keeping the one literal next to its token definition makes the pairing
-     easy to audit. Both are #1976d2. */
-  border-top-color: #1976d2;
+  border: 3px solid var(--color-line);
+  border-top-color: var(--color-action);
   border-radius: 50%;
-  animation: spin 0.6s linear infinite;
+}
+
+/* Spinners are the one animation that often survives reduced motion, but
+   the preference asks for calm: reduced-motion users get a static ring. */
+@media (prefers-reduced-motion: no-preference) {
+  .loading-spinner {
+    animation: spin 0.6s linear infinite;
+  }
 }
 
 @keyframes spin {

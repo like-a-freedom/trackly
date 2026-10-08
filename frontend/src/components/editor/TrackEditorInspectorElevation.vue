@@ -52,7 +52,7 @@ defineEmits(["chart-point-hover", "chart-point-leave", "chart-point-click"]);
 <style scoped>
 .sidebar-section {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .section-header {
@@ -75,6 +75,6 @@ defineEmits(["chart-point-hover", "chart-point-leave", "chart-point-click"]);
 }
 
 .elevation-status.error {
-  color: #c62828;
+  color: var(--color-danger);
 }
 </style>

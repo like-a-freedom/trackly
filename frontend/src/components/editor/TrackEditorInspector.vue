@@ -144,9 +144,9 @@ function formatDistance(km) {
 .inspector-card {
   box-sizing: border-box;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  background: oklch(100% 0 none / 0.96);
+  border: 1px solid oklch(92.9% 0.0126 255.5 / 0.9);
+  box-shadow: 0 12px 32px oklch(20.8% 0.0398 265.8 / 0.08);
   padding: 16px;
 }
 
@@ -155,7 +155,7 @@ function formatDistance(km) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-block-end: 12px;
 }
 
 .inspector-eyebrow,
@@ -163,7 +163,7 @@ function formatDistance(km) {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
+  color: oklch(55.4% 0.0407 257.4);
 }
 
 .inspector-mode {
@@ -171,8 +171,8 @@ function formatDistance(km) {
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: oklch(97% 0.0142 254.6);
+  color: oklch(48.8% 0.2172 264.4);
   font-size: 0.82rem;
   font-weight: 600;
 }
@@ -191,24 +191,24 @@ function formatDistance(km) {
 .inspector-banner strong,
 .inspector-panel strong {
   display: block;
-  margin-bottom: 4px;
-  color: #0f172a;
+  margin-block-end: 4px;
+  color: oklch(20.8% 0.0398 265.8);
 }
 
 .inspector-banner p,
 .inspector-panel p {
   margin: 0;
-  color: #475569;
+  color: oklch(44.6% 0.0374 257.3);
   font-size: 0.9rem;
 }
 
 .inspector-banner--accent {
-  background: #eff6ff;
+  background: oklch(97% 0.0142 254.6);
 }
 
 .inspector-banner--neutral,
 .inspector-panel {
-  background: #f8fafc;
+  background: oklch(98.4% 0.0034 none);
 }
 
 @media (max-width: 1180px) {

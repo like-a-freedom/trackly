@@ -1103,7 +1103,7 @@ defineExpose({
   position: relative;
   height: 100vh;
   width: 100vw;
-  overflow: hidden;
+  overflow: clip;
   /* Optimize rendering performance */
   will-change: auto;
   transform: translateZ(0); /* Force hardware acceleration */
@@ -1115,7 +1115,7 @@ defineExpose({
   align-items: center;
   height: 100vh;
   width: 100vw;
-  background: #f5f5f5;
+  background: oklch(97% 0 none);
 }
 
 .loading-spinner {
@@ -1130,34 +1130,40 @@ defineExpose({
   align-items: center;
   height: 100vh;
   width: 100vw;
-  background: #f5f5f5;
+  background: oklch(97% 0 none);
   text-align: center;
   padding: 20px;
 }
 
 .error-message h2 {
   color: var(--color-ink);
-  margin-bottom: 10px;
+  margin-block-end: 10px;
 }
 
 .error-message p {
   color: var(--color-muted);
-  margin-bottom: 20px;
+  margin-block-end: 20px;
 }
 
 .btn-home {
   background: var(--accent-hover);
-  color: white;
+  color: oklch(100% 0 none);
   border: none;
   padding: 12px 24px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 16px;
-  transition: background 0.2s;
+  transition: background-color 0.2s var(--ease-out, ease-out);
 }
 
-.btn-home:hover {
-  background: var(--accent);
+.btn-home:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-home:hover {
+    background: var(--accent);
+  }
 }
 
 @media(min-width:901px) {

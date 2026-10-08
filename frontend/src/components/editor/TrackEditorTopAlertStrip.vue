@@ -84,43 +84,43 @@ defineEmits(["restoreDraft", "deleteDraft"]);
   gap: 12px;
   padding: 10px 14px;
   border-radius: 16px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  border: 1px solid oklch(92.9% 0.0126 255.5 / 0.9);
+  background: oklch(100% 0 none / 0.96);
+  box-shadow: 0 8px 20px oklch(20.8% 0.0398 265.8 / 0.06);
   backdrop-filter: blur(14px);
 }
 
 .top-alert strong {
   display: block;
-  margin-bottom: 2px;
-  color: #0f172a;
+  margin-block-end: 2px;
+  color: oklch(20.8% 0.0398 265.8);
 }
 
 .top-alert p {
   margin: 0;
-  color: #475569;
+  color: oklch(44.6% 0.0374 257.3);
   font-size: 0.86rem;
   line-height: 1.35;
 }
 
 .top-alert--draft {
-  border-color: #fdba74;
-  background: #fff7ed;
+  border-color: oklch(83.7% 0.1165 66.3);
+  background: oklch(98% 0.0158 73.7);
 }
 
 .top-alert--error {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-color: oklch(80.8% 0.1035 19.6);
+  background: oklch(97.1% 0.0129 17.4);
 }
 
 .top-alert--info {
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: oklch(88.2% 0.0571 254.1);
+  background: oklch(97% 0.0142 254.6);
 }
 
 .top-alert--info strong {
   flex: 0 0 auto;
-  margin-bottom: 0;
+  margin-block-end: 0;
 }
 
 .top-alert--info p {
@@ -135,18 +135,22 @@ defineEmits(["restoreDraft", "deleteDraft"]);
 }
 
 .top-alert-btn {
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  border: 1px solid oklch(86.9% 0.0198 252.9 / 0.9);
   border-radius: 12px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--color-surface);
+  color: oklch(20.8% 0.0398 265.8);
   padding: 7px 11px;
   cursor: pointer;
 }
 
+.top-alert-btn:active {
+  transform: scale(0.97);
+}
+
 .top-alert-btn--primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
+  background: oklch(54.6% 0.2152 262.9);
+  border-color: oklch(54.6% 0.2152 262.9);
+  color: var(--color-surface);
 }
 
 @media (max-width: 768px) {
@@ -156,7 +160,7 @@ defineEmits(["restoreDraft", "deleteDraft"]);
   }
 
   .top-alert--info strong {
-    margin-bottom: 2px;
+    margin-block-end: 2px;
   }
 }
 

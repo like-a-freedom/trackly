@@ -205,11 +205,12 @@ const tabs = [
 </script>
 
 <style scoped>
-.panel-tabs { display:flex; flex-shrink:0; border-bottom:1px solid var(--color-line); }
-.panel-tab { flex:1; min-height:44px; background:transparent; border:0; border-bottom:3px solid transparent; color:var(--color-muted); cursor:pointer; }
-.panel-tab--active { color:var(--color-action); border-bottom-color:var(--color-action); font-weight:600; }
-.panel-content { flex:1; min-height:0; overflow:hidden; }
+.panel-tabs { display:flex; flex-shrink:0; border-block-end:1px solid var(--color-line); }
+.panel-tab { flex:1; min-height:44px; background:transparent; border:0; border-block-end:3px solid transparent; color:var(--color-muted); cursor:pointer; }
+.panel-tab:active { background:oklch(97% 0 none); }
+.panel-tab--active { color:var(--color-action); border-block-end-color:var(--color-action); font-weight:600; }
+.panel-content { flex:1; min-height:0; overflow:clip; }
 .panel-tab-body { height:100%; overflow:auto; padding:16px; box-sizing:border-box; }
-.panel-inner-divider { border-top:1px solid var(--color-line); margin:20px 0; }
-.panel-empty-tip { padding:12px; margin-bottom:16px; background:#eff6ff; color:#194aa5; line-height:1.5; }
+.panel-inner-divider { border-block-start:1px solid var(--color-line); margin:20px 0; }
+.panel-empty-tip { padding:12px; margin-block-end:16px; background:oklch(97% 0.0142 254.6); color:oklch(43.4% 0.1563 261.4); line-height:1.5; }
 </style>

@@ -290,9 +290,9 @@ function handleExport(format) {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--color-surface);
+  border-block-end: 1px solid oklch(90.7% 0 none);
+  box-shadow: 0 1px 3px oklch(0% 0 none / 0.08);
   z-index: 1000;
   flex-wrap: wrap;
 }
@@ -300,16 +300,16 @@ function handleExport(format) {
 .toolbar-select {
   display: flex;
   align-items: center;
-  margin-left: 8px;
+  margin-inline-start: 8px;
 }
 
 .toolbar-select-input {
-  border: 1px solid #e5e7eb;
+  border: 1px solid oklch(92.8% 0.0058 264.5);
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 12px;
-  color: #111827;
-  background: #fff;
+  color: oklch(21% 0.0318 264.7);
+  background: var(--color-surface);
 }
 
 .toolbar-group {
@@ -323,25 +323,30 @@ function handleExport(format) {
   align-items: center;
   gap: 4px;
   padding: 6px 10px;
-  border: 1px solid #ddd;
+  border: 1px solid oklch(89.8% 0 none);
   border-radius: 4px;
-  background: #fafafa;
+  background: oklch(98.5% 0 none);
   cursor: pointer;
   font-size: 13px;
   color: var(--color-ink);
-  transition: all 0.15s;
   white-space: nowrap;
 }
 
-.toolbar-btn:hover:not(:disabled) {
-  background: #e8f0fe;
-  border-color: #1976d2;
+@media (hover: hover) and (pointer: fine) {
+  .toolbar-btn:hover:not(:disabled) {
+    background: oklch(95.3% 0.0207 261.8);
+    border-color: oklch(56.5% 0.1633 253.3);
+  }
+}
+
+.toolbar-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .toolbar-btn.active {
-  background: #1976d2;
-  color: #fff;
-  border-color: #1565c0;
+  background: oklch(56.5% 0.1633 253.3);
+  color: var(--color-surface);
+  border-color: oklch(51.3% 0.1603 255.7);
 }
 
 .toolbar-btn:disabled {
@@ -361,7 +366,7 @@ function handleExport(format) {
 .toolbar-divider {
   width: 1px;
   height: 24px;
-  background: #e0e0e0;
+  background: oklch(90.7% 0 none);
   margin: 0 4px;
 }
 
@@ -392,19 +397,21 @@ function handleExport(format) {
 }
 
 .manual-warning {
-  color: #c62828;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
 .save-btn {
-  background: #1976d2;
-  color: #fff;
-  border-color: #1565c0;
+  background: oklch(56.5% 0.1633 253.3);
+  color: var(--color-surface);
+  border-color: oklch(51.3% 0.1603 255.7);
   font-weight: 500;
 }
 
-.save-btn:hover:not(:disabled) {
-  background: #1565c0;
+@media (hover: hover) and (pointer: fine) {
+  .save-btn:hover:not(:disabled) {
+    background: oklch(51.3% 0.1603 255.7);
+  }
 }
 
 .toggle-label {
@@ -414,11 +421,11 @@ function handleExport(format) {
 .toolbar-status {
   font-size: 11px;
   color: var(--color-muted);
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 
 .toolbar-status.error {
-  color: #c62828;
+  color: var(--color-danger);
 }
 
 .export-group {
@@ -427,13 +434,13 @@ function handleExport(format) {
 
 .export-dropdown {
   position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 4px;
-  background: #fff;
-  border: 1px solid #ddd;
+  inset-block-start: 100%;
+  inset-inline-end: 0;
+  margin-block-start: 4px;
+  background: var(--color-surface);
+  border: 1px solid oklch(89.8% 0 none);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px oklch(0% 0 none / 0.12);
   z-index: 100;
   min-width: 140px;
   padding: 4px 0;
@@ -445,14 +452,20 @@ function handleExport(format) {
   padding: 8px 14px;
   border: none;
   background: transparent;
-  text-align: left;
+  text-align: start;
   font-size: 13px;
   cursor: pointer;
   color: var(--color-ink);
 }
 
-.export-item:hover {
-  background: #f0f0f0;
+.export-item:active {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .export-item:hover {
+    background: oklch(95.5% 0 none);
+  }
 }
 
 @media (max-width: 640px) {
@@ -484,6 +497,24 @@ function handleExport(format) {
 
   .toolbar-toggle {
     font-size: 13px;
+  }
+}
+
+/* Transitions are opt-in: color and press motion only run when the visitor
+   has not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .toolbar-btn {
+    transition:
+      background-color 0.15s var(--ease-out, ease-out),
+      border-color 0.15s var(--ease-out, ease-out),
+      color 0.15s var(--ease-out, ease-out),
+      transform 0.15s var(--ease-out, ease-out);
+  }
+
+  .export-item {
+    transition:
+      background-color 0.15s var(--ease-out, ease-out),
+      transform 0.15s var(--ease-out, ease-out);
   }
 }
 </style>

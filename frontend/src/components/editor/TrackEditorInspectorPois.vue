@@ -176,7 +176,7 @@ watch(
 <style scoped>
 .sidebar-section {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .section-header {
@@ -204,11 +204,13 @@ watch(
   gap: 6px;
   padding: 5px 8px;
   border-radius: 4px;
-  transition: background 0.15s;
+  transition: background-color 0.15s var(--ease-out, ease-out);
 }
 
-.poi-item:hover {
-  background: #f5f5f5;
+@media (hover: hover) and (pointer: fine) {
+  .poi-item:hover {
+    background: oklch(97% 0 none);
+  }
 }
 
 .poi-icon {
@@ -219,7 +221,7 @@ watch(
 .poi-info {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 
@@ -242,7 +244,7 @@ watch(
 }
 
 .poi-warning {
-  color: #d32f2f;
+  color: oklch(56.8% 0.2002 26.4);
   font-weight: 600;
 }
 
@@ -263,13 +265,19 @@ watch(
   color: var(--color-muted);
 }
 
-.btn-icon-sm:hover {
-  background: #e0e0e0;
+.btn-icon-sm:active {
+  transform: scale(0.97);
 }
 
-.btn-icon-sm.danger:hover {
-  background: #fce4ec;
-  color: #c62828;
+@media (hover: hover) and (pointer: fine) {
+  .btn-icon-sm:hover {
+    background: oklch(90.7% 0 none);
+  }
+
+  .btn-icon-sm.danger:hover {
+    background: oklch(94.1% 0.0282 355.4);
+    color: var(--color-danger);
+  }
 }
 
 .btn-sm {

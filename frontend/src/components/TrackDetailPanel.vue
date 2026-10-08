@@ -2396,14 +2396,14 @@ defineExpose({
 <style scoped>
 .track-detail-flyout {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  inset-block-end: 0;
   z-index: 1001;
-  background: rgba(255, 255, 255, 0.98);
-  border-top-left-radius: 18px;
-  border-top-right-radius: 18px;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+  background: oklch(100% 0 none / 0.98);
+  border-start-start-radius: 18px;
+  border-start-end-radius: 18px;
+  box-shadow: 0 -4px 24px oklch(0% 0 none / 0.18);
   padding: 24px 0 0 0;
   width: 100vw;
   min-width: 100vw;
@@ -2415,7 +2415,6 @@ defineExpose({
   flex-direction: column;
   color: var(--color-ink);
   box-sizing: border-box;
-  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
   /* Prevent touch actions from propagating to map */
   touch-action: none;
 }
@@ -2440,7 +2439,6 @@ defineExpose({
   box-sizing: border-box;
   overflow-y: auto;
   flex: 1;
-  scroll-behavior: smooth;
   /* Allow vertical scrolling only within content */
   touch-action: pan-y;
   /* Enable momentum scrolling on iOS */
@@ -2449,7 +2447,7 @@ defineExpose({
 
 .track-detail-flyout.collapsed .flyout-content {
   padding: 0;
-  overflow: hidden;
+  overflow: clip;
   max-height: 0;
   min-height: 0;
   height: 0;
@@ -2471,39 +2469,42 @@ defineExpose({
 }
 
 .flyout-content::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: oklch(0% 0 none / 0.2);
   border-radius: 3px;
 }
 
-.flyout-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .flyout-content::-webkit-scrollbar-thumb:hover {
+    background: oklch(0% 0 none / 0.3);
+  }
 }
 
 .panel-controls-tab {
   position: fixed;
-  bottom: 16px;
-  right: 16px;
+  inset-block-end: 16px;
+  inset-inline-end: 16px;
   z-index: 1300; /* Same as TrackFilterControl */
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--control-bg);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--control-border);
+  box-shadow: var(--control-shadow);
   display: flex;
   align-items: center;
   justify-content: center;
   /* Force layer creation for better rendering */
   transform: translateZ(0);
   will-change: transform;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.panel-controls-tab:hover {
-  /* Keep subtle transform but avoid highlighting the whole tab area
-     — highlight will be applied to the inner button for consistency */
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .panel-controls-tab:hover {
+    /* Keep subtle transform but avoid highlighting the whole tab area
+       — highlight will be applied to the inner button for consistency */
+    transform: translateY(-1px);
+  }
 }
 
 .collapse-toggle-btn {
@@ -2517,7 +2518,6 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
   box-sizing: border-box;
   min-width: 28px;
@@ -2531,16 +2531,6 @@ defineExpose({
   padding: 6px;
 }
 
-.collapse-toggle-btn:hover {
-  /* Use a subtle neutral hover similar to other icon buttons */
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--color-ink);
-}
-
-.collapse-toggle-btn:active {
-  transform: scale(0.95);
-}
-
 .close-button {
   background: none;
   border: none;
@@ -2548,7 +2538,6 @@ defineExpose({
   color: var(--color-danger);
   padding: 6px;
   border-radius: 6px;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2557,17 +2546,19 @@ defineExpose({
   box-sizing: border-box;
 }
 
-.close-button:hover {
-  background: rgba(220, 38, 38, 0.1);
-  color: var(--color-danger);
-  transform: scale(1.05);
-}
+@media (hover: hover) and (pointer: fine) {
+  .close-button:hover {
+    background: color-mix(in oklch, var(--color-danger) 10%, transparent);
+    color: var(--color-danger);
+    transform: scale(1.05);
+  }
 
-.collapse-toggle-btn:hover {
-  /* Neutral, subtle highlight to match other icon buttons */
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--color-ink);
-  transform: scale(1.05);
+  .collapse-toggle-btn:hover {
+    /* Neutral, subtle highlight to match other icon buttons */
+    background: oklch(0% 0 none / 0.06);
+    color: var(--color-ink);
+    transform: scale(1.05);
+  }
 }
 
 .collapse-toggle-btn:active {
@@ -2580,7 +2571,7 @@ defineExpose({
 
 /* Track Header */
 .track-header {
-  margin-bottom: 20px;
+  margin-block-end: 20px;
   position: relative;
 }
 
@@ -2605,9 +2596,9 @@ defineExpose({
   align-self: stretch;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.08),
-    rgba(0, 0, 0, 0.15),
-    rgba(0, 0, 0, 0.08)
+    oklch(0% 0 none / 0.08),
+    oklch(0% 0 none / 0.15),
+    oklch(0% 0 none / 0.08)
   );
   border-radius: 1px;
 }
@@ -2619,7 +2610,6 @@ defineExpose({
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2629,10 +2619,16 @@ defineExpose({
   gap: 6px;
 }
 
-.share-track-btn:hover {
-  background: rgba(33, 150, 243, 0.1);
-  color: var(--accent);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .share-track-btn:hover {
+    background: color-mix(in oklch, var(--color-action) 10%, transparent);
+    color: var(--accent);
+    transform: scale(1.05);
+  }
+}
+
+.share-track-btn:active {
+  transform: scale(0.95);
 }
 
 .share-track-btn:disabled {
@@ -2648,7 +2644,6 @@ defineExpose({
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2656,10 +2651,16 @@ defineExpose({
   height: 28px;
 }
 
-.export-gpx-btn:hover {
-  background: rgba(33, 150, 243, 0.1);
-  color: var(--accent);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .export-gpx-btn:hover {
+    background: color-mix(in oklch, var(--color-action) 10%, transparent);
+    color: var(--accent);
+    transform: scale(1.05);
+  }
+}
+
+.export-gpx-btn:active {
+  transform: scale(0.95);
 }
 
 .export-gpx-btn:disabled {
@@ -2675,7 +2676,6 @@ defineExpose({
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2683,10 +2683,12 @@ defineExpose({
   height: 28px;
 }
 
-.delete-track-btn:hover {
-  background: rgba(220, 38, 38, 0.1);
-  color: var(--color-danger);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .delete-track-btn:hover {
+    background: color-mix(in oklch, var(--color-danger) 10%, transparent);
+    color: var(--color-danger);
+    transform: scale(1.05);
+  }
 }
 
 .edit-track-geometry-btn {
@@ -2696,7 +2698,6 @@ defineExpose({
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2704,10 +2705,16 @@ defineExpose({
   height: 28px;
 }
 
-.edit-track-geometry-btn:hover {
-  background: rgba(25, 118, 210, 0.1);
-  color: #1565c0;
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .edit-track-geometry-btn:hover {
+    background: color-mix(in oklch, var(--color-action) 10%, transparent);
+    color: var(--color-action);
+    transform: scale(1.05);
+  }
+}
+
+.edit-track-geometry-btn:active {
+  transform: scale(0.95);
 }
 
 .delete-track-btn:active {
@@ -2734,7 +2741,7 @@ defineExpose({
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-block-end: 12px;
 }
 
 .title-with-edit {
@@ -2757,8 +2764,10 @@ defineExpose({
   gap: 8px;
 }
 
-.track-name-block.editable:hover .edit-name-btn {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .track-name-block.editable:hover .edit-name-btn {
+    opacity: 1;
+  }
 }
 
 .edit-name-btn {
@@ -2769,7 +2778,6 @@ defineExpose({
   padding: 6px;
   border-radius: 6px;
   opacity: 0;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2777,20 +2785,26 @@ defineExpose({
   height: 28px;
 }
 
-.edit-name-btn:hover {
-  background: #f0f0f0;
-  color: var(--accent-hover);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .edit-name-btn:hover {
+    background: oklch(95.5% 0 none);
+    color: var(--accent-hover);
+    transform: scale(1.05);
+  }
+}
+
+.edit-name-btn:active {
+  transform: scale(0.95);
 }
 
 /* Name Edit Mode */
 .name-edit-block {
-  background: #f8f9fa;
+  background: oklch(98.2% 0.0017 none);
   border-radius: 12px;
   padding: 20px;
   margin: 0 0 18px 0;
-  border: 2px solid #e3f2fd;
-  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.08);
+  border: 2px solid oklch(95.3% 0.0218 239.4);
+  box-shadow: 0 4px 16px color-mix(in oklch, var(--color-action) 8%, transparent);
 }
 
 .edit-name-input {
@@ -2798,14 +2812,16 @@ defineExpose({
   font-size: 1.6em;
   font-weight: 600;
   color: var(--color-ink);
-  background: #fff;
-  border: 2px solid #ddd;
+  background: var(--color-surface);
+  border: 2px solid oklch(89.8% 0 none);
   border-radius: 8px;
   padding: 12px 16px;
-  margin-bottom: 16px;
-  transition: all 0.2s ease;
+  margin-block-end: 16px;
   font-family: inherit;
   box-sizing: border-box;
+  transition:
+    border-color 0.2s var(--ease-out, ease-out),
+    box-shadow 0.2s var(--ease-out, ease-out);
 }
 
 .edit-name-input:focus-visible {
@@ -2815,13 +2831,13 @@ defineExpose({
   outline-offset: -1px;
   border-color: var(--accent);
   background: var(--control-bg-solid);
-  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-action) 18%, transparent);
 }
 
 .edit-name-actions {
   display: flex;
   gap: 12px;
-  margin-bottom: 0;
+  margin-block-end: 0;
 }
 
 .edit-name-actions button {
@@ -2831,7 +2847,6 @@ defineExpose({
   font-size: 0.95em;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2840,13 +2855,13 @@ defineExpose({
 }
 
 .edit-name-error {
-  color: #d32f2f;
+  color: oklch(56.8% 0.2002 26.4);
   font-size: 0.9em;
-  margin-top: 8px;
+  margin-block-start: 8px;
   padding: 8px 12px;
-  background: #ffebee;
+  background: oklch(95.7% 0.0221 7.2);
   border-radius: 6px;
-  border: 1px solid #d32f2f;
+  border: 1px solid oklch(56.8% 0.2002 26.4);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2854,12 +2869,11 @@ defineExpose({
 
 /* Track Description */
 .track-description-block {
-  background: #f8f9fa;
+  background: oklch(98.2% 0.0017 none);
   border-radius: 12px;
   padding: 16px 20px;
   margin: 0 0 18px 0;
   position: relative;
-  transition: all 0.2s ease;
   border: 2px solid transparent;
 }
 
@@ -2867,29 +2881,33 @@ defineExpose({
   cursor: pointer;
 }
 
-.track-description-block.editable:hover {
-  background: #f0f4f8;
-  border-color: #e3f2fd;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 12px rgba(33, 150, 243, 0.08);
+@media (hover: hover) and (pointer: fine) {
+  .track-description-block.editable:hover {
+    background: oklch(96.5% 0.0069 247.9);
+    border-color: oklch(95.3% 0.0218 239.4);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 12px color-mix(in oklch, var(--color-action) 8%, transparent);
+  }
 }
 
 .track-description-block.empty {
-  border: 2px dashed #d0d0d0;
-  background: #fafafa;
+  border: 2px dashed oklch(85.8% 0 none);
+  background: oklch(98.5% 0 none);
 }
 
-.track-description-block.empty:hover {
-  border-color: var(--accent-hover);
-  background: #f8fbff;
+@media (hover: hover) and (pointer: fine) {
+  .track-description-block.empty:hover {
+    border-color: var(--accent-hover);
+    background: oklch(98.7% 0.0062 255.5);
+  }
 }
 
 .description-content {
-  padding-right: 50px; /* Space for edit button */
+  padding-inline-end: 50px; /* Space for edit button */
 }
 
 .track-description-text {
-  color: #444;
+  color: oklch(38.7% 0 none);
   font-size: 1.08em;
   line-height: 1.6;
   margin: 0;
@@ -2907,17 +2925,16 @@ defineExpose({
 
 .edit-description-btn {
   position: absolute;
-  top: 50%;
-  right: 12px;
+  inset-block-start: 50%;
+  inset-inline-end: 12px;
   transform: translateY(-50%);
-  background: rgba(33, 150, 243, 0.1);
-  color: #1565c0;
+  background: color-mix(in oklch, var(--color-action) 10%, transparent);
+  color: var(--color-action);
   border: none;
   border-radius: 6px;
   padding: 6px;
   font-size: 0;
   cursor: pointer;
-  transition: all 0.2s ease;
   width: 28px;
   height: 28px;
   display: flex;
@@ -2926,19 +2943,25 @@ defineExpose({
   opacity: 0.7;
 }
 
-.edit-description-btn:hover {
-  background: rgba(33, 150, 243, 0.2);
-  opacity: 1;
-  transform: translateY(-50%) scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .edit-description-btn:hover {
+    background: color-mix(in oklch, var(--color-action) 20%, transparent);
+    opacity: 1;
+    transform: translateY(-50%) scale(1.05);
+  }
+}
+
+.edit-description-btn:active {
+  transform: translateY(-50%) scale(0.95);
 }
 
 .description-edit-block {
-  background: #f8f9fa;
+  background: oklch(98.2% 0.0017 none);
   border-radius: 12px;
   padding: 20px;
   margin: 0 0 18px 0;
-  border: 2px solid #e3f2fd;
-  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.08);
+  border: 2px solid oklch(95.3% 0.0218 239.4);
+  box-shadow: 0 4px 16px color-mix(in oklch, var(--color-action) 8%, transparent);
 }
 
 .edit-description-input {
@@ -2946,18 +2969,20 @@ defineExpose({
   min-height: 80px;
   max-height: 300px;
   border-radius: 8px;
-  border: 2px solid #ddd;
+  border: 2px solid oklch(89.8% 0 none);
   padding: 12px 16px;
   font-size: 1.08em;
-  margin-bottom: 16px;
+  margin-block-end: 16px;
   resize: none;
-  background: #fff;
+  background: var(--color-surface);
   color: var(--color-ink);
   font-family: inherit;
   box-sizing: border-box;
-  transition: all 0.2s ease;
   line-height: 1.5;
   overflow-y: auto;
+  transition:
+    border-color 0.2s var(--ease-out, ease-out),
+    box-shadow 0.2s var(--ease-out, ease-out);
 }
 
 .edit-description-input:focus-visible {
@@ -2965,7 +2990,7 @@ defineExpose({
   outline-offset: -1px;
   border-color: var(--accent);
   background: var(--control-bg-solid);
-  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-action) 18%, transparent);
 }
 
 .edit-description-input::placeholder {
@@ -2976,7 +3001,7 @@ defineExpose({
 .edit-description-actions {
   display: flex;
   gap: 12px;
-  margin-bottom: 0;
+  margin-block-end: 0;
 }
 
 .edit-description-actions button {
@@ -2986,7 +3011,6 @@ defineExpose({
   font-size: 0.95em;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2996,49 +3020,61 @@ defineExpose({
 
 .save-btn {
   background: var(--accent-hover);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+  color: var(--color-surface);
+  box-shadow: 0 2px 8px color-mix(in oklch, var(--color-action) 30%, transparent);
+}
+
+.save-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .save-btn:disabled {
-  background: #b3d6f7;
-  color: #eee;
+  background: oklch(86.2% 0.0592 247);
+  color: oklch(94.9% 0 none);
   cursor: not-allowed;
   box-shadow: none;
 }
 
-.save-btn:not(:disabled):hover {
-  background: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+@media (hover: hover) and (pointer: fine) {
+  .save-btn:not(:disabled):hover {
+    background: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in oklch, var(--color-action) 40%, transparent);
+  }
 }
 
 .cancel-btn {
-  background: #f5f5f5;
+  background: oklch(97% 0 none);
   color: var(--color-muted);
-  border: 2px solid #ddd;
+  border: 2px solid oklch(89.8% 0 none);
+}
+
+.cancel-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .cancel-btn:disabled {
-  background: #f9f9f9;
-  color: #ccc;
+  background: oklch(98.2% 0 none);
+  color: oklch(84.5% 0 none);
   cursor: not-allowed;
 }
 
-.cancel-btn:not(:disabled):hover {
-  background: #eeeeee;
-  border-color: #bbb;
-  color: #444;
+@media (hover: hover) and (pointer: fine) {
+  .cancel-btn:not(:disabled):hover {
+    background: oklch(94.9% 0 none);
+    border-color: oklch(79.2% 0 none);
+    color: oklch(38.7% 0 none);
+  }
 }
 
 .edit-description-error {
-  color: #d32f2f;
+  color: oklch(56.8% 0.2002 26.4);
   font-size: 0.9em;
-  margin-top: 8px;
+  margin-block-start: 8px;
   padding: 8px 12px;
-  background: #ffebee;
+  background: oklch(95.7% 0.0221 7.2);
   border-radius: 6px;
-  border: 1px solid #d32f2f;
+  border: 1px solid oklch(56.8% 0.2002 26.4);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3046,13 +3082,13 @@ defineExpose({
 
 /* Stats Sections */
 :deep(.stats-section) {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #eee;
+  margin-block-end: 24px;
+  padding-block-end: 20px;
+  border-block-end: 1px solid oklch(94.9% 0 none);
 }
 
 :deep(.stats-section:last-of-type) {
-  border-bottom: none;
+  border-block-end: none;
 }
 
 :deep(.stats-section h3) {
@@ -3066,7 +3102,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 12px;
+  margin-block-end: 12px;
 }
 
 :deep(.section-header-with-tooltip h3) {
@@ -3086,17 +3122,22 @@ defineExpose({
   color: var(--color-muted);
   cursor: help;
   opacity: 0.7;
-  transition: all 0.2s ease;
+  transition:
+    opacity 0.2s var(--ease-out, ease-out),
+    color 0.2s var(--ease-out, ease-out),
+    background-color 0.2s var(--ease-out, ease-out);
   border-radius: 50%;
   width: 18px;
   height: 18px;
   position: relative;
 }
 
-:deep(.info-icon:hover) {
-  opacity: 1;
-  color: var(--accent-hover);
-  background-color: rgba(33, 150, 243, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  :deep(.info-icon:hover) {
+    opacity: 1;
+    color: var(--accent-hover);
+    background-color: color-mix(in oklch, var(--color-action) 10%, transparent);
+  }
 }
 
 /* Ensure tooltips work correctly for custom tooltip attr */
@@ -3110,10 +3151,10 @@ defineExpose({
   position: absolute;
   /* Anchored below the icon rather than above it: these hints sit inside a
      panel header where "above" would cover the track name and description. */
-  top: calc(100% + 8px);
-  left: 0;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-start: 0;
   transform: none;
-  background: #fff;
+  background: var(--color-surface);
   color: var(--color-ink);
   padding: 8px 12px;
   border-radius: 6px;
@@ -3130,12 +3171,20 @@ defineExpose({
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e0e0e0;
+  transition:
+    opacity 0.2s var(--ease-out, ease-out),
+    visibility 0.2s var(--ease-out, ease-out);
+  box-shadow: 0 2px 12px oklch(0% 0 none / 0.15);
+  border: 1px solid oklch(90.7% 0 none);
 }
 
-:deep(.info-icon:hover::after),
+@media (hover: hover) and (pointer: fine) {
+  :deep(.info-icon:hover::after) {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
 :deep(.info-icon:focus-visible::after) {
   opacity: 1;
   visibility: visible;
@@ -3146,19 +3195,27 @@ defineExpose({
 :deep(.info-icon::before) {
   content: "";
   position: absolute;
-  left: 8px;
-  top: calc(100% + 2px);
+  inset-inline-start: 8px;
+  inset-block-start: calc(100% + 2px);
   border: 6px solid transparent;
-  border-bottom-color: #fff;
+  border-block-end-color: var(--color-surface);
   z-index: 10001;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+  transition:
+    opacity 0.2s var(--ease-out, ease-out),
+    visibility 0.2s var(--ease-out, ease-out);
+  filter: drop-shadow(0 1px 1px oklch(0% 0 none / 0.1));
 }
 
-:deep(.info-icon:hover::before),
+@media (hover: hover) and (pointer: fine) {
+  :deep(.info-icon:hover::before) {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
 :deep(.info-icon:focus-visible::before) {
   opacity: 1;
   visibility: visible;
@@ -3167,9 +3224,9 @@ defineExpose({
 :deep(.info-icon:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.18);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--color-action) 18%, transparent);
   color: var(--accent);
-  background-color: rgba(25, 118, 210, 0.08);
+  background-color: color-mix(in oklch, var(--color-action) 8%, transparent);
 }
 
 .info-icon svg {
@@ -3181,11 +3238,11 @@ defineExpose({
 /* off-DOM measurement element for tooltip sizing (visually hidden) */
 .info-icon__measure {
   position: absolute;
-  left: -9999px;
-  top: -9999px;
+  inset-inline-start: -9999px;
+  inset-block-start: -9999px;
   visibility: hidden;
   pointer-events: none;
-  background: #fff;
+  background: var(--color-surface);
   color: var(--color-ink);
   padding: 8px 12px;
   border-radius: 6px;
@@ -3206,13 +3263,13 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-block-end: 16px;
 }
 
 /* Unit Toggles */
 :deep(.unit-toggles) {
   display: flex;
-  background: #f0f0f0;
+  background: oklch(95.5% 0 none);
   border-radius: 6px;
   padding: 2px;
 }
@@ -3225,24 +3282,29 @@ defineExpose({
   font-size: 0.85em;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   color: var(--color-muted);
 }
 
 :deep(.unit-toggle.active) {
-  background: #fff;
+  background: oklch(100% 0 none);
   color: var(--color-ink);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px oklch(0% 0 none / 0.1);
 }
 
-:deep(.unit-toggle:hover:not(.active)) {
-  background: rgba(255, 255, 255, 0.7);
+@media (hover: hover) and (pointer: fine) {
+  :deep(.unit-toggle:hover:not(.active)) {
+    background: oklch(100% 0 none / 0.7);
+  }
+}
+
+:deep(.unit-toggle:active) {
+  transform: scale(0.97);
 }
 
 /* Chart Toggles */
 :deep(.chart-toggles) {
   display: flex;
-  background: #f0f0f0;
+  background: oklch(95.5% 0 none);
   border-radius: 6px;
   padding: 2px;
 }
@@ -3255,18 +3317,23 @@ defineExpose({
   font-size: 0.85em;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   color: var(--color-muted);
 }
 
 :deep(.chart-toggle.active) {
-  background: #fff;
+  background: oklch(100% 0 none);
   color: var(--color-ink);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px oklch(0% 0 none / 0.1);
 }
 
-:deep(.chart-toggle:hover:not(.active):not(:disabled)) {
-  background: rgba(255, 255, 255, 0.7);
+@media (hover: hover) and (pointer: fine) {
+  :deep(.chart-toggle:hover:not(.active):not(:disabled)) {
+    background: oklch(100% 0 none / 0.7);
+  }
+}
+
+:deep(.chart-toggle:active:not(:disabled)) {
+  transform: scale(0.97);
 }
 
 :deep(.chart-toggle:disabled) {
@@ -3289,7 +3356,6 @@ defineExpose({
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3298,10 +3364,16 @@ defineExpose({
   box-sizing: border-box;
 }
 
-.force-update-btn:hover:not(:disabled) {
-  background: rgba(33, 150, 243, 0.1);
-  color: var(--accent);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .force-update-btn:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--color-action) 10%, transparent);
+    color: var(--accent);
+    transform: scale(1.05);
+  }
+
+  .force-update-btn:hover:not(:disabled) svg {
+    transform: rotate(180deg);
+  }
 }
 
 .force-update-btn:active {
@@ -3314,14 +3386,6 @@ defineExpose({
   transform: none;
 }
 
-.force-update-btn svg {
-  transition: transform 0.3s ease;
-}
-
-.force-update-btn:hover:not(:disabled) svg {
-  transform: rotate(180deg);
-}
-
 /* Stop Polling Button in Header */
 .stop-polling-btn-header {
   background: none;
@@ -3330,7 +3394,6 @@ defineExpose({
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3339,10 +3402,12 @@ defineExpose({
   box-sizing: border-box;
 }
 
-.stop-polling-btn-header:hover {
-  background: rgba(220, 38, 38, 0.1);
-  color: var(--color-danger);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .stop-polling-btn-header:hover {
+    background: color-mix(in oklch, var(--color-danger) 10%, transparent);
+    color: var(--color-danger);
+    transform: scale(1.05);
+  }
 }
 
 .stop-polling-btn-header:active {
@@ -3369,7 +3434,7 @@ defineExpose({
    stats, tabs and tags all fell back to unstyled defaults. :deep() crosses
    that boundary while keeping these rules in one place. */
 :deep(.stats-section .stat-item) {
-  background: #f8f9fa;
+  background: oklch(98.2% 0.0017 none);
   border-radius: 6px;
   padding: 12px;
   display: flex;
@@ -3394,7 +3459,7 @@ defineExpose({
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 16px;
+  margin-block-start: 16px;
 }
 
 /* Slope Stats Grid */
@@ -3408,7 +3473,7 @@ defineExpose({
 :deep(.stats-section .chart-section) {
   margin: 16px 0;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* Heart Rate Stats */
@@ -3428,8 +3493,8 @@ defineExpose({
 }
 
 :deep(.category-tag) {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: oklch(95.3% 0.0218 239.4);
+  color: var(--color-action);
   padding: 4px 12px;
   border-radius: 6px;
   font-size: 0.85em;
@@ -3441,14 +3506,18 @@ defineExpose({
   align-items: center;
   gap: 6px;
   padding: 6px 8px 6px 12px;
-  background: #e3f2fd;
-  border: 1px solid #bbdefb;
-  transition: all 0.2s ease;
+  background: oklch(95.3% 0.0218 239.4);
+  border: 1px solid oklch(88.5% 0.0546 243.4);
+  transition:
+    background-color 0.2s var(--ease-out, ease-out),
+    border-color 0.2s var(--ease-out, ease-out);
 }
 
-.category-tag.editable:hover {
-  background: #bbdefb;
-  border-color: #90caf9;
+@media (hover: hover) and (pointer: fine) {
+  .category-tag.editable:hover {
+    background: oklch(88.5% 0.0546 243.4);
+    border-color: oklch(81.6% 0.0896 243.6);
+  }
 }
 
 .remove-tag {
@@ -3458,17 +3527,18 @@ defineExpose({
   width: 18px;
   height: 18px;
   padding: 0;
-  background: rgba(0, 0, 0, 0.1);
+  background: oklch(0% 0 none / 0.1);
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s ease;
-  color: #1565c0;
+  color: var(--color-action);
 }
 
-.remove-tag:hover {
-  background: rgba(0, 0, 0, 0.2);
-  transform: scale(1.1);
+@media (hover: hover) and (pointer: fine) {
+  .remove-tag:hover {
+    background: oklch(0% 0 none / 0.2);
+    transform: scale(1.1);
+  }
 }
 
 .remove-tag:active {
@@ -3496,10 +3566,10 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   align-self: flex-start !important; /* Force self-alignment to left */
-  margin-left: 0 !important; /* No left margin */
-  margin-right: auto !important; /* Push to left */
-  --ms-tag-bg: #10b981;
-  --ms-tag-color: #fff;
+  margin-inline-start: 0 !important; /* No start margin */
+  margin-inline-end: auto !important; /* Push to start */
+  --ms-tag-bg: oklch(69.6% 0.1491 162.5);
+  --ms-tag-color: var(--color-surface);
   --ms-tag-radius: 4px;
   --ms-tag-font-size: 0.87rem;
   --ms-tag-font-weight: 600;
@@ -3507,7 +3577,7 @@ defineExpose({
   padding: 0;
   border: none;
   border-radius: 4px;
-  background: white;
+  background: oklch(100% 0 none);
   min-height: 44px;
 }
 
@@ -3530,15 +3600,15 @@ defineExpose({
   .track-category-select-inline
   :deep(.multiselect-wrapper) {
   margin: 0 !important; /* Remove auto-centering margin */
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  margin-inline-start: 0 !important;
+  margin-inline-end: 0 !important;
 }
 
 /* Also target the multiselect root element itself */
 .categories-inline-edit :deep(.multiselect) {
   margin: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  margin-inline-start: 0 !important;
+  margin-inline-end: 0 !important;
 }
 
 /* The saving indicator pairs a spinner with the word "Saving...". Without an
@@ -3557,7 +3627,6 @@ defineExpose({
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
@@ -3571,10 +3640,10 @@ defineExpose({
 
 .edit-error {
   padding: 8px 12px;
-  background: #ffebee;
-  border: 1px solid #ef5350;
+  background: oklch(95.7% 0.0221 7.2);
+  border: 1px solid oklch(65.4% 0.1926 25.1);
   border-radius: 6px;
-  color: #c62828;
+  color: var(--color-danger);
   font-size: 0.9em;
 }
 
@@ -3585,8 +3654,8 @@ defineExpose({
 }
 
 .classification-tag {
-  background: #f3e5f5;
-  color: #7b1fa2;
+  background: oklch(93.8% 0.026 321.9);
+  color: oklch(45.3% 0.1988 313);
   padding: 4px 12px;
   border-radius: 6px;
   font-size: 0.85em;
@@ -3602,12 +3671,12 @@ defineExpose({
 .stats-section .chart-section {
   margin: 16px 0;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .elevation-profile-placeholder {
   height: 150px;
-  background-color: #f0f0f0;
+  background-color: oklch(95.5% 0 none);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3621,7 +3690,7 @@ defineExpose({
   align-items: center;
   gap: 10px;
   font-size: 0.95em;
-  color: #2d3748;
+  color: oklch(33.5% 0.0331 260.9);
 }
 
 :deep(.toggle-row input) {
@@ -3631,7 +3700,7 @@ defineExpose({
 
 /* Track Metadata — rendered by TrackInfoPanel, same scope reason as above. */
 :deep(.track-metadata) {
-  margin-top: 24px;
+  margin-block-start: 24px;
 }
 
 :deep(.track-metadata h3) {
@@ -3648,7 +3717,7 @@ defineExpose({
 }
 
 :deep(.metadata-item) {
-  background: #f8f9fa;
+  background: oklch(98.2% 0.0017 none);
   border-radius: 6px;
   padding: 12px;
   display: flex;
@@ -3671,16 +3740,16 @@ defineExpose({
 /* Panel controls responsive adjustments */
 @media (max-width: 640px) {
   .panel-controls-tab {
-    bottom: 12px;
-    right: 12px;
+    inset-block-end: 12px;
+    inset-inline-end: 12px;
     width: 44px;
     height: 44px;
     border-radius: 10px;
     /* Solid background for better visibility on mobile */
-    background: #ffffff;
+    background: var(--color-surface);
     backdrop-filter: none;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid oklch(0% 0 none / 0.12);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.15);
   }
 
   .collapse-toggle-btn svg {
@@ -3743,10 +3812,10 @@ defineExpose({
 @supports (-webkit-appearance: none) {
   @media (max-width: 640px) {
     .panel-controls-tab {
-      background: #ffffff !important;
+      background: var(--color-surface) !important;
       backdrop-filter: none !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+      border: 1px solid oklch(0% 0 none / 0.12) !important;
+      box-shadow: 0 4px 12px oklch(0% 0 none / 0.15) !important;
       transform: translate3d(0, 0, 0);
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
@@ -3770,8 +3839,8 @@ defineExpose({
   }
 }
 @media(min-width:901px) {
- .track-detail-flyout { left:auto; right:0; top:0; bottom:0; width:380px; min-width:0; max-width:380px; min-height:0; max-height:100dvh; padding:20px 0 0; border-radius:0; box-shadow:none; border-left:1px solid var(--color-line); background:var(--color-surface); }
- .track-detail-flyout.collapsed { top:auto; width:44px; max-height:0; }
+ .track-detail-flyout { inset-inline-start:auto; inset-inline-end:0; inset-block-start:0; inset-block-end:0; width:380px; min-width:0; max-width:380px; min-height:0; max-height:100dvh; padding:20px 0 0; border-radius:0; box-shadow:none; border-inline-start:1px solid var(--color-line); background:var(--color-surface); }
+ .track-detail-flyout.collapsed { inset-block-start:auto; width:44px; max-height:0; }
  .flyout-content { padding:0 20px 24px; }
  :deep(.basic-info-grid), :deep(.speed-pace-grid) { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
@@ -3780,6 +3849,101 @@ defineExpose({
  .track-header .title-with-edit h2 { overflow-wrap:anywhere; }
  .track-name-block .header-actions { flex:1 1 100%; width:100%; justify-content:flex-end; gap:4px; }
  .header-actions.grouped { gap:8px; flex-wrap:wrap; }
+
+/* Motion is opt-in: transitions that move or scale an element, smooth panel
+   scrolling and the saving spinner only run when the visitor has not asked for
+   reduced motion. Color-only transitions stay ungated above. */
+@media (prefers-reduced-motion: no-preference) {
+  .track-detail-flyout {
+    transition:
+      transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.3s var(--ease-out, ease-out);
+  }
+
+  .flyout-content {
+    scroll-behavior: smooth;
+  }
+
+  .panel-controls-tab {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .collapse-toggle-btn {
+    transition:
+      background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .close-button,
+  .share-track-btn,
+  .export-gpx-btn,
+  .delete-track-btn,
+  .edit-track-geometry-btn,
+  .stop-polling-btn-header,
+  .force-update-btn {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      color 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .edit-name-btn {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      color 0.2s var(--ease-out, ease-out),
+      opacity 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .edit-description-btn {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      opacity 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .track-description-block {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      border-color 0.2s var(--ease-out, ease-out),
+      box-shadow 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .save-btn,
+  .cancel-btn {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      border-color 0.2s var(--ease-out, ease-out),
+      color 0.2s var(--ease-out, ease-out),
+      box-shadow 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .remove-tag {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .force-update-btn svg {
+    transition: transform 0.3s var(--ease-out, ease-out);
+  }
+
+  :deep(.unit-toggle),
+  :deep(.chart-toggle) {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      color 0.2s var(--ease-out, ease-out),
+      box-shadow 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  :deep(.saving-indicator .spinner) {
+    animation: spin 1s linear infinite;
+  }
+}
 </style>
 
 <style>
@@ -3794,8 +3958,8 @@ defineExpose({
 .categories-inline-edit > .multiselect,
 .categories-inline-edit > .track-category-select-inline {
   margin: 0 !important;
-  margin-left: 0 !important;
-  margin-right: auto !important;
+  margin-inline-start: 0 !important;
+  margin-inline-end: auto !important;
   align-self: flex-start !important;
 }
 
@@ -3805,8 +3969,8 @@ defineExpose({
 .categories-inline-edit .multiselect .multiselect-wrapper,
 .track-category-select-inline .multiselect-wrapper {
   margin: 0 !important;
-  margin-left: 0 !important;
-  margin-right: auto !important;
+  margin-inline-start: 0 !important;
+  margin-inline-end: auto !important;
   justify-content: flex-start !important;
 }
 
@@ -3814,8 +3978,8 @@ defineExpose({
 .categories-inline-edit .multiselect,
 .track-category-select-inline.multiselect {
   margin: 0 !important;
-  margin-left: 0 !important;
-  margin-right: auto !important;
+  margin-inline-start: 0 !important;
+  margin-inline-end: auto !important;
 }
 
 /* Touch targets for the toggles that live in this unscoped block. The scoped

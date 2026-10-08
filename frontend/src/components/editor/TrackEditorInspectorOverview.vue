@@ -119,15 +119,15 @@ const emit = defineEmits([
 
 <style scoped>
 .draft-banner {
-  background: #fff3e0;
-  border-bottom: 1px solid #ffe0b2;
+  background: oklch(96.9% 0.0282 79.5);
+  border-block-end: 1px solid oklch(92.1% 0.0687 77.5);
   padding: 10px 12px;
 }
 
 .draft-banner p {
   margin: 0 0 8px;
   font-size: 13px;
-  color: #e65100;
+  color: oklch(63.1% 0.197 40.3);
 }
 
 .draft-actions {
@@ -136,10 +136,10 @@ const emit = defineEmits([
 }
 
 .error-banner {
-  background: #fce4ec;
-  border-bottom: 1px solid #ef9a9a;
+  background: oklch(94.1% 0.0282 355.4);
+  border-block-end: 1px solid oklch(77.2% 0.1024 19.7);
   padding: 10px 12px;
-  color: #c62828;
+  color: var(--color-danger);
 }
 
 .error-banner p {
@@ -147,16 +147,16 @@ const emit = defineEmits([
 }
 
 .info-banner {
-  background: #e8f0fe;
-  border-bottom: 1px solid #c7d7fb;
+  background: oklch(95.3% 0.0207 261.8);
+  border-block-end: 1px solid oklch(87.9% 0.0528 266.4);
   padding: 10px 12px;
   font-size: 12px;
-  color: #1a4fa3;
+  color: oklch(44.4% 0.147 259.6);
 }
 
 .sidebar-section {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .section-title {
@@ -167,7 +167,7 @@ const emit = defineEmits([
 }
 
 .form-group {
-  margin-bottom: 10px;
+  margin-block-end: 10px;
 }
 
 .form-label {
@@ -175,11 +175,11 @@ const emit = defineEmits([
   font-size: 12px;
   font-weight: 500;
   color: var(--color-muted);
-  margin-bottom: 4px;
+  margin-block-end: 4px;
 }
 
 .required {
-  color: #d32f2f;
+  color: oklch(56.8% 0.2002 26.4);
 }
 
 .form-input { box-sizing: border-box; }
@@ -191,10 +191,10 @@ const emit = defineEmits([
 
 .char-count {
   display: block;
-  text-align: right;
+  text-align: end;
   font-size: 11px;
   color: var(--color-muted);
-  margin-top: 2px;
+  margin-block-start: 2px;
 }
 
 .category-chips {
@@ -208,11 +208,14 @@ const emit = defineEmits([
   align-items: center;
   gap: 2px;
   padding: 4px 8px;
-  border: 1px solid #ddd;
+  border: 1px solid oklch(89.8% 0 none);
   border-radius: 16px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    background-color 0.15s var(--ease-out, ease-out),
+    border-color 0.15s var(--ease-out, ease-out),
+    color 0.15s var(--ease-out, ease-out);
   user-select: none;
 }
 
@@ -221,14 +224,20 @@ const emit = defineEmits([
 }
 .category-chip:focus-within { outline:3px solid var(--color-action); outline-offset:2px; }
 
-.category-chip:hover {
-  border-color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .category-chip:hover {
+    border-color: var(--accent);
+  }
+}
+
+.category-chip:active {
+  transform: scale(0.97);
 }
 
 .category-chip.selected {
-  background: #e8f0fe;
+  background: oklch(95.3% 0.0207 261.8);
   border-color: var(--accent);
-  color: #1565c0;
+  color: oklch(51.3% 0.1603 255.7);
 }
 
 .btn-sm {

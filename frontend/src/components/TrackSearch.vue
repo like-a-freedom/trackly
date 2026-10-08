@@ -426,8 +426,8 @@ onBeforeUnmount(() => {
      user is not looking at and leaves the panel area legible. */
   background: radial-gradient(
     ellipse at center top,
-    rgba(0, 0, 0, 0.28) 0%,
-    rgba(0, 0, 0, 0.45) 100%
+    oklch(0% 0 none / 0.28) 0%,
+    oklch(0% 0 none / 0.45) 100%
   );
   backdrop-filter: blur(3px);
   z-index: 3500;
@@ -438,16 +438,16 @@ onBeforeUnmount(() => {
 }
 
 .search-modal {
-  background: rgba(38, 38, 41, 0.72);
+  background: oklch(27% 0.0055 286 / 0.72);
   backdrop-filter: blur(40px) saturate(180%);
   border-radius: 12px;
   box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.14),
-    0 24px 60px rgba(0, 0, 0, 0.5);
+    0 0 0 0.5px oklch(100% 0 none / 0.14),
+    0 24px 60px oklch(0% 0 none / 0.5);
   width: 90%;
   max-width: 640px;
   max-height: 70vh;
-  overflow: hidden;
+  overflow: clip;
   /* Prevent touch actions from propagating to map */
   touch-action: none;
 }
@@ -459,11 +459,11 @@ onBeforeUnmount(() => {
   padding: 14px 18px;
   /* A hairline rather than a 1px rule: it separates the input row from the
      results without reading as a second card edge. */
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.14);
+  border-block-end: 0.5px solid oklch(100% 0 none / 0.14);
 }
 
 .search-icon {
-  color: rgba(255, 255, 255, 0.55);
+  color: oklch(100% 0 none / 0.55);
   margin-inline-end: 12px;
   flex-shrink: 0;
 }
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   line-height: var(--leading-snug);
   background: transparent;
-  color: rgba(255, 255, 255, 0.95);
+  color: oklch(100% 0 none / 0.95);
   min-width: 0;
   caret-color: var(--accent);
 }
@@ -485,22 +485,22 @@ onBeforeUnmount(() => {
    The container highlight carries it rather than an outline on the input:
    an outline here would draw a box inside the panel's own rounded edge. */
 .search-input:focus-visible {
-  outline: none;
+  outline: 2px solid transparent;
 }
 
 .search-input-container:has(.search-input:focus-visible) {
-  background: rgba(255, 255, 255, 0.08);
+  background: oklch(100% 0 none / 0.08);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .search-input::placeholder {
-  color: rgba(255, 255, 255, 0.42);
+  color: oklch(100% 0 none / 0.42);
 }
 
 .clear-button {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.55);
+  color: oklch(100% 0 none / 0.55);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -510,9 +510,15 @@ onBeforeUnmount(() => {
   margin-inline-start: 8px;
 }
 
-.clear-button:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.85);
+.clear-button:active {
+  transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .clear-button:hover {
+    background: oklch(100% 0 none / 0.12);
+    color: oklch(100% 0 none / 0.85);
+  }
 }
 
 .search-loading {
@@ -520,19 +526,18 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  color: rgba(255, 255, 255, 0.6);
+  color: oklch(100% 0 none / 0.6);
 }
 
 .loading-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: rgba(255, 255, 255, 0.75);
+  border: 2px solid oklch(100% 0 none / 0.2);
+  border-top-color: oklch(100% 0 none / 0.75);
   border-radius: 50%;
   /* Explicit box and no flex: without both the ring flexes and drags the
      "Searching..." label around with it. */
   flex: 0 0 auto;
-  animation: spin 1s linear infinite;
   margin-inline-end: 12px;
 }
 
@@ -559,30 +564,36 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 12px 18px;
   cursor: pointer;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
-  transition: background-color 0.15s;
+  border-block-end: 0.5px solid oklch(100% 0 none / 0.08);
+  transition: background-color 0.15s var(--ease-out, ease-out);
 }
 
-.search-result-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+.search-result-item:active {
+  background: oklch(100% 0 none / 0.12);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .search-result-item:hover {
+    background: oklch(100% 0 none / 0.08);
+  }
 }
 
 /* Keyboard selection. Marked by an accent fill plus a left bar, so the
    current row never depends on colour alone. */
 .search-result-item.is-active {
   background: var(--accent);
-  box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.9);
+  box-shadow: inset 3px 0 0 oklch(100% 0 none / 0.9);
 }
 
 .search-result-item:last-child {
-  border-bottom: none;
+  border-block-end: none;
 }
 
 /* On the selected row the text sits on the accent fill, so it inverts */
 .search-result-item.is-active .track-name,
 .search-result-item.is-active .track-description,
 .search-result-item.is-active .track-meta {
-  color: #fff;
+  color: var(--color-surface);
 }
 
 .track-info {
@@ -596,20 +607,21 @@ onBeforeUnmount(() => {
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
   margin: 0 0 2px 0;
-  color: rgba(255, 255, 255, 0.95);
+  color: oklch(100% 0 none / 0.95);
   text-wrap: balance;
 }
 
 /* bridge */
 .track-description {
   font-size: var(--text-xs);
-  color: rgba(255, 255, 255, 0.6);
+  color: oklch(100% 0 none / 0.6);
   margin: 0 0 4px 0;
   line-height: var(--leading-normal);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+  /* line-clamp truncation still needs overflow:hidden */
   overflow: hidden;
   text-wrap: pretty;
 }
@@ -619,7 +631,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 12px;
   font-size: var(--text-xs);
-  color: rgba(255, 255, 255, 0.45);
+  color: oklch(100% 0 none / 0.45);
 }
 
 .track-length {
@@ -632,7 +644,7 @@ onBeforeUnmount(() => {
 }
 
 .track-arrow {
-  color: #ccc;
+  color: oklch(84.5% 0 none);
   margin-inline-start: 12px;
 }
 
@@ -642,12 +654,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 48px 20px;
-  color: rgba(255, 255, 255, 0.5);
+  color: oklch(100% 0 none / 0.5);
   text-align: center;
 }
 
 .no-results-icon {
-  margin-bottom: 16px;
+  margin-block-end: 16px;
   opacity: 0.4;
 }
 
@@ -656,16 +668,16 @@ onBeforeUnmount(() => {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   line-height: var(--leading-tight);
-  color: rgba(255, 255, 255, 0.85);
+  color: oklch(100% 0 none / 0.85);
   text-wrap: balance;
 }
 
 .no-results-hint {
-  margin-top: 8px !important;
+  margin-block-start: 8px !important;
   font-size: var(--text-xs) !important;
   font-weight: var(--weight-normal) !important;
   line-height: var(--leading-normal) !important;
-  color: rgba(255, 255, 255, 0.45) !important;
+  color: oklch(100% 0 none / 0.45) !important;
   max-width: 40ch;
   text-wrap: pretty;
 }
@@ -689,4 +701,11 @@ onBeforeUnmount(() => {
 }
 
 /* Force light theme for consistency with the rest of the interface */
+
+/* Spinner motion is opt-in: it only runs when reduced motion is not requested. */
+@media (prefers-reduced-motion: no-preference) {
+  .loading-spinner {
+    animation: spin 1s linear infinite;
+  }
+}
 </style>

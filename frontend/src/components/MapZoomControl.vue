@@ -90,23 +90,28 @@ defineExpose({ zoomBy });
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s var(--ease-out, ease-out),
+    box-shadow 0.2s var(--ease-out, ease-out),
+    color 0.2s var(--ease-out, ease-out);
   box-shadow: var(--control-shadow);
   color: var(--control-icon);
 }
 
 .zoom-btn svg {
   stroke: var(--control-icon);
-  transition: stroke 0.2s;
+  transition: stroke 0.2s var(--ease-out, ease-out);
 }
 
-.zoom-btn:hover {
-  background: var(--control-bg-solid);
-  box-shadow: var(--control-shadow-hover);
-}
+@media (hover: hover) and (pointer: fine) {
+  .zoom-btn:hover {
+    background: var(--control-bg-solid);
+    box-shadow: var(--control-shadow-hover);
+  }
 
-.zoom-btn:hover svg {
-  stroke: var(--control-icon-hover);
+  .zoom-btn:hover svg {
+    stroke: var(--control-icon-hover);
+  }
 }
 
 .zoom-btn:active {
@@ -120,10 +125,10 @@ defineExpose({ zoomBy });
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--color-surface);
     backdrop-filter: none;
     border: 1px solid var(--control-border-strong);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.15);
   }
 
   .zoom-btn svg {

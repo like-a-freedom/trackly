@@ -1373,19 +1373,19 @@ defineExpose({
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   padding: 20px;
-  background: #f8f9fa;
+  background: oklch(98.2% 0.0017 none);
   border-radius: 8px;
   margin: 16px 0;
 }
 
 .stat-item {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 6px;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px oklch(0% 0 none / 0.1);
 }
 
 .stat-label {
@@ -1404,15 +1404,14 @@ defineExpose({
 <style>
 /* Global styles for custom tooltip */
 .elevation-tooltip {
-  background: #ffffff;
+  background: var(--color-surface);
   border: none;
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px oklch(0% 0 none / 0.1);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 12px;
   min-width: 180px;
   max-width: 260px;
-  transition: all 0.15s ease;
   transform: translateY(-5px);
   opacity: 0;
   visibility: hidden;
@@ -1420,8 +1419,17 @@ defineExpose({
   pointer-events: none;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .elevation-tooltip {
+    transition:
+      opacity 0.15s var(--ease-out, ease-out),
+      visibility 0.15s var(--ease-out, ease-out),
+      transform 0.15s var(--ease-out, ease-out);
+  }
+}
+
 .tooltip-header {
-  background: #f8f9fa;
+  background: oklch(98.2% 0.0017 none);
   border-bottom: none;
   padding: 8px 12px;
   border-radius: 6px 6px 0 0;
@@ -1451,7 +1459,7 @@ defineExpose({
   font-weight: 400;
   color: var(--color-muted);
   font-size: 11px;
-  margin-top: 2px;
+  margin-block-start: 2px;
 }
 
 .tooltip-body {
@@ -1465,47 +1473,49 @@ defineExpose({
   padding: 4px 0;
   min-height: 24px;
   border-radius: 4px;
-  transition: all 0.1s ease;
+  transition: background-color 0.1s var(--ease-out, ease-out);
   position: relative;
-  margin-bottom: 6px;
+  margin-block-end: 6px;
 }
 
 .tooltip-row:last-of-type {
-  margin-bottom: 0;
+  margin-block-end: 0;
 }
 
-.tooltip-row:hover {
-  background: rgba(0, 0, 0, 0.02);
+@media (hover: hover) and (pointer: fine) {
+  .tooltip-row:hover {
+    background: oklch(0% 0 none / 0.02);
+  }
 }
 
 .tooltip-row.elevation {
-  border-left: 2px solid rgba(75, 192, 192, 1);
-  padding-left: 8px;
-  margin-left: -2px;
+  border-inline-start: 2px solid oklch(74.3% 0.1037 195.2);
+  padding-inline-start: 8px;
+  margin-inline-start: -2px;
 }
 
 .tooltip-row.pulse {
-  border-left: 2px solid rgba(255, 99, 132, 1);
-  padding-left: 8px;
-  margin-left: -2px;
+  border-inline-start: 2px solid oklch(70.7% 0.1906 10.5);
+  padding-inline-start: 8px;
+  margin-inline-start: -2px;
 }
 
 .tooltip-row.temperature {
-  border-left: 2px solid rgba(255, 165, 0, 1);
-  padding-left: 8px;
-  margin-left: -2px;
+  border-inline-start: 2px solid oklch(79.3% 0.171 70.7);
+  padding-inline-start: 8px;
+  margin-inline-start: -2px;
 }
 
 .tooltip-row.pace {
-  border-left: 2px solid rgba(156, 39, 176, 1);
-  padding-left: 8px;
-  margin-left: -2px;
+  border-inline-start: 2px solid oklch(51.7% 0.2151 321.2);
+  padding-inline-start: 8px;
+  margin-inline-start: -2px;
 }
 
 .tooltip-row.slope {
-  border-left: 2px solid rgba(54, 162, 235, 1);
-  padding-left: 8px;
-  margin-left: -2px;
+  border-inline-start: 2px solid oklch(68.5% 0.1439 243.1);
+  padding-inline-start: 8px;
+  margin-inline-start: -2px;
 }
 
 .tooltip-icon {
@@ -1524,9 +1534,9 @@ defineExpose({
 .tooltip-value {
   font-weight: 500;
   color: var(--color-ink);
-  text-align: right;
+  text-align: end;
   font-size: 11px;
-  transition: color 0.1s ease;
+  transition: color 0.1s var(--ease-out, ease-out);
 }
 
 .tooltip-value.slope-value {
@@ -1534,20 +1544,22 @@ defineExpose({
 }
 
 .tooltip-slope-category {
-  margin-top: 2px;
-  margin-bottom: 0;
-  margin-left: -2px;
-  margin-right: 0;
+  margin-block-start: 2px;
+  margin-block-end: 0;
+  margin-inline-start: -2px;
+  margin-inline-end: 0;
   padding: 6px 10px;
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
   text-align: center;
   color: var(--color-ink);
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s var(--ease-out, ease-out),
+    color 0.15s var(--ease-out, ease-out);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px oklch(0% 0 none / 0.05);
   width: calc(100% + 2px);
 }
 </style>

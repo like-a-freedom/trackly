@@ -125,7 +125,7 @@ function handleOptimizerRatioInput(event) {
 <style scoped>
 .sidebar-section {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .section-header {
@@ -149,14 +149,14 @@ function handleOptimizerRatioInput(event) {
 
 .optimizer-range {
   width: 100%;
-  margin-bottom: 8px;
+  margin-block-end: 8px;
 }
 
 .optimizer-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
+  margin-block-start: 6px;
 }
 
 .optimizer-stats {
@@ -174,7 +174,7 @@ function handleOptimizerRatioInput(event) {
 }
 
 .optimizer-status.error {
-  color: #c62828;
+  color: var(--color-danger);
 }
 
 .btn-sm {

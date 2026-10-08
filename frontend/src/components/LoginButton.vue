@@ -86,7 +86,7 @@
         />
       </svg>
     </button>
-    <p v-if="error" role="alert" class="fixed bottom-20 right-4 z-50 m-0 max-w-xs rounded border border-line bg-surface p-3 text-sm text-danger">{{ error }}</p>
+    <p v-if="error" role="alert" class="fixed inset-be-20 end-4 z-50 m-0 max-w-xs rounded border border-line bg-surface p-3 text-sm text-danger">{{ error }}</p>
   </div>
 </template>
 
@@ -121,9 +121,9 @@ function goToAccount() {
 }
 
 .login-button {
-  background: rgba(255, 255, 255, 0.95);
+  background: oklch(100% 0 none / 0.95);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid oklch(0% 0 none / 0.08);
   border-radius: 8px;
   width: 40px;
   height: 40px;
@@ -131,8 +131,7 @@ function goToAccount() {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px oklch(0% 0 none / 0.08);
   color: var(--color-muted);
   /* Force layer creation for better rendering */
   transform: translateZ(0);
@@ -143,22 +142,23 @@ function goToAccount() {
 .login-button svg {
   width: 20px;
   height: 20px;
-  transition: transform 0.2s;
 }
 
-.login-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px);
-}
+@media (hover: hover) and (pointer: fine) {
+  .login-button:hover:not(:disabled) {
+    background: oklch(100% 0 none);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.12);
+    transform: translateY(-1px);
+  }
 
-.login-button:hover:not(:disabled) svg {
-  transform: scale(1.05);
+  .login-button:hover:not(:disabled) svg {
+    transform: scale(1.05);
+  }
 }
 
 .login-button:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px oklch(0% 0 none / 0.08);
 }
 
 .login-button:disabled {
@@ -173,10 +173,10 @@ function goToAccount() {
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--color-surface);
     backdrop-filter: none;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid oklch(0% 0 none / 0.12);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.15);
   }
 
   .login-button svg {
@@ -188,10 +188,6 @@ function goToAccount() {
     width: 44px;
     height: 44px;
   }
-}
-
-.spinner {
-  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
@@ -214,17 +210,25 @@ function goToAccount() {
   padding: 0;
   width: 36px;
   height: 36px;
-  background: #fff;
-  border: 2px solid #e5e7eb;
+  background: var(--color-surface);
+  border: 2px solid oklch(92.8% 0.0058 264.5);
   border-radius: 50%;
   cursor: pointer;
-  overflow: hidden;
-  transition: all 0.2s ease;
+  overflow: clip;
+  transition:
+    border-color 0.2s var(--ease-out, ease-out),
+    box-shadow 0.2s var(--ease-out, ease-out);
 }
 
-.user-button:hover {
-  border-color: var(--accent);
-  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
+.user-button:active {
+  transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .user-button:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px color-mix(in oklch, var(--color-action) 20%, transparent);
+  }
 }
 
 .user-avatar {
@@ -239,7 +243,27 @@ function goToAccount() {
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: #e5e7eb;
+  background: oklch(92.8% 0.0058 264.5);
   color: var(--color-muted);
+}
+
+/* Motion is opt-in: hover lift, icon scale and the loading spinner only run
+   when the visitor has not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .login-button {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      box-shadow 0.2s var(--ease-out, ease-out),
+      color 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .login-button svg {
+    transition: transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
 }
 </style>

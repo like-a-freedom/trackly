@@ -346,7 +346,7 @@ async function copyTrackUrl() {
 }
 .upload-label {
   font-size: var(--text-xs);
-  margin-bottom: 4px;
+  margin-block-end: 4px;
   color: var(--color-muted);
   cursor: pointer;
   font-weight: var(--weight-medium);
@@ -358,12 +358,12 @@ async function copyTrackUrl() {
      focus, which breaks the bottom-anchored form out of the screen. */
   font-size: 1rem;
   padding: 6px 8px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid oklch(85.8% 0 none);
   border-radius: 4px;
-  background: #fafbfc;
-  margin-bottom: 1px;
+  background: oklch(98.8% 0.0017 none);
+  margin-block-end: 1px;
 }
-.upload-btn { margin-top: 4px; }
+.upload-btn { margin-block-start: 4px; }
 
 
 .drop-area {
@@ -371,10 +371,12 @@ async function copyTrackUrl() {
   border-radius: 6px;
   padding: 12px 4px;
   text-align: center;
-  background: #f7faff;
-  transition: border-color 0.2s, background 0.2s;
+  background: oklch(98.4% 0.0074 260.7);
+  transition:
+    border-color 0.2s var(--ease-out, ease-out),
+    background-color 0.2s var(--ease-out, ease-out);
   cursor: pointer;
-  margin-bottom: 6px;
+  margin-block-end: 6px;
   min-height: 38px;
   display: flex;
   align-items: center;
@@ -386,7 +388,7 @@ async function copyTrackUrl() {
 }
 .drop-area.drag-active {
   border-color: var(--accent);
-  background: #e3f2fd;
+  background: oklch(95.3% 0.0218 239.4);
 }
 .upload-label input[type="file"] {
   position: absolute; width:1px; height:1px; opacity:0;
@@ -398,19 +400,19 @@ async function copyTrackUrl() {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff4f4;
-  color: var(--danger);
-  border: 1px solid #f3bcbc;
+  background: oklch(97.6% 0.0118 17.4);
+  color: var(--color-danger);
+  border: 1px solid oklch(84.5% 0.0636 18.5);
   border-radius: 5px;
   padding: 8px 12px;
   font-size: var(--text-xs);
   line-height: var(--leading-snug);
-  margin-bottom: 2px;
-  margin-top: 2px;
+  margin-block-end: 2px;
+  margin-block-start: 2px;
   min-height: 32px;
   font-weight: var(--weight-medium);
   text-wrap: pretty;
-  box-shadow: 0 1px 2px rgba(200,0,0,0.04);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--color-danger) 4%, transparent);
 }
 
 /* Centered layout for prominent single-line warnings (e.g., duplicate detection) */
@@ -425,19 +427,19 @@ async function copyTrackUrl() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #f0fbf4;
+  background: oklch(97.8% 0.0148 158.3);
   color: var(--color-success);
-  border: 1px solid #d9f0e0;
+  border: 1px solid oklch(93.4% 0.0323 155.4);
   border-radius: 5px;
   padding: 8px 12px;
   font-size: var(--text-xs);
   line-height: var(--leading-snug);
-  margin-top: 2px;
-  margin-bottom: 2px;
+  margin-block-start: 2px;
+  margin-block-end: 2px;
   min-height: 32px;
   font-weight: var(--weight-medium);
   text-wrap: pretty;
-  box-shadow: 0 1px 2px rgba(21,122,58,0.04);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--color-success) 4%, transparent);
 }
 
 .success-text {
@@ -451,15 +453,14 @@ async function copyTrackUrl() {
   margin-inline-start: 4px;
 }
 .track-link-btn {
-  background: #16a34a;
-  color: white;
+  background: oklch(62.7% 0.1699 149.2);
+  color: var(--color-surface);
   border: none;
   border-radius: 4px;
   padding: 5px 10px;
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   cursor: pointer;
-  transition: background 0.15s ease;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -467,18 +468,23 @@ async function copyTrackUrl() {
   min-height: 26px;
 }
 
-.track-link-btn:hover {
-  background: #15803d;
+.track-link-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .track-link-btn:hover {
+    background: oklch(52.7% 0.1371 150.1);
+  }
 }
 
 .copy-link-btn {
   background: transparent;
   color: var(--color-success);
-  border: 1px solid rgba(22, 163, 74, 0.4);
+  border: 1px solid color-mix(in oklch, var(--color-success) 40%, transparent);
   border-radius: 4px;
   padding: 4px 6px;
   cursor: pointer;
-  transition: background 0.15s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -486,17 +492,19 @@ async function copyTrackUrl() {
   min-width: 26px;
 }
 
-.copy-link-btn:hover:not(:disabled) {
-  background: rgba(22, 163, 74, 0.08);
+.copy-link-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .copy-link-btn:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--color-success) 8%, transparent);
+  }
 }
 
 .copy-link-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.fade-slide-enter-active, .fade-slide-leave-active {
-  transition: opacity 0.35s cubic-bezier(.4,0,.2,1), transform 0.35s cubic-bezier(.4,0,.2,1);
 }
 
 .fade-slide-enter-from, .fade-slide-leave-to {
@@ -507,5 +515,28 @@ async function copyTrackUrl() {
 .fade-slide-enter-to, .fade-slide-leave-from {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Motion is opt-in: the slide-fade transition and button press motion only
+   run when the visitor has not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .fade-slide-enter-active,
+  .fade-slide-leave-active {
+    transition:
+      opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .track-link-btn {
+    transition:
+      background-color 0.15s var(--ease-out, ease-out),
+      transform 0.15s var(--ease-out, ease-out);
+  }
+
+  .copy-link-btn {
+    transition:
+      background-color 0.15s var(--ease-out, ease-out),
+      transform 0.15s var(--ease-out, ease-out);
+  }
 }
 </style>

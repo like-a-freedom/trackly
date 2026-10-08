@@ -200,10 +200,7 @@ onMounted(() => {
 <style scoped>
 .auth-callback-container {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -212,9 +209,9 @@ onMounted(() => {
 }
 
 .auth-callback-card {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 32px oklch(0% 0 none / 0.12);
   padding: 48px;
   max-width: 400px;
   width: 100%;
@@ -233,10 +230,15 @@ onMounted(() => {
 .spinner {
   width: 48px;
   height: 48px;
-  border: 4px solid #e0e0e0;
-  border-top-color: var(--accent);
+  border: 4px solid oklch(90.7% 0 none);
+  border-block-start-color: var(--accent);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
 }
 
 @keyframes spin {
@@ -271,8 +273,8 @@ p {
 }
 
 .error-message {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: oklch(97.1% 0.0129 17.4);
+  border: 1px solid oklch(88.5% 0.0593 18.3);
   border-radius: 8px;
   padding: 12px 16px;
   color: var(--color-danger);
@@ -284,7 +286,7 @@ p {
   font-size: 0.9em;
 }
 
-.btn-primary  { margin-top: 8px; }
+.btn-primary  { margin-block-start: 8px; }
 
 
 

@@ -318,7 +318,7 @@
     <div
       v-if="contextMenu.visible"
       class="context-menu"
-      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      :style="{ insetInlineStart: contextMenu.x + 'px', insetBlockStart: contextMenu.y + 'px' }"
       data-testid="context-menu"
       role="menu"
       aria-label="Map editing actions"
@@ -1666,8 +1666,8 @@ defineExpose({ fitBounds, panTo, zoomIn, zoomOut });
   width: 100%;
   height: 100%;
   min-height: 100%;
-  overflow: hidden;
-  background: #dbeafe;
+  overflow: clip;
+  background: oklch(93.2% 0.0316 255.6);
 }
 
 .editor-map {
@@ -1679,10 +1679,10 @@ defineExpose({ fitBounds, panTo, zoomIn, zoomOut });
 
 .context-menu {
   position: fixed;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: oklch(100% 0 none / 0.96);
+  border: 1px solid oklch(86.9% 0.0198 252.9 / 0.9);
   border-radius: 16px;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 16px 36px oklch(20.8% 0.0398 265.8 / 0.18);
   backdrop-filter: blur(14px);
   z-index: 2000;
   min-width: 180px;
@@ -1696,13 +1696,27 @@ defineExpose({ fitBounds, panTo, zoomIn, zoomOut });
   border: none;
   background: transparent;
   border-radius: 12px;
-  text-align: left;
+  text-align: start;
   font-size: 13px;
   cursor: pointer;
-  color: #1e293b;
+  color: oklch(27.9% 0.0368 260);
 }
 
-.context-menu-item:hover {
-  background: #eff6ff;
+.context-menu-item:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .context-menu-item:hover {
+    background: var(--color-soft);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .context-menu-item {
+    transition:
+      background-color 0.15s var(--ease-out, ease-out),
+      transform 0.15s var(--ease-out, ease-out);
+  }
 }
 </style>

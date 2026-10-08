@@ -1,12 +1,12 @@
 <template>
-  <details class="mt-4 border-t border-line pt-4">
+  <details class="mbs-4 border-t border-line pbs-4">
     <summary class="min-h-11 cursor-pointer font-medium">Edit points by coordinates</summary>
-    <form class="mt-3 grid gap-3" @submit.prevent="handleAdd">
+    <form class="mbs-3 grid gap-3" @submit.prevent="handleAdd">
       <label class="grid gap-1 text-sm">Latitude<input v-model.number="latitude" aria-label="Latitude" type="number" step="any" min="-90" max="90" required class="min-h-11 rounded border border-line px-3 text-base" /></label>
       <label class="grid gap-1 text-sm">Longitude<input v-model.number="longitude" aria-label="Longitude" type="number" step="any" min="-180" max="180" required class="min-h-11 rounded border border-line px-3 text-base" /></label>
       <button type="submit" :disabled="!validCoordinates" class="min-h-11 rounded border-0 bg-action px-3 text-white disabled:opacity-50">Add point</button>
     </form>
-    <div v-if="points.length" class="mt-4 grid gap-3">
+    <div v-if="points.length" class="mbs-4 grid gap-3">
       <label class="grid gap-1 text-sm">Point number<input v-model.number="pointNumber" type="number" min="1" :max="points.length" class="min-h-11 rounded border border-line px-3 text-base" @change="handleFocus" /></label>
       <p class="m-0 text-sm text-muted" aria-live="polite">{{ points.length }} points in this segment. {{ isAnchor ? 'Selected point is an anchor.' : 'Make this point an anchor to move or delete it.' }}</p>
       <div class="grid grid-cols-2 gap-2">

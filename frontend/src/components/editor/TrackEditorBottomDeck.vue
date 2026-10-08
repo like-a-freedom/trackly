@@ -168,10 +168,10 @@ defineEmits([
   min-width: 0;
   height: 100%;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
-  overflow: hidden;
+  background: oklch(100% 0 none / 0.96);
+  border: 1px solid oklch(92.9% 0.0126 255.5 / 0.9);
+  box-shadow: 0 12px 32px oklch(20.8% 0.0398 265.8 / 0.06);
+  overflow: clip;
 }
 
 @media (max-width: 768px) {

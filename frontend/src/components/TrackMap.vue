@@ -896,37 +896,32 @@ watch(
 .fullscreen-map {
   height: 100vh;
   width: 100vw;
-  top: 0;
-  left: 0;
+  inset-block-start: 0;
+  inset-inline-start: 0;
   z-index: 0;
 }
 .track-zoom-animating {
-  transition: weight 1.2s cubic-bezier(0.25, 1, 0.5, 1),
-    opacity 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: opacity 1.2s cubic-bezier(0.25, 1, 0.5, 1);
 }
 :deep(.track-zoom-animating) path {
   transform-origin: center center;
-  animation: track-zoom-out-anim 0.5s cubic-bezier(0.22, 1.1, 0.36, 1) both;
-  transition: stroke-width 0.75s cubic-bezier(0.34, 1.56, 0.64, 1),
-    stroke-opacity 0.75s cubic-bezier(0.34, 1.56, 0.64, 1),
-    filter 0.75s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes track-zoom-out-anim {
   0% {
     transform: scale(1.28);
-    filter: drop-shadow(0 0 16px #1976d2cc) brightness(1.28);
+    filter: drop-shadow(0 0 16px oklch(56.5% 0.1633 253.3 / 0.8)) brightness(1.28);
     stroke-width: 10;
     opacity: 0.5;
   }
   30% {
     transform: scale(1.12);
-    filter: drop-shadow(0 0 10px #1976d2bb) brightness(1.14);
+    filter: drop-shadow(0 0 10px oklch(56.5% 0.1633 253.3 / 0.73)) brightness(1.14);
     stroke-width: 7.5;
     opacity: 0.8;
   }
   60% {
     transform: scale(1.02);
-    filter: drop-shadow(0 0 5px #1976d2aa) brightness(1.04);
+    filter: drop-shadow(0 0 5px oklch(56.5% 0.1633 253.3 / 0.67)) brightness(1.04);
     stroke-width: 5.5;
     opacity: 0.97;
   }
@@ -942,11 +937,10 @@ watch(
 :deep(.chart-hover-marker) {
   z-index: 850 !important;
   pointer-events: none;
-  transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
 :deep(.chart-fixed-marker) {
-  animation: marker-pulse 2s ease-in-out infinite;
+  opacity: 1;
 }
 
 @keyframes marker-pulse {
@@ -963,15 +957,17 @@ watch(
 :deep(.chart-hover-segment) {
   stroke-width: 6 !important;
   stroke-opacity: 1 !important;
-  transition: stroke-width 100ms ease, stroke-opacity 100ms ease;
-  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.08));
+  transition:
+    stroke-width 100ms var(--ease-out, ease-out),
+    stroke-opacity 100ms var(--ease-out, ease-out);
+  filter: drop-shadow(0 0 6px oklch(0% 0 none / 0.08));
 }
 
 /* Gap line from marker to nearest point */
 :deep(.chart-gap-line) {
   stroke-dasharray: 4 4;
   opacity: 0.6;
-  transition: opacity 120ms ease;
+  transition: opacity 120ms var(--ease-out, ease-out);
 }
 
 :deep(.marker-tooltip) {
@@ -985,7 +981,7 @@ watch(
   /* 13px floor: this was 10px, which is unreadable on a tile background */
   font-size: var(--text-xs);
   color: var(--color-muted);
-  margin-top: 4px;
+  margin-block-start: 4px;
 }
 
 /* Performance optimizations for smooth map rendering */
@@ -1012,7 +1008,9 @@ watch(
 :deep(.leaflet-overlay-pane path) {
   will-change: transform, stroke-width, stroke-opacity;
   backface-visibility: hidden;
-  transition: stroke-width 0.1s ease, stroke-opacity 0.1s ease;
+  transition:
+    stroke-width 0.1s var(--ease-out, ease-out),
+    stroke-opacity 0.1s var(--ease-out, ease-out);
 }
 
 :deep(.leaflet-zoom-anim .leaflet-overlay-pane path) {
@@ -1028,5 +1026,27 @@ watch(
 
 :deep(.chart-fixed-marker .fixed-icon) {
   transform: translateY(-2px);
+}
+
+/* Motion is opt-in: the zoom-out pulse and the hover marker shift only run
+   when the visitor has not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  :deep(.track-zoom-animating) path {
+    animation: track-zoom-out-anim 0.5s cubic-bezier(0.22, 1.1, 0.36, 1) both;
+    transition:
+      stroke-width 0.75s cubic-bezier(0.34, 1.56, 0.64, 1),
+      stroke-opacity 0.75s cubic-bezier(0.34, 1.56, 0.64, 1),
+      filter 0.75s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  :deep(.chart-hover-marker) {
+    transition:
+      opacity 0.12s var(--ease-out, ease-out),
+      transform 0.12s var(--ease-out, ease-out);
+  }
+
+  :deep(.chart-fixed-marker) {
+    animation: marker-pulse 2s ease-in-out infinite;
+  }
 }
 </style>

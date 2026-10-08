@@ -28,7 +28,7 @@ const handleAdd = () => {
 
 <template>
   <fieldset class="m-0 min-w-0 border-0 p-0 text-ink" :disabled="disabled" :aria-describedby="readonly ? undefined : helpId">
-    <legend class="mb-2 p-0 font-semibold">Categories</legend>
+    <legend class="mbe-2 p-0 font-semibold">Categories</legend>
     <template v-if="readonly">
       <div class="categories flex flex-wrap gap-2">
         <span v-for="value in modelValue" :key="value" class="category-tag rounded border border-line bg-canvas px-2 py-1 text-sm">{{ TRACK_CATEGORIES.find(option => option.value === value)?.label ?? value }}</span>
@@ -41,15 +41,15 @@ const handleAdd = () => {
           {{ option.label }}
         </label>
       </div>
-      <div v-if="customValues.length" class="mt-2 flex flex-wrap gap-2">
+      <div v-if="customValues.length" class="mbs-2 flex flex-wrap gap-2">
         <button v-for="value in customValues" :key="value" type="button" class="min-h-11 max-w-full break-words rounded border border-line bg-canvas px-3 text-sm" :aria-label="`Remove category ${value}`" @click="handleToggle(value)">{{ value }} ×</button>
       </div>
-      <div class="mt-3 flex gap-2">
+      <div class="mbs-3 flex gap-2">
         <input v-model="custom" type="text" aria-label="Custom category" placeholder="Custom category" class="min-h-11 min-w-0 flex-1 rounded border border-line bg-surface px-3 text-base" :aria-invalid="!!error" :aria-describedby="helpId" @keydown.enter.prevent="handleAdd" />
         <button type="button" data-testid="add-category" class="min-h-11 rounded border border-line bg-surface px-3 text-sm font-semibold" :disabled="disabled || !custom.trim()" @click="handleAdd">Add</button>
       </div>
-      <p :id="helpId" class="mb-0 mt-2 text-sm text-muted">Optional. Up to 50 categories; 100 UTF-8 bytes each.</p>
-      <p v-if="error" role="alert" class="mb-0 mt-2 text-sm text-danger">{{ error }}</p>
+      <p :id="helpId" class="mbe-0 mbs-2 text-sm text-muted">Optional. Up to 50 categories; 100 UTF-8 bytes each.</p>
+      <p v-if="error" role="alert" class="mbe-0 mbs-2 text-sm text-danger">{{ error }}</p>
     </template>
   </fieldset>
 </template>

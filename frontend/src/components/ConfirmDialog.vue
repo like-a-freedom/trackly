@@ -129,11 +129,8 @@ defineExpose({
 <style scoped>
 .dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  background: oklch(0% 0 none / 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -142,14 +139,19 @@ defineExpose({
 }
 
 .dialog {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px oklch(0% 0 none / 0.3);
   max-width: 450px;
   width: 100%;
   max-height: 90vh;
-  overflow: hidden;
-  animation: dialog-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: clip;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dialog {
+    animation: dialog-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
 
 .dialog-content {
@@ -167,7 +169,7 @@ defineExpose({
   margin: 0;
   font-size: 0.95em;
   line-height: 1.5;
-  color: #444;
+  color: oklch(38.7% 0 none);
 }
 
 .dialog-actions {
@@ -189,7 +191,7 @@ defineExpose({
 
 .dialog-fade-enter-active,
 .dialog-fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s var(--ease-out, ease-out);
 }
 
 .dialog-fade-enter-from,

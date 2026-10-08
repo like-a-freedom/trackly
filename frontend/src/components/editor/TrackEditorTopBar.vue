@@ -177,7 +177,7 @@
       <span v-if="!canSave && !saving" class="text-sm text-muted" data-testid="save-requirements">{{ !trackName.trim() ? 'Add a name in Description' : 'Add at least two route points' }}</span>
     </div>
 
-    <p v-if="graphCoverage && routingMode === 'auto'" class="m-0 px-3 pb-2 text-sm text-muted" data-testid="routing-coverage">Road routing: {{ graphCoverage }}</p>
+    <p v-if="graphCoverage && routingMode === 'auto'" class="m-0 px-3 pbe-2 text-sm text-muted" data-testid="routing-coverage">Road routing: {{ graphCoverage }}</p>
     <div
       v-if="shouldShowGraphStatus"
       class="top-bar-status"
@@ -321,12 +321,12 @@ function updateOverflowMenuPosition() {
 
   overflowMenuStyle.value = {
     position: "fixed",
-    top: `${Math.round(top)}px`,
-    left: `${Math.round(left)}px`,
+    insetBlockStart: `${Math.round(top)}px`,
+    insetInlineStart: `${Math.round(left)}px`,
     width: `${Math.round(maxWidth)}px`,
     minWidth: "0",
     maxWidth: `${Math.round(maxWidth)}px`,
-    right: "auto",
+    insetInlineEnd: "auto",
   };
 }
 
@@ -385,9 +385,9 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 12px 16px;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  background: oklch(100% 0 none / 0.96);
+  border: 1px solid oklch(92.9% 0.0126 255.5 / 0.9);
+  box-shadow: 0 12px 32px oklch(20.8% 0.0398 265.8 / 0.08);
 
 }
 
@@ -406,10 +406,10 @@ onBeforeUnmount(() => {
 }
 
 .top-bar-track-copy strong {
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #0f172a;
+  color: oklch(20.8% 0.0398 265.8);
 }
 
 
@@ -420,8 +420,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
+  background: oklch(96.2% 0.0434 156.7);
+  color: oklch(44.8% 0.1083 151.3);
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -439,14 +439,14 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: oklch(97% 0.0142 254.6);
+  color: oklch(37.9% 0.1378 265.5);
   font-size: 0.84rem;
 }
 
 .metric-chip--warning {
-  background: #fff7ed;
-  color: #c2410c;
+  background: oklch(98% 0.0158 73.7);
+  color: oklch(55.3% 0.1739 38.4);
 }
 
 .top-bar-controls {
@@ -474,9 +474,9 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding: 6px;
   border-radius: 14px;
-  background: #fff;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+  background: var(--color-surface);
+  border: 1px solid oklch(86.9% 0.0198 252.9 / 0.9);
+  box-shadow: 0 14px 28px oklch(20.8% 0.0398 265.8 / 0.12);
   z-index: 3000;
   box-sizing: border-box;
 }
@@ -486,17 +486,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  color: #334155;
+  color: oklch(37.2% 0.0392 257.3);
   font-size: 0.9rem;
 }
 
 .top-bar-select {
   width: 100%;
   min-width: 0;
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  border: 1px solid oklch(86.9% 0.0198 252.9 / 0.9);
   border-radius: 10px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--color-surface);
+  color: oklch(20.8% 0.0398 265.8);
   padding: 8px 10px;
   font-size: 0.9rem;
 }
@@ -506,12 +506,18 @@ onBeforeUnmount(() => {
   background: transparent;
   border-radius: 10px;
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
-.top-bar-export-item:hover {
-  background: #eff6ff;
+@media (hover: hover) and (pointer: fine) {
+  .top-bar-export-item:hover {
+    background: oklch(97% 0.0142 254.6);
+  }
+}
+
+.top-bar-export-item:active {
+  transform: scale(0.98);
 }
 
 .top-bar-status {
@@ -519,13 +525,13 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #475569;
+  color: oklch(44.6% 0.0374 257.3);
   font-size: 0.8rem;
   min-height: 18px;
 }
 
 .top-bar-status-warning {
-  color: #b45309;
+  color: oklch(55.5% 0.1455 49);
 }
 
 .top-bar-status-actions {
@@ -535,17 +541,23 @@ onBeforeUnmount(() => {
 }
 
 .top-bar-status-action {
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  border: 1px solid oklch(86.9% 0.0198 252.9 / 0.9);
   border-radius: 10px;
-  background: #fff;
-  color: #0f172a;
+  background: var(--color-surface);
+  color: oklch(20.8% 0.0398 265.8);
   padding: 4px 8px;
   font-size: 0.78rem;
   cursor: pointer;
 }
 
-.top-bar-status-action:hover {
-  background: rgba(241, 245, 249, 1);
+@media (hover: hover) and (pointer: fine) {
+  .top-bar-status-action:hover {
+    background: oklch(96.8% 0.0069 247.9);
+  }
+}
+
+.top-bar-status-action:active {
+  transform: scale(0.97);
 }
 
 @media (max-width: 1100px) {

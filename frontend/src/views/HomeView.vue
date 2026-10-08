@@ -869,8 +869,8 @@ body,
 /* Map controls overlay - positioned absolutely to appear above map */
 .map-controls-overlay {
   position: fixed;
-  top: 16px;
-  left: 16px;
+  inset-block-start: 16px;
+  inset-inline-start: 16px;
   z-index: 1200; /* Above map layers (tile: 200, overlay: 400, popup: 700) */
   display: flex;
   flex-direction: column;
@@ -901,16 +901,24 @@ body,
   border-radius: var(--control-radius);
   cursor: pointer;
   box-shadow: var(--control-shadow);
-  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+  transition: background-color 0.2s var(--ease-out, ease-out),
+    box-shadow 0.2s var(--ease-out, ease-out),
+    color 0.2s var(--ease-out, ease-out);
   user-select: none;
   pointer-events: auto;
 }
 
-.create-track-btn:hover {
-  background: var(--control-bg-solid);
-  color: var(--control-icon-hover);
-  box-shadow: var(--control-shadow-hover);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .create-track-btn:hover {
+    background: var(--control-bg-solid);
+    color: var(--control-icon-hover);
+    box-shadow: var(--control-shadow-hover);
+    transform: translateY(-1px);
+  }
+
+  .create-track-btn:hover svg {
+    stroke: var(--accent-hover);
+  }
 }
 
 .create-track-btn:active {
@@ -923,11 +931,7 @@ body,
   height: 20px;
   flex-shrink: 0;
   stroke: var(--accent);
-  transition: stroke 0.2s;
-}
-
-.create-track-btn:hover svg {
-  stroke: var(--accent-hover);
+  transition: stroke 0.2s var(--ease-out, ease-out);
 }
 
 /* Touch sizing keys on the input mode, not the viewport — a touch iPad is
@@ -937,10 +941,10 @@ body,
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--color-surface);
     backdrop-filter: none;
     border: 1px solid var(--control-border-strong);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.15);
   }
 
   .create-track-btn svg {
@@ -952,8 +956,8 @@ body,
 /* Auth button overlay - positioned in bottom left */
 .auth-button-overlay {
   position: fixed;
-  bottom: 16px;
-  left: 16px;
+  inset-block-end: 16px;
+  inset-inline-start: 16px;
   z-index: 1200;
   pointer-events: auto;
 }
@@ -962,28 +966,28 @@ body,
    the clusters follow the writing direction if the app ever ships RTL. */
 @media (max-width: 640px), (pointer: coarse) {
   .auth-button-overlay {
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    left: calc(12px + env(safe-area-inset-left, 0px));
+    inset-block-end: calc(12px + env(safe-area-inset-bottom, 0px));
+    inset-inline-start: calc(12px + env(safe-area-inset-left, 0px));
   }
 }
 
 @media (max-width: 640px), (pointer: coarse) {
   .map-controls-overlay {
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    left: calc(12px + env(safe-area-inset-left, 0px));
+    inset-block-start: calc(12px + env(safe-area-inset-top, 0px));
+    inset-inline-start: calc(12px + env(safe-area-inset-left, 0px));
   }
 }
 
 .upload-form-container {
   /* Fix visibility on mobile Safari: pin to viewport and respect safe areas */
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  inset-inline-end: 16px;
+  inset-block-end: 16px;
   /* iOS safe area support (older constant() first, then env()) */
-  right: calc(16px + constant(safe-area-inset-right));
-  right: calc(16px + env(safe-area-inset-right));
-  bottom: calc(16px + constant(safe-area-inset-bottom));
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  inset-inline-end: calc(16px + constant(safe-area-inset-right));
+  inset-inline-end: calc(16px + env(safe-area-inset-right));
+  inset-block-end: calc(16px + constant(safe-area-inset-bottom));
+  inset-block-end: calc(16px + env(safe-area-inset-bottom));
   z-index: 2000; /* Above map panes and controls */
   /* Only the upload control lives here now; Create Track moved to the
      top-left map-tool stack. Right-aligned so the compact button keeps the
@@ -1005,7 +1009,7 @@ body,
 }
 
 .collapsible-upload {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 6px;
   /* Adaptive sizing */
   width: auto;
@@ -1029,7 +1033,8 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, box-shadow 0.2s;
+  transition: background-color 0.2s var(--ease-out, ease-out),
+    box-shadow 0.2s var(--ease-out, ease-out);
   border: 1px solid var(--control-border);
   user-select: none;
   box-shadow: var(--control-shadow);
@@ -1042,27 +1047,33 @@ body,
   will-change: transform;
 }
 
-.upload-button-compact:hover {
-  background: rgba(255, 255, 255, 1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .upload-button-compact:hover {
+    background: oklch(100% 0 none);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.12);
+    transform: translateY(-1px);
+  }
+
+  .upload-button-compact:hover .upload-icon {
+    color: oklch(51.3% 0.1603 255.7);
+  }
+}
+
+.upload-button-compact:active {
+  transform: scale(0.97);
 }
 
 .upload-button-compact.drag-active {
   border-color: var(--accent);
-  background: rgba(227, 242, 253, 0.95);
-  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.25);
+  background: oklch(95.3% 0.0218 239.4 / 0.95);
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--color-action) 25%, transparent);
 }
 
 .upload-icon {
   width: 24px;
   height: 24px;
-  color: #1976d2;
-  transition: color 0.2s;
-}
-
-.upload-button-compact:hover .upload-icon {
-  color: #1565c0;
+  color: oklch(56.5% 0.1633 253.3);
+  transition: color 0.2s var(--ease-out, ease-out);
 }
 
 /* Expanded form styles */
@@ -1071,12 +1082,17 @@ body,
   min-width: 210px;
   max-width: 320px;
   padding: 16px;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  animation: expandForm 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px oklch(0% 0 none / 0.12);
   box-sizing: border-box;
   font-size: var(--text-sm);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .upload-form-expanded {
+    animation: expandForm 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
 
 @keyframes expandForm {
@@ -1094,9 +1110,9 @@ body,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e5e5e5;
+  margin-block-end: 12px;
+  padding-block-end: 8px;
+  border-block-end: 1px solid oklch(92.2% 0 none);
 }
 
 .upload-form-title {
@@ -1117,13 +1133,20 @@ body,
   align-items: center;
   justify-content: center;
   color: var(--color-muted);
-  transition: all 0.2s;
+  transition: background-color 0.2s var(--ease-out, ease-out),
+    color 0.2s var(--ease-out, ease-out);
   padding: 0;
 }
 
-.collapse-button:hover {
-  background: #f5f5f5;
-  color: var(--color-ink);
+@media (hover: hover) and (pointer: fine) {
+  .collapse-button:hover {
+    background: oklch(97% 0 none);
+    color: var(--color-ink);
+  }
+}
+
+.collapse-button:active {
+  transform: scale(0.95);
 }
 
 .collapse-button svg {
@@ -1135,18 +1158,18 @@ body,
 @media (max-width: 640px), (pointer: coarse) {
   .upload-form-container {
     /* Safe-area aware offsets on small screens */
-    right: calc(12px + env(safe-area-inset-right, 0px));
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    inset-inline-end: calc(12px + env(safe-area-inset-right, 0px));
+    inset-block-end: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .upload-button-compact {
     width: 44px; /* Same as other buttons */
     height: 44px;
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--color-surface);
     backdrop-filter: none;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid oklch(0% 0 none / 0.12);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.15);
   }
 
   .upload-icon {
@@ -1161,9 +1184,9 @@ body,
   }
 }
 
-.create-track-btn { position:fixed; top:12px; left:64px; width:auto; min-height:44px; display:flex; gap:8px; padding:0 12px; font-size:14px; color:var(--color-ink); }
+.create-track-btn { position:fixed; inset-block-start:12px; inset-inline-start:64px; width:auto; min-height:44px; display:flex; gap:8px; padding:0 12px; font-size:14px; color:var(--color-ink); }
 .create-track-btn svg { width:20px; height:20px; flex-shrink:0; }
-.upload-form-container { top:64px; bottom:auto; left:64px; right:auto; max-width:calc(100vw - 80px); }
+.upload-form-container { inset-block-start:64px; inset-block-end:auto; inset-inline-start:64px; inset-inline-end:auto; max-width:calc(100vw - 80px); }
 .upload-button-compact { width:auto; min-height:44px; display:flex; gap:8px; padding:0 12px; font-size:14px; color:var(--color-ink); }
 .upload-button-compact .upload-icon { width:20px; height:20px; }
 .collapsible-upload.expanded .upload-form-expanded { width:100%; min-width:0; max-width:100%; }

@@ -264,6 +264,6 @@ onUnmounted(() => {
 }
 
 .direction-arrow svg {
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 1px 1px oklch(0% 0 none / 0.2));
 }
 </style>

@@ -131,7 +131,7 @@ function formatDistance(km) {
 <style scoped>
 .sidebar-section {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .section-header {
@@ -160,20 +160,27 @@ function formatDistance(km) {
   padding: 6px 8px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background-color 0.15s var(--ease-out, ease-out);
 }
 
-.segment-item:hover {
-  background: #f5f5f5;
+.segment-item:active {
+  background: oklch(94.9% 0 none);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .segment-item:hover {
+    background: oklch(97% 0 none);
+  }
 }
 
 .segment-item.active {
-  background: #e8f0fe;
+  background: oklch(95.3% 0.0207 261.8);
 }
 
 .segment-item.highlighted {
-  background: #fff9c4;
-  outline:2px solid #9b7900; outline-offset:-2px;
+  background: oklch(97.4% 0.0682 102.2);
+  outline: 2px solid oklch(59.2% 0.1211 88.9);
+  outline-offset: -2px;
 }
 
 .segment-color {
@@ -198,7 +205,7 @@ function formatDistance(km) {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+  margin-block-start: 6px;
 }
 
 
@@ -211,35 +218,55 @@ function formatDistance(km) {
 .segment-color-input {
   width: 26px;
   height: 26px;
-  border: 1px solid #ddd;
+  border: 1px solid oklch(89.8% 0 none);
   border-radius: 6px;
   padding: 0;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .segment-actions {
   display: flex;
   gap: 2px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s var(--ease-out, ease-out);
 }
 
-.segment-item:hover .segment-actions {
+@media (hover: hover) and (pointer: fine) {
+  .segment-item:hover .segment-actions {
+    opacity: 1;
+  }
+}
+
+/* Touch devices have no hover: keep the actions visible there and whenever a
+   control inside the row holds focus, so they are never invisible yet tappable. */
+.segment-item:focus-within .segment-actions {
   opacity: 1;
 }
 
+@media (pointer: coarse) {
+  .segment-actions {
+    opacity: 1;
+  }
+}
+
 .btn-icon {
-  border: 1px solid #ddd;
+  border: 1px solid oklch(89.8% 0 none);
   border-radius: 4px;
-  background: #fafafa;
+  background: oklch(98.5% 0 none);
   cursor: pointer;
   font-size: 16px;
   padding: 2px 6px;
   line-height: 1;
 }
 
-.btn-icon:hover {
-  background: #e8f0fe;
+.btn-icon:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-icon:hover {
+    background: oklch(95.3% 0.0207 261.8);
+  }
 }
 
 .btn-icon-sm {
@@ -252,12 +279,18 @@ function formatDistance(km) {
   color: var(--color-muted);
 }
 
-.btn-icon-sm:hover {
-  background: #e0e0e0;
+.btn-icon-sm:active {
+  transform: scale(0.97);
 }
 
-.btn-icon-sm.danger:hover {
-  background: #fce4ec;
-  color: #c62828;
+@media (hover: hover) and (pointer: fine) {
+  .btn-icon-sm:hover {
+    background: oklch(90.7% 0 none);
+  }
+
+  .btn-icon-sm.danger:hover {
+    background: oklch(94.1% 0.0282 355.4);
+    color: var(--color-danger);
+  }
 }
 </style>

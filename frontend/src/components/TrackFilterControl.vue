@@ -850,8 +850,8 @@ onUnmounted(() => {
 <style scoped>
 .track-filter-wrapper {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  inset-block-start: 16px;
+  inset-inline-end: 16px;
   z-index: 1300; /* Higher than SearchButton's 1200 */
 }
 
@@ -859,8 +859,8 @@ onUnmounted(() => {
    native control gets — no inherited background, border, or padding. */
 .filter-button-compact {
   position: absolute;
-  top: 0;
-  right: 0;
+  inset-block-start: 0;
+  inset-inline-end: 0;
   width: 40px;
   height: 40px;
   padding: 0;
@@ -871,7 +871,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
   user-select: none;
   box-shadow: var(--control-shadow);
   color: var(--control-icon);
@@ -881,11 +880,13 @@ onUnmounted(() => {
   will-change: transform;
 }
 
-.filter-button-compact:hover {
-  background: var(--control-bg-solid);
-  color: var(--control-icon-hover);
-  box-shadow: var(--control-shadow-hover);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .filter-button-compact:hover {
+    background: var(--control-bg-solid);
+    color: var(--control-icon-hover);
+    box-shadow: var(--control-shadow-hover);
+    transform: translateY(-1px);
+  }
 }
 
 .filter-button-compact:active {
@@ -899,18 +900,17 @@ onUnmounted(() => {
 
 .track-filter-control {
   position: relative !important;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  box-shadow: 0 2px 8px oklch(0% 0 none / 0.12) !important;
   padding: 16px !important;
   z-index: 1300; /* Same as wrapper */
   min-width: 210px;
   max-width: 320px;
   width: 320px !important;
-  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
+  overflow: clip;
   box-sizing: border-box !important;
-  margin-top: 8px; /* space from button */
+  margin-block-start: 8px; /* space from button */
 }
 
 .panel-header {
@@ -919,7 +919,7 @@ onUnmounted(() => {
   justify-content: space-between;
   margin: -8px -8px 8px -8px; /* pull to edges visually */
   padding: 8px;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
+  border-block-end: 1px solid oklch(0% 0 none / 0.06);
 }
 
 .header-controls {
@@ -944,17 +944,23 @@ onUnmounted(() => {
   height: 32px;
   border: none;
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-surface);
   color: var(--color-muted);
   cursor: pointer;
-  transition: background 0.2s, transform 0.2s, color 0.2s;
 }
 
-.filter-options-btn:hover,
-.collapse-btn:hover { 
-  background: #f5f5f5; 
-  color: var(--color-ink);
-  transform: translateY(-1px); 
+@media (hover: hover) and (pointer: fine) {
+  .filter-options-btn:hover,
+  .collapse-btn:hover {
+    background: oklch(97% 0 none);
+    color: var(--color-ink);
+    transform: translateY(-1px);
+  }
+}
+
+.filter-options-btn:active,
+.collapse-btn:active {
+  transform: scale(0.95);
 }
 
 .options-icon,
@@ -965,22 +971,21 @@ onUnmounted(() => {
 
 /* Filter options panel */
 .filter-options-panel {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: oklch(98.2% 0.0017 none);
+  border: 1px solid oklch(94.2% 0.0052 247.9);
   border-radius: 6px;
   padding: 12px;
-  margin-bottom: 12px;
-  animation: fadeInDown 0.2s ease;
+  margin-block-end: 12px;
 }
 
 .options-header {
-  margin-bottom: 10px;
+  margin-block-end: 10px;
 }
 
 .options-title {
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  color: #495057;
+  color: oklch(42.8% 0.0147 248.2);
 }
 
 .options-checkboxes {
@@ -998,7 +1003,7 @@ onUnmounted(() => {
   cursor: pointer;
   flex-shrink: 0;
   position: relative;
-  top: 2px; /* Align checkbox center with text center */
+  inset-block-start: 2px; /* Align checkbox center with text center */
 }
 
 .option-checkbox:disabled {
@@ -1027,17 +1032,17 @@ onUnmounted(() => {
   }
 }
 .filter-section {
-  margin-bottom: 12px;
+  margin-block-end: 12px;
 }
 .filter-section label {
   display: block;
-  margin-bottom: 12px;
+  margin-block-end: 12px;
   font-weight: 500;
 }
 
 /* Space before actions for consistency with other sections */
 .filter-actions {
-  margin-top: 12px;
+  margin-block-start: 12px;
 }
 
 /* Add padding for the slider inside the filter-section */
@@ -1050,8 +1055,8 @@ onUnmounted(() => {
   padding-inline-end: 15px;
   margin-inline-start: auto;
   margin-inline-end: auto;
-  margin-top: 40px;
-  margin-bottom: 20px;
+  margin-block-start: 40px;
+  margin-block-end: 20px;
 }
 
 /* Make slider tooltips smaller and more compact */
@@ -1076,7 +1081,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 6px;
+  margin-block-start: 6px;
   max-height: 200px;
   overflow-y: auto;
   /* Allow vertical scrolling only within this container */
@@ -1101,7 +1106,7 @@ onUnmounted(() => {
   padding: 0;
   flex: 1;
   line-height: var(--leading-snug);
-  padding-top: 0;
+  padding-block-start: 0;
 }
 
 /* Reset button sizing for the panel's own controls. The header buttons set
@@ -1113,18 +1118,24 @@ onUnmounted(() => {
 }
 
 .filter-actions {
-  text-align: right;
+  text-align: end;
 }
 .track-filter-control .filter-actions button {
-  background: #eee;
+  background: oklch(94.9% 0 none);
   border: none;
   border-radius: 4px;
   padding: 6px 14px;
   cursor: pointer;
-  transition: background 0.2s;
 }
-.track-filter-control .filter-actions button:hover {
-  background: #ddd;
+
+.track-filter-control .filter-actions button:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .track-filter-control .filter-actions button:hover {
+    background: oklch(89.8% 0 none);
+  }
 }
 
 .no-tracks-placeholder {
@@ -1141,7 +1152,7 @@ onUnmounted(() => {
 }
 
 .placeholder-icon {
-  margin-bottom: 12px;
+  margin-block-end: 12px;
   color: var(--color-muted);
   opacity: 0.8;
 }
@@ -1177,11 +1188,7 @@ onUnmounted(() => {
   text-wrap: pretty;
 }
 
-/* Transition for panel */
-.filter-slide-fade-enter-active,
-.filter-slide-fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
+/* Transition for panel (declared inside the no-preference block below) */
 .filter-slide-fade-enter-from,
 .filter-slide-fade-leave-to {
   opacity: 0;
@@ -1192,19 +1199,19 @@ onUnmounted(() => {
    768px wide and still needs 44px targets. */
 @media (max-width: 640px), (pointer: coarse) {
   .track-filter-wrapper {
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    right: calc(12px + env(safe-area-inset-right, 0px));
+    inset-block-start: calc(12px + env(safe-area-inset-top, 0px));
+    inset-inline-end: calc(12px + env(safe-area-inset-right, 0px));
   }
   .filter-button-compact {
-    top: 0;
-    right: 0;
+    inset-block-start: 0;
+    inset-inline-end: 0;
     width: 44px;
     height: 44px;
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--color-surface);
     backdrop-filter: none;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid oklch(0% 0 none / 0.12);
+    box-shadow: 0 4px 12px oklch(0% 0 none / 0.15);
   }
 
   .filter-icon {
@@ -1220,12 +1227,12 @@ onUnmounted(() => {
      so the panel starts below 264 and stays clear of both corners. */
   .track-filter-control {
     position: fixed !important;
-    top: calc(272px + env(safe-area-inset-top, 0px)) !important;
-    left: calc(12px + env(safe-area-inset-left, 0px));
-    right: calc(12px + env(safe-area-inset-right, 0px));
+    inset-block-start: calc(272px + env(safe-area-inset-top, 0px)) !important;
+    inset-inline-start: calc(12px + env(safe-area-inset-left, 0px));
+    inset-inline-end: calc(12px + env(safe-area-inset-right, 0px));
     width: auto !important;
     max-width: none;
-    margin-top: 0;
+    margin-block-start: 0;
     /* Hugs the top of the band and grows only as far as its content: an
        empty panel stretched to 500px of dead white is worse than a short
        one. The max-height keeps tall filter content inside the band, where
@@ -1241,6 +1248,47 @@ onUnmounted(() => {
   .collapse-btn {
     width: 44px;
     height: 44px;
+  }
+}
+
+/* Motion is opt-in: height collapse, slide animations and press motion only
+   run when the visitor has not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .filter-button-compact {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      box-shadow 0.2s var(--ease-out, ease-out),
+      color 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .track-filter-control {
+    transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .filter-options-btn,
+  .collapse-btn {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      color 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .filter-options-panel {
+    animation: fadeInDown 0.2s var(--ease-out, ease-out);
+  }
+
+  .track-filter-control .filter-actions button {
+    transition:
+      background-color 0.2s var(--ease-out, ease-out),
+      transform 0.2s var(--ease-out, ease-out);
+  }
+
+  .filter-slide-fade-enter-active,
+  .filter-slide-fade-leave-active {
+    transition:
+      opacity 0.25s var(--ease-out, ease-out),
+      transform 0.25s var(--ease-out, ease-out);
   }
 }
 </style>

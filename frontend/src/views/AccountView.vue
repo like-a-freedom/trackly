@@ -1,6 +1,6 @@
 <template>
   <div class="account-page">
-    <div v-if="accountActionError" role="alert" class="mx-4 mt-4 flex items-center gap-3 rounded border border-danger bg-surface p-3 text-sm text-danger">
+    <div v-if="accountActionError" role="alert" class="mx-4 mbs-4 flex items-center gap-3 rounded border border-danger bg-surface p-3 text-sm text-danger">
       <span>{{ accountActionError }}</span>
       <button v-if="failedAccountAction" type="button" class="min-h-11 shrink-0 rounded border border-line bg-surface px-3 text-ink" :disabled="!!accountActionPending" @click="handleRetryAccountAction">Retry</button>
     </div>
@@ -716,7 +716,7 @@ onMounted(async () => {
 <style scoped>
 .account-page {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: oklch(97.5% 0.0045 258.3);
 }
 
 .account-header {
@@ -725,10 +725,10 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 16px;
   padding: 16px 24px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border-block-end: 1px solid oklch(92.8% 0.0058 264.5);
   position: sticky;
-  top: 0;
+  inset-block-start: 0;
   z-index: 100;
 }
 
@@ -738,19 +738,26 @@ onMounted(async () => {
   gap: 6px;
   padding: 8px 12px;
   background: transparent;
-  border: 1px solid #e5e7eb;
+  border: 1px solid oklch(92.8% 0.0058 264.5);
   border-radius: 8px;
   color: var(--color-ink);
   font-size: 0.9em;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s var(--ease-out, ease-out),
+    border-color 0.2s var(--ease-out, ease-out);
   flex-shrink: 0;
 }
 
-.back-btn:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+.back-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .back-btn:hover {
+    background: oklch(96.7% 0.0029 none);
+    border-color: oklch(87.2% 0.0093 258.3);
+  }
 }
 
 .header-profile {
@@ -765,8 +772,8 @@ onMounted(async () => {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  overflow: hidden;
-  background: #e5e7eb;
+  overflow: clip;
+  background: oklch(92.8% 0.0058 264.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -785,7 +792,7 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--color-ink);
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 
@@ -801,27 +808,34 @@ onMounted(async () => {
   width: 36px;
   height: 36px;
   background: transparent;
-  border: 1px solid #e5e7eb;
+  border: 1px solid oklch(92.8% 0.0058 264.5);
   border-radius: 8px;
   color: var(--color-ink);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s var(--ease-out, ease-out),
+    border-color 0.2s var(--ease-out, ease-out);
 }
 
-.settings-btn:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+.settings-btn:active {
+  transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-btn:hover {
+    background: oklch(96.7% 0.0029 none);
+    border-color: oklch(87.2% 0.0093 258.3);
+  }
 }
 
 .settings-menu {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: 0;
   min-width: 200px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border: 1px solid oklch(92.8% 0.0058 264.5);
   border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px oklch(0% 0 none / 0.15);
   padding: 6px;
   z-index: 1000;
 }
@@ -838,37 +852,42 @@ onMounted(async () => {
   font-size: 0.9em;
   font-weight: 500;
   color: var(--color-ink);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background-color 0.15s var(--ease-out, ease-out);
 }
 
-.menu-item:hover {
-  background: #f3f4f6;
+.menu-item:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .menu-item:hover {
+    background: oklch(96.7% 0.0029 none);
+  }
 }
 
 .menu-item-danger {
   color: var(--color-danger);
 }
 
-.menu-item-danger:hover {
-  background: #fef2f2;
+@media (hover: hover) and (pointer: fine) {
+  .menu-item-danger:hover {
+    background: oklch(97.1% 0.0129 17.4);
+  }
 }
 
 .menu-separator {
   height: 1px;
-  background: #e5e7eb;
+  background: oklch(92.8% 0.0058 264.5);
   margin: 6px 0;
 }
 
 /* Modal */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: oklch(0% 0 none / 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -877,11 +896,11 @@ onMounted(async () => {
 }
 
 .modal-content {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 12px;
   width: 100%;
   max-width: 480px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 25px -5px oklch(0% 0 none / 0.1);
 }
 
 .modal-header {
@@ -889,7 +908,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-block-end: 1px solid oklch(92.8% 0.0058 264.5);
 }
 
 .modal-header h3 {
@@ -910,12 +929,19 @@ onMounted(async () => {
   border-radius: 6px;
   color: var(--color-muted);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s var(--ease-out, ease-out),
+    color 0.15s var(--ease-out, ease-out);
 }
 
-.modal-close:hover {
-  background: #f3f4f6;
-  color: var(--color-ink);
+.modal-close:active {
+  transform: scale(0.95);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .modal-close:hover {
+    background: oklch(96.7% 0.0029 none);
+    color: var(--color-ink);
+  }
 }
 
 .modal-body {
@@ -928,11 +954,11 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-block-start: 1px solid oklch(92.8% 0.0058 264.5);
 }
 
 .form-group {
-  margin-bottom: 0;
+  margin-block-end: 0;
 }
 
 .form-label {
@@ -940,7 +966,7 @@ onMounted(async () => {
   font-size: 0.9em;
   font-weight: 500;
   color: var(--color-ink);
-  margin-bottom: 8px;
+  margin-block-end: 8px;
 }
 
 
@@ -971,19 +997,25 @@ onMounted(async () => {
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e0e0e0;
-  border-top-color: var(--accent);
+  border: 3px solid oklch(90.7% 0 none);
+  border-block-start-color: var(--accent);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
 }
 
 .spinner-small {
   width: 20px;
   height: 20px;
-  border: 2px solid #e0e0e0;
-  border-top-color: var(--accent);
+  border: 2px solid oklch(90.7% 0 none);
+  border-block-start-color: var(--accent);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .spinner,
+  .spinner-small,
+  .spinner-icon {
+    animation: spin 1s linear infinite;
+  }
 }
 
 @keyframes spin {
@@ -1002,10 +1034,10 @@ onMounted(async () => {
 }
 
 .account-section {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
+  box-shadow: 0 1px 3px oklch(0% 0 none / 0.08);
+  overflow: clip;
 }
 
 .section-header {
@@ -1013,7 +1045,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .section-header h2 {
@@ -1026,7 +1058,7 @@ onMounted(async () => {
 .track-count {
   font-size: 0.9em;
   color: var(--color-muted);
-  background: #f3f4f6;
+  background: oklch(96.7% 0.0029 none);
   padding: 4px 10px;
   border-radius: 12px;
 }
@@ -1038,8 +1070,8 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 16px;
   padding: 16px 24px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-block-end: 1px solid oklch(95.5% 0 none);
+  background: oklch(98.5% 0 none);
   flex-wrap: wrap;
 }
 
@@ -1051,15 +1083,15 @@ onMounted(async () => {
   min-width: 200px;
   max-width: 300px;
   padding: 8px 12px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface);
+  border: 1px solid oklch(92.8% 0.0058 264.5);
   border-radius: 8px;
   color: var(--color-muted);
 }
 
 .search-box:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.16);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-action) 16%, transparent);
 }
 
 .search-input {
@@ -1100,19 +1132,26 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
+  background: oklch(96.7% 0.0029 none);
+  border: 1px solid oklch(87.2% 0.0093 258.3);
   border-radius: 6px;
   font-size: 0.8em;
   font-weight: 500;
   color: var(--color-ink);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s var(--ease-out, ease-out),
+    border-color 0.15s var(--ease-out, ease-out);
 }
 
-.btn-bulk:hover:not(:disabled) {
-  background: #e5e7eb;
-  border-color: #9ca3af;
+.btn-bulk:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-bulk:hover:not(:disabled) {
+    background: oklch(92.8% 0.0058 264.5);
+    border-color: oklch(71.4% 0.0192 261.3);
+  }
 }
 
 .btn-bulk:disabled {
@@ -1122,12 +1161,14 @@ onMounted(async () => {
 
 .btn-bulk-danger {
   color: var(--color-danger);
-  border-color: #fca5a5;
+  border-color: oklch(80.8% 0.1035 19.6);
 }
 
-.btn-bulk-danger:hover:not(:disabled) {
-  background: #fef2f2;
-  border-color: #f87171;
+@media (hover: hover) and (pointer: fine) {
+  .btn-bulk-danger:hover:not(:disabled) {
+    background: oklch(97.1% 0.0129 17.4);
+    border-color: oklch(71.1% 0.1661 22.2);
+  }
 }
 
 .tracks-loading {
@@ -1149,7 +1190,7 @@ onMounted(async () => {
 }
 
 .empty-icon {
-  color: #d1d5db;
+  color: oklch(87.2% 0.0093 258.3);
 }
 
 .tracks-empty p {
@@ -1171,20 +1212,22 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 16px 24px;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background 0.15s ease;
+  border-block-end: 1px solid oklch(95.5% 0 none);
+  transition: background-color 0.15s var(--ease-out, ease-out);
 }
 
 .track-card:last-child {
-  border-bottom: none;
+  border-block-end: none;
 }
 
-.track-card:hover {
-  background: #f9fafb;
+@media (hover: hover) and (pointer: fine) {
+  .track-card:hover {
+    background: oklch(98.5% 0.0017 none);
+  }
 }
 
 .track-card.selected {
-  background: #eff6ff;
+  background: oklch(97% 0.0142 254.6);
 }
 
 .track-checkbox {
@@ -1210,7 +1253,7 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--color-ink);
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
 }
 
@@ -1247,17 +1290,17 @@ onMounted(async () => {
   font-size: 0.75em;
   font-weight: 600;
   text-transform: uppercase;
-  background: #f3f4f6;
+  background: oklch(96.7% 0.0029 none);
   color: var(--color-muted);
-  border: 1px solid #e5e7eb;
+  border: 1px solid oklch(92.8% 0.0058 264.5);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s var(--ease-out, ease-out),
+    border-color 0.15s var(--ease-out, ease-out);
   flex-shrink: 0;
 }
 
-.visibility-toggle:hover:not(:disabled) {
-  background: #e5e7eb;
-  border-color: #d1d5db;
+.visibility-toggle:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .visibility-toggle:disabled {
@@ -1266,18 +1309,21 @@ onMounted(async () => {
 }
 
 .visibility-toggle.public {
-  background: #dcfce7;
+  background: oklch(96.2% 0.0434 156.7);
   color: var(--color-success);
-  border-color: #86efac;
+  border-color: oklch(87.1% 0.1363 154.4);
 }
 
-.visibility-toggle.public:hover:not(:disabled) {
-  background: #bbf7d0;
-  border-color: #4ade80;
-}
+@media (hover: hover) and (pointer: fine) {
+  .visibility-toggle:hover:not(:disabled) {
+    background: oklch(92.8% 0.0058 264.5);
+    border-color: oklch(87.2% 0.0093 258.3);
+  }
 
-.spinner-icon {
-  animation: spin 1s linear infinite;
+  .visibility-toggle.public:hover:not(:disabled) {
+    background: oklch(92.5% 0.0806 156);
+    border-color: oklch(80% 0.1821 151.7);
+  }
 }
 
 .btn-load-more {
@@ -1285,18 +1331,25 @@ onMounted(async () => {
   width: calc(100% - 48px);
   margin: 16px 24px 24px;
   padding: 12px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: oklch(96.7% 0.0029 none);
+  border: 1px solid oklch(92.8% 0.0058 264.5);
   border-radius: 8px;
   font-size: 0.9em;
   font-weight: 500;
   color: var(--color-ink);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s var(--ease-out, ease-out),
+    border-color 0.2s var(--ease-out, ease-out);
 }
 
-.btn-load-more:hover:not(:disabled) {
-  background: #e5e7eb;
+.btn-load-more:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-load-more:hover:not(:disabled) {
+    background: oklch(92.8% 0.0058 264.5);
+  }
 }
 
 .btn-load-more:disabled {
@@ -1328,7 +1381,7 @@ onMounted(async () => {
   }
 
   .settings-menu {
-    right: -8px;
+    inset-inline-end: -8px;
   }
 
   .modal-overlay {

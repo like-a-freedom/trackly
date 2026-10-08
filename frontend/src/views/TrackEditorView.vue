@@ -895,17 +895,17 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.track-editor-view { height:100vh; height:100dvh; overflow:hidden; }
+.track-editor-view { height:100vh; height:100dvh; overflow:clip; }
 .editor-map-stage { position:relative; flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 360px; }
 .editor-map-region { min-width:0; min-height:0; position:relative; }
 .editor-overlay-layer { display:contents; }
-.editor-left-panel { min-height:0; min-width:0; background:var(--color-surface); border-left:1px solid var(--color-line); overflow:hidden; }
-.editor-left-rail { position:absolute; z-index:500; top:12px; left:60px; max-width:calc(100% - 440px); }
+.editor-left-panel { min-height:0; min-width:0; background:var(--color-surface); border-inline-start:1px solid var(--color-line); overflow:clip; }
+.editor-left-rail { position:absolute; z-index:500; inset-block-start:12px; inset-inline-start:60px; max-width:calc(100% - 440px); }
 .sheet-toggle { display:none; }
 @media(max-width:900px) {
  .editor-map-stage { grid-template-columns:minmax(0,1fr); }
- .editor-left-rail { left:60px; right:12px; max-width:none; }
- .editor-left-panel { position:absolute; z-index:600; bottom:0; left:0; right:0; height:min(36%,280px); display:flex; flex-direction:column; border-top:1px solid var(--color-line); padding-bottom:env(safe-area-inset-bottom); }
+ .editor-left-rail { inset-inline-start:60px; inset-inline-end:12px; max-width:none; }
+ .editor-left-panel { position:absolute; z-index:600; inset-block-end:0; inset-inline-start:0; inset-inline-end:0; height:min(36%,280px); display:flex; flex-direction:column; border-block-start:1px solid var(--color-line); padding-bottom:env(safe-area-inset-bottom); }
  .editor-left-panel[data-sheet="collapsed"] { height:44px; }
  .editor-left-panel[data-sheet="full"] { height:calc(100% - 80px); }
  .sheet-toggle { display:block; flex-shrink:0; }

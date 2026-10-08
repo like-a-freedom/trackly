@@ -6,11 +6,12 @@
 }
 
 .km-marker__badge {
+  position: relative;
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: rgba(16, 24, 40, 0.85);
-  color: #fff;
+  background: oklch(21% 0.0341 263.4 / 0.85);
+  color: oklch(100% 0 none);
   font-size: var(--text-xs);
   font-weight: 600;
   /* Distances are read against each other, so the digits must align */
@@ -19,19 +20,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px oklch(0% 0 none / 0.3);
   cursor: pointer;
-  transition: transform 0.15s ease;
   user-select: none;
   -webkit-user-select: none;
-}
-
-.km-marker__badge:hover {
-  transform: scale(1.1);
-}
-
-.km-marker__badge:active {
-  transform: scale(0.95);
 }
 
 /* Start/Finish markers - under POI (600), but above km */
@@ -43,17 +35,38 @@
 .endpoint-marker--finish,
 .endpoint-marker--loop {
   cursor: pointer;
-  transition: transform 0.15s ease;
-}
-
-.endpoint-marker--start:hover,
-.endpoint-marker--finish:hover,
-.endpoint-marker--loop:hover {
-  transform: scale(1.1);
 }
 
 .endpoint-marker__icon {
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+  filter: drop-shadow(0 2px 4px oklch(0% 0 none / 0.25));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .km-marker__badge:hover {
+    transform: scale(1.1);
+  }
+
+  .endpoint-marker--start:hover,
+  .endpoint-marker--finish:hover,
+  .endpoint-marker--loop:hover {
+    transform: scale(1.1);
+  }
+}
+
+.km-marker__badge:active,
+.endpoint-marker--start:active,
+.endpoint-marker--finish:active,
+.endpoint-marker--loop:active {
+  transform: scale(0.95);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .km-marker__badge,
+  .endpoint-marker--start,
+  .endpoint-marker--finish,
+  .endpoint-marker--loop {
+    transition: transform 0.15s var(--ease-out, ease-out);
+  }
 }
 
 /* Direction arrows - handled by leaflet-polylinedecorator */
@@ -74,7 +87,7 @@
 
 .track-marker-tooltip__title {
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-block-end: 2px;
 }
 
 .track-marker-tooltip__subtitle {
@@ -82,7 +95,7 @@
      and weight than the same text on a light surface. */
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  color: #ccc;
+  color: oklch(84.5% 0 none);
 }
 
 /* Mobile adjustments (project standard breakpoint) */
@@ -92,34 +105,22 @@
     height: 22px;
     font-size: 10px;
   }
-  
+
   .endpoint-marker__icon {
     width: 28px !important;
     height: 28px !important;
     /* Disable backdrop-filter for performance (project pattern) */
     backdrop-filter: none;
   }
-  
-  /* Increase touch target on mobile */
-  .km-marker__badge::before {
-    content: '';
-    position: absolute;
-    width: 44px;
-    height: 44px;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-  
+
+  /* Grow the touch target to 44px without growing the visual box: inset
+     collapses to 0 once the badge itself reaches 44px. */
+  .km-marker__badge::before,
   .endpoint-marker--start::before,
   .endpoint-marker--finish::before,
   .endpoint-marker--loop::before {
     content: '';
     position: absolute;
-    width: 44px;
-    height: 44px;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    inset: min(0px, (100% - 44px) / 2);
   }
 }

@@ -88,9 +88,12 @@ const modeItems = [
 .left-rail-group { display:flex; gap:4px; flex-shrink:0; }
 .left-rail-divider { width:1px; background:var(--color-line); }
 .left-rail-btn { display:flex; align-items:center; justify-content:center; width:44px; height:44px; border:0; background:transparent; color:var(--color-ink); border-radius:4px; cursor:pointer; flex-shrink:0; }
-.left-rail-btn.active { background:var(--color-action); color:white; }
-.left-rail-btn:disabled { color:#75859a; cursor:not-allowed; }
-.left-rail-btn:hover:not(:disabled):not(.active) { background:#eff6ff; }
+.left-rail-btn.active { background:var(--color-action); color:var(--color-surface); }
+.left-rail-btn:disabled { color:oklch(61.1% 0.0371 255.3); cursor:not-allowed; }
+.left-rail-btn:active:not(:disabled) { transform:scale(0.95); }
+@media (hover: hover) and (pointer: fine) {
+ .left-rail-btn:hover:not(:disabled):not(.active) { background:oklch(97% 0.0142 254.6); }
+}
 .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
 
 .mode-select { display:none; }

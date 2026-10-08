@@ -83,7 +83,7 @@ defineEmits([
 <style scoped>
 .sidebar-section {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .section-header {
@@ -121,8 +121,14 @@ defineEmits([
   color: var(--color-muted);
 }
 
-.btn-icon-sm:hover {
-  background: #e0e0e0;
+.btn-icon-sm:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-icon-sm:hover {
+    background: oklch(90.7% 0 none);
+  }
 }
 
 .btn-sm {

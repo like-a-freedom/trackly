@@ -2,7 +2,7 @@
   <div
     v-if="visible && data"
     class="custom-tooltip"
-    :style="{ left: x + 'px', top: y + 'px', position: 'fixed', zIndex: 2000 }"
+    :style="{ insetInlineStart: x + 'px', insetBlockStart: y + 'px', position: 'fixed', zIndex: 2000 }"
   >
     <div class="upload-form">
       <div
@@ -121,9 +121,9 @@ function formatDataset(dataset: string | undefined): string {
 <style scoped>
 .custom-tooltip {
   position: fixed;
-  background: rgba(255,255,255,0.98);
+  background: oklch(100% 0 none / 0.98);
   border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  box-shadow: 0 2px 12px oklch(0% 0 none / 0.18);
   padding: 10px 16px 12px 16px; /* increased padding for better spacing */
   color: var(--color-ink);
   font-size: 15px;
@@ -134,15 +134,15 @@ function formatDataset(dataset: string | undefined): string {
   max-height: 440px;
   height: auto;
   white-space: normal;
-  border: 1px solid #e0e0e0;
+  border: 1px solid oklch(90.7% 0 none);
   opacity: 0.98;
   z-index: 2000;
-  left: 0;
-  top: 0;
+  inset-inline-start: 0;
+  inset-block-start: 0;
   box-sizing: border-box;
-  transition: opacity 0.22s;
+  transition: opacity 0.22s var(--ease-out, ease-out);
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 .custom-tooltip > div { pointer-events: none; }
 .upload-form { background: none; box-shadow: none; border-radius: 0; padding: 0; gap: 0; height: auto; }
@@ -152,41 +152,41 @@ function formatDataset(dataset: string | undefined): string {
    digits make two values of equal length look different widths. */
 .upload-label {
   font-size: var(--text-xs);
-  margin-bottom: 4px;
+  margin-block-end: 4px;
   line-height: var(--leading-snug);
   padding: 0 1px;
   overflow-wrap: break-word;
   font-variant-numeric: tabular-nums;
 }
-.upload-label:last-child { margin-bottom: 0; }
+.upload-label:last-child { margin-block-end: 0; }
 .upload-label.name {
   font-weight: var(--weight-bold);
   font-size: var(--text-md);
   line-height: var(--leading-tight);
   text-wrap: balance;
-  margin-top: 4px;
-  margin-bottom: 4px;
+  margin-block-start: 4px;
+  margin-block-end: 4px;
   font-variant-numeric: normal;
 }
 .upload-label.description {
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
-  color: #444;
-  margin-bottom: 10px;
+  color: oklch(38.7% 0 none);
+  margin-block-end: 10px;
   text-wrap: pretty;
 }
 .upload-label.meta {
   font-size: var(--text-xs);
   color: var(--color-muted);
-  margin-bottom: 4px;
+  margin-block-end: 4px;
 }
 .upload-label.categories-section {
-  margin-bottom: 4px;
-  margin-top: 8px;
+  margin-block-end: 4px;
+  margin-block-start: 8px;
 }
 .upload-label.share-section {
-  margin-top: 8px;
-  margin-bottom: 4px;
+  margin-block-start: 8px;
+  margin-block-end: 4px;
 }
 .category-tags {
   display: inline-flex;
@@ -197,22 +197,27 @@ function formatDataset(dataset: string | undefined): string {
 }
 .category-tag {
   display: inline-block;
-  background: #e3f2fd;
+  background: oklch(95.3% 0.0218 239.4);
   color: var(--accent);
   border-radius: 6px;
   padding: 2px 10px 2px 8px;
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   line-height: 1.3;
-  border: 1px solid #bbdefb;
-  box-shadow: 0 1px 2px rgba(25,118,210,0.04);
+  border: 1px solid oklch(88.5% 0.0546 243.4);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--color-action) 4%, transparent);
   user-select: none;
   white-space: nowrap;
-  transition: background 0.18s, color 0.18s;
+  transition:
+    background-color 0.18s var(--ease-out, ease-out),
+    color 0.18s var(--ease-out, ease-out);
 }
-.category-tag:hover {
-  background: #bbdefb;
-  color: var(--accent-active);
+
+@media (hover: hover) and (pointer: fine) {
+  .category-tag:hover {
+    background: oklch(88.5% 0.0546 243.4);
+    color: var(--accent-active);
+  }
 }
 @media (max-width: 600px) {
   .custom-tooltip {
@@ -224,7 +229,7 @@ function formatDataset(dataset: string | undefined): string {
     height: auto;
     min-height: unset;
     max-height: 350px;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 }
 </style>

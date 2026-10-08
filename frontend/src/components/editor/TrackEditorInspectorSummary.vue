@@ -96,11 +96,11 @@ const timeDisplay = computed(() => {
 <style scoped>
 .sidebar-section {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-block-end: 1px solid oklch(95.5% 0 none);
 }
 
 .summary-section {
-  background: #fafafa;
+  background: oklch(98.5% 0 none);
 }
 
 .summary-row {

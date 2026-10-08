@@ -266,8 +266,8 @@ onUnmounted(() => {
   justify-content: center;
   border-radius: 50%;
   font-weight: bold;
-  color: white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  color: var(--color-surface);
+  box-shadow: 0 2px 6px oklch(0% 0 none / 0.3);
 }
 
 .poi-cluster-inner {
@@ -283,19 +283,19 @@ onUnmounted(() => {
    must be tabular — proportional figures make 8 and 11 different widths and
    the column of counts stops scanning. */
 .poi-cluster-small {
-  background-color: rgba(255, 107, 107, 0.9);
+  background-color: oklch(71.2% 0.1812 22.8 / 0.9);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .poi-cluster-medium {
-  background-color: rgba(255, 80, 80, 0.9);
+  background-color: oklch(67.6% 0.2115 24.8 / 0.9);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .poi-cluster-large {
-  background-color: rgba(220, 53, 53, 0.9);
+  background-color: oklch(58.9% 0.2035 26.1 / 0.9);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
