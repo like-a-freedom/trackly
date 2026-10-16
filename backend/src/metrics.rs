@@ -1357,4 +1357,75 @@ mod tests {
         assert!(body_str.contains("track_exports_total"));
         assert!(body_str.contains("trackly_session_heartbeat"));
     }
+
+    /// Scan the scrape output for a `trackly_session_heartbeat` series matching a
+    /// specific session hash and activity, order-independently.
+    fn heartbeat_value(body: &str, hash: &str, activity: &str) -> f64 {
+        let act = format!("activity=\"{activity}\"");
+        for line in body.lines() {
+            if line.starts_with("trackly_session_heartbeat")
+                && line.contains(hash)
+                && line.contains(&act)
+            {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    return parts[1].parse().unwrap_or(0.0);
+                }
+            }
+        }
+        0.0
+    }
+
+    async fn scrape() -> String {
+        let response = serve_metrics().await.into_response();
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        String::from_utf8(bytes.to_vec()).expect("utf8 body")
+    }
+
+    #[tokio::test]
+    async fn record_session_activity_emits_heartbeat_per_activity() {
+        let session = Uuid::new_v4();
+        let hash = hash_session_id(&session);
+
+        // The wiring seam: upload / edit / enrich are the activities now emitted by
+        // the real handlers. Each must increment its own series.
+        for activity in ["upload", "edit", "enrich"] {
+            let before = scrape().await;
+            let before = heartbeat_value(&before, &hash, activity);
+
+            record_session_activity(Some(session), activity);
+
+            let after = scrape().await;
+            let after = heartbeat_value(&after, &hash, activity);
+
+            assert_eq!(after, before + 1.0, "activity={activity} should increment");
+        }
+    }
+
+    #[tokio::test]
+    async fn record_session_activity_normalizes_unknown_and_ignores_none() {
+        let session = Uuid::new_v4();
+        let hash = hash_session_id(&session);
+
+        // Unknown activity label normalizes to "other".
+        record_session_activity(Some(session), "definitely-not-an-activity");
+        let body = scrape().await;
+        assert!(
+            heartbeat_value(&body, &hash, "other") >= 1.0,
+            "unknown activity should map to activity=\"other\""
+        );
+
+        // A None session must be a no-op (no new series for a random hash).
+        let ghost = Uuid::new_v4();
+        let ghost_hash = hash_session_id(&ghost);
+        record_session_activity(None, "upload");
+        let body_after = scrape().await;
+        assert_eq!(
+            heartbeat_value(&body_after, &ghost_hash, "upload"),
+            0.0,
+            "None session must not emit a heartbeat"
+        );
+    }
 }

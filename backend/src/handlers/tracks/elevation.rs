@@ -14,6 +14,7 @@ use tracing::info;
 
 use crate::db;
 use crate::error::{AppError, Result};
+use crate::metrics;
 use crate::models::{ElevationPreviewRequest, ElevationPreviewResponse, EnrichElevationRequest};
 use crate::track_utils::ElevationEnrichmentService;
 use crate::track_utils::extract_coordinates_from_geojson;
@@ -52,6 +53,10 @@ pub async fn enrich_elevation(
             "No coordinates found in track geometry".into(),
         ));
     }
+
+    // Record session engagement heartbeat (enrich = high weight in engagement_score_7d).
+    // Fired once the user has a valid track and enrichment is actually being attempted.
+    metrics::record_session_activity(Some(request.session_id), "enrich");
 
     let outcome = crate::services::enrichment::run_enrichment(&pool, track_id, coordinates).await;
 

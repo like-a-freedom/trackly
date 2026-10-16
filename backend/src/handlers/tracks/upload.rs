@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tracing::{error, warn};
 
 use crate::error::{AppError, Result};
+use crate::metrics;
 use crate::models::TrackUploadResponse;
 use crate::track_upload;
 
@@ -114,6 +115,10 @@ pub async fn upload_track(
     };
 
     let response = track_upload::upload(&pool, request).await?;
+
+    // Record session engagement heartbeat (upload = highest weight in engagement_score_7d).
+    // `session_id` is `Option<Uuid>` (Copy) and is only present for anonymous uploads.
+    metrics::record_session_activity(session_id, "upload");
 
     Ok((StatusCode::CREATED, Json(response)))
 }

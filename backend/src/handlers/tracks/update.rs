@@ -70,6 +70,7 @@ pub async fn update_track_description(
     db::update_track_description(&pool, track_id, &request.description).await?;
 
     metrics::record_track_edit("description");
+    metrics::record_session_activity(Some(request.session_id), "edit");
 
     Ok(Json(serde_json::json!({
         "id": track_id.to_string(),
@@ -91,6 +92,7 @@ pub async fn update_track_name(
     db::update_track_name(&pool, track_id, &request.name).await?;
 
     metrics::record_track_edit("name");
+    metrics::record_session_activity(Some(request.session_id), "edit");
 
     Ok(Json(serde_json::json!({
         "id": track_id.to_string(),
@@ -114,6 +116,7 @@ pub async fn update_track_categories(
     db::update_track_categories(&pool, track_id, &request.categories).await?;
 
     metrics::record_track_category_edit("update");
+    metrics::record_session_activity(Some(request.session_id), "edit");
 
     Ok(Json(serde_json::json!({
         "id": track_id.to_string(),
@@ -185,6 +188,8 @@ pub async fn update_track_visibility(
         is_public = request.is_public,
         "Track visibility updated"
     );
+
+    metrics::record_session_activity(request.session_id, "edit");
 
     Ok(Json(serde_json::json!({
         "id": track_id.to_string(),
