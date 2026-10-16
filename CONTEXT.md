@@ -53,11 +53,8 @@ Port interface for map rendering (`frontend/src/map/MapAdapter.ts`). Production 
 _Avoid_: map service, map provider.
 
 ## TrackMap
-The main map component (1052 LOC). Renders tiles, GeoJSON, clusters, POIs, elevation overlays through the adapters in `frontend/src/map/` (ADR 0020).
+The main map component (1052 LOC). Renders tiles, GeoJSON, clusters, POIs, elevation overlays through the adapters in `frontend/src/map/` (ADR 0020). In jsdom it is replaced by the global stub in `frontend/src/test-setup.ts`, which carries the same name, props and `update:*` events so tests resolve it with `findComponent({ name: 'TrackMap' })`.
 _Avoid_: map component, map view.
 
 ## Deferred Follow-ups
 - `AccountView.vue` (~1446 LOC) — needs splitting
-- `frontend/src/composables/__tests__/HomeView.integration.test.ts` — 12 cases skipped: every one
-  resolves the map via `findComponent({ name: 'TrackMap' })`, but `TrackMap.vue` declares no
-  `name`, so the lookup returns an empty wrapper

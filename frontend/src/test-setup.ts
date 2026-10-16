@@ -93,11 +93,14 @@ config.global.stubs = {
     // Stub out router-link if you're using Vue Router
     'router-link': true,
     'router-view': true,
-    // Stub TrackMap component to prevent Leaflet mounting issues
+    // Stub TrackMap component to prevent Leaflet mounting issues. The stub keeps
+    // the real component's contract: same name (so `findComponent({ name })`
+    // resolves it), same v-model events and the same props the view binds.
     'TrackMap': {
+        name: 'TrackMap',
         template: '<div class="track-map-stub"></div>',
-        props: ['polylines', 'zoom', 'center', 'bounds'],
-        emits: ['centerUpdate', 'zoomUpdate', 'boundsUpdate', 'trackClick', 'mapReady']
+        props: ['polylines', 'zoom', 'center', 'bounds', 'markerLatLng', 'activeTrackId', 'url', 'attribution', 'heatmapPoints', 'showHeatmap', 'selectedTrackDetail'],
+        emits: ['update:center', 'update:zoom', 'update:bounds', 'trackClick', 'mapReady']
     }
 };
 

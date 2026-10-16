@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import { events } from '../../events';
 
 // Mock dependencies
 vi.mock('vue-router', () => ({
@@ -82,15 +83,8 @@ vi.mock('../../composables/useMapUrlState', () => ({
   })
 }));
 
-// Mock TrackMap component
-vi.mock('../../components/TrackMap.vue', () => ({
-  default: {
-    name: 'TrackMap',
-    template: '<div data-testid="track-map"></div>',
-    props: ['zoom', 'center', 'polylines', 'activeTrackId'],
-    emits: ['update:zoom', 'update:center', 'update:bounds', 'mapReady']
-  }
-}));
+// TrackMap is stubbed globally (src/test-setup.ts) so Leaflet never mounts in jsdom;
+// the stub keeps the real component's name, props and v-model events.
 
 // Mock other components
 vi.mock('../../components/TrackTooltip.vue', () => ({ default: { template: '<div></div>' } }));
@@ -109,11 +103,7 @@ vi.stubGlobal('localStorage', localStorageMock);
 // Import HomeView after mocks so mocks are applied before module load
 import HomeView from '../../views/HomeView.vue';
 
-// Skipped: every case resolves the map through `findComponent({ name: 'TrackMap' })`,
-// but TrackMap.vue declares no `name` option, so the lookup always returns an empty
-// wrapper and all 12 cases fail. Re-enable once the suite resolves the map by the
-// imported component instead.
-describe.skip('HomeView Integration Tests', () => {
+describe('HomeView Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorageMock.getItem.mockReturnValue(null);
@@ -258,6 +248,8 @@ describe.skip('HomeView Integration Tests', () => {
 
   describe('Component Lifecycle', () => {
     it('should clean up event listeners on unmount', async () => {
+      const onSpy = vi.spyOn(events, 'on');
+      const offSpy = vi.spyOn(events, 'off');
       const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
 
       const wrapper = mount(HomeView);
@@ -265,10 +257,17 @@ describe.skip('HomeView Integration Tests', () => {
 
       wrapper.unmount();
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('track-deleted', expect.any(Function));
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('mapUrlStateChanged', expect.any(Function));
+      // Bus subscriptions go through the typed events module (ADR 0017), not window:
+      // every handler subscribed on mount must be released with the same identity.
+      expect(onSpy.mock.calls.length).toBeGreaterThan(0);
+      for (const [name, handler] of onSpy.mock.calls) {
+        expect(offSpy).toHaveBeenCalledWith(name, handler);
+      }
+      // The only DOM listener is the beforeunload guard.
       expect(removeEventListenerSpy).toHaveBeenCalledWith('beforeunload', expect.any(Function));
 
+      onSpy.mockRestore();
+      offSpy.mockRestore();
       removeEventListenerSpy.mockRestore();
     });
 
