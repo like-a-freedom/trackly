@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use crate::db;
 use crate::error::{AppError, Result};
+use crate::handlers::util::session_id_from_headers;
 use crate::metrics;
 use crate::services::gpx_export;
 
@@ -31,12 +32,16 @@ pub async fn export_track(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
     Query(query): Query<ExportQuery>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse> {
     let track = db::get_track_detail(&pool, track_id)
         .await?
         .ok_or(AppError::NotFound)?;
 
     let format = query.format.as_deref().unwrap_or("gpx");
+
+    // Record session engagement heartbeat once per export request.
+    metrics::record_session_activity(session_id_from_headers(&headers), "export");
 
     match format {
         "gpx" => {

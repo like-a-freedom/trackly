@@ -742,6 +742,10 @@ async function onTrackSelected(track) {
   // Don't need to save search state here - it's already managed by TrackSearch component
   // The search state is already saved when search is performed
 
+  // One-shot marker so the upcoming track view is attributed to search.
+  // Consumed by fetchTrackDetail; a map click clears it via clearSearchState().
+  searchStore.markSelectedFromSearch(track.id);
+
   // Navigate to track detail route
   router.push(`/track/${track.id}`);
   closeSearch();

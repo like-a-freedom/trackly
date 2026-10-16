@@ -5,6 +5,9 @@ export const useSearchStore = defineStore('search', () => {
     const searchQuery = ref<string>('');
     const searchResults = ref<unknown[]>([]);
     const lastSearchQuery = ref<string>('');
+    // One-shot marker: which track the user most recently picked from search
+    // results. Consumed by the first view of that track for referrer attribution.
+    const pendingSearchTrackId = ref<string | null>(null);
 
     const hasSearchState = computed(() => lastSearchQuery.value.trim() !== '');
 
@@ -22,6 +25,17 @@ export const useSearchStore = defineStore('search', () => {
         searchQuery.value = '';
         searchResults.value = [];
         lastSearchQuery.value = '';
+        pendingSearchTrackId.value = null;
+    }
+
+    function markSelectedFromSearch(trackId: string): void {
+        pendingSearchTrackId.value = trackId;
+    }
+
+    function consumeSelectedFromSearch(trackId: string): boolean {
+        if (pendingSearchTrackId.value !== trackId) return false;
+        pendingSearchTrackId.value = null;
+        return true;
     }
 
     return {
@@ -31,6 +45,8 @@ export const useSearchStore = defineStore('search', () => {
         hasSearchState,
         saveSearchState,
         restoreSearchState,
-        clearSearchState
+        clearSearchState,
+        markSelectedFromSearch,
+        consumeSelectedFromSearch
     };
 });

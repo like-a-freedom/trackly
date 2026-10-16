@@ -1055,7 +1055,8 @@ async function pollForElevationData(trackId) {
       return;
     }
 
-    const response = await fetch(`/api/tracks/${effectiveTrackId}`);
+    // background=1: this is a poll for enrichment progress, not a track view.
+    const response = await fetch(`/api/tracks/${effectiveTrackId}?background=1`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -2160,7 +2161,8 @@ async function forceEnrichElevation() {
       `[TrackDetailPanel] Fetching updated track data after elevation enrichment`
     );
     try {
-      const trackResponse = await fetch(`/api/tracks/${track.value.id}`);
+      // background=1: refresh after enrichment completes, not a new track view.
+      const trackResponse = await fetch(`/api/tracks/${track.value.id}?background=1`);
       if (trackResponse.ok) {
         const updatedTrack = await trackResponse.json();
 

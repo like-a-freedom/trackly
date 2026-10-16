@@ -284,6 +284,33 @@ describe('useTrackPersistence', () => {
             vi.restoreAllMocks();
         });
 
+        it('attaches the session header so the export can be attributed to the session', async () => {
+            mockFetch.mockResolvedValue({
+                ok: true,
+                blob: () => Promise.resolve(new Blob()),
+            });
+
+            const originalURL = globalThis.URL;
+            globalThis.URL = {
+                createObjectURL: vi.fn(() => 'blob:url'),
+                revokeObjectURL: vi.fn(),
+            } as any;
+
+            const store = createTestStore({ savedTrackId: 'track-123', trackName: 'My Track' });
+            await persistence.exportTrack(store, mockGetAuthHeader, 'gpx');
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/api/tracks/track-123/export'),
+                expect.objectContaining({
+                    headers: expect.objectContaining({
+                        'x-session-id': expect.any(String),
+                    }),
+                }),
+            );
+
+            globalThis.URL = originalURL;
+        });
+
         it('handles HTTP error', async () => {
             mockFetch.mockResolvedValue({ ok: false, status: 404 });
 

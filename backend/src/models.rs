@@ -364,6 +364,13 @@ pub struct MapInteractionEvent {
 pub struct TrackSimplificationQuery {
     pub zoom: Option<f64>,
     pub mode: Option<String>,
+    /// Traffic source for view attribution (direct | search | link). Optional;
+    /// defaults to "direct" on the server when absent.
+    pub referrer: Option<String>,
+    /// True for background refreshes (elevation polling, post-enrich refetch).
+    /// Such requests must not be counted as a track view.
+    #[serde(default)]
+    pub background: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -510,26 +517,44 @@ mod tests {
         let query_with_both = TrackSimplificationQuery {
             zoom: Some(12.0),
             mode: Some("detail".to_string()),
+            referrer: Some("search".to_string()),
+            background: false,
         };
 
         assert_eq!(query_with_both.zoom, Some(12.0));
         assert_eq!(query_with_both.mode, Some("detail".to_string()));
+        assert_eq!(query_with_both.referrer, Some("search".to_string()));
 
         let query_with_zoom_only = TrackSimplificationQuery {
             zoom: Some(8.0),
             mode: None,
+            referrer: None,
+            background: false,
         };
 
         assert_eq!(query_with_zoom_only.zoom, Some(8.0));
         assert_eq!(query_with_zoom_only.mode, None);
+        assert_eq!(query_with_zoom_only.referrer, None);
 
         let query_empty = TrackSimplificationQuery {
             zoom: None,
             mode: None,
+            referrer: None,
+            background: false,
         };
 
         assert_eq!(query_empty.zoom, None);
         assert_eq!(query_empty.mode, None);
+    }
+
+    #[test]
+    fn test_track_simplification_query_background_defaults_false() {
+        let de = serde_json::from_str::<TrackSimplificationQuery>(r#"{"zoom":12}"#).unwrap();
+        assert!(!de.background);
+
+        let explicit =
+            serde_json::from_str::<TrackSimplificationQuery>(r#"{"background":true}"#).unwrap();
+        assert!(explicit.background);
     }
 
     #[test]

@@ -2089,6 +2089,33 @@ describe('TrackDetailPanel', () => {
       expect(wrapper.vm.track.elevation_gain).toBe(400);
       expect(wrapper.vm.track.elevation_enriched).toBe(true);
     });
+
+    it('marks polling requests as background so they are not counted as track views', async () => {
+      const trackNoElevation = {
+        ...mockTrackMinimal,
+        length_km: 5.0,
+        elevation_enriched: false,
+        elevation_gain: null,
+      };
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ ...trackNoElevation, elevation_enriched: true }),
+      });
+
+      wrapper = mount(TrackDetailPanel, {
+        props: { track: trackNoElevation, isVisible: true },
+      });
+
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.startElevationPolling(trackNoElevation.id);
+      await wrapper.vm.pollForElevationData();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `/api/tracks/${trackNoElevation.id}?background=1`,
+      );
+    });
   });
 
   describe('Description Link Conversion', () => {

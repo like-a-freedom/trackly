@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { useTracks, resetTracksCaches } from '../useTracks';
+import { useSearchStore } from '../../stores/search';
 
 // Mock session utility
 vi.mock('../../utils/session', () => ({
@@ -463,6 +464,38 @@ describe('useTracks composable', () => {
             );
             expect(fetchMock).toHaveBeenCalledWith(
                 expect.stringContaining('mode=detail'),
+                expect.any(Object)
+            );
+        });
+
+        it('should attribute the view as coming from search when the track was just searched for', async () => {
+            fetchMock.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ id: 'track-123' })
+            });
+
+            useSearchStore().markSelectedFromSearch('track-123');
+
+            const { fetchTrackDetail } = useTracks();
+            await fetchTrackDetail('track-123');
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                expect.stringContaining('referrer=search'),
+                expect.any(Object)
+            );
+        });
+
+        it('should default the view referrer to direct', async () => {
+            fetchMock.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ id: 'track-999' })
+            });
+
+            const { fetchTrackDetail } = useTracks();
+            await fetchTrackDetail('track-999');
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                expect.stringContaining('referrer=direct'),
                 expect.any(Object)
             );
         });

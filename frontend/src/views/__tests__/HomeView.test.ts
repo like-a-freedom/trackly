@@ -5,6 +5,7 @@ import type { VueWrapper } from '@vue/test-utils';
 import { ref } from 'vue';
 
 import HomeView from '../HomeView.vue';
+import { useSearchStore } from '../../stores/search';
 
 vi.mock('../../stores/featureFlags', () => ({ useFeatureFlagsStore: () => ({ isAuthEnabled: true, isEditorEnabled: true }) }));
 
@@ -653,6 +654,16 @@ describe('HomeView', () => {
             const track = { id: 'track-123' };
             wrapper.vm.onTrackSelected(track);
             expect(mockRouter.push).toHaveBeenCalledWith('/track/track-123');
+        });
+
+        it('should mark the upcoming track view as coming from search', () => {
+            const track = { id: 'track-123' };
+            wrapper.vm.onTrackSelected(track);
+
+            // The marker is one-shot: the view fetch consumes it for this track.
+            const searchStore = useSearchStore();
+            expect(searchStore.consumeSelectedFromSearch('track-123')).toBe(true);
+            expect(searchStore.consumeSelectedFromSearch('track-123')).toBe(false);
         });
     });
 

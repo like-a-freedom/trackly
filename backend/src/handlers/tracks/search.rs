@@ -5,6 +5,7 @@
 use axum::{
     Json,
     extract::{Query, State},
+    http::HeaderMap,
 };
 
 use sqlx::PgPool;
@@ -12,6 +13,7 @@ use std::sync::Arc;
 
 use crate::db;
 use crate::error::Result;
+use crate::handlers::util::session_id_from_headers;
 use crate::metrics;
 use crate::models::{TrackSearchQuery, TrackSearchResult};
 
@@ -24,6 +26,7 @@ use crate::models::{TrackSearchQuery, TrackSearchResult};
 pub async fn search_tracks(
     State(pool): State<Arc<PgPool>>,
     Query(params): Query<TrackSearchQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<TrackSearchResult>>> {
     let query = params.query.trim();
     if query.is_empty() {
@@ -32,6 +35,7 @@ pub async fn search_tracks(
 
     let query_type = if query.len() > 3 { "long" } else { "short" };
     metrics::record_track_search("results", query_type);
+    metrics::record_session_activity(session_id_from_headers(&headers), "search");
 
     let tracks = db::search_tracks(&pool, query).await?;
     Ok(Json(tracks))

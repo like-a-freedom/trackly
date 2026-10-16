@@ -1,5 +1,6 @@
 import { computed, type ComputedRef } from 'vue';
 import { useTracksStore } from '../stores/tracks';
+import { useSearchStore } from '../stores/search';
 import { http } from '../http-instance';
 import { getSessionId } from '../utils/session';
 import { LRUCache } from '../utils/lru-cache';
@@ -64,6 +65,29 @@ function setCachedHeatmap(cacheKey: string, data: unknown[]): void {
 function normalizeCategories(categories: unknown): string[] | null {
     if (!Array.isArray(categories)) return null;
     return [...categories].map((cat) => String(cat)).sort();
+}
+
+/**
+ * Resolve the referrer label for a track view.
+ *
+ * "search" when the user just picked this track from search results (one-shot,
+ * so later direct views are not mis-attributed), "link" when the page was
+ * opened from another origin, otherwise "direct".
+ */
+function resolveViewReferrer(trackId: string): string {
+    const searchStore = useSearchStore();
+    if (searchStore.consumeSelectedFromSearch(trackId)) return 'search';
+    return isExternalDocumentReferrer() ? 'link' : 'direct';
+}
+
+function isExternalDocumentReferrer(): boolean {
+    try {
+        const referrer = typeof document !== 'undefined' ? document.referrer : '';
+        if (!referrer) return false;
+        return new URL(referrer).origin !== window.location.origin;
+    } catch {
+        return false;
+    }
 }
 
 interface FilterOptions {
@@ -271,7 +295,10 @@ export function useTracks() {
             const params = new URLSearchParams();
             if (zoom !== null) params.append('zoom', zoom.toString());
             if (mode) params.append('mode', mode);
-            if (params.toString()) endpoint += `?${params.toString()}`;
+            // View attribution: label for track_views_total (direct | search | link).
+            // Without it the backend defaults the label to "direct".
+            params.append('referrer', resolveViewReferrer(id));
+            endpoint += `?${params.toString()}`;
 
             const sessionId = getSessionId();
             const headers: Record<string, string> | undefined = sessionId ? { 'x-session-id': sessionId } : undefined;

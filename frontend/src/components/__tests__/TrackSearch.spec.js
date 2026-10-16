@@ -85,7 +85,14 @@ describe('TrackSearch', () => {
     await wrapper.vm.$nextTick()
     await flushPromises()
 
-    expect(fetch).toHaveBeenCalledWith('/api/tracks/search?query=test')
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/tracks/search?query=test',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-session-id': expect.any(String),
+        }),
+      }),
+    );
   })
 
   it('shows no results message when no tracks found', async () => {

@@ -48,4 +48,31 @@ describe('useSearchStore', () => {
         expect(store.lastSearchQuery).toBe('');
         expect(store.hasSearchState).toBe(false);
     });
+
+    it('attributes a view to search only once, for the matching track', () => {
+        const store = useSearchStore();
+        store.markSelectedFromSearch('t1');
+
+        // Consumed by the first view of that track...
+        expect(store.consumeSelectedFromSearch('t1')).toBe(true);
+        // ...and not reported again for later views of the same track.
+        expect(store.consumeSelectedFromSearch('t1')).toBe(false);
+    });
+
+    it('does not attribute a view to search for a different track', () => {
+        const store = useSearchStore();
+        store.markSelectedFromSearch('t1');
+
+        expect(store.consumeSelectedFromSearch('t2')).toBe(false);
+        // The pending attribution for t1 survives an unrelated view.
+        expect(store.consumeSelectedFromSearch('t1')).toBe(true);
+    });
+
+    it('drops pending search attribution when search state is cleared', () => {
+        const store = useSearchStore();
+        store.markSelectedFromSearch('t1');
+        store.clearSearchState();
+
+        expect(store.consumeSelectedFromSearch('t1')).toBe(false);
+    });
 });

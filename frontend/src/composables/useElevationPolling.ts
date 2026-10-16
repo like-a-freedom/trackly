@@ -36,7 +36,9 @@ export function useElevationPolling(): ElevationPollingState {
     if (!currentTrackId) return;
 
     try {
-      const response = await http(`/api/tracks/${currentTrackId}`, { method: 'GET' });
+      // `background=1` marks this as a refresh, not a user view, so the backend
+      // does not count it in track_views_total or emit a view heartbeat.
+      const response = await http(`/api/tracks/${currentTrackId}?background=1`, { method: 'GET' });
       if (!response.ok) return;
 
       const data = await response.json();

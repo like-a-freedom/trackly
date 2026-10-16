@@ -2,8 +2,20 @@
 
 use crate::auth::OptionalAuthUser;
 use crate::error::AppError;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use uuid::Uuid;
+
+/// Extract the anonymous session UUID from the `x-session-id` header.
+///
+/// Returns `None` when the header is missing, not valid UTF-8, or not a valid
+/// UUID. Used by read-only handlers (view / search / export) that receive the
+/// session via header instead of a request body.
+pub fn session_id_from_headers(headers: &HeaderMap) -> Option<Uuid> {
+    headers
+        .get("x-session-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| Uuid::parse_str(s).ok())
+}
 
 /// Map a database error to a safe, generic `AppError`.
 /// Internal details are never exposed to the client.
@@ -151,5 +163,23 @@ mod tests {
     fn test_handle_db_error_not_found() {
         let error = sqlx::Error::RowNotFound;
         assert!(matches!(handle_db_error(error), AppError::NotFound));
+    }
+
+    #[test]
+    fn test_session_id_from_headers_parses_valid_uuid() {
+        let uuid = Uuid::new_v4();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-session-id", uuid.to_string().parse().unwrap());
+        assert_eq!(session_id_from_headers(&headers), Some(uuid));
+    }
+
+    #[test]
+    fn test_session_id_from_headers_missing_or_invalid() {
+        // Missing header
+        assert_eq!(session_id_from_headers(&HeaderMap::new()), None);
+        // Present but not a UUID
+        let mut headers = HeaderMap::new();
+        headers.insert("x-session-id", "not-a-uuid".parse().unwrap());
+        assert_eq!(session_id_from_headers(&headers), None);
     }
 }

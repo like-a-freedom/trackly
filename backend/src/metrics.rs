@@ -979,6 +979,22 @@ pub fn record_track_search(result_type: &str, query_type: &str) {
         .inc();
 }
 
+pub fn record_track_view(ownership: &str, referrer: &str) {
+    let ownership_label = match ownership {
+        "own" => "own",
+        "public" => "public",
+        _ => "unknown",
+    };
+    let referrer_label = match referrer {
+        "search" => "search",
+        "link" => "link",
+        _ => "direct",
+    };
+    TRACK_VIEWS_TOTAL
+        .with_label_values(&[ownership_label, referrer_label])
+        .inc();
+}
+
 pub fn record_track_edit(field: &str) {
     let field_label = match field {
         "name" => "name",
@@ -1356,6 +1372,30 @@ mod tests {
         assert!(body_str.contains("track_edits_total"));
         assert!(body_str.contains("track_exports_total"));
         assert!(body_str.contains("trackly_session_heartbeat"));
+    }
+
+    #[tokio::test]
+    async fn record_track_view_increments_view_metric() {
+        initialize_metrics_baseline();
+        let frag = "ownership=\"own\",referrer=\"direct\"";
+
+        let before_body = serve_metrics().await.into_response();
+        let before_bytes = to_bytes(before_body.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let before_str = String::from_utf8(before_bytes.to_vec()).expect("utf8");
+        let before = parse_metric_value_from_scrape(&before_str, "track_views_total", frag);
+
+        record_track_view("own", "direct");
+
+        let after_body = serve_metrics().await.into_response();
+        let after_bytes = to_bytes(after_body.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let after_str = String::from_utf8(after_bytes.to_vec()).expect("utf8");
+        let after = parse_metric_value_from_scrape(&after_str, "track_views_total", frag);
+
+        assert_eq!(after, before + 1.0);
     }
 
     /// Scan the scrape output for a `trackly_session_heartbeat` series matching a

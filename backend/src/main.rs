@@ -96,7 +96,14 @@ async fn main() {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
+        .allow_headers([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            header::ACCEPT,
+            // Anonymous session id sent by the frontend so read-only endpoints
+            // (view / search / export) can attribute engagement heartbeats.
+            header::HeaderName::from_static("x-session-id"),
+        ])
         .allow_credentials(true)
         .max_age(std::time::Duration::from_secs(3600));
 

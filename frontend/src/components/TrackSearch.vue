@@ -193,6 +193,7 @@ import { useModalIsolation } from "../composables/useModalIsolation";
 import { storeToRefs } from "pinia";
 import { useSearchStore } from "../stores/search";
 import { capitalize } from "../utils/string";
+import { getSessionId } from "../utils/session";
 
 interface Track {
   id: string;
@@ -366,6 +367,8 @@ const performSearch = async () => {
   try {
     const response = await fetch(
       `/api/tracks/search?query=${encodeURIComponent(searchQuery.value)}`,
+      // Session header lets the backend attribute the search heartbeat.
+      { headers: { "x-session-id": getSessionId() } },
     );
     if (response.ok) {
       const results = await response.json();

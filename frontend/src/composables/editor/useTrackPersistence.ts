@@ -199,7 +199,9 @@ ${trkpts}
         }
 
         try {
-            const headers = await getAuthHeader();
+            const authHeaders = await getAuthHeader();
+            // Session header lets the backend attribute the export heartbeat.
+            const headers = { ...authHeaders, 'x-session-id': getSessionId() };
 
             const resp = await fetch(
                 `${API_BASE}/api/tracks/${id}/export?format=${format}`,
