@@ -28,7 +28,7 @@ Adopt a three-zone layout for the editor:
 └── TrackEditorBottomDeck       — horizontal card overview (wide screens)
 ```
 
-The old `TrackEditorToolbar` is removed from the view but its file and test are retained (not deleted) for reference. The `TrackEditorLeftPanel` retains only its tabbed content role; its header and alerts move to TopBar and TopAlertStrip.
+The old `TrackEditorToolbar` is removed from the view but its file is retained (not deleted) for reference. The `TrackEditorLeftPanel` retains only its tabbed content role; its header and alerts move to TopBar and TopAlertStrip.
 
 BottomDeck and LeftPanel both render the same card components but in different layouts (horizontal overview vs vertical tabs). BottomDeck is shown on wide screens (>=1400px) as an alternative overview; LeftPanel remains the primary editing surface.
 
@@ -38,5 +38,5 @@ BottomDeck and LeftPanel both render the same card components but in different l
 - TopAlertStrip replaces LeftPanel's inline alerts
 - BottomDeck provides a horizontal card layout complementary to LeftPanel's vertical tabs
 - TrackEditorLeftPanel shrinks (header + alerts removed)
-- TrackEditorToolbar.vue and its test remain on disk as unused reference (not deleted per user constraint)
+- TrackEditorToolbar.vue remains on disk as unused reference (not deleted per user constraint)
 - CSS custom property `--rail-width` added to editor-map-stage for rail sizing
