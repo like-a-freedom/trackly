@@ -33,6 +33,11 @@ services:
       EXPORT_RATE_LIMIT_SECONDS: ${EXPORT_RATE_LIMIT_SECONDS:-10}
       SERVICE_NAME: trackly_backend
       APP_ENV: dev
+      # Feature flags: "false" hides the track editor UI (Create Track button) and blocks its routes.
+      # OAuth/OIDC is disabled by deliberately NOT passing GOOGLE_* / JWT_SECRET to the container:
+      # AuthConfig::try_from_env() treats their absence as "auth not configured", while empty
+      # strings would instead ENABLE auth. Set "true" to restore the editor.
+      FEATURE_EDITOR: ${FEATURE_EDITOR:-true}
       SITE_URL: ${SITE_URL:-http://localhost:8080}
       DATABASE_MAX_CONNECTIONS: ${DATABASE_MAX_CONNECTIONS:-5}
       TRACK_MAX_GAP_METERS: ${TRACK_MAX_GAP_METERS:-500}
