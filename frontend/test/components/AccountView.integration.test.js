@@ -7,7 +7,7 @@ import AccountView from '../../src/views/AccountView.vue';
 // These tests verify the component works correctly with its dependencies
 
 // Use vi.hoisted to make mocks available in vi.mock factories
-const { mockPush, mockReplace, mockHttp, mockAuthState, mockConfirmState, mockFetchHistory } = vi.hoisted(() => {
+const { mockPush, mockReplace, mockHttp, mockAuthState, mockConfirmState } = vi.hoisted(() => {
     const mockAuthState = {
         user: {
             id: 'integration-user-id',
@@ -21,19 +21,16 @@ const { mockPush, mockReplace, mockHttp, mockAuthState, mockConfirmState, mockFe
         logoutFn: vi.fn(),
         updateProfileFn: vi.fn(),
         deleteAccountFn: vi.fn(),
-        authFetchFn: vi.fn(),
     };
     // vi.mock factories are hoisted above the describe scope, so shared mutable
     // state they read must live in vi.hoisted as well.
     const mockConfirmState = { response: true };
-    const mockFetchHistory = [];
     return {
         mockPush: vi.fn(),
         mockReplace: vi.fn(),
         mockHttp: vi.fn(),
         mockAuthState,
         mockConfirmState,
-        mockFetchHistory,
     };
 });
 
@@ -57,10 +54,6 @@ vi.mock('../../src/composables/useAuth', () => ({
         logout: mockAuthState.logoutFn,
         updateProfile: mockAuthState.updateProfileFn,
         deleteAccount: mockAuthState.deleteAccountFn,
-        authFetch: (...args) => {
-            mockFetchHistory.push({ args, timestamp: Date.now() });
-            return mockAuthState.authFetchFn?.(...args);
-        },
     })),
 }));
 
@@ -81,7 +74,6 @@ describe('AccountView Integration', () => {
         vi.clearAllMocks();
         mockPush.mockReset();
         mockReplace.mockReset();
-        mockFetchHistory.length = 0;
         mockConfirmState.response = true;
 
         // Default mock for http - returns tracks
@@ -112,16 +104,6 @@ describe('AccountView Integration', () => {
             return Promise.resolve(mockAuthState.user);
         });
         mockAuthState.deleteAccountFn = vi.fn().mockResolvedValue({});
-        mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve({
-                tracks: [
-                    { id: 'track-1', name: 'Track 1', length_km: 5.5, elevation_gain: 100, is_public: true, created_at: '2024-01-01' },
-                    { id: 'track-2', name: 'Track 2', length_km: 3.2, elevation_gain: 50, is_public: false, created_at: '2024-01-02' },
-                ],
-                total: 2
-            }),
-        });
     });
 
     afterEach(() => {
@@ -133,7 +115,7 @@ describe('AccountView Integration', () => {
             mount(AccountView);
             await flushPromises();
 
-            // Component uses http directly, not authFetch
+            // Component loads tracks through the shared http instance
             const httpCalls = mockHttp.mock.calls;
             expect(httpCalls.length).toBeGreaterThan(0);
 

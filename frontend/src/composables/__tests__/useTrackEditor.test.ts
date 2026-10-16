@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Mock dependencies before importing the composable
 vi.mock('../useAuth', () => ({
     useAuth: () => ({
-        getAuthHeader: vi.fn().mockResolvedValue({ Authorization: 'Bearer test-token' }),
         user: { value: { id: 1, email: 'test@test.com' } },
     }),
 }));

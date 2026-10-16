@@ -31,8 +31,6 @@ describe('useAuth', () => {
         expect(typeof auth.migrateSessionTracks).toBe('function');
         expect(typeof auth.deleteAccount).toBe('function');
         expect(typeof auth.ensureValidToken).toBe('function');
-        expect(typeof auth.getAuthHeader).toBe('function');
-        expect(typeof auth.authFetch).toBe('function');
     });
 
     it('exposes E2E hooks in non-production mode', () => {

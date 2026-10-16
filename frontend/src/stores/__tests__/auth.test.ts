@@ -94,20 +94,6 @@ describe('useAuthStore', () => {
         expect(store.user).toEqual(customUser);
     });
 
-    it('getAuthHeader returns empty when no token', async () => {
-        const store = useAuthStore();
-        const header = await store.getAuthHeader();
-        expect(header).toEqual({});
-    });
-
-    it('getAuthHeader returns Bearer token', async () => {
-        const store = useAuthStore();
-        store.accessToken = 'test-token';
-        store.tokenExpiresAt = Date.now() + 10 * 60 * 1000;
-        const header = await store.getAuthHeader();
-        expect(header).toEqual({ Authorization: 'Bearer test-token' });
-    });
-
     it('updateProfile updates user', async () => {
         const store = useAuthStore();
         store.accessToken = 'test-token';
@@ -148,20 +134,6 @@ describe('useAuthStore', () => {
         const store = useAuthStore();
         await store.initialize();
         expect(store.isInitialized).toBe(true);
-    });
-
-    it('authFetch adds auth header', async () => {
-        const store = useAuthStore();
-        store.accessToken = 'test-token';
-        store.tokenExpiresAt = Date.now() + 10 * 60 * 1000;
-
-        const mockResponse = new Response('{}', { status: 200 });
-        vi.spyOn(global, 'fetch').mockResolvedValue(mockResponse);
-
-        await store.authFetch('/api/test');
-        expect(global.fetch).toHaveBeenCalledWith('/api/test', expect.objectContaining({
-            headers: expect.objectContaining({ Authorization: 'Bearer test-token' })
-        }));
     });
 
     it('reset clears all state', () => {

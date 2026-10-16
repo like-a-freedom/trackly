@@ -27,7 +27,6 @@ let mockAuthState = {
         avatar_url: 'https://example.com/avatar.jpg',
     },
     isLoading: false,
-    authFetchFn: null,
     initializeFn: vi.fn().mockResolvedValue(undefined),
 };
 
@@ -43,7 +42,6 @@ vi.mock('../../src/composables/useAuth', () => ({
         logout: (...args) => mockAuthState.logoutFn?.(...args),
         updateProfile: (...args) => mockAuthState.updateProfileFn?.(...args),
         deleteAccount: (...args) => mockAuthState.deleteAccountFn?.(...args),
-        authFetch: (...args) => mockAuthState.authFetchFn?.(...args),
     })),
 }));
 
@@ -111,10 +109,6 @@ describe('AccountView', () => {
                 avatar_url: 'https://example.com/avatar.jpg',
             },
             isLoading: false,
-            authFetchFn: vi.fn().mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({ tracks: mockTracks }),
-            }),
             initializeFn: vi.fn().mockResolvedValue(undefined),
         };
     });

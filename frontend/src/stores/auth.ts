@@ -144,23 +144,6 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    async function getAuthHeader(): Promise<Record<string, string>> {
-        if (!accessToken.value) return {};
-        await ensureValidToken();
-        return { Authorization: `Bearer ${accessToken.value}` };
-    }
-
-    async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-        await ensureValidToken();
-        return fetch(url, {
-            ...options,
-            headers: {
-                ...(options.headers || {}),
-                Authorization: `Bearer ${accessToken.value}`
-            }
-        });
-    }
-
     // Dev-only E2E hook
     function setE2EAuthenticated(testUser?: User): void {
         accessToken.value = 'e2e-access-token';
@@ -246,8 +229,6 @@ export const useAuthStore = defineStore('auth', () => {
         migrateSessionTracks,
         deleteAccount,
         ensureValidToken,
-        getAuthHeader,
-        authFetch,
         setE2EAuthenticated,
 
         // Testing utility

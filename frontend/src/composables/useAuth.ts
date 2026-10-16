@@ -38,8 +38,6 @@ export function useAuth() {
         migrateSessionTracks: store.migrateSessionTracks.bind(store),
         deleteAccount: store.deleteAccount.bind(store),
         ensureValidToken: store.ensureValidToken.bind(store),
-        getAuthHeader: store.getAuthHeader.bind(store),
-        authFetch: store.authFetch.bind(store),
         _resetForTesting: () => store.$reset()
     };
 }

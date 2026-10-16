@@ -34,8 +34,8 @@ The remaining 12 are deliberate:
 same commit because `http()` supplies the header, leaving the callback as dead weight in six
 function signatures.
 
-`useAuth.authFetch` and `useAuth.getAuthHeader` now have no production call sites; they are kept as
-the legacy escape hatch and are candidates for deletion.
+`useAuth.authFetch` and `useAuth.getAuthHeader` had no production call sites after the
+migration; they were kept as a legacy escape hatch and have since been deleted (ADR 0040).
 
 ## Consequences
 - Auth header injection is centralized in one module; a call site cannot forget it
