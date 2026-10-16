@@ -57,7 +57,6 @@ The main map component (2734 LOC). Renders tiles, GeoJSON, clusters, POIs, eleva
 _Avoid_: map component, map view.
 
 ## Deferred Follow-ups
-- `TrackDetailPanel.vue` (4156 LOC) — needs splitting
 - `AccountView.vue` (~1520 LOC) — needs splitting
 - `useSearchState.js` — module-singleton but production-dead; can be deleted
 - `useTracks.js` — module-scope singleton; Pinia migration deferred

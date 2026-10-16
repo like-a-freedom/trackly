@@ -617,6 +617,9 @@ import { events } from "../events";
 import { useMemoizedComputed } from "../composables/useMemoization";
 import { clearCacheByPattern } from "../composables/useMemoization";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
+import { useTooltipPlacement } from "../composables/useTooltipPlacement";
+import { useElevationEnrichment } from "../composables/useElevationEnrichment";
+import { http } from "../http-instance";
 import { useToastStore } from "@/stores/toast";
 import { useConfirm } from "../composables/useConfirm";
 import CategoriesPanel from "./TrackDetailPanel/CategoriesPanel.vue";
@@ -677,37 +680,35 @@ const flyoutContent = ref(null);
 const descriptionTextarea = ref(null);
 const nameInput = ref(null);
 
+const track = ref(props.track);
+
+// Icon tooltips (extracted to composables/useTooltipPlacement)
+const { attach: attachIconTooltips, detach: detachIconTooltips } =
+  useTooltipPlacement(flyoutContent);
+
+// Elevation enrichment + polling (extracted to composables/useElevationEnrichment)
+const {
+  enrichingElevation,
+  enrichmentPollingInterval,
+  isPollingForElevation,
+  startElevationPolling,
+  stopElevationPolling,
+  pollForElevationData,
+  forceEnrichElevation,
+} = useElevationEnrichment({
+  track,
+  chartUpdateKey,
+  hasElevationData: () => hasElevationData.value,
+  sessionId: () => props.sessionId,
+  showConfirm,
+  showToast,
+});
+
 // --- Name editing state ---
 const isEditingName = ref(false);
 const editedName = ref("");
 const savingName = ref(false);
 const nameError = ref("");
-
-function needsElevationPolling(trackData) {
-  if (!trackData) return false;
-
-  // Only poll if track is explicitly marked as NOT enriched
-  // This prevents polling for tracks that just don't have elevation data
-  if (!trackData.elevation_enriched) {
-    // Check if there's ANY elevation data at all
-    const hasAnyElevationData =
-      trackData.elevation_profile ||
-      (trackData.elevation_gain && trackData.elevation_gain > 0) ||
-      (trackData.elevation_loss && trackData.elevation_loss > 0);
-
-    // Only poll if:
-    // 1. Track is long enough to warrant elevation data
-    // 2. Track doesn't already have elevation data
-    // 3. Track is explicitly NOT enriched (meaning we tried to get data and failed)
-    if (trackData.length_km > 0 && !hasAnyElevationData) {
-      // Don't poll for tracks that were added before elevation enrichment was implemented
-      // Only poll if the track shows signs of being enrichment-ready
-      return true;
-    }
-  }
-
-  return false;
-}
 
 // Reset panel state on mount to fix re-opening issues
 onMounted(() => {
@@ -717,7 +718,7 @@ onMounted(() => {
   // Do not auto-start polling on mount by default to avoid unnecessary repeated requests.
   // Polling is started manually via the 'Force update elevation' control or when the backend explicitly indicates in-progress state.
   // Setup tooltip handlers within this panel
-  attachIconTooltipHandlers(flyoutContent.value);
+  attachIconTooltips();
 });
 
 // NOTE: We do not auto-start polling on component activation.
@@ -726,7 +727,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopElevationPolling();
   // Detach tooltip handlers
-  detachIconTooltipHandlers(flyoutContent.value);
+  detachIconTooltips();
   // Clear export cooldown timer if active
   if (exportCooldownInterval) {
     clearInterval(exportCooldownInterval);
@@ -867,307 +868,6 @@ function startExportCooldown(seconds) {
 // --- Share state ---
 const copyingLink = ref(false);
 const linkCopied = ref(false);
-
-// --- Elevation enrichment state ---
-const enrichingElevation = ref(false);
-
-// --- Elevation enrichment polling (with backoff and attempt limits) ---
-const enrichmentPollingInterval = ref(null);
-const isPollingForElevation = ref(false);
-const currentPollingTrackId = ref(null); // Track which track ID we're polling
-const pollingAttempts = ref(0);
-const POLLING_MAX_ATTEMPTS = 15; // Stop after too many attempts
-const POLLING_BASE_INTERVAL_MS = 3000; // initial interval
-const POLLING_MAX_INTERVAL_MS = 30000; // max backoff
-
-function startElevationPolling(trackId) {
-  if (isPollingForElevation.value) return;
-
-  isPollingForElevation.value = true;
-  currentPollingTrackId.value = trackId; // Remember which track we're polling for
-  pollingAttempts.value = 0;
-  console.info(
-    `[TrackDetailPanel] Starting elevation polling for track ${trackId}`
-  );
-
-  // Use recursive timeout with exponential backoff instead of setInterval
-  const scheduleNext = async () => {
-    if (!isPollingForElevation.value) return;
-    pollingAttempts.value += 1;
-
-    // If we've reached max attempts, stop polling
-    if (pollingAttempts.value > POLLING_MAX_ATTEMPTS) {
-      console.info(
-        `[TrackDetailPanel] Reached max polling attempts (${POLLING_MAX_ATTEMPTS}) for ${trackId}, stopping`
-      );
-      stopElevationPolling();
-      return;
-    }
-
-    try {
-      await pollForElevationData(trackId);
-    } catch (err) {
-      // If pollForElevationData ever throws (shouldn't), log but continue scheduling.
-      console.error(
-        `[TrackDetailPanel] scheduleNext: poll failed: ${err?.message || err}`
-      );
-    }
-
-    // Compute interval with exponential backoff
-    const interval = Math.min(
-      POLLING_BASE_INTERVAL_MS * Math.pow(2, pollingAttempts.value - 1),
-      POLLING_MAX_INTERVAL_MS
-    );
-    enrichmentPollingInterval.value = setTimeout(scheduleNext, interval);
-  };
-
-  // Kick off the first call after a short delay to allow UI to settle
-  enrichmentPollingInterval.value = setTimeout(
-    scheduleNext,
-    POLLING_BASE_INTERVAL_MS
-  );
-}
-
-// Tooltip placement helpers
-function _createMeasureNode(text) {
-  const measure = document.createElement("div");
-  measure.className = "info-icon__measure";
-  measure.textContent = text || "";
-  return measure;
-}
-
-function updateTooltipPlacementForIcon(el) {
-  if (!el || !flyoutContent.value) return;
-  const tooltipText = el.getAttribute("data-tooltip");
-  if (!tooltipText) return;
-
-  // create measurement element inside panel so scoped styles apply
-  const measure = _createMeasureNode(tooltipText);
-  flyoutContent.value.appendChild(measure);
-
-  const panelRect = flyoutContent.value.getBoundingClientRect();
-  const iconRect = el.getBoundingClientRect();
-  const measureRect = measure.getBoundingClientRect();
-
-  // Compute available spaces
-  const aboveSpace = iconRect.top - panelRect.top;
-  const belowSpace = panelRect.bottom - iconRect.bottom;
-
-  // default: place above
-  el.classList.remove("tooltip-bottom");
-
-  // Vertical placement: prefer above; if not enough, place below
-  if (measureRect.height + 16 > aboveSpace && belowSpace > aboveSpace) {
-    el.classList.add("tooltip-bottom");
-  }
-
-  // Cleanup measure node
-  if (measure && measure.parentNode) measure.parentNode.removeChild(measure);
-}
-
-let _tooltipResizeHandler = null;
-let _tooltipScrollHandler = null;
-function attachIconTooltipHandlers(container) {
-  if (!container) return;
-  const icons = container.querySelectorAll(".info-icon[data-tooltip]");
-  icons.forEach((icon) => {
-    // mouse and keyboard interactions
-    const showHandler = () => {
-      icon.classList.add("tooltip-active");
-      updateTooltipPlacementForIcon(icon);
-    };
-    const hideHandler = () => {
-      icon.classList.remove("tooltip-active");
-      icon.classList.remove("tooltip-bottom");
-    };
-    icon._tooltipHandlers = { showHandler, hideHandler };
-    icon.addEventListener("mouseenter", showHandler);
-    icon.addEventListener("focus", showHandler);
-    icon.addEventListener("touchstart", showHandler, { passive: true });
-    icon.addEventListener("mouseleave", hideHandler);
-    icon.addEventListener("blur", hideHandler);
-  });
-  // Recompute on resize / scroll
-  _tooltipResizeHandler = () =>
-    icons.forEach((i) => {
-      if (i.classList.contains("tooltip-active"))
-        updateTooltipPlacementForIcon(i);
-    });
-  _tooltipScrollHandler = () =>
-    icons.forEach((i) => {
-      if (i.classList.contains("tooltip-active"))
-        updateTooltipPlacementForIcon(i);
-    });
-  window.addEventListener("resize", _tooltipResizeHandler);
-  container.addEventListener("scroll", _tooltipScrollHandler);
-}
-
-function detachIconTooltipHandlers(container) {
-  if (!container) return;
-  const icons = container.querySelectorAll(".info-icon[data-tooltip]");
-  icons.forEach((icon) => {
-    const handlers = icon._tooltipHandlers;
-    if (handlers) {
-      icon.removeEventListener("mouseenter", handlers.showHandler);
-      icon.removeEventListener("focus", handlers.showHandler);
-      icon.removeEventListener("touchstart", handlers.showHandler);
-      icon.removeEventListener("mouseleave", handlers.hideHandler);
-      icon.removeEventListener("blur", handlers.hideHandler);
-      delete icon._tooltipHandlers;
-    }
-  });
-  if (_tooltipResizeHandler) {
-    window.removeEventListener("resize", _tooltipResizeHandler);
-    _tooltipResizeHandler = null;
-  }
-  if (_tooltipScrollHandler) {
-    container.removeEventListener("scroll", _tooltipScrollHandler);
-    _tooltipScrollHandler = null;
-  }
-}
-
-/**
- * Merge freshly fetched elevation/slope data into the current track, bust the
- * chart caches and notify listeners.
- *
- * Shared by the enrichment poller (`pollForElevationData`) and the manual
- * "enrich elevation" action so the merge shape and the
- * `track-elevation-updated` payload stay identical for both entry points.
- *
- * @param trackId - id of the track that was refetched; also used to key the
- *   per-track cache entries.
- * @param updatedTrack - full track payload returned by the detail endpoint.
- */
-async function applyElevationUpdate(trackId, updatedTrack) {
-  // Force cache invalidation before updating track data
-  clearCacheByPattern(`elevation_${trackId}`);
-  clearCacheByPattern(`chartdata_`);
-  chartUpdateKey.value = Date.now();
-
-  // Update local track data - create new object to trigger reactivity
-  track.value = {
-    ...track.value,
-    elevation_enriched: updatedTrack.elevation_enriched,
-    elevation_gain: updatedTrack.elevation_gain,
-    elevation_loss: updatedTrack.elevation_loss,
-    elevation_min: updatedTrack.elevation_min,
-    elevation_max: updatedTrack.elevation_max,
-    elevation_dataset: updatedTrack.elevation_dataset,
-    elevation_enriched_at: updatedTrack.elevation_enriched_at,
-    elevation_profile: updatedTrack.elevation_profile,
-    slope_min: updatedTrack.slope_min,
-    slope_max: updatedTrack.slope_max,
-    slope_avg: updatedTrack.slope_avg,
-    slope_segments: updatedTrack.slope_segments,
-    slope_histogram: updatedTrack.slope_histogram,
-    // Add timestamp to force chart update
-    _lastUpdated: Date.now(),
-  };
-
-  // Dispatch global event for other components
-  events.emit("track-elevation-updated", {
-    trackId,
-    elevation_gain: updatedTrack.elevation_gain,
-    elevation_loss: updatedTrack.elevation_loss,
-    elevation_min: updatedTrack.elevation_min,
-    elevation_max: updatedTrack.elevation_max,
-    elevation_dataset: updatedTrack.elevation_dataset,
-    elevation_profile: updatedTrack.elevation_profile,
-    elevation_enriched_at: updatedTrack.elevation_enriched_at,
-    slope_min: updatedTrack.slope_min,
-    slope_max: updatedTrack.slope_max,
-    slope_segments: updatedTrack.slope_segments,
-  });
-
-  // Force reactivity with nextTick
-  await nextTick();
-}
-
-// Separate polling function for easier testing
-async function pollForElevationData(trackId) {
-  try {
-    // Resolve the effective trackId for this poll call. Accept explicit trackId,
-    // fallback to currentPollingTrackId (set when polling started), then props.track.id.
-    // This prevents callers from accidentally stopping the poll when they invoke
-    // pollForElevationData() without providing an argument.
-    const effectiveTrackId =
-      trackId || currentPollingTrackId.value || props.track.id;
-
-    // If we have an active polling track recorded and it doesn't match the
-    // effectiveTrackId, then the poll is stale and should be stopped.
-    if (
-      currentPollingTrackId.value &&
-      currentPollingTrackId.value !== effectiveTrackId
-    ) {
-      console.log(
-        `[TrackDetailPanel] Stopping poll for ${effectiveTrackId} - current polling is for ${currentPollingTrackId.value}`
-      );
-      stopElevationPolling();
-      return;
-    }
-
-    // Don't fetch if we're not actually polling (safety check)
-    if (!isPollingForElevation.value) {
-      console.log(`[TrackDetailPanel] Polling flag is false, stopping`);
-      return;
-    }
-
-    // background=1: this is a poll for enrichment progress, not a track view.
-    const response = await fetch(`/api/tracks/${effectiveTrackId}?background=1`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const updatedTrack = await response.json();
-
-    // Check if elevation data has been updated
-    const hasNewElevationData =
-      (updatedTrack.elevation_enriched && !track.value.elevation_enriched) ||
-      updatedTrack.elevation_gain !== track.value.elevation_gain ||
-      updatedTrack.elevation_loss !== track.value.elevation_loss ||
-      updatedTrack.elevation_min !== track.value.elevation_min ||
-      updatedTrack.elevation_max !== track.value.elevation_max ||
-      updatedTrack.slope_min !== track.value.slope_min ||
-      updatedTrack.slope_max !== track.value.slope_max ||
-      updatedTrack.slope_segments?.length !==
-        track.value.slope_segments?.length;
-
-    if (hasNewElevationData) {
-      console.info(
-        `[TrackDetailPanel] Elevation data updated for track ${
-          trackId || props.track.id
-        }`
-      );
-
-      // Merge the refreshed elevation/slope data, bust caches and notify
-      await applyElevationUpdate(effectiveTrackId, updatedTrack);
-
-      // Stop polling
-      stopElevationPolling();
-
-      // Show success message
-      showToast("Elevation data has been successfully updated!", "success");
-    }
-  } catch (error) {
-    console.error(
-      `[TrackDetailPanel] Error polling elevation data: ${error.message}`
-    );
-    // Do NOT re-throw here so that callers won't accidentally stop polling.
-    // We want polling to continue (scheduleNext will handle retries/backoff)
-    return;
-  }
-}
-
-function stopElevationPolling() {
-  if (enrichmentPollingInterval.value) {
-    console.info(`[TrackDetailPanel] Stopping elevation polling`);
-    clearTimeout(enrichmentPollingInterval.value);
-    enrichmentPollingInterval.value = null;
-  }
-  currentPollingTrackId.value = null; // Clear the track ID we were polling for
-  isPollingForElevation.value = false;
-  pollingAttempts.value = 0;
-}
 
 // Computed property to safely parse time data
 const parsedTimeData = computed(() => {
@@ -1471,8 +1171,6 @@ const chartTitle = useMemoizedComputed(
   }
 );
 
-const track = ref(props.track);
-
 // Watch for track changes
 watch(
   () => props.track,
@@ -1676,7 +1374,7 @@ const elevationGain = useMemoizedComputed(
 // Debounced API functions to prevent excessive requests
 const debouncedSaveName = useAdvancedDebounce(
   async (trackId, name, sessionId) => {
-    const response = await fetch(`/api/tracks/${trackId}/name`, {
+    const response = await http(`/api/tracks/${trackId}/name`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -1698,7 +1396,7 @@ const debouncedSaveName = useAdvancedDebounce(
 
 const debouncedSaveDescription = useAdvancedDebounce(
   async (trackId, description, sessionId) => {
-    const response = await fetch(`/api/tracks/${trackId}/description`, {
+    const response = await http(`/api/tracks/${trackId}/description`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -1749,7 +1447,7 @@ async function confirmDelete() {
   if (!proceed) return;
   try {
     deletingTrack.value = true;
-    const res = await fetch(`/api/tracks/${track.value.id}`, {
+    const res = await http(`/api/tracks/${track.value.id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1910,7 +1608,7 @@ async function exportTrack() {
     // Include session header so backend can apply per-session rate limits when available
     const headers = sessionHeaders(props.sessionId || getSessionId());
 
-    const response = await fetch(`/api/tracks/${track.value.id}/export`, {
+    const response = await http(`/api/tracks/${track.value.id}/export`, {
       headers,
     });
 
@@ -2109,121 +1807,6 @@ async function shareTrack() {
     }
   } finally {
     copyingLink.value = false;
-  }
-}
-
-// Force enrich elevation data
-async function forceEnrichElevation() {
-  if (!track.value?.id || enrichingElevation.value) return;
-
-  // Show confirmation dialog if track already has elevation data
-  if (hasElevationData.value) {
-    const confirmed = await showConfirm({
-      title: "Update Elevation Data",
-      message:
-        "This track already has elevation data. Updating will replace the existing data with new values from the external service. Continue?",
-      confirmText: "Continue",
-      cancelText: "Cancel",
-    });
-    if (!confirmed) return;
-  }
-  enrichingElevation.value = true;
-  try {
-    const response = await fetch(
-      `/api/tracks/${track.value.id}/enrich-elevation`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          session_id: props.sessionId,
-          force: true,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      if (response.status === 403) {
-        showToast("You are not allowed to update this track.", "error");
-        return;
-      } else if (response.status === 429) {
-        showToast("API rate limit exceeded. Please try again later.", "error");
-        return;
-      } else {
-        throw new Error("Failed to update elevation data");
-      }
-    }
-
-    const result = await response.json();
-
-    // Update local track data with new elevation information
-    if (result.elevation_gain !== undefined)
-      track.value.elevation_gain = result.elevation_gain;
-    if (result.elevation_loss !== undefined)
-      track.value.elevation_loss = result.elevation_loss;
-    if (result.elevation_min !== undefined)
-      track.value.elevation_min = result.elevation_min;
-    if (result.elevation_max !== undefined)
-      track.value.elevation_max = result.elevation_max;
-    if (result.elevation_dataset !== undefined)
-      track.value.elevation_dataset = result.elevation_dataset;
-    if (result.enriched_at !== undefined)
-      track.value.elevation_enriched_at = result.enriched_at;
-    track.value.elevation_enriched = true;
-
-    // Fetch the complete updated track data to get elevation_profile and slope data
-    console.info(
-      `[TrackDetailPanel] Fetching updated track data after elevation enrichment`
-    );
-    let merged = false;
-    try {
-      // background=1: refresh after enrichment completes, not a new track view.
-      const trackResponse = await fetch(`/api/tracks/${track.value.id}?background=1`);
-      if (trackResponse.ok) {
-        const updatedTrack = await trackResponse.json();
-
-        // Merge the refreshed elevation/slope data, bust caches and notify
-        // listeners. `applyElevationUpdate` emits `track-elevation-updated`
-        // itself, so the fallback below must not fire on this path.
-        await applyElevationUpdate(track.value.id, updatedTrack);
-        merged = true;
-
-        console.info(`[TrackDetailPanel] Track data updated successfully`);
-      }
-    } catch (fetchError) {
-      console.error(
-        `[TrackDetailPanel] Failed to fetch updated track data:`,
-        fetchError
-      );
-      // Don't start polling - just show a message
-      showToast(
-        "Elevation data was enriched, but failed to refresh the display. Please refresh the page to see the updated data.",
-        "error"
-      );
-    }
-
-    if (!merged) {
-      // The full refresh failed: still notify listeners with the scalar values
-      // the enrichment call returned, so other views do not go stale.
-      events.emit("track-elevation-updated", {
-        trackId: track.value.id,
-        elevation_gain: track.value.elevation_gain,
-        elevation_loss: track.value.elevation_loss,
-        elevation_min: track.value.elevation_min,
-        elevation_max: track.value.elevation_max,
-        elevation_dataset: track.value.elevation_dataset,
-        elevation_profile: track.value.elevation_profile,
-        elevation_enriched_at: track.value.elevation_enriched_at,
-      });
-    }
-
-    showToast("Elevation data updated successfully!", "success");
-  } catch (error) {
-    console.error("Elevation enrichment failed:", error);
-    showToast("Failed to update elevation data. Please try again.", "error");
-  } finally {
-    enrichingElevation.value = false;
   }
 }
 

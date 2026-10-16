@@ -1749,7 +1749,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await vi.waitFor(() => wrapper.vm.track && wrapper.vm.track.elevation_gain === 650);
+      await waitFor(() => wrapper.vm.track?.elevation_gain === 650);
 
       // Check that track data was updated
       expect(wrapper.vm.track.elevation_gain).toBe(650);
@@ -1810,7 +1810,7 @@ describe('TrackDetailPanel', () => {
       await forceUpdateBtn.trigger('click');
 
       // Wait for all async operations to complete
-      await vi.waitFor(() => mockShowToast.mock.calls.length > 0);
+      await waitFor(() => mockShowToast.mock.calls.length > 0);
       await wrapper.vm.$nextTick();
 
       expect(mockShowToast).toHaveBeenCalledWith(
@@ -2114,6 +2114,7 @@ describe('TrackDetailPanel', () => {
 
       expect(global.fetch).toHaveBeenCalledWith(
         `/api/tracks/${trackNoElevation.id}?background=1`,
+        expect.objectContaining({ headers: expect.any(Object) }),
       );
     });
   });
