@@ -49,15 +49,12 @@ A long-lived token used to obtain new access tokens. Stored httpOnly cookie.
 _Avoid_: session token, bearer token.
 
 ## MapAdapter
-Port interface for map rendering. Implementations: LeafletAdapter (production), StubAdapter (tests).
+Port interface for map rendering (`frontend/src/map/MapAdapter.ts`). Production implementation: `LeafletAdapter`; tests double the `leaflet` module in `test-setup.ts`.
 _Avoid_: map service, map provider.
 
 ## TrackMap
-The main map component (2734 LOC). Renders tiles, GeoJSON, clusters, POIs, elevation overlays.
+The main map component (1052 LOC). Renders tiles, GeoJSON, clusters, POIs, elevation overlays through the adapters in `frontend/src/map/` (ADR 0020).
 _Avoid_: map component, map view.
 
 ## Deferred Follow-ups
-- `AccountView.vue` (~1520 LOC) — needs splitting
-- `useSearchState.js` — module-singleton but production-dead; can be deleted
-- `useTracks.js` — module-scope singleton; Pinia migration deferred
-- `LeafletAdapter.js` — full extraction from TrackMap.vue deferred
+- `AccountView.vue` (~1446 LOC) — needs splitting
