@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { http } from '../../http-instance';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { useBulkTrackOperations } from '../useBulkTrackOperations';
 vi.mock('../../http-instance', () => ({ http: vi.fn() }));
 describe('bulk selection', () => {
@@ -10,6 +10,46 @@ describe('bulk selection', () => {
   const operations = useBulkTrackOperations({ tracks: ref([visible, { id:'hidden', is_public:false }]), visibleTracks: ref([visible]), selectedIds, allVisibleSelected:ref(false), someSelected:ref(false), removeTracks:vi.fn(), confirm:vi.fn() });
   operations.toggleSelectAll();
   expect(selectedIds.value).toEqual(['visible']);
+ });
+});
+
+describe('selection scope follows the visible set', () => {
+ const setup = (ids: string[], visible: { id: string; is_public: boolean }[]) => {
+  const tracks = ref([{ id: 'a', is_public: false }, { id: 'b', is_public: false }]);
+  const visibleTracks = ref(visible);
+  const selectedIds = ref<string[]>(ids);
+  const operations = useBulkTrackOperations({ tracks, visibleTracks, selectedIds, allVisibleSelected: ref(false), someSelected: ref(false), removeTracks: vi.fn(), confirm: vi.fn() });
+  return { visibleTracks, selectedIds, operations };
+ };
+
+ it('drops selected tracks that the search filter hides', async () => {
+  const { visibleTracks, selectedIds } = setup(['a', 'b'], [{ id: 'a', is_public: false }, { id: 'b', is_public: false }]);
+  visibleTracks.value = [{ id: 'a', is_public: false }];
+  await nextTick();
+  expect(selectedIds.value).toEqual(['a']);
+ });
+
+ it('clears the selection when the filter hides every selected track', async () => {
+  const { visibleTracks, selectedIds } = setup(['b'], [{ id: 'a', is_public: false }, { id: 'b', is_public: false }]);
+  visibleTracks.value = [{ id: 'a', is_public: false }];
+  await nextTick();
+  expect(selectedIds.value).toEqual([]);
+ });
+
+ it('keeps the selection while every selected track stays visible', async () => {
+  const { visibleTracks, selectedIds } = setup(['a', 'b'], [{ id: 'a', is_public: false }, { id: 'b', is_public: false }]);
+  const before = selectedIds.value;
+  visibleTracks.value = [{ id: 'a', is_public: false }, { id: 'b', is_public: false }];
+  await nextTick();
+  expect(selectedIds.value).toBe(before);
+ });
+
+ it('leaves the selection untouched when the caller provides no visible set', async () => {
+  const selectedIds = ref<string[]>(['a']);
+  useBulkTrackOperations({ tracks: ref([{ id: 'a', is_public: false }]), selectedIds, allVisibleSelected: ref(true), someSelected: ref(true), removeTracks: vi.fn(), confirm: vi.fn() });
+  selectedIds.value = ['a', 'hidden'];
+  await nextTick();
+  expect(selectedIds.value).toEqual(['a', 'hidden']);
  });
 });
 

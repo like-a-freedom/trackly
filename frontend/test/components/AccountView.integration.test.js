@@ -382,7 +382,7 @@ describe('AccountView Integration', () => {
             expect(filteredTracks[0].find('.track-name').text()).toBe('Mountain Hike');
         });
 
-        it('hides tracks filtered out by search while keeping their selection', async () => {
+        it('clears the selection when search filters out selected tracks', async () => {
             mockHttp.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({
@@ -405,15 +405,16 @@ describe('AccountView Integration', () => {
             // Verify bulk buttons appear
             expect(wrapper.findAll('.btn-bulk').length).toBeGreaterThan(0);
 
-            // Search for non-existent track: matching tracks are hidden from the list.
-            // The selection itself is retained in component state (bulk buttons stay).
+            // Search for non-existent track: the selection is scoped to the visible
+            // collection, so hidden tracks cannot stay selected.
             const searchInput = wrapper.find('.search-input');
             await searchInput.setValue('NonExistentTrack');
             await nextTick();
 
             const visibleTrackCheckboxes = wrapper.findAll('.track-checkbox');
             expect(visibleTrackCheckboxes.length).toBe(0);
-            expect(wrapper.findAll('.btn-bulk').length).toBeGreaterThan(0);
+            // Bulk buttons disappear: nothing visible is selected any more
+            expect(wrapper.findAll('.btn-bulk').length).toBe(0);
         });
 
         it('maintains selection across pagination', async () => {

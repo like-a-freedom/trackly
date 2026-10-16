@@ -1,4 +1,4 @@
-import { ref, computed, type Ref } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 import { http } from '../http-instance';
 
 interface TrackItem {
@@ -30,6 +30,18 @@ export function useBulkTrackOperations(options: UseBulkOperationsOptions): BulkO
 
   const bulkOperating = ref(false);
   const error = ref<string | null>(null);
+
+  // Selection is scoped to the tracks the user can actually see: narrowing the
+  // collection (search, deletions) must never leave bulk actions aiming at
+  // hidden tracks. See docs/audit/2026-10-04-design-mitigation-plan.md (F25).
+  if (options.visibleTracks) {
+    watch(options.visibleTracks, (visible) => {
+      if (selectedIds.value.length === 0) return;
+      const visibleIds = new Set(visible.map((track) => track.id));
+      const retained = selectedIds.value.filter((id) => visibleIds.has(id));
+      if (retained.length !== selectedIds.value.length) selectedIds.value = retained;
+    });
+  }
 
   function toggleSelectAll(): void {
     if (allVisibleSelected.value || someSelected.value) {
