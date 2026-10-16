@@ -123,7 +123,11 @@ describe('GeolocationButton', () => {
 
         expect(wrapper.emitted('location-found')).toBeTruthy();
         expect(wrapper.emitted('location-found')[0][0]).toHaveProperty('error');
-        expect(wrapper.emitted('location-found')[0][0].error).toContain('denied');
+        // User-facing wording for PERMISSION_DENIED (see GeolocationButton.vue
+        // and src/components/__tests__/GeolocationButton.test.ts)
+        expect(wrapper.emitted('location-found')[0][0].error).toBe(
+            'Location access is off for this site'
+        );
     });
 
     it('disables button while getting location', async () => {

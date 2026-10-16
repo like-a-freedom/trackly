@@ -91,8 +91,9 @@ describe('TrackTooltip', () => {
             });
 
             const tooltip = wrapper.find('.custom-tooltip');
-            expect(tooltip.attributes('style')).toContain('left: 150px');
-            expect(tooltip.attributes('style')).toContain('top: 250px');
+            // Logical properties (RTL-safe), matching the good-css audit.
+            expect(tooltip.attributes('style')).toContain('inset-inline-start: 150px');
+            expect(tooltip.attributes('style')).toContain('inset-block-start: 250px');
             expect(tooltip.attributes('style')).toContain('position: fixed');
             expect(tooltip.attributes('style')).toContain('z-index: 2000');
         });
@@ -368,8 +369,9 @@ describe('TrackTooltip', () => {
             await wrapper.setProps({ x: 300, y: 400 });
 
             const tooltip = wrapper.find('.custom-tooltip');
-            expect(tooltip.attributes('style')).toContain('left: 300px');
-            expect(tooltip.attributes('style')).toContain('top: 400px');
+            // Logical properties (RTL-safe), matching the good-css audit.
+            expect(tooltip.attributes('style')).toContain('inset-inline-start: 300px');
+            expect(tooltip.attributes('style')).toContain('inset-block-start: 400px');
         });
 
         it('updates content when data prop changes', async () => {

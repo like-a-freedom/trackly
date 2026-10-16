@@ -376,7 +376,10 @@ describe('ElevationChart', () => {
 
             const tooltip = document.getElementById('elevation-chart-tooltip')
             expect(tooltip).toBeTruthy()
-            expect(tooltip.innerHTML).toContain('📍 0.25 km')
+            // Distance header uses an inline SVG pin icon instead of the 📍 emoji
+            expect(tooltip.innerHTML).toContain('class="tooltip-distance"')
+            expect(tooltip.innerHTML).toContain('tooltip-distance-icon')
+            expect(tooltip.innerHTML).toContain('<span>0.25 km</span>')
             expect(tooltip.innerHTML).toContain('⛰️')
             expect(tooltip.innerHTML).toContain('Elevation:')
             expect(tooltip.innerHTML).toContain('110 m')

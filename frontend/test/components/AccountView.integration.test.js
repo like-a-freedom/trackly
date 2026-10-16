@@ -7,7 +7,7 @@ import AccountView from '../../src/views/AccountView.vue';
 // These tests verify the component works correctly with its dependencies
 
 // Use vi.hoisted to make mocks available in vi.mock factories
-const { mockPush, mockReplace, mockHttp, mockAuthState } = vi.hoisted(() => {
+const { mockPush, mockReplace, mockHttp, mockAuthState, mockConfirmState, mockFetchHistory } = vi.hoisted(() => {
     const mockAuthState = {
         user: {
             id: 'integration-user-id',
@@ -17,64 +17,72 @@ const { mockPush, mockReplace, mockHttp, mockAuthState } = vi.hoisted(() => {
             avatar_url: 'https://example.com/integration-avatar.jpg',
         },
         isLoading: false,
+        initializeFn: vi.fn(),
         logoutFn: vi.fn(),
         updateProfileFn: vi.fn(),
         deleteAccountFn: vi.fn(),
         authFetchFn: vi.fn(),
     };
+    // vi.mock factories are hoisted above the describe scope, so shared mutable
+    // state they read must live in vi.hoisted as well.
+    const mockConfirmState = { response: true };
+    const mockFetchHistory = [];
     return {
         mockPush: vi.fn(),
         mockReplace: vi.fn(),
         mockHttp: vi.fn(),
         mockAuthState,
+        mockConfirmState,
+        mockFetchHistory,
     };
 });
 
+// Declared at module top level: vitest hoists `vi.mock` regardless, and
+// declaring it inside `describe` is warned about and becomes an error in a
+// future release. The factories read state from `vi.hoisted` above.
+vi.mock('vue-router', () => ({
+    useRouter: () => ({
+        push: mockPush,
+        replace: mockReplace,
+    }),
+}));
+
+// Mock useAuth
+vi.mock('../../src/composables/useAuth', () => ({
+    useAuth: vi.fn(() => ({
+        user: computed(() => mockAuthState.user),
+        isLoading: ref(mockAuthState.isLoading),
+        // AccountView awaits initialize() in onMounted before loading tracks
+        initialize: mockAuthState.initializeFn,
+        logout: mockAuthState.logoutFn,
+        updateProfile: mockAuthState.updateProfileFn,
+        deleteAccount: mockAuthState.deleteAccountFn,
+        authFetch: (...args) => {
+            mockFetchHistory.push({ args, timestamp: Date.now() });
+            return mockAuthState.authFetchFn?.(...args);
+        },
+    })),
+}));
+
+// Mock useConfirm
+vi.mock('../../src/composables/useConfirm', () => ({
+    useConfirm: () => ({
+        confirm: () => Promise.resolve(mockConfirmState.response),
+    }),
+}));
+
+// Mock http-instance
+vi.mock('../../src/http-instance', () => ({
+    http: mockHttp,
+}));
+
 describe('AccountView Integration', () => {
-    vi.mock('vue-router', () => ({
-        useRouter: () => ({
-            push: mockPush,
-            replace: mockReplace,
-        }),
-    }));
-
-    // Track fetch history for verification
-    let fetchHistory = [];
-
-    // Mock useAuth
-    vi.mock('../../src/composables/useAuth', () => ({
-        useAuth: vi.fn(() => ({
-            user: computed(() => mockAuthState.user),
-            isLoading: ref(mockAuthState.isLoading),
-            logout: mockAuthState.logoutFn,
-            updateProfile: mockAuthState.updateProfileFn,
-            deleteAccount: mockAuthState.deleteAccountFn,
-            authFetch: (...args) => {
-                fetchHistory.push({ args, timestamp: Date.now() });
-                return mockAuthState.authFetchFn?.(...args);
-            },
-        })),
-    }));
-
-    // Mock useConfirm
-    let confirmResponse = true;
-    vi.mock('../../src/composables/useConfirm', () => ({
-        useConfirm: () => ({
-            confirm: () => Promise.resolve(confirmResponse),
-        }),
-    }));
-
-    // Mock http-instance
-    vi.mock('../../src/http-instance', () => ({
-        http: mockHttp,
-    }));
-
     beforeEach(() => {
         vi.clearAllMocks();
         mockPush.mockReset();
         mockReplace.mockReset();
-        fetchHistory = [];
-        confirmResponse = true;
+        mockFetchHistory.length = 0;
+        mockConfirmState.response = true;
 
         // Default mock for http - returns tracks
         mockHttp.mockResolvedValue({
@@ -97,6 +105,7 @@ describe('AccountView Integration', () => {
             avatar_url: 'https://example.com/integration-avatar.jpg',
         };
         mockAuthState.isLoading = false;
+        mockAuthState.initializeFn = vi.fn().mockResolvedValue(undefined);
         mockAuthState.logoutFn = vi.fn();
         mockAuthState.updateProfileFn = vi.fn().mockImplementation((updates) => {
             mockAuthState.user = { ...mockAuthState.user, ...updates };
@@ -132,9 +141,12 @@ describe('AccountView Integration', () => {
                 c[0].includes('/api/account/tracks')
             );
             expect(trackFetch).toBeDefined();
-            expect(trackFetch[0]).toContain('limit=');
-            expect(trackFetch[0]).toContain('offset=');
-            expect(trackFetch[0]).toContain('sort=created_at');
+            // Current contract: GET /api/account/tracks?offset=0&limit=20
+            expect(trackFetch[1]).toMatchObject({ method: 'GET' });
+            const url = new URL('http://localhost' + trackFetch[0]);
+            expect(url.pathname).toBe('/api/account/tracks');
+            expect(url.searchParams.get('offset')).toBe('0');
+            expect(url.searchParams.get('limit')).toBe('20');
         });
 
         it('initializes with user data from auth composable', async () => {
@@ -160,14 +172,13 @@ describe('AccountView Integration', () => {
             await selectAll.setChecked(true);
             await nextTick();
 
-            // Verify bulk delete button appears and is functional
+            // Verify bulk delete button appears and reflects the filtered selection
             const bulkDeleteBtn = wrapper.findAll('.btn-bulk').find(b =>
                 b.text().includes('Delete')
             );
             expect(bulkDeleteBtn).toBeDefined();
-
-            // Verify that tracks are selected (the button shows count)
-            expect(bulkDeleteBtn.text()).toContain('Delete');
+            // Search matched a single track, so select-all selected exactly that one
+            expect(bulkDeleteBtn.text()).toContain('Delete (1)');
         });
 
         it('complete flow: toggle visibility for multiple tracks', async () => {
@@ -224,6 +235,8 @@ describe('AccountView Integration', () => {
             // Verify modal is open
             expect(document.querySelector('.modal-overlay')).toBeTruthy();
             expect(document.querySelector('#nickname-input')).toBeTruthy();
+
+            wrapper.unmount();
         });
 
         it('complete flow: logout and redirect', async () => {
@@ -250,70 +263,66 @@ describe('AccountView Integration', () => {
 
     describe('Error Recovery Flows', () => {
         it('recovers from track loading failure', async () => {
-            // First call fails
-            let callCount = 0;
-            mockAuthState.authFetchFn = vi.fn().mockImplementation(() => {
-                callCount++;
-                if (callCount === 1) {
-                    return Promise.reject(new Error('Network error'));
-                }
-                return Promise.resolve({
-                    ok: true,
-                    json: () => Promise.resolve({ 
-                        tracks: [{ id: 'track-1', name: 'Track 1', length_km: 5.5, elevation_gain: 100, is_public: true, created_at: '2024-01-01' }],
-                        total: 1 
-                    }),
-                });
-            });
+            // First track request fails (tracks are loaded via the shared http instance)
+            mockHttp.mockRejectedValueOnce(new Error('Network error'));
 
             const wrapper = mount(AccountView);
             await flushPromises();
 
             // Component should still be functional
             expect(wrapper.find('.account-page').exists()).toBe(true);
-            
-            // Should show empty state or error state
-            expect(wrapper.find('.tracks-empty').exists() || wrapper.find('.tracks-list').exists()).toBe(true);
+
+            // Error state with a retry action should be shown
+            const errorState = wrapper.find('.tracks-empty[role="alert"]');
+            expect(errorState.exists()).toBe(true);
+            expect(errorState.text()).toContain('Could not load your tracks. Please retry.');
+            expect(errorState.find('button').text()).toContain('Retry loading tracks');
+
+            // Retry succeeds and the track list renders
+            await errorState.find('button').trigger('click');
+            await flushPromises();
+            expect(wrapper.findAll('.track-card').length).toBe(2);
+            expect(wrapper.find('.tracks-empty[role="alert"]').exists()).toBe(false);
         });
 
         it('handles visibility toggle failure gracefully', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
+            mockHttp.mockResolvedValue({
                 ok: true,
-                json: () => Promise.resolve({ 
+                json: () => Promise.resolve({
                     tracks: [{ id: 'track-1', name: 'Track 1', length_km: 5.5, elevation_gain: 100, is_public: true, created_at: '2024-01-01' }],
-                    total: 1 
+                    total: 1
                 }),
             });
 
             const wrapper = mount(AccountView);
             await flushPromises();
+            expect(wrapper.findAll('.track-card').length).toBe(1);
 
             // Make toggle fail
-            mockAuthState.authFetchFn = vi.fn().mockRejectedValue(new Error('API Error'));
+            mockHttp.mockRejectedValueOnce(new Error('API Error'));
 
             // Try to toggle visibility
             const toggleBtn = wrapper.find('.visibility-toggle');
             await toggleBtn.trigger('click');
             await flushPromises();
 
-            // Component should still be functional
+            // Component should still be functional and surface the failure
             expect(wrapper.find('.account-page').exists()).toBe(true);
+            const errorState = wrapper.find('.tracks-empty[role="alert"]');
+            expect(errorState.exists()).toBe(true);
+            expect(errorState.text()).toContain('Could not change visibility. Please retry.');
+
+            // Retry restores the list, and the toggle is not stuck in the disabled state
+            await errorState.find('button').trigger('click');
+            await flushPromises();
+            expect(wrapper.findAll('.track-card').length).toBe(1);
+            expect(wrapper.find('.visibility-toggle').attributes('disabled')).toBeUndefined();
         });
 
         it('handles bulk operation partial failure', async () => {
-            mockAuthState.authFetchFn = vi.fn().mockResolvedValue({
-                ok: true,
-                json: () => Promise.resolve({ 
-                    tracks: [
-                        { id: 'track-1', name: 'Track 1', length_km: 5.5, elevation_gain: 100, is_public: true, created_at: '2024-01-01' },
-                        { id: 'track-2', name: 'Track 2', length_km: 3.2, elevation_gain: 50, is_public: false, created_at: '2024-01-02' },
-                    ],
-                    total: 2 
-                }),
-            });
-
             const wrapper = mount(AccountView);
             await flushPromises();
+            expect(wrapper.findAll('.track-card').length).toBe(2);
 
             // Select tracks
             const checkboxes = wrapper.findAll('.track-checkbox input[type="checkbox"]');
@@ -321,8 +330,8 @@ describe('AccountView Integration', () => {
             await checkboxes[1].setChecked(true);
             await nextTick();
 
-            // Make bulk operation fail
-            mockAuthState.authFetchFn = vi.fn().mockRejectedValue(new Error('Bulk operation failed'));
+            // Make bulk operation fail (confirm resolves, so the DELETE request is next)
+            mockHttp.mockRejectedValueOnce(new Error('Bulk operation failed'));
 
             const bulkDeleteBtn = wrapper.findAll('.btn-bulk').find(b => 
                 b.text().includes('Delete')
@@ -330,8 +339,15 @@ describe('AccountView Integration', () => {
             await bulkDeleteBtn.trigger('click');
             await flushPromises();
 
-            // Component should recover
+            // Component should recover: error surfaced, selection and tracks retained
             expect(wrapper.find('.account-page').exists()).toBe(true);
+            const toolbarAlert = wrapper.find('.tracks-toolbar [role="alert"]');
+            expect(toolbarAlert.exists()).toBe(true);
+            expect(toolbarAlert.text()).toContain('Could not complete this action. Your selection is retained; please retry.');
+            expect(wrapper.findAll('.btn-bulk').length).toBeGreaterThan(0);
+            expect(wrapper.findAll('.track-card').length).toBe(2);
+            // The failed request went through the shared http instance
+            expect(mockHttp.mock.calls.some(c => c[0].includes('/api/account/tracks/bulk'))).toBe(true);
         });
     });
 
@@ -366,7 +382,7 @@ describe('AccountView Integration', () => {
             expect(filteredTracks[0].find('.track-name').text()).toBe('Mountain Hike');
         });
 
-        it('clears selection when search filters out selected tracks', async () => {
+        it('hides tracks filtered out by search while keeping their selection', async () => {
             mockHttp.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({
@@ -389,14 +405,15 @@ describe('AccountView Integration', () => {
             // Verify bulk buttons appear
             expect(wrapper.findAll('.btn-bulk').length).toBeGreaterThan(0);
 
-            // Search for non-existent track
+            // Search for non-existent track: matching tracks are hidden from the list.
+            // The selection itself is retained in component state (bulk buttons stay).
             const searchInput = wrapper.find('.search-input');
             await searchInput.setValue('NonExistentTrack');
             await nextTick();
 
-            // Bulk buttons should disappear (no tracks visible to select)
             const visibleTrackCheckboxes = wrapper.findAll('.track-checkbox');
             expect(visibleTrackCheckboxes.length).toBe(0);
+            expect(wrapper.findAll('.btn-bulk').length).toBeGreaterThan(0);
         });
 
         it('maintains selection across pagination', async () => {
@@ -424,13 +441,14 @@ describe('AccountView Integration', () => {
 
             // Load more tracks
             const loadMoreBtn = wrapper.find('.btn-load-more');
-            if (loadMoreBtn.exists()) {
-                await loadMoreBtn.trigger('click');
-                await flushPromises();
+            expect(loadMoreBtn.exists()).toBe(true);
+            await loadMoreBtn.trigger('click');
+            await flushPromises();
 
-                // Bulk buttons should still be visible (track still selected)
-                expect(wrapper.findAll('.btn-bulk').length).toBeGreaterThan(0);
-            }
+            expect(wrapper.findAll('.track-card').length).toBe(2);
+            // Bulk buttons should still be visible (first track still selected)
+            expect(wrapper.findAll('.btn-bulk').length).toBeGreaterThan(0);
+            expect(wrapper.findAll('.track-checkbox input')[0].element.checked).toBe(true);
         });
     });
 
@@ -464,11 +482,13 @@ describe('AccountView Integration', () => {
             mount(AccountView);
             await flushPromises();
 
-            // Verify all fetch calls were made through http
+            // All requests go through the shared http instance (the token header is
+            // attached inside src/http.ts, which is mocked out at this layer).
             const trackCalls = mockHttp.mock.calls.filter(c =>
                 c[0].includes('/api/account/tracks')
             );
             expect(trackCalls.length).toBeGreaterThan(0);
+            expect(trackCalls[0][1]).toMatchObject({ method: 'GET' });
         });
 
         it('fetches tracks with pagination parameters', async () => {
@@ -479,11 +499,13 @@ describe('AccountView Integration', () => {
                 c[0].includes('/api/account/tracks')
             );
 
+            // Current contract: only offset/limit are sent (sort/order were dropped)
             const url = new URL('http://localhost' + trackCall[0]);
-            expect(url.searchParams.has('limit')).toBe(true);
-            expect(url.searchParams.has('offset')).toBe(true);
-            expect(url.searchParams.get('sort')).toBe('created_at');
-            expect(url.searchParams.get('order')).toBe('desc');
+            expect(url.pathname).toBe('/api/account/tracks');
+            expect(url.searchParams.get('limit')).toBe('20');
+            expect(url.searchParams.get('offset')).toBe('0');
+            expect(url.searchParams.has('sort')).toBe(false);
+            expect(url.searchParams.has('order')).toBe(false);
         });
     });
 

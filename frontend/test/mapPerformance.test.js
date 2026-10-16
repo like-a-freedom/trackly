@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { debounce, throttle, PerformanceMonitor } from '../src/utils/mapPerformance.js';
+import { useAdvancedDebounce, useThrottle } from '../src/composables/useAdvancedDebounce';
+
+// NOTE: this legacy file originally imported debounce/throttle/PerformanceMonitor
+// from '../src/utils/mapPerformance.js'. Those exports were deleted as dead code in
+// commit 3d0b261 ("TypeScript migration"); src/utils/mapPerformance.ts now only
+// exports OPTIMIZED_MAP_OPTIONS (covered by src/utils/__tests__/mapPerformance.test.ts).
+// The debounce/throttle behaviour survives in src/composables/useAdvancedDebounce.ts,
+// so the assertions below are re-pointed at that live implementation with the exact
+// same call sites: legacy debounce(fn, wait, immediate) maps to
+// { leading: immediate, trailing: !immediate }.
+const debounce = (fn, wait, immediate = false) =>
+    useAdvancedDebounce(fn, wait, { leading: immediate, trailing: !immediate });
+const throttle = (fn, limit) => useThrottle(fn, limit);
 
 describe('Map Performance Utilities', () => {
     beforeEach(() => {
         vi.useFakeTimers();
-        // Clear any existing timers before each test
-        PerformanceMonitor.timers.clear();
     });
 
     afterEach(() => {
@@ -74,28 +84,11 @@ describe('Map Performance Utilities', () => {
         });
     });
 
-    describe('PerformanceMonitor', () => {
-        beforeEach(() => {
-            // Clear any existing timers
-            PerformanceMonitor.timers.clear();
-        });
-
-        it('should measure performance correctly', () => {
-            // Mock performance.now with specific return values
-            const mockNow = vi.fn()
-                .mockReturnValueOnce(100)  // start() call
-                .mockReturnValueOnce(150); // end() call
-
-            global.performance = { now: mockNow };
-
-            const duration = PerformanceMonitor.measure('test', () => {
-                return 'result';
-            });
-
-            expect(mockNow).toHaveBeenCalledTimes(2);
-            expect(duration).toBe(50); // 150 - 100 = 50
-        });
-    });
+    // NOTE: the `PerformanceMonitor` suite that used to live here was removed
+    // along with its subject. The API (timers / start / end / measure) was
+    // deleted from src/utils/mapPerformance.ts in commit 3d0b261 as dead code,
+    // nothing under src/ imports it, and no equivalent exists — so there was
+    // nothing left to assert against.
 
     describe('Smooth rendering optimization', () => {
         it('should keep tracks visible during zoom operations', () => {

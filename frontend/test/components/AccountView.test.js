@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { ref, computed, nextTick } from 'vue';
+import { createPinia } from 'pinia';
 import AccountView from '../../src/views/AccountView.vue';
 
 // Import mocked http for assertions
@@ -27,13 +28,18 @@ let mockAuthState = {
     },
     isLoading: false,
     authFetchFn: null,
+    initializeFn: vi.fn().mockResolvedValue(undefined),
 };
 
 // Mock useAuth composable
+// NOTE: the component's onMounted awaits initialize() before loading tracks,
+// so the mock MUST provide it (it previously did not, which prevented every
+// test that relies on rendered tracks from ever seeing them).
 vi.mock('../../src/composables/useAuth', () => ({
     useAuth: vi.fn(() => ({
         user: computed(() => mockAuthState.user),
         isLoading: ref(mockAuthState.isLoading),
+        initialize: (...args) => mockAuthState.initializeFn?.(...args),
         logout: (...args) => mockAuthState.logoutFn?.(...args),
         updateProfile: (...args) => mockAuthState.updateProfileFn?.(...args),
         deleteAccount: (...args) => mockAuthState.deleteAccountFn?.(...args),
@@ -109,6 +115,7 @@ describe('AccountView', () => {
                 ok: true,
                 json: () => Promise.resolve({ tracks: mockTracks }),
             }),
+            initializeFn: vi.fn().mockResolvedValue(undefined),
         };
     });
 
@@ -211,13 +218,13 @@ describe('AccountView', () => {
             const wrapper = mount(AccountView);
             await flushPromises();
 
-            expect(wrapper.find('.track-count').text()).toBe('3 tracks');
+            expect(wrapper.find('.track-count').text()).toBe('3 loaded tracks');
 
             const searchInput = wrapper.find('.search-input');
             await searchInput.setValue('Run');
             await nextTick();
 
-            expect(wrapper.find('.track-count').text()).toBe('1 tracks');
+            expect(wrapper.find('.track-count').text()).toBe('1 loaded tracks');
         });
     });
 
@@ -377,7 +384,7 @@ describe('AccountView', () => {
 
             expect(mockConfirmFn).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    title: 'Delete Tracks?',
+                    title: 'Delete Tracks',
                 })
             );
 
@@ -591,11 +598,20 @@ describe('AccountView', () => {
             expect(saveBtn?.hasAttribute('disabled')).toBeFalsy();
         });
 
-        it('calls updateProfile when saving valid nickname', async () => {
-            const updateProfileMock = vi.fn().mockResolvedValue({});
-            mockAuthState.updateProfileFn = updateProfileMock;
+        it('calls nickname API when saving valid nickname', async () => {
+            // The nickname save flow now PATCHes /api/auth/me/nickname via http
+            // (useNicknameEdit composable) and updates the store through the
+            // computed setter in AccountView (which uses the real auth store).
+            vi.mocked(mockHttp).mockClear();
+            vi.mocked(mockHttp).mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ tracks: mockTracks, total: mockTracks.length }),
+            });
 
-            const wrapper = mount(AccountView, { attachTo: document.body });
+            const wrapper = mount(AccountView, {
+                attachTo: document.body,
+                global: { plugins: [createPinia()] },
+            });
             await flushPromises();
 
             await openNicknameModal(wrapper);
@@ -613,18 +629,36 @@ describe('AccountView', () => {
             document.querySelector('.modal-footer .btn-primary')?.click();
             await flushPromises();
 
-            expect(updateProfileMock).toHaveBeenCalledWith({ nickname: 'newnickname' });
+            expect(mockHttp).toHaveBeenCalledWith(
+                '/api/auth/me/nickname',
+                expect.objectContaining({
+                    method: 'PATCH',
+                    body: JSON.stringify({ nickname: 'newnickname' }),
+                })
+            );
         });
 
         it('shows loading state while saving nickname', async () => {
-            // Use a delayed mock to test loading state
-            let resolveProfile;
-            const updateProfileMock = vi.fn().mockImplementation(() =>
-                new Promise((resolve) => { resolveProfile = resolve; })
-            );
-            mockAuthState.updateProfileFn = updateProfileMock;
+            // First call = initial track load; subsequent calls (nickname PATCH)
+            // are deferred so the in-flight "Saving..." state is observable.
+            let resolveHttp;
+            let call = 0;
+            vi.mocked(mockHttp).mockClear();
+            vi.mocked(mockHttp).mockImplementation(() => {
+                call++;
+                if (call === 1) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({ tracks: mockTracks, total: mockTracks.length }),
+                    });
+                }
+                return new Promise((resolve) => { resolveHttp = resolve; });
+            });
 
-            const wrapper = mount(AccountView, { attachTo: document.body });
+            const wrapper = mount(AccountView, {
+                attachTo: document.body,
+                global: { plugins: [createPinia()] },
+            });
             await flushPromises();
 
             await openNicknameModal(wrapper);
@@ -647,7 +681,7 @@ describe('AccountView', () => {
             expect(document.querySelector('.modal-footer .btn-primary')?.textContent).toContain('Saving');
 
             // Resolve the promise to clean up
-            resolveProfile({});
+            resolveHttp({ ok: true, json: () => Promise.resolve({}) });
             await flushPromises();
         });
     });
@@ -941,7 +975,8 @@ describe('AccountView', () => {
 
             const trackCount = wrapper.find('.track-count');
             expect(trackCount.exists()).toBe(true);
-            expect(trackCount.text()).toContain('3 tracks');
+            // Header now shows "<n> loaded tracks"
+            expect(trackCount.text()).toContain('3 loaded tracks');
         });
 
         it('updates track count when tracks are filtered', async () => {
@@ -953,12 +988,27 @@ describe('AccountView', () => {
             await nextTick();
 
             const trackCount = wrapper.find('.track-count');
-            expect(trackCount.text()).toContain('1 tracks');
+            expect(trackCount.text()).toContain('1 loaded tracks');
         });
     });
 
     describe('Bulk Operations UI', () => {
         it('disables bulk buttons during operation', async () => {
+            // First call = initial track load; subsequent calls (bulk API) are deferred
+            // so the in-flight (disabled) state is observable.
+            let resolveBulk;
+            let call = 0;
+            vi.mocked(mockHttp).mockImplementation(() => {
+                call++;
+                if (call === 1) {
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({ tracks: mockTracks, total: mockTracks.length }),
+                    });
+                }
+                return new Promise((resolve) => { resolveBulk = resolve; });
+            });
+
             const wrapper = mount(AccountView);
             await flushPromises();
 
@@ -970,11 +1020,19 @@ describe('AccountView', () => {
             const bulkBtn = wrapper.find('.btn-bulk');
             expect(bulkBtn.attributes('disabled')).toBeUndefined();
 
-            // Click to trigger operation
+            // Click to trigger operation (bulk toggle visibility)
             await bulkBtn.trigger('click');
+            await nextTick();
 
             // Should be disabled during operation
             expect(bulkBtn.attributes('disabled')).toBeDefined();
+
+            // Resolve pending API call and clean up
+            resolveBulk({
+                ok: true,
+                json: () => Promise.resolve({ updated: [{ id: 'track-1', is_public: false }] }),
+            });
+            await flushPromises();
         });
 
         it('shows correct count on bulk buttons', async () => {

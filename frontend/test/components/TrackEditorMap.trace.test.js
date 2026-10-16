@@ -79,7 +79,7 @@ describe("TrackEditorMap trace mode", () => {
     vi.restoreAllMocks();
   });
 
-  it("starts trace on mousedown and adds points on move", async () => {
+  it("starts trace on mousedown, collects move points and commits traceStroke on mouseup", async () => {
     const wrapper = mountMap({ editorMode: "trace" });
     const mapWrapper = wrapper.findComponent({ ref: "mapRef" });
     mapWrapper.vm.$emit("ready", mapMock);
@@ -88,8 +88,10 @@ describe("TrackEditorMap trace mode", () => {
       latlng: { lat: 10, lng: 10 },
     });
 
-    expect(wrapper.emitted("addWaypoint")).toBeTruthy();
-    expect(wrapper.emitted("addWaypoint")[0]).toEqual([10, 10]);
+    // Trace mode never emits per-point `addWaypoint`: mousedown starts a
+    // freehand stroke (see startTrace/onMapMouseDown) and points are
+    // collected into a single `traceStroke` committed on mouseup.
+    expect(wrapper.emitted("addWaypoint")).toBeFalsy();
     expect(mapMock.dragging.disable).toHaveBeenCalled();
 
     const nowSpy = vi.spyOn(Date, "now");
@@ -98,11 +100,22 @@ describe("TrackEditorMap trace mode", () => {
     mapMock.fire("mousemove", { latlng: { lat: 10.001, lng: 10.001 } });
     mapMock.fire("mousemove", { latlng: { lat: 10.002, lng: 10.002 } });
 
-    const emitted = wrapper.emitted("addWaypoint");
-    expect(emitted.length).toBeGreaterThanOrEqual(2);
+    // Stroke still in progress — nothing committed until mouseup
+    expect(wrapper.emitted("traceStroke")).toBeFalsy();
 
     mapMock.fire("mouseup", {});
     expect(mapMock.dragging.enable).toHaveBeenCalled();
+
+    const stroke = wrapper.emitted("traceStroke");
+    expect(stroke).toBeTruthy();
+    // emitted() wraps each emission as an args array: [payload]
+    const strokePoints = stroke[0][0];
+    // start point + both throttled mousemove points (>=120ms apart, >=30m)
+    expect(strokePoints).toEqual([
+      [10, 10],
+      [10.001, 10.001],
+      [10.002, 10.002],
+    ]);
   });
 
   it("ignores click when in trace mode", async () => {
