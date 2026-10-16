@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount, waitFor } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 
 // Mock dependencies
@@ -109,6 +109,10 @@ vi.stubGlobal('localStorage', localStorageMock);
 // Import HomeView after mocks so mocks are applied before module load
 import HomeView from '../../views/HomeView.vue';
 
+// Skipped: every case resolves the map through `findComponent({ name: 'TrackMap' })`,
+// but TrackMap.vue declares no `name` option, so the lookup always returns an empty
+// wrapper and all 12 cases fail. Re-enable once the suite resolves the map by the
+// imported component instead.
 describe.skip('HomeView Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -220,7 +224,7 @@ describe.skip('HomeView Integration Tests', () => {
       await nextTick();
 
       // Wait for debounced save (may need to flush timers in real test)
-      await waitFor(() => localStorageMock.setItem.mock.calls.length > 0);
+      await vi.waitUntil(() => localStorageMock.setItem.mock.calls.length > 0);
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         'trackly_map_position',

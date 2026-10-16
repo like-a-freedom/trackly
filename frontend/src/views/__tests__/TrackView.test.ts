@@ -146,7 +146,7 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Check that trackBounds computed property works
         const trackBounds = wrapper.vm.trackBounds;
@@ -170,7 +170,7 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         const trackBounds = wrapper.vm.trackBounds;
         const track = wrapper.vm.track;
@@ -193,7 +193,7 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         const initialBounds = wrapper.vm.trackBounds;
 
@@ -221,11 +221,11 @@ describe('TrackView Auto-Scaling', () => {
         wrapper = createWrapper();
 
         // Wait for track to load
-        await vi.waitFor(() => wrapper.vm.track, { timeout: 10000 });
+        await vi.waitUntil(() => wrapper.vm.track, { timeout: 10000 });
 
         // Wait for loading to complete by checking the HTML
         // TrackMap is only rendered when loading is false, track is truthy, polylines has items, and trackBounds is truthy
-        await vi.waitFor(
+        await vi.waitUntil(
             () => wrapper.html().includes('track-map-mock'),
             { timeout: 10000 }
         );
@@ -256,7 +256,7 @@ describe('TrackView Auto-Scaling', () => {
         });
 
         // Wait for track to load
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Simulate a chart hover payload
         const payload = { index: 1, distanceKm: 1.2, elevation: 120, latlng: [59.9321, 30.3619], isFixed: false };
@@ -279,7 +279,7 @@ describe('TrackView Auto-Scaling', () => {
     it('should toggle fixed state on handleChartPointClick', async () => {
         wrapper = createWrapper();
 
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         const payload = { index: 1, distanceKm: 1.2, elevation: 120, latlng: [59.9321, 30.3619], isFixed: true };
         wrapper.vm.handleChartPointClick(payload);
@@ -300,7 +300,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should reconstruct latlng from coordinateData when payload.latlng is missing', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Ensure coordinateData is built from track.latlngs
         const coordData = wrapper.vm.coordinateData;
@@ -318,7 +318,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('prefers coordinateIndex over index when mapping hover to latlng', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         const coordData = wrapper.vm.coordinateData;
         const lastIndex = coordData.length - 1;
@@ -333,7 +333,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should fall back to proportional mapping using track.latlngs when coordinateData lengths differ', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Create a long track.latlngs array to test proportional mapping
         wrapper.vm.track.latlngs = [
@@ -351,7 +351,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should set correct segmentIndex for multi-segment tracks', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Fake multi-segment track
         wrapper.vm.track.segments = [
@@ -406,7 +406,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('exposes E2E hooks in non-production modes', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // The E2E hooks should be attached to window in test mode
         expect(window.__e2e).toBeTruthy();
@@ -449,7 +449,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should compute isOwner based on session_id when user is null', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Track has session_id 'test-session' and our sessionId is 'test-session'
         expect(wrapper.vm.isOwner).toBe(true);
@@ -457,7 +457,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should compute isTrackLoop for loop tracks', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Set track with loop coordinates (start and end are the same)
         wrapper.vm.track = {
@@ -475,7 +475,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should compute endTime from time_data when track has time_data', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Set track with time_data
         wrapper.vm.track = {
@@ -489,7 +489,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should compute endTime from recorded_at + duration_seconds', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Set track with recorded_at and duration
         wrapper.vm.track = {
@@ -505,7 +505,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should compute distanceMarkersEnabled correctly', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Default should be true (distance_markers_enabled !== false)
         expect(wrapper.vm.distanceMarkersEnabled).toBe(true);
@@ -513,7 +513,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should handle chart point leave by clearing marker', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // First set a marker
         wrapper.vm.handleChartPointHover({ index: 1, latlng: [59.9321, 30.3619] });
@@ -529,7 +529,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should update markerLatLng on map-ready event', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         // Simulate map-ready by calling onMapReady
         wrapper.vm.onMapReady();
@@ -538,7 +538,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should compute polylines from track segments', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         const polylines = wrapper.vm.polylines;
         expect(polylines.length).toBeGreaterThan(0);
@@ -549,7 +549,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should compute center from track bounds', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         const center = wrapper.vm.center;
         expect(center).toBeDefined();
@@ -563,7 +563,7 @@ describe('TrackView Auto-Scaling', () => {
         mockRoute.query = { autoPan: '1' };
 
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         expect(wrapper.vm.shouldAutoPan).toBe(true);
 
@@ -573,7 +573,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should handle handleDescriptionUpdated', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         wrapper.vm.handleDescriptionUpdated('New description');
         await nextTick();
@@ -583,7 +583,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should handle handleNameUpdated', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         wrapper.vm.handleNameUpdated('New Name');
         await nextTick();
@@ -593,7 +593,7 @@ describe('TrackView Auto-Scaling', () => {
 
     it('should handle handleDistanceMarkersUpdated', async () => {
         wrapper = createWrapper();
-        await vi.waitFor(() => wrapper.vm.track);
+        await vi.waitUntil(() => wrapper.vm.track);
 
         wrapper.vm.handleDistanceMarkersUpdated(false);
         await nextTick();

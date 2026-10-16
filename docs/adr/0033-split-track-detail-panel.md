@@ -66,6 +66,6 @@ without removing a reason to change — the fetches themselves are already on `h
   the element never reaches the setup variable, so every touch/wheel/scroll handler guarded by
   `if (!flyoutContent.value) return` becomes a no-op. The touch-event tests catch this.
 - `http()` resolves the token before issuing the request, so enrichment now lands one microtask
-  later than the raw `fetch` it replaced. Two tests that used `vi.waitFor` had to switch to the
-  global `waitFor` helper: in vitest 4.1 `vi.waitFor` resolves as soon as its callback returns a
-  non-thenable value (i.e. it does not poll at all), so it never waited for the extra tick.
+  later than the raw `fetch` it replaced. The affected tests await the state instead of assuming
+  it: in vitest 4.1 `vi.waitFor` resolves as soon as its callback returns a non-thenable value
+  (i.e. it never polls), so a truthy condition has to go through `vi.waitUntil`.

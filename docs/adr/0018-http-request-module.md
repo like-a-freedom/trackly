@@ -44,7 +44,7 @@ migration; they were kept as a legacy escape hatch and have since been deleted (
 - `http()` resolves the token before issuing the request, so a request lands one microtask later
   than a bare `fetch`. Tests that assert synchronously right after firing a timer must drain the
   microtask queue (`vi.advanceTimersByTimeAsync`, `await Promise.resolve()`). Note that vitest 4.1
-  `vi.waitFor` resolves as soon as its callback returns a non-thenable value — it does not poll — so
-  tests that need to wait for that extra tick use the global `waitFor` helper from
-  `src/test-setup.ts` instead.
+  `vi.waitFor` resolves as soon as its callback returns a non-thenable value — it does not poll —
+  so tests that wait for such a tick use `vi.waitUntil`, which polls until the callback returns a
+  truthy value.
 - 4 new http tests verify auth injection, header merging, logging

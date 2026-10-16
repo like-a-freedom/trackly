@@ -1598,7 +1598,7 @@ describe('TrackDetailPanel', () => {
       await forceUpdateBtn.trigger('click');
 
       // Wait for async operations
-      await vi.waitFor(() => mockShowConfirm.mock.calls.length > 0);
+      await vi.waitUntil(() => mockShowConfirm.mock.calls.length > 0);
 
       expect(mockShowConfirm).toHaveBeenCalled();
       expect(global.fetch).toHaveBeenCalledWith('/api/tracks/1/enrich-elevation', {
@@ -1674,7 +1674,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await vi.waitFor(() => mockShowToast.mock.calls.length > 0);
+      await vi.waitUntil(() => mockShowToast.mock.calls.length > 0);
 
       expect(mockShowToast).toHaveBeenCalledWith('You are not allowed to update this track.', 'error');
     });
@@ -1692,7 +1692,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await vi.waitFor(() => mockShowToast.mock.calls.length > 0);
+      await vi.waitUntil(() => mockShowToast.mock.calls.length > 0);
 
       expect(mockShowToast).toHaveBeenCalledWith('API rate limit exceeded. Please try again later.', 'error');
     });
@@ -1710,7 +1710,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await vi.waitFor(() => mockShowToast.mock.calls.length > 0);
+      await vi.waitUntil(() => mockShowToast.mock.calls.length > 0);
 
       expect(mockShowToast).toHaveBeenCalledWith('Failed to update elevation data. Please try again.', 'error');
     });
@@ -1749,7 +1749,7 @@ describe('TrackDetailPanel', () => {
       const forceUpdateBtn = wrapper.find('.force-update-btn');
       await forceUpdateBtn.trigger('click');
 
-      await waitFor(() => wrapper.vm.track?.elevation_gain === 650);
+      await vi.waitUntil(() => wrapper.vm.track?.elevation_gain === 650);
 
       // Check that track data was updated
       expect(wrapper.vm.track.elevation_gain).toBe(650);
@@ -1810,7 +1810,7 @@ describe('TrackDetailPanel', () => {
       await forceUpdateBtn.trigger('click');
 
       // Wait for all async operations to complete
-      await waitFor(() => mockShowToast.mock.calls.length > 0);
+      await vi.waitUntil(() => mockShowToast.mock.calls.length > 0);
       await wrapper.vm.$nextTick();
 
       expect(mockShowToast).toHaveBeenCalledWith(

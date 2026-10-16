@@ -58,3 +58,6 @@ _Avoid_: map component, map view.
 
 ## Deferred Follow-ups
 - `AccountView.vue` (~1446 LOC) — needs splitting
+- `frontend/src/composables/__tests__/HomeView.integration.test.ts` — 12 cases skipped: every one
+  resolves the map via `findComponent({ name: 'TrackMap' })`, but `TrackMap.vue` declares no
+  `name`, so the lookup returns an empty wrapper

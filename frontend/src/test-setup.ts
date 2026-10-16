@@ -1,7 +1,6 @@
 // Test setup file for Vitest
 import { config } from '@vue/test-utils';
 import { vi } from 'vitest';
-import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Install a global Pinia instance for all tests
@@ -346,21 +345,8 @@ if (typeof window !== "undefined") {
     Object.defineProperty(window, "localStorage", { value: localStorageMock, configurable: true, writable: true });
 }
 
-// Global helper to wait for arbitrary conditions without relying on real timers
-(global as unknown as { waitFor: (predicate: () => boolean, options?: { timeout?: number }) => Promise<void> }).waitFor = async (predicate, { timeout = 1000 } = {}) => {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-        // Let Vue and microtasks settle
-        await nextTick();
-        await Promise.resolve();
-        try {
-            if (predicate()) return;
-        } catch (e) {
-            // Ignore intermediate errors until the condition stabilizes
-        }
-    }
-    throw new Error('waitFor: condition not met within timeout');
-};
+// Async waits use `vi.waitUntil`, which polls for a truthy value (ADR 0018).
+// No global `waitFor` shim: vitest's `vi.waitFor` never polls.
 
 // Suppress Vue warnings during tests
 config.global.config.warnHandler = () => { };
