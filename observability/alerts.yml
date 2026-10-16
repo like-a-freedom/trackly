@@ -265,6 +265,56 @@ groups:
           summary: "High churn risk fraction"
           description: "{{ $value | humanizePercentage }} of active sessions are at risk of churn (no activity in last 14d but had activity in last 30d)"
 
+  - name: trackly_auth_security
+    interval: 30s
+    rules:
+      - alert: HighLoginFailureRate
+        expr: |
+          sum(rate(auth_login_attempts_total{job="trackly_backend", success="failed"}[5m]))
+          /
+          clamp_min(sum(rate(auth_login_attempts_total{job="trackly_backend"}[5m])), 0.001)
+          > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "High login failure rate"
+          description: "{{ $value | humanizePercentage }} of login attempts are failing (possible credential stuffing)"
+
+      - alert: SustainedRateLimiting
+        expr: |
+          sum(increase(auth_rate_limits_total{job="trackly_backend"}[1h])) > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "Sustained rate limiting"
+          description: "{{ $value }} rate-limit hits in the last hour (endpoint {{ $labels.endpoint }})"
+
+      - alert: SuspiciousTokenRefreshFailures
+        expr: |
+          sum(rate(auth_token_refreshes_total{job="trackly_backend", result=~"invalid|revoked"}[10m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "Invalid/revoked token refresh attempts"
+          description: "Refresh attempts failing with invalid/revoked tokens at {{ $value | humanize }}/s"
+
+      - alert: AuthSessionsCollapsed
+        expr: |
+          auth_active_sessions_total{job="trackly_backend"} == 0
+        for: 30m
+        labels:
+          severity: info
+          component: auth
+        annotations:
+          summary: "No active auth sessions"
+          description: "auth_active_sessions_total has been 0 for 30m (auth disabled or no logins)"
+
   - name: trackly_frontend_health
     interval: 30s
     rules:
@@ -305,16 +355,10 @@ groups:
           summary: "High frontend latency"
           description: "95th percentile frontend latency is {{ $value }}s"
 
-      - alert: BackendUpstreamUnhealthy
-        expr: |
-          caddy_reverse_proxy_upstreams_healthy{job="trackly_frontend"} == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: frontend
-        annotations:
-          summary: "Backend upstream is unhealthy"
-          description: "Caddy reports backend upstream as unhealthy for {{ $labels.upstream }}"
+      # NOTE: the former "BackendUpstreamUnhealthy" alert used
+      # caddy_reverse_proxy_upstreams_healthy, which the Caddy prometheus plugin does
+      # not emit, so it could never fire. Backend reachability from the proxy is now
+      # covered by BackendDown + FrontendHighErrorRate.
 
       - alert: FrontendHighMemoryUsage
         expr: |

@@ -53,17 +53,18 @@ scrape_configs:
     scrape_timeout: 10s
 
 # Remote write configuration for VictoriaMetrics
+#
+# NOTE: no write_relabel_configs here on purpose. Dropping labels at remote-write
+# time breaks the pipeline:
+#   - filtering to *_bucket/_sum/_count drops every counter and gauge,
+#   - labelkeep without `le` breaks every histogram_quantile (latency percentiles),
+#   - labelkeep without `code` breaks the Caddy 5xx error-rate alert,
+#   - dropping `session_hash` breaks all product recording rules (engagement/retention).
+# Cardinality (mainly `session_hash` on trackly_session_heartbeat) is managed in
+# VictoriaMetrics via retention + -search.maxUniqueTimeseries / -maxLabelValueLength.
 remote_write:
   - url: http://victoriametrics:8428/api/v1/write
     queue_config:
       max_samples_per_send: 10000
       max_shards: 30
       capacity: 50000
-    write_relabel_configs:
-      # Drop metrics with empty values
-      - source_labels: [__name__]
-        regex: '.*_bucket|.*_sum|.*_count'
-        action: keep
-      # Keep only necessary labels to reduce cardinality
-      - action: labelkeep
-        regex: '__name__|job|instance|service|component|env|version|method|route|status_class|operation|format|source|category|reason|result|state|outcome|mode|ownership|referrer|query_type|result_type|field|action|zoom_bucket|session_hash|activity' 
