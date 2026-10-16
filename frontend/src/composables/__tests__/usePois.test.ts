@@ -1,15 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 import { usePois } from '../usePois';
+import { useAuthStore } from '../../stores/auth';
 import type { Poi } from '@/types';
 
 describe('usePois', () => {
     let pois: ReturnType<typeof usePois>;
 
     beforeEach(() => {
+        // http() resolves its token through useAuthStore(), which needs an active Pinia.
+        setActivePinia(createPinia());
         vi.clearAllMocks();
         pois = usePois();
     });
@@ -43,7 +47,27 @@ describe('usePois', () => {
             expect(result).toEqual(mockPois);
             expect(pois.pois.value).toEqual(mockPois);
             expect(pois.loading.value).toBe(false);
-            expect(mockFetch).toHaveBeenCalledWith('/api/tracks/track-123/pois');
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/tracks/track-123/pois',
+                expect.objectContaining({ headers: expect.any(Object) }),
+            );
+        });
+
+        it('attaches the bearer token when authenticated', async () => {
+            const auth = useAuthStore();
+            auth.accessToken = 'tok-abc';
+            auth.tokenExpiresAt = Date.now() + 60 * 60 * 1000;
+
+            mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+
+            await pois.fetchTrackPois('track-123');
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/tracks/track-123/pois',
+                expect.objectContaining({
+                    headers: expect.objectContaining({ Authorization: 'Bearer tok-abc' }),
+                }),
+            );
         });
 
         it('handles 404 response', async () => {
@@ -136,6 +160,7 @@ describe('usePois', () => {
 
             expect(mockFetch).toHaveBeenCalledWith(
                 expect.stringContaining('limit=100'),
+                expect.objectContaining({ headers: expect.any(Object) }),
             );
         });
     });

@@ -1,4 +1,5 @@
 import { geojsonToPoints } from './trackGeometryUtils';
+import { http } from '../../http-instance';
 import type { LatLngTuple, Segment } from '@/types';
 
 const API_BASE = '';
@@ -84,7 +85,7 @@ export function useTrackOptimizer(): TrackOptimizer {
         optimizerAbort = new AbortController();
 
         try {
-            const resp = await fetch(`${API_BASE}/api/tracks/simplify-preview`, {
+            const resp = await http(`${API_BASE}/api/tracks/simplify-preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

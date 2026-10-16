@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { http } from '../http-instance';
 
 export const useFeatureFlagsStore = defineStore('featureFlags', () => {
     const auth = ref<boolean>(false);
@@ -22,7 +23,7 @@ export const useFeatureFlagsStore = defineStore('featureFlags', () => {
     async function loadFlags(): Promise<void> {
         isLoading.value = true;
         try {
-            const res = await fetch('/api/feature-flags');
+            const res = await http('/api/feature-flags');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (typeof data?.auth !== 'boolean' || typeof data?.editor !== 'boolean') throw new Error('Invalid feature flags');

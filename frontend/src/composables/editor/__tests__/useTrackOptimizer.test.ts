@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -47,6 +48,8 @@ describe('useTrackOptimizer', () => {
     let optimizer: ReturnType<typeof useTrackOptimizer>;
 
     beforeEach(() => {
+        // http() resolves its token through useAuthStore(), which needs an active Pinia.
+        setActivePinia(createPinia());
         vi.clearAllMocks();
         vi.useFakeTimers();
         optimizer = useTrackOptimizer();
@@ -375,7 +378,7 @@ describe('useTrackOptimizer', () => {
     });
 
     describe('scheduleOptimizationPreview', () => {
-        it('schedules preview with debounce', () => {
+        it('schedules preview with debounce', async () => {
             const store = createTestStore({
                 segments: [{
                     points: [[50, 30], [51, 31]] as LatLngTuple[],
@@ -401,7 +404,7 @@ describe('useTrackOptimizer', () => {
             optimizer.scheduleOptimizationPreview(store, 0.5);
             expect(mockFetch).not.toHaveBeenCalled();
 
-            vi.advanceTimersByTime(500);
+            await vi.advanceTimersByTimeAsync(500);
             expect(mockFetch).toHaveBeenCalled();
         });
     });

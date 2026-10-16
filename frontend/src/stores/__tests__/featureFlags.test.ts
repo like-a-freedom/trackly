@@ -33,6 +33,9 @@ describe('useFeatureFlagsStore', () => {
     const store = useFeatureFlagsStore();
     const first = store.fetchFlags();
     const second = store.fetchFlags();
+    // http() resolves the auth token before issuing the request, so drain the
+    // microtask queue before asserting that the request was issued.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fetch).toHaveBeenCalledTimes(1);
     complete({ ok:true, json:async () => ({auth:false,editor:false}) });
     await Promise.all([first,second]);

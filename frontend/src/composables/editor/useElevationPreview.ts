@@ -1,4 +1,5 @@
 import type { LatLngTuple, ElevationPoint } from '@/types';
+import { http } from '../../http-instance';
 
 const API_BASE = '';
 const MAX_ELEVATION_PREVIEW_POINTS = 2000;
@@ -63,7 +64,7 @@ export function scheduleElevationPreview(store: EditorStore): void {
         elevationAbort = new AbortController();
 
         try {
-            const resp = await fetch(`${API_BASE}/api/elevation/preview`, {
+            const resp = await http(`${API_BASE}/api/elevation/preview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ coordinates: limitedPoints }),

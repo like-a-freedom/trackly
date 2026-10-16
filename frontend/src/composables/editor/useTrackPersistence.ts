@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
 import type { Segment, Poi, LatLngTuple } from '@/types';
 import { getSessionId, sessionHeaders } from '../../utils/session';
+import { http } from '../../http-instance';
 import { getDefaultSegmentColor } from './trackGeometryUtils';
 
 const API_BASE = '';
@@ -85,7 +86,6 @@ ${trkpts}
 
     async function createTrackFromSegment(
         store: PersistenceStore,
-        getAuthHeader: () => Promise<Record<string, string>>,
         segIndex: number,
         name?: string,
     ): Promise<{ ok: boolean; id?: string; error?: string }> {
@@ -102,10 +102,7 @@ ${trkpts}
             return { ok: false, error: 'Track name is required' };
         }
 
-        const headers = {
-            'Content-Type': 'application/json',
-            ...(await getAuthHeader()),
-        };
+        const headers = { 'Content-Type': 'application/json' };
 
         const waypointsPayload = (seg.waypoints || [])
             .filter((idx) => idx >= 0 && idx < seg.points.length)
@@ -123,7 +120,7 @@ ${trkpts}
         ];
 
         try {
-            const resp = await fetch(`${API_BASE}/api/tracks/create`, {
+            const resp = await http(`${API_BASE}/api/tracks/create`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -153,21 +150,17 @@ ${trkpts}
 
     async function duplicateTrack(
         store: PersistenceStore,
-        getAuthHeader: () => Promise<Record<string, string>>,
     ): Promise<{ ok: boolean; id?: string; error?: string }> {
         if (!store.savedTrackId) {
             return { ok: false, error: 'Save the track before duplicating' };
         }
 
         try {
-            const headers = {
-                'Content-Type': 'application/json',
-                ...(await getAuthHeader()),
-            };
+            const headers = { 'Content-Type': 'application/json' };
             const payload: Record<string, string> = {
                 session_id: getSessionId(),
             };
-            const resp = await fetch(
+            const resp = await http(
                 `${API_BASE}/api/tracks/${store.savedTrackId}/duplicate`,
                 {
                     method: 'POST',
@@ -189,7 +182,6 @@ ${trkpts}
 
     async function exportTrack(
         store: PersistenceStore,
-        getAuthHeader: () => Promise<Record<string, string>>,
         format: 'gpx' | 'kml' | 'geojson',
     ): Promise<boolean> {
         const id = store.savedTrackId;
@@ -199,11 +191,10 @@ ${trkpts}
         }
 
         try {
-            const authHeaders = await getAuthHeader();
             // Session header lets the backend attribute the export heartbeat.
-            const headers = { ...authHeaders, ...sessionHeaders(getSessionId()) };
+            const headers = { ...sessionHeaders(getSessionId()) };
 
-            const resp = await fetch(
+            const resp = await http(
                 `${API_BASE}/api/tracks/${id}/export?format=${format}`,
                 { headers },
             );
@@ -235,7 +226,7 @@ ${trkpts}
 
     async function loadTrackPois(store: PersistenceStore, id: string): Promise<void> {
         try {
-            const resp = await fetch(`${API_BASE}/api/tracks/${id}/pois`);
+            const resp = await http(`${API_BASE}/api/tracks/${id}/pois`);
             if (!resp.ok) throw new Error(`Places could not be loaded (HTTP ${resp.status}). Retry before saving.`);
             const data = await resp.json();
             if (Array.isArray(data)) {
@@ -258,7 +249,6 @@ ${trkpts}
 
     async function loadTrack(
         store: PersistenceStore,
-        getAuthHeader: () => Promise<Record<string, string>>,
         id: string,
         onTrackLoaded: (data: any) => void,
     ): Promise<void> {
@@ -266,12 +256,9 @@ ${trkpts}
         loadFailed.value = false;
         error.value = null;
         try {
-            const headers = {
-                ...sessionHeaders(getSessionId()),
-                ...(await getAuthHeader()),
-            };
+            const headers = { ...sessionHeaders(getSessionId()) };
 
-            const response = await fetch(`${API_BASE}/api/tracks/${id}/simplified`, { headers });
+            const response = await http(`${API_BASE}/api/tracks/${id}/simplified`, { headers });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -308,7 +295,6 @@ ${trkpts}
 
     async function saveTrack(
         store: PersistenceStore,
-        getAuthHeader: () => Promise<Record<string, string>>,
         geometryToGeoJSON: () => GeoJSON.Geometry | null,
         draftSave: { markClean: () => void; deleteDraft: () => void; isCurrentRevision?: () => boolean },
     ): Promise<string | null> {
@@ -348,14 +334,11 @@ ${trkpts}
         }
 
         try {
-            const headers = {
-                'Content-Type': 'application/json',
-                ...(await getAuthHeader()),
-            };
+            const headers = { 'Content-Type': 'application/json' };
 
             if (store.savedTrackId) {
                 // Update existing track geometry
-                const resp = await fetch(
+                const resp = await http(
                     `${API_BASE}/api/tracks/${store.savedTrackId}/geometry`,
                     {
                         method: 'PUT',
@@ -386,7 +369,7 @@ ${trkpts}
                 return store.savedTrackId;
             } else {
                 // Create new track
-                const resp = await fetch(`${API_BASE}/api/tracks/create`, {
+                const resp = await http(`${API_BASE}/api/tracks/create`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({
@@ -419,7 +402,7 @@ ${trkpts}
                 loadedGeometry = geometryIdentity(geojson);
                 store.savedTrackId = result.id;
                 // A replayed create can refer to an earlier, unacknowledged revision.
-                const confirmation = await fetch(`${API_BASE}/api/tracks/${result.id}/geometry`, {
+                const confirmation = await http(`${API_BASE}/api/tracks/${result.id}/geometry`, {
                     method:'PUT', headers, body:JSON.stringify({geometry:geojson,waypoints:waypointsPayload,segment_meta:buildSegmentMetaPayload(store),pois:store.pois.map(p => ({lat:p.lat,lon:p.lng,name:p.name,description:p.description,category:p.category})),session_id:sessionId}),
                 });
                 if (!confirmation.ok) throw new Error(`Track created, but current route confirmation failed: HTTP ${confirmation.status}`);
@@ -444,8 +427,8 @@ ${trkpts}
 
     async function verifySavedTrack(store: PersistenceStore, headers: Record<string, string>, geometry: GeoJSON.Geometry, anchors: Array<{lat:number;lon:number;index:number}>): Promise<void> {
         const [detailResponse, placesResponse] = await Promise.all([
-            fetch(`${API_BASE}/api/tracks/${store.savedTrackId}/simplified`, { headers }),
-            fetch(`${API_BASE}/api/tracks/${store.savedTrackId}/pois`, { headers }),
+            http(`${API_BASE}/api/tracks/${store.savedTrackId}/simplified`, { headers }),
+            http(`${API_BASE}/api/tracks/${store.savedTrackId}/pois`, { headers }),
         ]);
         if (!detailResponse.ok || !placesResponse.ok) throw new Error('Save requests completed, but final readback is unconfirmed. Your draft is retained; retry Save.');
         const detail = await detailResponse.json();
@@ -479,7 +462,7 @@ ${trkpts}
         const sessionId = getSessionId();
 
         const requests = [
-            fetch(`${API_BASE}/api/tracks/${id}/name`, {
+            http(`${API_BASE}/api/tracks/${id}/name`, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({
@@ -487,7 +470,7 @@ ${trkpts}
                     session_id: sessionId,
                 }),
             }),
-            fetch(`${API_BASE}/api/tracks/${id}/description`, {
+            http(`${API_BASE}/api/tracks/${id}/description`, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({
@@ -495,7 +478,7 @@ ${trkpts}
                     session_id: sessionId,
                 }),
             }),
-            fetch(`${API_BASE}/api/tracks/${id}/categories`, {
+            http(`${API_BASE}/api/tracks/${id}/categories`, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({

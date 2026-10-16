@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -35,6 +36,8 @@ function createTestStore(overrides: Partial<ElevationStore> = {}): ElevationStor
 
 describe('useElevationPreview', () => {
     beforeEach(() => {
+        // http() resolves its token through useAuthStore(), which needs an active Pinia.
+        setActivePinia(createPinia());
         vi.clearAllMocks();
         vi.useFakeTimers();
     });
@@ -72,7 +75,7 @@ describe('useElevationPreview', () => {
             expect(store.elevationLoading).toBe(false);
         });
 
-        it('fetches elevation data for valid track', () => {
+        it('fetches elevation data for valid track', async () => {
             const elevationResponse = {
                 elevation_profile: [
                     { distance: 0, elevation: 100 },
@@ -95,7 +98,7 @@ describe('useElevationPreview', () => {
             });
 
             scheduleElevationPreview(store);
-            vi.advanceTimersByTime(600);
+            await vi.advanceTimersByTimeAsync(600);
 
             expect(mockFetch).toHaveBeenCalledWith(
                 expect.stringContaining('/api/elevation/preview'),
@@ -139,7 +142,7 @@ describe('useElevationPreview', () => {
             expect(store.elevationError).toBe('Unable to fetch elevation profile');
         });
 
-        it('debounces multiple calls', () => {
+        it('debounces multiple calls', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({ elevation_profile: [] }),
@@ -153,13 +156,13 @@ describe('useElevationPreview', () => {
             scheduleElevationPreview(store);
             scheduleElevationPreview(store);
 
-            vi.advanceTimersByTime(600);
+            await vi.advanceTimersByTimeAsync(600);
 
             // Should only fetch once due to debounce
             expect(mockFetch).toHaveBeenCalledTimes(1);
         });
 
-        it('clamps coordinates to max points', () => {
+        it('clamps coordinates to max points', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({ elevation_profile: [] }),
@@ -173,7 +176,7 @@ describe('useElevationPreview', () => {
 
             const store = createTestStore({ coordinateData: coords });
             scheduleElevationPreview(store);
-            vi.advanceTimersByTime(600);
+            await vi.advanceTimersByTimeAsync(600);
 
             expect(mockFetch).toHaveBeenCalled();
             const body = JSON.parse(mockFetch.mock.calls[0][1].body);

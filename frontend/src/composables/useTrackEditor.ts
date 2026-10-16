@@ -41,7 +41,7 @@ const CATEGORY_SLOPE_PENALTY: Record<string, number> = {
 };
 
 export function useTrackEditor({ trackId = null }: { trackId?: string | null } = {}) {
-    const { getAuthHeader, user } = useAuth();
+    const { user } = useAuth();
     const routing = useRouting();
     const undoRedo = useUndoRedo(50);
     const draftSave = useDraftSave({ trackId });
@@ -593,7 +593,6 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
         };
         await persistence.loadTrack(
             store,
-            getAuthHeader,
             id,
             (feature: any) => {
                 const properties = feature.properties ?? feature;
@@ -654,7 +653,6 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
                 savedTrackId: persistence.savedTrackId.value,
                 error: persistence.error.value,
             },
-            getAuthHeader,
             toGeoJSON,
             { ...draftSave, isCurrentRevision: () => revision === savedRevision && !draftSave.conflict.value },
         );
@@ -672,7 +670,6 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
                 savedTrackId: persistence.savedTrackId.value,
                 error: persistence.error.value,
             },
-            getAuthHeader,
         );
     }
 
@@ -687,7 +684,6 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
                 savedTrackId: persistence.savedTrackId.value,
                 error: persistence.error.value,
             },
-            getAuthHeader,
             segIndex,
             name,
         );
@@ -708,7 +704,6 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
                 savedTrackId: persistence.savedTrackId.value,
                 error: persistence.error.value,
             },
-            getAuthHeader,
             format,
         );
     }

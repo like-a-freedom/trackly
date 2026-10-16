@@ -184,8 +184,9 @@ describe('TrackSearch', () => {
     vi.advanceTimersByTime(299)
     expect(fetch).not.toHaveBeenCalled()
 
-    // Fast-forward past debounce time
-    vi.advanceTimersByTime(1)
+    // Fast-forward past debounce time. The async variant also drains the
+    // microtask http() needs to resolve the auth token before calling fetch.
+    await vi.advanceTimersByTimeAsync(1)
     expect(fetch).toHaveBeenCalledTimes(1)
 
     vi.useRealTimers()

@@ -194,6 +194,7 @@ import { storeToRefs } from "pinia";
 import { useSearchStore } from "../stores/search";
 import { capitalize } from "../utils/string";
 import { getSessionId, sessionHeaders } from "../utils/session";
+import { http } from "../http-instance";
 
 interface Track {
   id: string;
@@ -365,7 +366,7 @@ const performSearch = async () => {
   isLoading.value = true;
 
   try {
-    const response = await fetch(
+    const response = await http(
       `/api/tracks/search?query=${encodeURIComponent(searchQuery.value)}`,
       // Session header lets the backend attribute the search heartbeat.
       { headers: sessionHeaders(getSessionId()) },

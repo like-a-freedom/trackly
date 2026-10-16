@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 import { useTrackPersistence } from '../useTrackPersistence';
+import { useAuthStore } from '../../../stores/auth';
 import type { Segment, LatLngTuple } from '@/types';
 
 interface PersistenceStore {
@@ -29,8 +31,6 @@ function createTestStore(overrides: Partial<PersistenceStore> = {}): Persistence
     };
 }
 
-const mockGetAuthHeader = vi.fn().mockResolvedValue({ Authorization: 'Bearer test' });
-
 // Spread the real module so `sessionHeaders` stays real and only the session
 // id is overridden.
 vi.mock('../../../utils/session', async (importOriginal) => ({
@@ -42,6 +42,11 @@ describe('useTrackPersistence', () => {
     let persistence: ReturnType<typeof useTrackPersistence>;
 
     beforeEach(() => {
+        // http() resolves its token through useAuthStore(), which needs an active Pinia.
+        setActivePinia(createPinia());
+        const auth = useAuthStore();
+        auth.accessToken = 'test';
+        auth.tokenExpiresAt = Date.now() + 60 * 60 * 1000;
         vi.clearAllMocks();
         persistence = useTrackPersistence();
     });
@@ -163,9 +168,36 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
-            const result = await persistence.createTrackFromSegment(store, mockGetAuthHeader, 0, 'Segment Track');
+            const result = await persistence.createTrackFromSegment(store, 0, 'Segment Track');
             expect(result.ok).toBe(true);
             expect(result.id).toBe('new-segment-track');
+        });
+
+        it('attaches the bearer token from the auth store to the request', async () => {
+            mockFetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ id: 'new-segment-track' }),
+            });
+
+            const store = createTestStore({
+                trackName: 'My Track',
+                segments: [{
+                    points: [[50, 30], [51, 31]] as LatLngTuple[],
+                    waypoints: [0, 1],
+                    surfaceTypes: ['unknown', 'unknown'],
+                    name: null,
+                    color: '#2196F3',
+                }],
+            });
+
+            await persistence.createTrackFromSegment(store, 0, 'Segment Track');
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/api/tracks/create'),
+                expect.objectContaining({
+                    headers: expect.objectContaining({ Authorization: 'Bearer test' }),
+                }),
+            );
         });
 
         it('fails for segment with less than 2 points', async () => {
@@ -180,7 +212,7 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
-            const result = await persistence.createTrackFromSegment(store, mockGetAuthHeader, 0);
+            const result = await persistence.createTrackFromSegment(store, 0);
             expect(result.ok).toBe(false);
             expect(result.error).toBe('Segment must have at least 2 points');
         });
@@ -197,7 +229,7 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
-            const result = await persistence.createTrackFromSegment(store, mockGetAuthHeader, 0, '   ');
+            const result = await persistence.createTrackFromSegment(store, 0, '   ');
             expect(result.ok).toBe(false);
             expect(result.error).toBe('Track name is required');
         });
@@ -216,7 +248,7 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
-            const result = await persistence.createTrackFromSegment(store, mockGetAuthHeader, 0);
+            const result = await persistence.createTrackFromSegment(store, 0);
             expect(result.ok).toBe(false);
             expect(result.error).toContain('500');
         });
@@ -225,7 +257,7 @@ describe('useTrackPersistence', () => {
     describe('duplicateTrack', () => {
         it('fails when no saved track ID', async () => {
             const store = createTestStore();
-            const result = await persistence.duplicateTrack(store, mockGetAuthHeader);
+            const result = await persistence.duplicateTrack(store);
             expect(result.ok).toBe(false);
             expect(result.error).toBe('Save the track before duplicating');
         });
@@ -237,7 +269,7 @@ describe('useTrackPersistence', () => {
             });
 
             const store = createTestStore({ savedTrackId: 'original-123' });
-            const result = await persistence.duplicateTrack(store, mockGetAuthHeader);
+            const result = await persistence.duplicateTrack(store);
             expect(result.ok).toBe(true);
             expect(result.id).toBe('duplicated-track');
         });
@@ -246,7 +278,7 @@ describe('useTrackPersistence', () => {
             mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
             const store = createTestStore({ savedTrackId: 'original-123' });
-            const result = await persistence.duplicateTrack(store, mockGetAuthHeader);
+            const result = await persistence.duplicateTrack(store);
             expect(result.ok).toBe(false);
             expect(result.error).toContain('500');
         });
@@ -255,7 +287,7 @@ describe('useTrackPersistence', () => {
     describe('exportTrack', () => {
         it('fails when no saved track ID', async () => {
             const store = createTestStore();
-            const result = await persistence.exportTrack(store, mockGetAuthHeader, 'gpx');
+            const result = await persistence.exportTrack(store, 'gpx');
             expect(result).toBe(false);
             expect(persistence.error.value).toBe('Save the track before exporting');
         });
@@ -279,7 +311,7 @@ describe('useTrackPersistence', () => {
             vi.spyOn(document.body, 'removeChild').mockImplementation(vi.fn() as any);
 
             const store = createTestStore({ savedTrackId: 'track-123', trackName: 'My Track' });
-            const result = await persistence.exportTrack(store, mockGetAuthHeader, 'gpx');
+            const result = await persistence.exportTrack(store, 'gpx');
             expect(result).toBe(true);
 
             globalThis.URL = originalURL;
@@ -300,7 +332,7 @@ describe('useTrackPersistence', () => {
             } as any;
 
             const store = createTestStore({ savedTrackId: 'track-123', trackName: 'My Track' });
-            await persistence.exportTrack(store, mockGetAuthHeader, 'gpx');
+            await persistence.exportTrack(store, 'gpx');
 
             expect(mockFetch).toHaveBeenCalledWith(
                 expect.stringContaining('/api/tracks/track-123/export'),
@@ -318,7 +350,7 @@ describe('useTrackPersistence', () => {
             mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
             const store = createTestStore({ savedTrackId: 'track-123' });
-            const result = await persistence.exportTrack(store, mockGetAuthHeader, 'gpx');
+            const result = await persistence.exportTrack(store, 'gpx');
             expect(result).toBe(false);
             expect(persistence.error.value).toContain('404');
         });
@@ -369,7 +401,7 @@ describe('useTrackPersistence', () => {
                 segment_meta: [{ name: 'Coast', color: '#1976d2' }],
             }) }).mockResolvedValueOnce({ ok: true, json: async () => [] });
             const store = createTestStore();
-            await persistence.loadTrack(store, mockGetAuthHeader, 'track-123', () => {});
+            await persistence.loadTrack(store, 'track-123', () => {});
             expect(store.trackName).toBe('Coastal route');
             expect(store.trackDescription).toBe('Cliff path');
             expect(store.trackCategories).toEqual(['walking']);
@@ -392,7 +424,7 @@ describe('useTrackPersistence', () => {
             });
 
             const store = createTestStore();
-            await persistence.loadTrack(store, mockGetAuthHeader, 'track-123', mockOnLoaded);
+            await persistence.loadTrack(store, 'track-123', mockOnLoaded);
 
             expect(store.trackName).toBe('Loaded Track');
             expect(store.trackDescription).toBe('Description');
@@ -405,7 +437,7 @@ describe('useTrackPersistence', () => {
             mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
             const store = createTestStore();
-            await persistence.loadTrack(store, mockGetAuthHeader, 'track-123', vi.fn());
+            await persistence.loadTrack(store, 'track-123', vi.fn());
 
             expect(persistence.error.value).toContain('404');
             expect(persistence.loading.value).toBe(false);
@@ -418,7 +450,7 @@ describe('useTrackPersistence', () => {
             }));
 
             const store = createTestStore();
-            const promise = persistence.loadTrack(store, mockGetAuthHeader, 'track-123', vi.fn());
+            const promise = persistence.loadTrack(store, 'track-123', vi.fn());
 
             expect(persistence.loading.value).toBe(true);
 
@@ -432,7 +464,7 @@ describe('useTrackPersistence', () => {
         mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : {name:'River &amp; forest',description:'Rock &amp; water',categories:[],waypoints:[{lat:50,lon:30.123456789,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#2196F3'}],geom_geojson:{type:'LineString',coordinates:[[30.123456789,50],[31,51]]}}}));
         const draft={markClean:vi.fn(),deleteDraft:vi.fn()};
         const store=createTestStore({trackName:'River & forest',trackDescription:'Rock & water',savedTrackId:'existing',segments:[{points:[[50,30.123456789123],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:null,color:'#2196F3'}]});
-        expect(await persistence.saveTrack(store,mockGetAuthHeader,()=>({type:'LineString',coordinates:[[30.123456789123,50],[31,51]]}),draft)).toBe('existing');
+        expect(await persistence.saveTrack(store,()=>({type:'LineString',coordinates:[[30.123456789123,50],[31,51]]}),draft)).toBe('existing');
         expect(draft.markClean).toHaveBeenCalled();
     });
 
@@ -440,7 +472,7 @@ describe('useTrackPersistence', () => {
         mockFetch.mockResolvedValue({ok:true,json:async () => ({name:'Older server revision',description:'',categories:[],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]}})});
         const draft = {markClean:vi.fn(),deleteDraft:vi.fn()};
         const store = createTestStore({trackName:'Current revision',savedTrackId:'existing',segments:[{points:[[50,30],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:null,color:'#2196F3'}]});
-        expect(await persistence.saveTrack(store,mockGetAuthHeader,() => ({type:'LineString',coordinates:[[30,50],[31,51]]}),draft)).toBeNull();
+        expect(await persistence.saveTrack(store,() => ({type:'LineString',coordinates:[[30,50],[31,51]]}),draft)).toBeNull();
         expect(draft.deleteDraft).not.toHaveBeenCalled();
         expect(persistence.error.value).toContain('readback');
     });
@@ -449,7 +481,7 @@ describe('useTrackPersistence', () => {
         const store = createTestStore({trackName:'Route',savedTrackId:'existing',segments:[{points:[[50,30],[51,31]],waypoints:[0,1],surfaceTypes:['unknown','unknown'],name:'Forest',color:'#2196F3'}]});
         mockFetch.mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : {name:'Route',description:'',categories:[],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]},waypoints:missing==='anchors' ? [] : [{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:missing==='segment metadata' ? 'Lost' : 'Forest',color:'#2196F3'}]}}));
         const draft = {markClean:vi.fn(),deleteDraft:vi.fn()};
-        expect(await persistence.saveTrack(store,mockGetAuthHeader,()=>({type:'LineString',coordinates:[[30,50],[31,51]]}),draft)).toBeNull();
+        expect(await persistence.saveTrack(store,()=>({type:'LineString',coordinates:[[30,50],[31,51]]}),draft)).toBeNull();
         expect(draft.markClean).not.toHaveBeenCalled();
         expect(draft.deleteDraft).not.toHaveBeenCalled();
         expect(persistence.error.value).toContain('readback');
@@ -458,7 +490,7 @@ describe('useTrackPersistence', () => {
     describe('saveTrack', () => {
         it('fails when track name is empty', async () => {
             const store = createTestStore({ trackName: '' });
-            const result = await persistence.saveTrack(store, mockGetAuthHeader, () => ({} as any), { markClean: vi.fn(), deleteDraft: vi.fn() });
+            const result = await persistence.saveTrack(store, () => ({} as any), { markClean: vi.fn(), deleteDraft: vi.fn() });
             expect(result).toBeNull();
         });
 
@@ -473,7 +505,7 @@ describe('useTrackPersistence', () => {
                     color: '#2196F3',
                 }],
             });
-            const result = await persistence.saveTrack(store, mockGetAuthHeader, () => ({} as any), { markClean: vi.fn(), deleteDraft: vi.fn() });
+            const result = await persistence.saveTrack(store, () => ({} as any), { markClean: vi.fn(), deleteDraft: vi.fn() });
             expect(result).toBeNull();
         });
 
@@ -497,7 +529,7 @@ describe('useTrackPersistence', () => {
 
             const defaultResponse = mockFetch.getMockImplementation()!;
             mockFetch.mockImplementation((url: string, ...args: unknown[]) => url.endsWith('/pois') ? Promise.resolve({ok:true,json:async()=>[]}) : defaultResponse(url,...args));
-            const result = await persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'MultiLineString', coordinates: [[[30, 50], [31, 51]]] } as GeoJSON.MultiLineString), draftSave);
+            const result = await persistence.saveTrack(store, () => ({ type: 'MultiLineString', coordinates: [[[30, 50], [31, 51]]] } as GeoJSON.MultiLineString), draftSave);
 
             expect(result).toBe('new-track');
             expect(persistence.savedTrackId.value).toBe('new-track');
@@ -525,7 +557,7 @@ describe('useTrackPersistence', () => {
 
             const defaultResponse = mockFetch.getMockImplementation()!;
             mockFetch.mockImplementation((url: string, ...args: unknown[]) => url.endsWith('/pois') ? Promise.resolve({ok:true,json:async()=>[]}) : defaultResponse(url,...args));
-            const result = await persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'MultiLineString', coordinates: [[[30, 50], [31, 51]]] } as GeoJSON.MultiLineString), draftSave);
+            const result = await persistence.saveTrack(store, () => ({ type: 'MultiLineString', coordinates: [[[30, 50], [31, 51]]] } as GeoJSON.MultiLineString), draftSave);
 
             expect(result).toBe('existing-track');
         });
@@ -535,7 +567,7 @@ describe('useTrackPersistence', () => {
             mockFetch.mockReturnValueOnce(new Promise(resolve => { complete = resolve; })).mockImplementation((url:string) => Promise.resolve({ok:true,json:async()=>url.endsWith('/pois') ? [] : ({name:'Route',description:'',categories:[],waypoints:[{lat:50,lon:30,index:0},{lat:51,lon:31,index:1}],segment_meta:[{name:null,color:'#2196F3'}],geom_geojson:{type:'LineString',coordinates:[[30,50],[31,51]]}})}));
             const draft = { markClean: vi.fn(), deleteDraft: vi.fn(), isCurrentRevision: () => false };
             const store = createTestStore({ trackName: 'Route', savedTrackId: 'existing', segments: [{ points: [[50, 30], [51, 31]], waypoints: [0, 1], surfaceTypes: ['unknown', 'unknown'], name: null, color: '#2196F3' }] });
-            const pending = persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'LineString', coordinates: [[30, 50], [31, 51]] }), draft);
+            const pending = persistence.saveTrack(store, () => ({ type: 'LineString', coordinates: [[30, 50], [31, 51]] }), draft);
             await Promise.resolve();
             complete({ ok: true });
             expect(await pending).toBe('existing');
@@ -547,7 +579,7 @@ describe('useTrackPersistence', () => {
             mockFetch.mockResolvedValueOnce({ ok: true }).mockResolvedValue({ ok: false, status: 403 });
             const draft = { markClean: vi.fn(), deleteDraft: vi.fn() };
             const store = createTestStore({ trackName: 'Route', savedTrackId: 'existing', segments: [{ points: [[50, 30], [51, 31]], waypoints: [0, 1], surfaceTypes: ['unknown', 'unknown'], name: null, color: '#2196F3' }] });
-            expect(await persistence.saveTrack(store, mockGetAuthHeader, () => ({ type: 'LineString', coordinates: [[30, 50], [31, 51]] }), draft)).toBeNull();
+            expect(await persistence.saveTrack(store, () => ({ type: 'LineString', coordinates: [[30, 50], [31, 51]] }), draft)).toBeNull();
             expect(draft.deleteDraft).not.toHaveBeenCalled();
             expect(draft.markClean).not.toHaveBeenCalled();
             expect(persistence.error.value).toContain('403');
@@ -567,7 +599,7 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
-            const result = await persistence.saveTrack(store, mockGetAuthHeader, () => ({} as any), { markClean: vi.fn(), deleteDraft: vi.fn() });
+            const result = await persistence.saveTrack(store, () => ({} as any), { markClean: vi.fn(), deleteDraft: vi.fn() });
             expect(result).toBeNull();
             expect(persistence.error.value).toContain('500');
         });
@@ -584,7 +616,7 @@ describe('useTrackPersistence', () => {
                 }],
             });
 
-            const result = await persistence.saveTrack(store, mockGetAuthHeader, () => null, { markClean: vi.fn(), deleteDraft: vi.fn() });
+            const result = await persistence.saveTrack(store, () => null, { markClean: vi.fn(), deleteDraft: vi.fn() });
             expect(result).toBeNull();
             expect(persistence.error.value).toBe('Track must contain at least 2 points');
         });
