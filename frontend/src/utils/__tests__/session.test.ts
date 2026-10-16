@@ -1,6 +1,6 @@
 // @ts-nocheck - Test mocks don't need full type fidelity
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { generateSessionId, getSessionId } from '../session';
+import { generateSessionId, getSessionId, sessionHeaders } from '../session';
 
 const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(window, 'crypto');
 const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
@@ -120,5 +120,15 @@ describe('session utils', () => {
 
         expect(result).toBe(stored);
         expect(window.crypto.randomUUID).not.toHaveBeenCalled();
+    });
+});
+
+describe('sessionHeaders', () => {
+    it('carries the session id under the backend header name', () => {
+        expect(sessionHeaders('abc-123')).toEqual({ 'x-session-id': 'abc-123' });
+    });
+
+    it('omits the header entirely when no id is available', () => {
+        expect(sessionHeaders('')).toEqual({});
     });
 });

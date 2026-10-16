@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue';
 import type { Segment, Poi, LatLngTuple } from '@/types';
-import { getSessionId } from '../../utils/session';
+import { getSessionId, sessionHeaders } from '../../utils/session';
 import { getDefaultSegmentColor } from './trackGeometryUtils';
 
 const API_BASE = '';
@@ -201,7 +201,7 @@ ${trkpts}
         try {
             const authHeaders = await getAuthHeader();
             // Session header lets the backend attribute the export heartbeat.
-            const headers = { ...authHeaders, 'x-session-id': getSessionId() };
+            const headers = { ...authHeaders, ...sessionHeaders(getSessionId()) };
 
             const resp = await fetch(
                 `${API_BASE}/api/tracks/${id}/export?format=${format}`,
@@ -266,9 +266,8 @@ ${trkpts}
         loadFailed.value = false;
         error.value = null;
         try {
-            const sessionId = getSessionId();
             const headers = {
-                ...(sessionId ? { 'x-session-id': sessionId } : {}),
+                ...sessionHeaders(getSessionId()),
                 ...(await getAuthHeader()),
             };
 

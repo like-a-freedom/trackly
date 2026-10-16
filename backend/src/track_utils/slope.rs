@@ -249,10 +249,15 @@ pub fn calculate_slope_metrics(
 
         // Find appropriate bucket
         for bucket in histogram.iter_mut() {
-            let bucket_from = bucket["bucket_from"].as_f64().unwrap() as f32;
-            let bucket_to = bucket["bucket_to"].as_f64().unwrap() as f32;
-            if slope >= bucket_from && slope < bucket_to {
-                let current_distance = bucket["distance_m"].as_f64().unwrap() as f32;
+            // Buckets are built by this module, but a malformed value must not
+            // abort the whole slope calculation.
+            let (Some(bucket_from), Some(bucket_to)) =
+                (bucket["bucket_from"].as_f64(), bucket["bucket_to"].as_f64())
+            else {
+                continue;
+            };
+            if slope >= bucket_from as f32 && slope < bucket_to as f32 {
+                let current_distance = bucket["distance_m"].as_f64().unwrap_or(0.0) as f32;
                 bucket["distance_m"] = serde_json::json!(current_distance + segment_distance);
                 break;
             }

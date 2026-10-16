@@ -53,8 +53,46 @@ fn derive_track_name(supplied: Option<&str>, file_name: &str) -> String {
     }
 }
 
+/// Upload a track from a GPX/KML file and persist it.
+///
+/// Wraps [`upload_inner`] so that every outcome is counted: successes land in
+/// `tracks_uploaded_total{source}` and rejections in
+/// `track_upload_failures_total{reason}`. Duplicates are deliberately not
+/// counted as failures — `tracks_deduplicated_total` already tracks them.
 #[tracing::instrument(skip(pool, request), fields(endpoint = "upload_track_service", file_name = %request.file_name))]
 pub async fn upload(pool: &Arc<PgPool>, request: UploadRequest) -> Result<TrackUploadResponse> {
+    match upload_inner(pool, request).await {
+        Ok(response) => {
+            metrics::record_track_uploaded("anonymous");
+            Ok(response)
+        }
+        Err(error @ AppError::DuplicateTrack(_)) => Err(error),
+        Err(error) => {
+            metrics::record_track_upload_failure(upload_failure_reason(&error));
+            Err(error)
+        }
+    }
+}
+
+/// Map a domain upload error onto the low-cardinality `reason` label used by
+/// `track_upload_failures_total`.
+///
+/// Only the variant is inspected: the label stays stable across message
+/// wording, which keeps the metric's cardinality bounded.
+fn upload_failure_reason(error: &AppError) -> &'static str {
+    match error {
+        AppError::Validation(_) => "validation",
+        AppError::BadRequest(_) => "bad_request",
+        AppError::Database(_) => "database",
+        AppError::Internal(_) => "internal",
+        // Everything else (auth, not-found, rate-limit, ...) cannot originate
+        // from the upload pipeline today; bucket them rather than adding labels
+        // that would never be incremented.
+        _ => "other",
+    }
+}
+
+async fn upload_inner(pool: &Arc<PgPool>, request: UploadRequest) -> Result<TrackUploadResponse> {
     let pipeline_start = Instant::now();
     validate_request(&request)?;
     validate_file_size(request.file_bytes.len())?;
@@ -400,6 +438,30 @@ mod tests {
             file_name: "test.gpx".into(),
             file_bytes: Bytes::from_static(b"<gpx></gpx>"),
         };
+    }
+
+    #[test]
+    fn upload_failure_reason_maps_domain_error_variants() {
+        assert_eq!(
+            upload_failure_reason(&AppError::Validation("too long".into())),
+            "validation"
+        );
+        assert_eq!(
+            upload_failure_reason(&AppError::BadRequest("invalid gpx file".into())),
+            "bad_request"
+        );
+        assert_eq!(upload_failure_reason(&AppError::NotFound), "other");
+        assert_eq!(upload_failure_reason(&AppError::TooManyRequests), "other");
+        assert_eq!(
+            upload_failure_reason(&AppError::Internal(anyhow::anyhow!("boom"))),
+            "internal"
+        );
+    }
+
+    #[test]
+    fn database_errors_keep_their_own_failure_reason() {
+        let error = AppError::Database(sqlx::Error::RowNotFound);
+        assert_eq!(upload_failure_reason(&error), "database");
     }
 
     #[test]

@@ -160,6 +160,7 @@ pub async fn create_track(
     })?;
 
     metrics::observe_track_length_km("editor", length_km);
+    metrics::record_track_uploaded("editor");
 
     info!(
         track_id = %track_id,

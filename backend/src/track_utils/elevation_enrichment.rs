@@ -7,6 +7,7 @@ use reqwest;
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::time::{Duration, sleep};
 use tracing::{error, info};
 
@@ -252,6 +253,7 @@ impl ElevationEnrichmentService {
                 >= i32::try_from(self.daily_limit).unwrap_or(i32::MAX)
             {
                 error!("Daily API limit exceeded for service {}", self.dataset);
+                metrics::record_elevation_api_error(&self.dataset, "limit");
                 return Err(anyhow!(
                     "Daily API limit exceeded for service {}",
                     self.dataset
@@ -280,8 +282,8 @@ impl ElevationEnrichmentService {
                     // Try fallback service if available
                     if let Some(fallback_result) = self.try_fallback_service(chunk).await {
                         enriched_points.extend(fallback_result);
-                        // Record API usage for fallback service too
-                        metrics::record_elevation_api_calls(&self.dataset, 1);
+                        // The fallback call was already counted under its own
+                        // service label inside `try_fallback_service`.
                         total_api_calls += 1;
                         continue;
                     }
@@ -388,6 +390,9 @@ impl ElevationEnrichmentService {
                     match self.fetch_open_elevation_batch(points).await {
                         Ok(result) => {
                             info!("Fallback service succeeded");
+                            // Counted under the service that actually answered,
+                            // not the primary one.
+                            metrics::record_elevation_api_calls(fallback_service, 1);
                             return Some(result);
                         }
                         Err(e) => {
@@ -419,26 +424,12 @@ impl ElevationEnrichmentService {
 
         let url = format!("{}/{}", self.base_url, self.dataset);
 
-        let response = self
-            .client
-            .get(&url)
-            .query(&[("locations", &locations)])
-            .timeout(self.timeout)
-            .send()
+        let (status, response_text) = self
+            .send_elevation_request(
+                &self.dataset,
+                self.client.get(&url).query(&[("locations", &locations)]),
+            )
             .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "OpenTopoData API request failed with status {}: {}",
-                status,
-                text
-            ));
-        }
-
-        let status = response.status();
-        let response_text = response.text().await.unwrap_or_default();
 
         let api_response: OpenTopoDataResponse = match serde_json::from_str(&response_text) {
             Ok(resp) => resp,
@@ -447,6 +438,7 @@ impl ElevationEnrichmentService {
                     "Failed to parse OpenTopoData API response: {}. Status: {}, Body: {}",
                     e, status, response_text
                 );
+                metrics::record_elevation_api_error(&self.dataset, "invalid_response");
                 return Err(anyhow!(
                     "Failed to parse API response: {}. Status: {}, Body: {}",
                     e,
@@ -458,6 +450,7 @@ impl ElevationEnrichmentService {
 
         // Validate that we got the expected number of results
         if api_response.results.len() != points.len() {
+            metrics::record_elevation_api_error(&self.dataset, "invalid_response");
             return Err(anyhow!(
                 "API returned {} results but expected {}",
                 api_response.results.len(),
@@ -466,6 +459,44 @@ impl ElevationEnrichmentService {
         }
 
         Ok(api_response.results)
+    }
+
+    /// Send an elevation API request and read its body.
+    ///
+    /// Latency and transport/status failures are recorded here so every service
+    /// reports `elevation_api_*` metrics through one code path; callers record
+    /// the parse failures that depend on the response shape.
+    async fn send_elevation_request(
+        &self,
+        service: &str,
+        request: reqwest::RequestBuilder,
+    ) -> Result<(reqwest::StatusCode, String)> {
+        let started = Instant::now();
+        let outcome: Result<(reqwest::StatusCode, String)> = async {
+            let response = request.timeout(self.timeout).send().await?;
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            if !status.is_success() {
+                return Err(anyhow!(
+                    "{service} API request failed with status {status}: {body}"
+                ));
+            }
+            Ok((status, body))
+        }
+        .await;
+
+        metrics::observe_elevation_api_duration(service, started.elapsed().as_secs_f64());
+        if let Err(error) = &outcome {
+            // Only transport failures are `reqwest` errors; anything else was
+            // produced above from a non-2xx status.
+            let kind = match error.downcast_ref::<reqwest::Error>() {
+                Some(reqwest_error) if reqwest_error.is_timeout() => "timeout",
+                Some(_) => "network",
+                None => "http_status",
+            };
+            metrics::record_elevation_api_error(service, kind);
+        }
+        outcome
     }
 
     /// Fetch elevation data for a batch of points from Open-Elevation API
@@ -492,26 +523,12 @@ impl ElevationEnrichmentService {
             "locations": locations
         });
 
-        let response = self
-            .client
-            .post(&self.base_url)
-            .json(&request_body)
-            .timeout(self.timeout)
-            .send()
+        let (status, response_text) = self
+            .send_elevation_request(
+                "open-elevation",
+                self.client.post(&self.base_url).json(&request_body),
+            )
             .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let text = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Open-Elevation API request failed with status {}: {}",
-                status,
-                text
-            ));
-        }
-
-        let status = response.status();
-        let response_text = response.text().await.unwrap_or_default();
 
         let api_response: OpenElevationResponse = match serde_json::from_str(&response_text) {
             Ok(resp) => resp,
@@ -520,6 +537,7 @@ impl ElevationEnrichmentService {
                     "Failed to parse Open-Elevation API response: {}. Status: {}, Body: {}",
                     e, status, response_text
                 );
+                metrics::record_elevation_api_error("open-elevation", "invalid_response");
                 return Err(anyhow!(
                     "Failed to parse API response: {}. Status: {}, Body: {}",
                     e,
@@ -528,6 +546,16 @@ impl ElevationEnrichmentService {
                 ));
             }
         };
+
+        // Reject a length mismatch instead of indexing past the end of `points`.
+        if api_response.results.len() != points.len() {
+            metrics::record_elevation_api_error("open-elevation", "invalid_response");
+            return Err(anyhow!(
+                "API returned {} results but expected {}",
+                api_response.results.len(),
+                points.len()
+            ));
+        }
 
         // Convert Open-Elevation response to ElevationPoint format
         let elevation_points: Vec<ElevationPoint> = api_response

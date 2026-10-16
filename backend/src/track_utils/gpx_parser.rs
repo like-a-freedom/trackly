@@ -665,20 +665,21 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let mut hr_min: Option<i32> = None;
     let mut hr_max: Option<i32> = None;
 
-    // Calculate HR min/max
+    // Calculate HR min/max; an empty sample simply yields no values.
     if let Some(hr_values) = &final_hr_data {
         let valid_hrs: Vec<i32> = hr_values.iter().filter_map(|&hr| hr).collect();
-        if !valid_hrs.is_empty() {
-            hr_min = Some(*valid_hrs.iter().min().unwrap());
-            hr_max = Some(*valid_hrs.iter().max().unwrap());
+        if let (Some(&min), Some(&max)) = (valid_hrs.iter().min(), valid_hrs.iter().max()) {
+            hr_min = Some(min);
+            hr_max = Some(max);
         }
     }
 
     if total_moving_secs > 0.0 {
         moving_time = Some(total_moving_secs.round() as i32);
-        moving_avg_speed = Some((moving_distance / 1000.0) / (total_moving_secs / 3600.0)); // km/h
-        moving_avg_pace = Some(if moving_avg_speed.unwrap() > 0.0 {
-            60.0 / moving_avg_speed.unwrap() // min/km
+        let avg_speed = (moving_distance / 1000.0) / (total_moving_secs / 3600.0); // km/h
+        moving_avg_speed = Some(avg_speed);
+        moving_avg_pace = Some(if avg_speed > 0.0 {
+            60.0 / avg_speed // min/km
         } else {
             0.0
         });

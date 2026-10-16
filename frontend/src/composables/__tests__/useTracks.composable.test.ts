@@ -5,8 +5,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import { useTracks, resetTracksCaches } from '../useTracks';
 import { useSearchStore } from '../../stores/search';
 
-// Mock session utility
-vi.mock('../../utils/session', () => ({
+// Mock session utility (spread the real module so `sessionHeaders` stays real
+// and only the session id is overridden)
+vi.mock('../../utils/session', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../utils/session')>()),
     getSessionId: () => 'test-session-id'
 }));
 

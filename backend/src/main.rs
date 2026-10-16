@@ -251,7 +251,21 @@ async fn main() {
         .layer(metrics::HttpMetricsLayer::new())
         .layer(cors)
         .with_state(pool);
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    // 12-factor: bind address comes from the environment, not from source.
+    // Invalid values abort at startup with a clear message instead of panicking
+    // mid-serve.
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(8080);
+    let addr: SocketAddr = match format!("{host}:{port}").parse() {
+        Ok(addr) => addr,
+        Err(e) => {
+            eprintln!("Invalid bind address from HOST/PORT ({host}:{port}): {e}");
+            std::process::exit(1);
+        }
+    };
     info!(address = %addr, "listening");
     info!(
         max_body_bytes = max_body_size,

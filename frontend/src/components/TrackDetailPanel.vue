@@ -604,7 +604,7 @@ import {
   convertUrlsToLinks,
   formatDateTime,
 } from "../utils/format";
-import { getSessionId } from "../utils/session";
+import { getSessionId, sessionHeaders } from "../utils/session";
 import {
   validateSpeedData,
   formatSpeed,
@@ -1026,6 +1026,63 @@ function detachIconTooltipHandlers(container) {
   }
 }
 
+/**
+ * Merge freshly fetched elevation/slope data into the current track, bust the
+ * chart caches and notify listeners.
+ *
+ * Shared by the enrichment poller (`pollForElevationData`) and the manual
+ * "enrich elevation" action so the merge shape and the
+ * `track-elevation-updated` payload stay identical for both entry points.
+ *
+ * @param trackId - id of the track that was refetched; also used to key the
+ *   per-track cache entries.
+ * @param updatedTrack - full track payload returned by the detail endpoint.
+ */
+async function applyElevationUpdate(trackId, updatedTrack) {
+  // Force cache invalidation before updating track data
+  clearCacheByPattern(`elevation_${trackId}`);
+  clearCacheByPattern(`chartdata_`);
+  chartUpdateKey.value = Date.now();
+
+  // Update local track data - create new object to trigger reactivity
+  track.value = {
+    ...track.value,
+    elevation_enriched: updatedTrack.elevation_enriched,
+    elevation_gain: updatedTrack.elevation_gain,
+    elevation_loss: updatedTrack.elevation_loss,
+    elevation_min: updatedTrack.elevation_min,
+    elevation_max: updatedTrack.elevation_max,
+    elevation_dataset: updatedTrack.elevation_dataset,
+    elevation_enriched_at: updatedTrack.elevation_enriched_at,
+    elevation_profile: updatedTrack.elevation_profile,
+    slope_min: updatedTrack.slope_min,
+    slope_max: updatedTrack.slope_max,
+    slope_avg: updatedTrack.slope_avg,
+    slope_segments: updatedTrack.slope_segments,
+    slope_histogram: updatedTrack.slope_histogram,
+    // Add timestamp to force chart update
+    _lastUpdated: Date.now(),
+  };
+
+  // Dispatch global event for other components
+  events.emit("track-elevation-updated", {
+    trackId,
+    elevation_gain: updatedTrack.elevation_gain,
+    elevation_loss: updatedTrack.elevation_loss,
+    elevation_min: updatedTrack.elevation_min,
+    elevation_max: updatedTrack.elevation_max,
+    elevation_dataset: updatedTrack.elevation_dataset,
+    elevation_profile: updatedTrack.elevation_profile,
+    elevation_enriched_at: updatedTrack.elevation_enriched_at,
+    slope_min: updatedTrack.slope_min,
+    slope_max: updatedTrack.slope_max,
+    slope_segments: updatedTrack.slope_segments,
+  });
+
+  // Force reactivity with nextTick
+  await nextTick();
+}
+
 // Separate polling function for easier testing
 async function pollForElevationData(trackId) {
   try {
@@ -1082,48 +1139,8 @@ async function pollForElevationData(trackId) {
         }`
       );
 
-      // Force cache invalidation before updating track data
-      clearCacheByPattern(`elevation_${trackId || props.track.id}`);
-      clearCacheByPattern(`chartdata_`);
-      chartUpdateKey.value = Date.now();
-
-      // Update local track data - create new object to trigger reactivity
-      track.value = {
-        ...track.value,
-        elevation_enriched: updatedTrack.elevation_enriched,
-        elevation_gain: updatedTrack.elevation_gain,
-        elevation_loss: updatedTrack.elevation_loss,
-        elevation_min: updatedTrack.elevation_min,
-        elevation_max: updatedTrack.elevation_max,
-        elevation_dataset: updatedTrack.elevation_dataset,
-        elevation_enriched_at: updatedTrack.elevation_enriched_at,
-        elevation_profile: updatedTrack.elevation_profile,
-        slope_min: updatedTrack.slope_min,
-        slope_max: updatedTrack.slope_max,
-        slope_avg: updatedTrack.slope_avg,
-        slope_segments: updatedTrack.slope_segments,
-        slope_histogram: updatedTrack.slope_histogram,
-        // Add timestamp to force chart update
-        _lastUpdated: Date.now(),
-      };
-
-      // Dispatch global event for other components
-      events.emit("track-elevation-updated", {
-        trackId: effectiveTrackId,
-        elevation_gain: updatedTrack.elevation_gain,
-        elevation_loss: updatedTrack.elevation_loss,
-        elevation_min: updatedTrack.elevation_min,
-        elevation_max: updatedTrack.elevation_max,
-        elevation_dataset: updatedTrack.elevation_dataset,
-        elevation_profile: updatedTrack.elevation_profile,
-        elevation_enriched_at: updatedTrack.elevation_enriched_at,
-        slope_min: updatedTrack.slope_min,
-        slope_max: updatedTrack.slope_max,
-        slope_segments: updatedTrack.slope_segments,
-      });
-
-      // Force reactivity with nextTick
-      await nextTick();
+      // Merge the refreshed elevation/slope data, bust caches and notify
+      await applyElevationUpdate(effectiveTrackId, updatedTrack);
 
       // Stop polling
       stopElevationPolling();
@@ -1891,8 +1908,7 @@ async function exportTrack() {
   exportingTrack.value = true;
   try {
     // Include session header so backend can apply per-session rate limits when available
-    const sessionHeader = props.sessionId || getSessionId();
-    const headers = sessionHeader ? { "x-session-id": sessionHeader } : {};
+    const headers = sessionHeaders(props.sessionId || getSessionId());
 
     const response = await fetch(`/api/tracks/${track.value.id}/export`, {
       headers,
@@ -2160,43 +2176,20 @@ async function forceEnrichElevation() {
     console.info(
       `[TrackDetailPanel] Fetching updated track data after elevation enrichment`
     );
+    let merged = false;
     try {
       // background=1: refresh after enrichment completes, not a new track view.
       const trackResponse = await fetch(`/api/tracks/${track.value.id}?background=1`);
       if (trackResponse.ok) {
         const updatedTrack = await trackResponse.json();
 
-        // Force cache invalidation
-        clearCacheByPattern(`elevation_${track.value.id}`);
-        clearCacheByPattern(`chartdata_`);
-
-        // Force chart update
-        chartUpdateKey.value = Date.now();
-
-        // Force complete track update with new object reference
-        track.value = {
-          ...track.value,
-          elevation_profile: updatedTrack.elevation_profile,
-          elevation_gain: updatedTrack.elevation_gain,
-          elevation_loss: updatedTrack.elevation_loss,
-          elevation_min: updatedTrack.elevation_min,
-          elevation_max: updatedTrack.elevation_max,
-          elevation_dataset: updatedTrack.elevation_dataset,
-          elevation_enriched_at: updatedTrack.elevation_enriched_at,
-          elevation_enriched: updatedTrack.elevation_enriched,
-          slope_min: updatedTrack.slope_min,
-          slope_max: updatedTrack.slope_max,
-          slope_avg: updatedTrack.slope_avg,
-          slope_segments: updatedTrack.slope_segments,
-          slope_histogram: updatedTrack.slope_histogram,
-          // Add timestamp to force chart update
-          _lastUpdated: Date.now(),
-        };
+        // Merge the refreshed elevation/slope data, bust caches and notify
+        // listeners. `applyElevationUpdate` emits `track-elevation-updated`
+        // itself, so the fallback below must not fire on this path.
+        await applyElevationUpdate(track.value.id, updatedTrack);
+        merged = true;
 
         console.info(`[TrackDetailPanel] Track data updated successfully`);
-
-        // Force reactivity with nextTick
-        await nextTick();
       }
     } catch (fetchError) {
       console.error(
@@ -2210,8 +2203,10 @@ async function forceEnrichElevation() {
       );
     }
 
-    // Dispatch global event to update other components (like tooltip)
-    events.emit("track-elevation-updated", {
+    if (!merged) {
+      // The full refresh failed: still notify listeners with the scalar values
+      // the enrichment call returned, so other views do not go stale.
+      events.emit("track-elevation-updated", {
         trackId: track.value.id,
         elevation_gain: track.value.elevation_gain,
         elevation_loss: track.value.elevation_loss,
@@ -2219,7 +2214,9 @@ async function forceEnrichElevation() {
         elevation_max: track.value.elevation_max,
         elevation_dataset: track.value.elevation_dataset,
         elevation_profile: track.value.elevation_profile,
-    });
+        elevation_enriched_at: track.value.elevation_enriched_at,
+      });
+    }
 
     showToast("Elevation data updated successfully!", "success");
   } catch (error) {

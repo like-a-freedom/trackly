@@ -148,11 +148,10 @@ pub fn simplify_track_for_zoom(points: &[(f64, f64)], zoom: f64) -> Vec<(f64, f6
     let point_count = points.len();
 
     // Always bypass for very small tracks
-    if adaptive_tolerance_scale(point_count).is_none() {
+    let Some(scale) = adaptive_tolerance_scale(point_count) else {
         return points.to_vec();
-    }
+    };
 
-    let scale = adaptive_tolerance_scale(point_count).unwrap();
     let mut tol = base_tolerance * scale;
 
     // Min retention configuration (read each call; inexpensive & keeps dynamic)

@@ -174,84 +174,93 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     Ok(())
 }
 
+/// The single statement behind [`get_track_detail`] and
+/// [`get_track_detail_adaptive`].
+///
+/// Declared once so the two readers cannot drift: the adaptive variant used to
+/// panic on rows the plain one handled, because each query carried its own copy
+/// of this column list. `original_points` is only consumed by the adaptive path
+/// — the full-detail path selects it and ignores it rather than duplicating the
+/// statement. It is a `&'static str`, so SQLx 0.9's `SqlSafeStr` check passes
+/// without needing an `AssertSqlSafe` audit for a `format!`-built string.
+const TRACK_DETAIL_SQL: &str = "SELECT id, name, description, categories, distance_markers_enabled, segment_meta, waypoints, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points FROM tracks WHERE id = $1";
+
+/// Map the columns shared by both track-detail queries onto [`TrackDetail`].
+///
+/// `segment_gaps`/`pause_gaps` are left `None`: each caller derives them from
+/// its own segment source (raw geometry here, normalized/simplified geometry in
+/// [`get_track_detail_adaptive`]). Required columns surface as `sqlx::Error`
+/// instead of panicking when the schema drifts.
+fn read_track_common(row: &sqlx::postgres::PgRow) -> Result<TrackDetail, sqlx::Error> {
+    Ok(TrackDetail {
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
+        description: row.try_get("description")?,
+        categories: row.try_get("categories")?,
+        distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
+        geom_geojson: row.try_get("geom_geojson")?,
+        waypoints: row.try_get("waypoints").ok(),
+        segment_meta: row.try_get("segment_meta").ok(),
+        segment_gaps: None,
+        pause_gaps: None,
+        length_km: row.try_get("length_km")?,
+        elevation_profile: row.try_get("elevation_profile").ok(),
+        hr_data: row.try_get("hr_data").ok(),
+        temp_data: row.try_get("temp_data").ok(),
+        time_data: row.try_get("time_data").ok(),
+        elevation_gain: row.try_get("elevation_gain").ok(),
+        elevation_loss: row.try_get("elevation_loss").ok(),
+        elevation_min: row.try_get("elevation_min").ok(),
+        elevation_max: row.try_get("elevation_max").ok(),
+        elevation_enriched: row.try_get("elevation_enriched").ok(),
+        elevation_enriched_at: row.try_get("elevation_enriched_at").ok(),
+        elevation_dataset: row.try_get("elevation_dataset").ok(),
+        slope_min: row.try_get("slope_min").ok(),
+        slope_max: row.try_get("slope_max").ok(),
+        slope_avg: row.try_get("slope_avg").ok(),
+        slope_histogram: row.try_get("slope_histogram").ok(),
+        slope_segments: row.try_get("slope_segments").ok(),
+        avg_speed: row.try_get("avg_speed")?,
+        avg_hr: row.try_get("avg_hr")?,
+        hr_min: row.try_get("hr_min")?,
+        hr_max: row.try_get("hr_max")?,
+        moving_time: row.try_get("moving_time")?,
+        pause_time: row.try_get("pause_time")?,
+        moving_avg_speed: row.try_get("moving_avg_speed").ok(),
+        moving_avg_pace: row.try_get("moving_avg_pace").ok(),
+        duration_seconds: row.try_get("duration_seconds")?,
+        created_at: row.try_get("created_at").ok(),
+        updated_at: row.try_get("updated_at").ok(),
+        recorded_at: row.try_get("recorded_at").ok(),
+        session_id: row.try_get("session_id").ok(),
+        user_id: row.try_get("user_id").ok(),
+        speed_data: row.try_get("speed_data").ok(),
+        pace_data: row.try_get("pace_data").ok(),
+    })
+}
+
 pub async fn get_track_detail(
     pool: &Arc<PgPool>,
     id: Uuid,
 ) -> Result<Option<TrackDetail>, sqlx::Error> {
-    let row = sqlx::query(r#"
-        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, waypoints, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data
-        FROM tracks WHERE id = $1
-    "#)
+    let row = sqlx::query(TRACK_DETAIL_SQL)
         .bind(id)
         .fetch_optional(&**pool)
         .await?;
-    if let Some(row) = row {
-        let geom_geojson: serde_json::Value = row
-            .try_get::<serde_json::Value, _>("geom_geojson")
-            .expect("Failed to get geom_geojson");
-        let time_data_raw: Option<serde_json::Value> = row.try_get("time_data").ok();
-        let segments_for_metadata = extract_segments_from_geojson(&geom_geojson).ok();
-        let (segment_gaps, pause_gaps) =
-            compute_gap_metadata(segments_for_metadata.as_deref(), time_data_raw.as_ref());
 
-        Ok(Some(TrackDetail {
-            id: row.try_get::<Uuid, _>("id")?,
-            name: row.try_get("name")?,
-            description: row.try_get("description")?,
-            categories: row.try_get("categories")?,
-            distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
-            geom_geojson: row.try_get::<serde_json::Value, _>("geom_geojson")?,
-            waypoints: row.try_get("waypoints").ok(),
-            segment_meta: row.try_get("segment_meta").ok(),
-            segment_gaps,
-            pause_gaps,
-            length_km: row
-                .try_get("length_km")
-                .expect("Failed to get length_km: length_km column missing or wrong type"),
-            elevation_profile: row.try_get("elevation_profile").ok(),
-            hr_data: row.try_get("hr_data").ok(),
-            temp_data: row.try_get("temp_data").ok(),
-            time_data: time_data_raw,
-            // Unified elevation fields
-            elevation_gain: row.try_get("elevation_gain").ok(),
-            elevation_loss: row.try_get("elevation_loss").ok(),
-            elevation_min: row.try_get("elevation_min").ok(),
-            elevation_max: row.try_get("elevation_max").ok(),
-            elevation_enriched: row.try_get("elevation_enriched").ok(),
-            elevation_enriched_at: row.try_get("elevation_enriched_at").ok(),
-            elevation_dataset: row.try_get("elevation_dataset").ok(),
-            // Slope fields
-            slope_min: row.try_get("slope_min").ok(),
-            slope_max: row.try_get("slope_max").ok(),
-            slope_avg: row.try_get("slope_avg").ok(),
-            slope_histogram: row.try_get("slope_histogram").ok(),
-            slope_segments: row.try_get("slope_segments").ok(),
-            avg_speed: row
-                .try_get("avg_speed")
-                .expect("Failed to get avg_speed: avg_speed column missing or wrong type"),
-            avg_hr: row
-                .try_get("avg_hr")
-                .expect("Failed to get avg_hr: avg_hr column missing or wrong type"),
-            hr_min: row.try_get("hr_min").ok(),
-            hr_max: row.try_get("hr_max").ok(),
-            moving_time: row.try_get("moving_time").ok(),
-            pause_time: row.try_get("pause_time").ok(),
-            moving_avg_speed: row.try_get("moving_avg_speed").ok(),
-            moving_avg_pace: row.try_get("moving_avg_pace").ok(),
-            duration_seconds: row.try_get("duration_seconds").expect(
-                "Failed to get duration_seconds: duration_seconds column missing or wrong type",
-            ),
-            created_at: row.try_get("created_at").ok(),
-            updated_at: row.try_get("updated_at").ok(),
-            recorded_at: row.try_get("recorded_at").ok(),
-            session_id: row.try_get("session_id").ok(),
-            user_id: row.try_get("user_id").ok(),
-            speed_data: row.try_get("speed_data").ok(),
-            pace_data: row.try_get("pace_data").ok(),
-        }))
-    } else {
-        Ok(None)
-    }
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let mut detail = read_track_common(&row)?;
+    // This path serves the full-detail view, so gaps come from the raw geometry.
+    let segments = extract_segments_from_geojson(&detail.geom_geojson).ok();
+    let (segment_gaps, pause_gaps) =
+        compute_gap_metadata(segments.as_deref(), detail.time_data.as_ref());
+    detail.segment_gaps = segment_gaps;
+    detail.pause_gaps = pause_gaps;
+
+    Ok(Some(detail))
 }
 
 /// Get track detail with adaptive simplification based on zoom and mode
@@ -265,172 +274,98 @@ pub async fn get_track_detail_adaptive(
     let track_mode = TrackMode::from_string(mode.unwrap_or("detail"));
     let zoom_level = zoom.unwrap_or(15.0); // Default to high detail for track detail view
 
-    let row = sqlx::query(r#"
-        SELECT id, name, description, categories, distance_markers_enabled, segment_meta, waypoints, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points
-        FROM tracks WHERE id = $1
-    "#)
+    let row = sqlx::query(TRACK_DETAIL_SQL)
         .bind(id)
         .fetch_optional(&**pool)
         .await?;
 
-    if let Some(row) = row {
-        let original_points: i32 = row.try_get("original_points").unwrap_or(0);
-        let mut geom_geojson: serde_json::Value = row
-            .try_get::<serde_json::Value, _>("geom_geojson")
-            .expect("Failed to get geom_geojson");
-        let mut working_segments: Option<Vec<Vec<(f64, f64)>>> = None;
-        let time_data_raw: Option<serde_json::Value> = row.try_get("time_data").ok();
+    let Some(row) = row else {
+        metrics::observe_db_query("get_track_detail_adaptive", start.elapsed().as_secs_f64());
+        return Ok(None);
+    };
 
-        // Normalize geometry by splitting teleport gaps for legacy records
-        if let Ok(raw_segments) = extract_segments_from_geojson(&geom_geojson) {
-            let max_gap_meters = std::env::var("TRACK_MAX_GAP_METERS")
-                .ok()
-                .and_then(|v| v.parse::<f64>().ok());
-            let mut normalized_segments: Vec<Vec<(f64, f64)>> = Vec::new();
-            let mut changed = false;
-            for segment in raw_segments {
-                let splits = split_points_by_gap(&segment, max_gap_meters);
-                if splits.len() > 1 {
-                    changed = true;
-                }
-                normalized_segments.extend(splits);
-            }
+    let original_points: i32 = row.try_get("original_points").unwrap_or(0);
+    let mut detail = read_track_common(&row)?;
+    let mut geom_geojson = detail.geom_geojson.clone();
+    let mut working_segments: Option<Vec<Vec<(f64, f64)>>> = None;
 
-            if changed {
-                geom_geojson = geojson_from_segments(&normalized_segments);
+    // Normalize geometry by splitting teleport gaps for legacy records
+    if let Ok(raw_segments) = extract_segments_from_geojson(&geom_geojson) {
+        let max_gap_meters = std::env::var("TRACK_MAX_GAP_METERS")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok());
+        let mut normalized_segments: Vec<Vec<(f64, f64)>> = Vec::new();
+        let mut changed = false;
+        for segment in raw_segments {
+            let splits = split_points_by_gap(&segment, max_gap_meters);
+            if splits.len() > 1 {
+                changed = true;
             }
-
-            if !normalized_segments.is_empty() {
-                working_segments = Some(normalized_segments.clone());
-            }
+            normalized_segments.extend(splits);
         }
 
-        // Apply simplification for huge tracks or overview mode
-        let params =
-            get_simplification_params(track_mode, Some(zoom_level), original_points as usize);
-        if params.should_simplify(original_points as usize)
-            && let Ok(segments) = extract_segments_from_geojson(&geom_geojson)
-            && !segments.is_empty()
-        {
-            let simplify_start = Instant::now();
-            let simplified_segments: Vec<Vec<(f64, f64)>> = segments
-                .iter()
-                .map(|segment| simplify_track_for_zoom(segment, zoom_level))
-                .collect();
-
-            metrics::observe_track_simplify(
-                if track_mode.is_detail() {
-                    "detail"
-                } else {
-                    "overview"
-                },
-                simplify_start.elapsed().as_secs_f64(),
-            );
-
-            let changed = simplified_segments
-                .iter()
-                .zip(segments.iter())
-                .any(|(new_seg, old_seg)| new_seg.len() < old_seg.len());
-
-            if changed {
-                geom_geojson = geojson_from_segments(&simplified_segments);
-            }
+        if changed {
+            geom_geojson = geojson_from_segments(&normalized_segments);
         }
 
-        // Simplify profile data for charts based on mode
-        let elevation_profile = simplify_chart_data(
-            row.try_get("elevation_profile").ok(),
-            track_mode,
-            zoom_level,
+        if !normalized_segments.is_empty() {
+            working_segments = Some(normalized_segments.clone());
+        }
+    }
+
+    // Apply simplification for huge tracks or overview mode
+    let params = get_simplification_params(track_mode, Some(zoom_level), original_points as usize);
+    if params.should_simplify(original_points as usize)
+        && let Ok(segments) = extract_segments_from_geojson(&geom_geojson)
+        && !segments.is_empty()
+    {
+        let simplify_start = Instant::now();
+        let simplified_segments: Vec<Vec<(f64, f64)>> = segments
+            .iter()
+            .map(|segment| simplify_track_for_zoom(segment, zoom_level))
+            .collect();
+
+        metrics::observe_track_simplify(
+            if track_mode.is_detail() {
+                "detail"
+            } else {
+                "overview"
+            },
+            simplify_start.elapsed().as_secs_f64(),
         );
 
-        let hr_data = simplify_chart_data(row.try_get("hr_data").ok(), track_mode, zoom_level);
+        let changed = simplified_segments
+            .iter()
+            .zip(segments.iter())
+            .any(|(new_seg, old_seg)| new_seg.len() < old_seg.len());
 
-        let temp_data = simplify_chart_data(row.try_get("temp_data").ok(), track_mode, zoom_level);
-
-        let time_data = simplify_chart_data(time_data_raw.clone(), track_mode, zoom_level);
-
-        let segments_for_metadata = working_segments
-            .clone()
-            .or_else(|| extract_segments_from_geojson(&geom_geojson).ok());
-        let (segment_gaps, pause_gaps) =
-            compute_gap_metadata(segments_for_metadata.as_deref(), time_data_raw.as_ref());
-
-        let result = Ok(Some(TrackDetail {
-            id: row
-                .try_get::<Uuid, _>("id")
-                .expect("Failed to get id: id column missing or wrong type"),
-            name: row
-                .try_get("name")
-                .expect("Failed to get name: name column missing or wrong type"),
-            description: row
-                .try_get("description")
-                .expect("Failed to get description: description column missing or wrong type"),
-            categories: row
-                .try_get("categories")
-                .expect("Failed to get categories: categories column missing or wrong type"),
-            distance_markers_enabled: row.try_get("distance_markers_enabled").ok(),
-            geom_geojson,
-            waypoints: row.try_get("waypoints").ok(),
-            segment_meta: row.try_get("segment_meta").ok(),
-            segment_gaps,
-            pause_gaps,
-            length_km: row.try_get("length_km")?,
-            elevation_profile,
-            hr_data,
-            temp_data,
-            time_data,
-            // Unified elevation fields
-            elevation_gain: row.try_get("elevation_gain").ok(),
-            elevation_loss: row.try_get("elevation_loss").ok(),
-            elevation_min: row.try_get("elevation_min").ok(),
-            elevation_max: row.try_get("elevation_max").ok(),
-            elevation_enriched: row.try_get("elevation_enriched").ok(),
-            elevation_enriched_at: row.try_get("elevation_enriched_at").ok(),
-            elevation_dataset: row.try_get("elevation_dataset").ok(),
-            // Slope fields
-            slope_min: row.try_get("slope_min").ok(),
-            slope_max: row.try_get("slope_max").ok(),
-            slope_avg: row.try_get("slope_avg").ok(),
-            slope_histogram: row.try_get("slope_histogram").ok(),
-            slope_segments: row.try_get("slope_segments").ok(),
-            avg_speed: row
-                .try_get("avg_speed")
-                .expect("Failed to get avg_speed: avg_speed column missing or wrong type"),
-            avg_hr: row
-                .try_get("avg_hr")
-                .expect("Failed to get avg_hr: avg_hr column missing or wrong type"),
-            hr_min: row
-                .try_get("hr_min")
-                .expect("Failed to get hr_min: hr_min column missing or wrong type"),
-            hr_max: row
-                .try_get("hr_max")
-                .expect("Failed to get hr_max: hr_max column missing or wrong type"),
-            moving_time: row
-                .try_get("moving_time")
-                .expect("Failed to get moving_time: moving_time column missing or wrong type"),
-            pause_time: row
-                .try_get("pause_time")
-                .expect("Failed to get pause_time: pause_time column missing or wrong type"),
-            moving_avg_speed: row.try_get("moving_avg_speed").ok(),
-            moving_avg_pace: row.try_get("moving_avg_pace").ok(),
-            duration_seconds: row.try_get("duration_seconds").expect(
-                "Failed to get duration_seconds: duration_seconds column missing or wrong type",
-            ),
-            created_at: row.try_get("created_at").ok(),
-            updated_at: row.try_get("updated_at").ok(),
-            recorded_at: row.try_get("recorded_at").ok(),
-            session_id: row.try_get("session_id").ok(),
-            user_id: row.try_get("user_id").ok(),
-            speed_data: row.try_get("speed_data").ok(),
-            pace_data: row.try_get("pace_data").ok(),
-        }));
-        metrics::observe_db_query("get_track_detail_adaptive", start.elapsed().as_secs_f64());
-        result
-    } else {
-        metrics::observe_db_query("get_track_detail_adaptive", start.elapsed().as_secs_f64());
-        Ok(None)
+        if changed {
+            geom_geojson = geojson_from_segments(&simplified_segments);
+        }
     }
+
+    detail.geom_geojson = geom_geojson;
+
+    // Gaps come from the normalized segments when available, otherwise from the
+    // final (possibly simplified) geometry — matching the previous behaviour.
+    // They are derived from the raw (not yet simplified) time data.
+    let segments_for_metadata = working_segments
+        .clone()
+        .or_else(|| extract_segments_from_geojson(&detail.geom_geojson).ok());
+    let (segment_gaps, pause_gaps) =
+        compute_gap_metadata(segments_for_metadata.as_deref(), detail.time_data.as_ref());
+    detail.segment_gaps = segment_gaps;
+    detail.pause_gaps = pause_gaps;
+
+    // Simplify profile data for charts based on mode
+    detail.elevation_profile =
+        simplify_chart_data(detail.elevation_profile.take(), track_mode, zoom_level);
+    detail.hr_data = simplify_chart_data(detail.hr_data.take(), track_mode, zoom_level);
+    detail.temp_data = simplify_chart_data(detail.temp_data.take(), track_mode, zoom_level);
+    detail.time_data = simplify_chart_data(detail.time_data.take(), track_mode, zoom_level);
+
+    metrics::observe_db_query("get_track_detail_adaptive", start.elapsed().as_secs_f64());
+    Ok(Some(detail))
 }
 
 pub async fn delete_track(pool: &Arc<PgPool>, track_id: Uuid) -> Result<u64, sqlx::Error> {

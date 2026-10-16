@@ -20,8 +20,13 @@ use tower::{Layer, Service};
 use tracing::info;
 use uuid::Uuid;
 
-static REGISTRY: Lazy<Registry> =
-    Lazy::new(|| Registry::new_custom(None, Some(static_labels())).unwrap());
+static REGISTRY: Lazy<Registry> = Lazy::new(|| {
+    // Infallible: `const_labels` keys are the compile-time literals produced by
+    // `static_labels` (`env`, `service`, `instance`, `version`), so label-name
+    // validation can never reject them. The process is unusable without a
+    // registry, so a panic here is the intended behaviour if that ever changed.
+    Registry::new_custom(None, Some(static_labels())).expect("static const label names are valid")
+});
 
 fn static_labels() -> std::collections::HashMap<String, String> {
     let mut labels = std::collections::HashMap::new();
@@ -135,19 +140,6 @@ static TRACK_CATEGORY_EDITS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
     REGISTRY
         .register(Box::new(counter.clone()))
         .expect("register track_category_edits_total");
-    counter
-});
-
-// Category edit counts broken down by action and category (e.g., add, remove)
-static TRACK_CATEGORY_EDITS_BY_CATEGORY: Lazy<IntCounterVec> = Lazy::new(|| {
-    let opts = Opts::new(
-        "track_category_edits_by_category_total",
-        "Track category edits by category and action",
-    );
-    let counter = IntCounterVec::new(opts, &["action", "category"]).expect("counter vec");
-    REGISTRY
-        .register(Box::new(counter.clone()))
-        .expect("register track_category_edits_by_category_total");
     counter
 });
 
@@ -307,6 +299,31 @@ static ELEVATION_API_CALLS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
     counter
 });
 
+static ELEVATION_API_DURATION_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
+    let opts = HistogramOpts::new(
+        "elevation_api_duration_seconds",
+        "Elevation API round-trip duration by service",
+    )
+    .buckets(vec![0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0]);
+    let hist = HistogramVec::new(opts, &["service"]).expect("hist vec");
+    REGISTRY
+        .register(Box::new(hist.clone()))
+        .expect("register elevation_api_duration_seconds");
+    hist
+});
+
+static ELEVATION_API_ERRORS_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    let opts = Opts::new(
+        "elevation_api_errors_total",
+        "Elevation API failures by service and kind (timeout, network, http_status, invalid_response, limit)",
+    );
+    let counter = IntCounterVec::new(opts, &["service", "kind"]).expect("counter vec");
+    REGISTRY
+        .register(Box::new(counter.clone()))
+        .expect("register elevation_api_errors_total");
+    counter
+});
+
 static TRACK_EXPORT_DURATION_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
     let opts = HistogramOpts::new("track_export_duration_seconds", "GPX export duration")
         .buckets(vec![0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]);
@@ -400,6 +417,18 @@ static BACKGROUND_TASKS_IN_FLIGHT: Lazy<IntGauge> = Lazy::new(|| {
     REGISTRY
         .register(Box::new(gauge.clone()))
         .expect("register background_tasks_in_flight");
+    gauge
+});
+
+static ENRICHMENT_QUEUE_DEPTH: Lazy<IntGauge> = Lazy::new(|| {
+    let gauge = IntGauge::with_opts(Opts::new(
+        "enrichment_queue_depth",
+        "Elevation enrichment jobs accepted but not yet completed",
+    ))
+    .expect("gauge");
+    REGISTRY
+        .register(Box::new(gauge.clone()))
+        .expect("register enrichment_queue_depth");
     gauge
 });
 
@@ -626,20 +655,23 @@ pub fn initialize_metrics_baseline() {
 
     // Upload and parsing
     let _ = TRACK_UPLOAD_FAILURES.with_label_values(&["validation"]);
+    let _ = TRACK_UPLOAD_FAILURES.with_label_values(&["bad_request"]);
+    let _ = TRACK_UPLOAD_FAILURES.with_label_values(&["database"]);
+    let _ = TRACK_UPLOAD_FAILURES.with_label_values(&["internal"]);
     let _ = TRACKS_UPLOADED_TOTAL.with_label_values(&["anonymous"]);
+    let _ = TRACKS_UPLOADED_TOTAL.with_label_values(&["editor"]);
     let _ = TRACKS_DEDUPLICATED_TOTAL.with_label_values(&["gpx_hash_match"]);
     let _ = TRACKS_DELETED_TOTAL.with_label_values(&["success"]);
     let _ = TRACK_PARSE_DURATION_SECONDS.with_label_values(&["gpx"]);
     let _ = TRACK_PIPELINE_LATENCY_SECONDS.with_label_values(&["success"]);
     let _ = TRACK_LENGTH_KM_BUCKET.with_label_values(&["anonymous"]);
+    let _ = TRACK_LENGTH_KM_BUCKET.with_label_values(&["editor"]);
     let _ = TRACK_CATEGORIES_TOTAL.with_label_values(&["unknown"]);
 
     // Category edit baselines
     let _ = TRACK_CATEGORY_EDITS_TOTAL.with_label_values(&["set"]);
     let _ = TRACK_CATEGORY_EDITS_TOTAL.with_label_values(&["add"]);
     let _ = TRACK_CATEGORY_EDITS_TOTAL.with_label_values(&["remove"]);
-    let _ = TRACK_CATEGORY_EDITS_BY_CATEGORY.with_label_values(&["add", "unknown"]);
-    let _ = TRACK_CATEGORY_EDITS_BY_CATEGORY.with_label_values(&["remove", "unknown"]);
 
     // Enrichment
     let _ = TRACK_ENRICH_REQUESTS_TOTAL.with_label_values(&["success"]);
@@ -652,6 +684,18 @@ pub fn initialize_metrics_baseline() {
     // Elevation API calls counter baseline
     let _ = ELEVATION_API_CALLS_TOTAL.with_label_values(&["opentopodata"]);
     let _ = ELEVATION_API_CALLS_TOTAL.with_label_values(&["open-elevation"]);
+    for service in ["opentopodata", "open-elevation"] {
+        let _ = ELEVATION_API_DURATION_SECONDS.with_label_values(&[service]);
+        for kind in [
+            "timeout",
+            "network",
+            "http_status",
+            "invalid_response",
+            "limit",
+        ] {
+            let _ = ELEVATION_API_ERRORS_TOTAL.with_label_values(&[service, kind]);
+        }
+    }
 
     // Export/simplify/POI
     let _ = TRACK_EXPORT_DURATION_SECONDS.with_label_values(&["gpx"]);
@@ -671,12 +715,6 @@ pub fn initialize_metrics_baseline() {
     let _ = TRACK_VIEWS_TOTAL.with_label_values(&["public", "link"]);
     let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "name"]);
     let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "name"]);
-    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "category"]);
-    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "category"]);
-    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "location"]);
-    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "location"]);
-    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["zero", "meta"]);
-    let _ = TRACK_SEARCHES_TOTAL.with_label_values(&["success", "meta"]);
     let _ = TRACK_EDITS_TOTAL.with_label_values(&["name"]);
     let _ = TRACK_EDITS_TOTAL.with_label_values(&["description"]);
     let _ = TRACK_EDITS_TOTAL.with_label_values(&["categories"]);
@@ -929,15 +967,36 @@ pub async fn serve_metrics() -> impl IntoResponse {
 
     let body = String::from_utf8(buffer).unwrap_or_default();
 
-    Response::builder()
+    // `format_type()` and `StatusCode::OK` are always valid header material, so
+    // building the response cannot realistically fail — but this is a handler,
+    // so a failure degrades to 500 instead of panicking the worker.
+    match Response::builder()
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, encoder.format_type())
         .body(Body::from(body))
-        .unwrap()
+    {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::error!(%error, "failed to build /metrics response");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 pub fn record_track_deduplicated(reason: &str) {
     TRACKS_DEDUPLICATED_TOTAL.with_label_values(&[reason]).inc();
+}
+
+/// Record a successfully persisted track, labelled by how it was created
+/// (`anonymous` for file uploads, `editor` for the track editor).
+pub fn record_track_uploaded(source: &str) {
+    TRACKS_UPLOADED_TOTAL.with_label_values(&[source]).inc();
+}
+
+/// Record a rejected upload, labelled by the domain error class
+/// (`validation`, `bad_request`, `database`, `internal`).
+pub fn record_track_upload_failure(reason: &str) {
+    TRACK_UPLOAD_FAILURES.with_label_values(&[reason]).inc();
 }
 
 pub fn record_track_deleted(result: &str) {
@@ -952,13 +1011,6 @@ pub fn record_track_category(category: &str) {
 pub fn record_track_category_edit(action: &str) {
     TRACK_CATEGORY_EDITS_TOTAL
         .with_label_values(&[action])
-        .inc();
-}
-
-/// Record a category edit scoped to a specific category and action (add/remove)
-pub fn record_track_category_edit_by_category(action: &str, category: &str) {
-    TRACK_CATEGORY_EDITS_BY_CATEGORY
-        .with_label_values(&[action, category])
         .inc();
 }
 
@@ -1009,6 +1061,7 @@ pub fn record_track_export(format: &str) {
     let fmt_label = match format {
         "gpx" => "gpx",
         "kml" => "kml",
+        "geojson" => "geojson",
         "fit" => "fit",
         _ => "other",
     };
@@ -1163,6 +1216,32 @@ pub fn observe_track_export_duration(format: &str, seconds: f64) {
     TRACK_EXPORT_DURATION_SECONDS
         .with_label_values(&[format])
         .observe(seconds);
+}
+
+/// Record the round-trip duration of one elevation API call.
+pub fn observe_elevation_api_duration(service: &str, seconds: f64) {
+    ELEVATION_API_DURATION_SECONDS
+        .with_label_values(&[service])
+        .observe(seconds);
+}
+
+/// Record an elevation API failure.
+///
+/// `kind` is intentionally coarse — `timeout`, `network`, `http_status`,
+/// `invalid_response` or `limit` — so the metric stays bounded by the number of
+/// upstream services rather than by the text of individual failures.
+pub fn record_elevation_api_error(service: &str, kind: &str) {
+    ELEVATION_API_ERRORS_TOTAL
+        .with_label_values(&[service, kind])
+        .inc();
+}
+
+/// Shared gauge for the elevation-enrichment backlog.
+///
+/// The queue owns the increments/decrements and injects this gauge so tests can
+/// substitute a private one instead of asserting on global state.
+pub fn enrichment_queue_depth_gauge() -> IntGauge {
+    ENRICHMENT_QUEUE_DEPTH.clone()
 }
 
 pub fn observe_track_pipeline_latency(outcome: &str, seconds: f64) {
@@ -1332,26 +1411,6 @@ mod tests {
         );
 
         assert_eq!(after, before + 1.0);
-
-        // Per-category metric
-        let before_cat = parse_metric_value_from_scrape(
-            &body_before_str,
-            "track_category_edits_by_category_total",
-            "action=\"add\",category=\"unknown\"",
-        );
-        record_track_category_edit_by_category("add", "unknown");
-
-        let response_after2 = serve_metrics().await.into_response();
-        let body_after2 = to_bytes(response_after2.into_body(), usize::MAX)
-            .await
-            .expect("body");
-        let body_after2_str = String::from_utf8(body_after2.to_vec()).expect("utf8");
-        let after_cat = parse_metric_value_from_scrape(
-            &body_after2_str,
-            "track_category_edits_by_category_total",
-            "action=\"add\",category=\"unknown\"",
-        );
-        assert_eq!(after_cat, before_cat + 1.0);
     }
 
     #[tokio::test]

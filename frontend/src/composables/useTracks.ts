@@ -2,7 +2,7 @@ import { computed, type ComputedRef } from 'vue';
 import { useTracksStore } from '../stores/tracks';
 import { useSearchStore } from '../stores/search';
 import { http } from '../http-instance';
-import { getSessionId } from '../utils/session';
+import { getSessionId, sessionHeaders } from '../utils/session';
 import { LRUCache } from '../utils/lru-cache';
 import type { Bounds } from '../map/MapAdapter';
 
@@ -300,10 +300,8 @@ export function useTracks() {
             params.append('referrer', resolveViewReferrer(id));
             endpoint += `?${params.toString()}`;
 
-            const sessionId = getSessionId();
-            const headers: Record<string, string> | undefined = sessionId ? { 'x-session-id': sessionId } : undefined;
-
-            const response = await http(endpoint, { headers });
+            // Session header lets the backend attribute the view heartbeat.
+            const response = await http(endpoint, { headers: sessionHeaders(getSessionId()) });
             if (!response.ok) throw new Error(`Failed to fetch track detail: ${response.status}`);
             return store.processTrackData(await response.json());
         } catch (e: unknown) {

@@ -33,10 +33,15 @@ pub async fn search_tracks(
         return Ok(Json(Vec::new()));
     }
 
-    let query_type = if query.len() > 3 { "long" } else { "short" };
-    metrics::record_track_search("results", query_type);
     metrics::record_session_activity(session_id_from_headers(&headers), "search");
 
     let tracks = db::search_tracks(&pool, query).await?;
+    // Recorded after the query so `result_type` reflects the real outcome: a
+    // zero-result search is a quality signal, not a success.
+    metrics::record_track_search(
+        if tracks.is_empty() { "zero" } else { "success" },
+        // This endpoint only matches on name/description.
+        "name",
+    );
     Ok(Json(tracks))
 }

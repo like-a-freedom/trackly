@@ -31,7 +31,10 @@ function createTestStore(overrides: Partial<PersistenceStore> = {}): Persistence
 
 const mockGetAuthHeader = vi.fn().mockResolvedValue({ Authorization: 'Bearer test' });
 
-vi.mock('../../../utils/session', () => ({
+// Spread the real module so `sessionHeaders` stays real and only the session
+// id is overridden.
+vi.mock('../../../utils/session', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../../utils/session')>()),
     getSessionId: vi.fn(() => 'test-session-id'),
 }));
 

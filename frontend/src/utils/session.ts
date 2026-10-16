@@ -53,3 +53,17 @@ export function getSessionId(): string {
     // Fallback: generate a session id without persisting
     return generateSessionId();
 }
+
+/**
+ * Headers carrying the anonymous session id, so the backend can attribute a
+ * request to the session that made it (view/export heartbeats, rate limits,
+ * dedup).
+ *
+ * The id is passed in rather than read from storage here, so the caller stays
+ * in control of which id is used (e.g. a `sessionId` prop falling back to
+ * `getSessionId()`).
+ */
+export function sessionHeaders(sessionId: string): Record<string, string> {
+    if (!sessionId) return {};
+    return { 'x-session-id': sessionId };
+}

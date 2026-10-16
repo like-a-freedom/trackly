@@ -342,8 +342,7 @@ pub async fn refresh_token(
         None => {
             let resp = axum::http::Response::builder()
                 .status(axum::http::StatusCode::NO_CONTENT)
-                .body(axum::body::Body::empty())
-                .expect("valid response");
+                .body(axum::body::Body::empty())?;
             return Ok(resp);
         }
     };
@@ -408,10 +407,8 @@ pub async fn refresh_token(
             builder = builder.header(name.as_str(), s);
         }
     }
-    let body = serde_json::to_string(&response).expect("serializable response");
-    let resp = builder
-        .body(axum::body::Body::from(body))
-        .expect("valid response");
+    let body = serde_json::to_string(&response)?;
+    let resp = builder.body(axum::body::Body::from(body))?;
     Ok(resp)
 }
 
