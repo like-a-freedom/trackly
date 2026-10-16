@@ -17,18 +17,22 @@ Create `frontend/src/http.ts` — a `createHttp({ tokenSource, logSink, baseUrl 
 - Test: `tokenSource = { getToken: () => 'test-token' }`, `logSink = { log: vi.fn() }`
 
 ### Migration status
-26 of the 38 raw `fetch` call sites have been migrated to `http()`: `useTrackPersistence` (13),
+26 of the 38 raw `fetch` call sites that existed when this ADR was written were migrated to
+`http()`: `useTrackPersistence` (13),
 `usePois` (2), `useTrackOptimizer`, `useElevationPreview`, `stores/featureFlags`,
 `components/TrackSearch.vue`, `components/TrackDetailPanel.vue` (4) and the elevation flow now in
 `composables/useElevationEnrichment.ts` (3, ADR 0033).
 
-The remaining 12 are deliberate:
+11 sites remain on raw `fetch`, all deliberate:
 
 | File(s) | Sites | Reason to stay on raw `fetch` |
 | --- | --- | --- |
 | `http.ts` | 1 | Is the module |
-| `auth/refresh.ts`, `auth/oauth-client.ts`, `auth/profile.ts`, `auth/migration.ts`, `stores/auth.ts` | 9 | `http-instance` imports `useAuthStore`, and the store imports these modules — routing them through `http()` would close an import cycle. They also run *before* a bearer token exists (`oauth-config`, `refresh`, callback exchange). |
+| `auth/refresh.ts`, `auth/oauth-client.ts`, `auth/profile.ts`, `auth/migration.ts` | 8 | `http-instance` imports `useAuthStore`, and the store imports these modules — routing them through `http()` would close an import cycle. They also run *before* a bearer token exists (`oauth-config`, `refresh`, callback exchange). |
 | `composables/useRouting.ts` | 2 | Downloads the static routing-graph asset (manifest + binary), not an API call. It needs the raw `Response` body stream for progress, and attaching a bearer token to the configurable `VITE_FAST_PATHS_MANIFEST_URL` could leak it to a third-party origin. |
+
+The count drops from 12 to 11 because `stores/auth.ts` held its single `fetch` inside the
+`authFetch` escape hatch, which was deleted in ADR 0040.
 
 `useTrackPersistence` no longer accepts a `getAuthHeader` callback: the parameter was deleted in the
 same commit because `http()` supplies the header, leaving the callback as dead weight in six

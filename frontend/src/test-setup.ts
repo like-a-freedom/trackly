@@ -348,8 +348,9 @@ if (typeof window !== "undefined") {
     Object.defineProperty(window, "localStorage", { value: localStorageMock, configurable: true, writable: true });
 }
 
-// Async waits use `vi.waitUntil`, which polls for a truthy value (ADR 0018).
-// No global `waitFor` shim: vitest's `vi.waitFor` never polls.
+// Async waits use `vi.waitUntil`, which polls for a truthy value. There is no global
+// `waitFor` shim: vitest 4.1 `vi.waitFor` resolves as soon as its callback produces a
+// non-thenable value, so it never actually waits (trap recorded in ADR 0018 and ADR 0033).
 
 // Suppress Vue warnings during tests
 config.global.config.warnHandler = () => { };

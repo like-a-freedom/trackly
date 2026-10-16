@@ -95,7 +95,7 @@ describe('AccountView bulk selection scope', () => {
         }));
     });
 
-    it('restores the full selection scope when the search is cleared', async () => {
+    it('keeps the pruned selection when the search is cleared', async () => {
         const wrapper = mountView();
         await nextTick();
 

@@ -53,7 +53,6 @@ export default tseslint.config(
                 afterEach: "readonly",
                 beforeAll: "readonly",
                 afterAll: "readonly",
-                waitFor: "readonly",
                 // Leaflet globals (L, GeoJSON are attached to window by Leaflet)
                 L: "readonly",
                 GeoJSON: "readonly",
