@@ -1298,35 +1298,8 @@
                 }
             ],
             "title": "Elevation Enrichment Latency",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "uid": "victoriametrics"
-            },
-            "fieldConfig": {
-                "defaults": {},
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 1,
-                "w": 6,
-                "x": 18,
-                "y": 35
-            },
-            "id": 311,
-            "options": {
-                "wideLayout": true
-            },
-            "pluginVersion": "12.3.0",
-            "targets": [
-                {
-                    "expr": "sum(increase(track_category_edits_total{job=\"trackly_backend\"}[24h]))",
-                    "refId": "A"
-                }
-            ],
-            "title": "Category Edits (24h)",
-            "type": "stat"
+            "type": "timeseries",
+            "description": "**What**: Elevation enrichment latency by status.\n\n**Why**: External API performance.\n\n**Actions**: If slow, check external API."
         },
         {
             "datasource": {
@@ -1501,32 +1474,8 @@
                 }
             ],
             "title": "Track Processing Operations",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "uid": "victoriametrics"
-            },
-            "fieldConfig": {
-                "defaults": {},
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 6,
-                "w": 12,
-                "x": 0,
-                "y": 43
-            },
-            "id": 312,
-            "pluginVersion": "12.3.0",
-            "targets": [
-                {
-                    "expr": "sum(increase(track_category_edits_by_category_total{job=\"trackly_backend\"}[1h])) by (category)",
-                    "refId": "A"
-                }
-            ],
-            "title": "Category Edits by Category (1h)",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Track simplification and slope recalculation latency.\n\n**Why**: Processing performance.\n\n**Actions**: Optimize algorithms if consistently slow."
         },
         {
             "collapsed": false,
@@ -1631,7 +1580,8 @@
                 }
             ],
             "title": "Bulk Operations Rate",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Bulk operation rates.\n\n**Why**: Batch processing health.\n\n**Actions**: Monitor for spikes."
         },
         {
             "datasource": {
@@ -1729,7 +1679,8 @@
                 }
             ],
             "title": "Bulk Operation Items Distribution",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Bulk operation item distribution.\n\n**Why**: Batch size analysis.\n\n**Actions**: Optimize batch sizes."
         },
         {
             "datasource": {
@@ -1955,7 +1906,8 @@
                 }
             ],
             "title": "GPX Export Latency",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: GPX export latency by format.\n\n**Why**: Export performance.\n\n**Actions**: Optimize slow formats."
         },
         {
             "datasource": {
@@ -2013,7 +1965,8 @@
                 }
             ],
             "title": "Total Requests (1h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Total HTTP requests processed in the last hour.\n\n**Why**: Traffic volume indicator.\n\n**Actions**: Compare with capacity planning."
         },
         {
             "collapsed": false,
@@ -2159,7 +2112,7 @@
                 "y": 59
             },
             "id": 28,
-            "description": "**What**: Number of times enrichment queue reached capacity in last hour.\n\n**Why**: Saturation metric - indicates backpressure and potential data loss.\n\n**Targets**: ✅ 0 (no saturation) | ⚠️ 1-10 (occasional) | 🚨 >10 (frequent saturation).\n\n**Interpretation**: Queue full means new enrichment requests are rejected/dropped. Indicates enrichment can't keep up with upload rate.\n\n**Actions**: If frequent, increase queue capacity or enrichment worker count. Check Elevation API latency for slowdowns.",
+            "description": "**What**: Success rate of elevation enrichment requests.\n\n**Why**: External API health.\n\n**Targets**: >95% (good) | 85-95% (warning) | <85% (critical).\n\n**Actions**: If low, check external API status.",
             "options": {
                 "colorMode": "value",
                 "graphMode": "area",
@@ -2378,7 +2331,8 @@
                 }
             ],
             "title": "POI Link Latency (p95 by operation)",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: POI link latency by operation.\n\n**Why**: POI processing performance.\n\n**Actions**: Optimize slow operations."
         },
         {
             "datasource": {
@@ -2600,7 +2554,8 @@
                 }
             ],
             "title": "Track Upload Failures (rate by reason 5m)",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Upload failure rate by reason.\n\n**Why**: Identifies failure modes.\n\n**Actions**: Address most common reason first."
         },
         {
             "datasource": {
@@ -2831,7 +2786,8 @@
                 }
             ],
             "title": "Tracks Uploaded (rate 5m by source)",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Track uploads by source (5m).\n\n**Why**: Traffic source breakdown.\n\n**Actions**: Low mobile may indicate UX issues."
         }
     ],
     "preload": false,
@@ -2843,10 +2799,45 @@
         "backend"
     ],
     "templating": {
-        "list": []
+        "list": [
+            {
+                "name": "route",
+                "label": "Route",
+                "type": "query",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                },
+                "query": "label_values(http_requests_total{job=\"trackly_backend\"}, route)",
+                "includeAll": true,
+                "multi": true,
+                "refresh": 2,
+                "current": {
+                    "text": "All",
+                    "value": "$__all"
+                }
+            },
+            {
+                "name": "method",
+                "label": "Method",
+                "type": "query",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                },
+                "query": "label_values(http_requests_total{job=\"trackly_backend\"}, method)",
+                "includeAll": true,
+                "multi": true,
+                "refresh": 2,
+                "current": {
+                    "text": "All",
+                    "value": "$__all"
+                }
+            }
+        ]
     },
     "time": {
-        "from": "now-15m",
+        "from": "now-1h",
         "to": "now"
     },
     "timepicker": {},

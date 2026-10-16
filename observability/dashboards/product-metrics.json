@@ -91,7 +91,8 @@
                 }
             ],
             "title": "Tracks Uploaded (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Total number of tracks uploaded in the last 24 hours.\n\n**Why**: Primary product health metric.\n\n**Actions**: Compare with previous days to identify trends."
         },
         {
             "datasource": {
@@ -149,7 +150,8 @@
                 }
             ],
             "title": "Tracks Uploaded (7d)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Total number of tracks uploaded in the last 7 days.\n\n**Why**: Weekly view smooths daily fluctuations.\n\n**Actions**: Compare week-over-week for growth trends."
         },
         {
             "datasource": {
@@ -207,7 +209,8 @@
                 }
             ],
             "title": "Deduplicated (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Number of tracks identified as duplicates in the last 24h.\n\n**Why**: High deduplication rates may indicate user confusion or re-uploads.\n\n**Actions**: If >20%, investigate why users upload duplicates."
         },
         {
             "datasource": {
@@ -265,7 +268,8 @@
                 }
             ],
             "title": "Upload Failures (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Number of failed track uploads in the last 24h.\n\n**Why**: Upload failures directly impact user experience.\n\n**Targets**: 0 (no failures) | 1-5 (warning) | >5 (critical).\n\n**Actions**: Check backend logs for error patterns."
         },
         {
             "datasource": {
@@ -323,7 +327,8 @@
                 }
             ],
             "title": "Tracks Deleted (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Number of tracks deleted by users in the last 24h.\n\n**Why**: Deletion rate can indicate dissatisfaction or cleanup behavior.\n\n**Actions**: High deletion rates may indicate users cannot find or manage their tracks."
         },
         {
             "datasource": {
@@ -389,7 +394,8 @@
                 }
             ],
             "title": "Upload Success Rate",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Percentage of upload attempts that succeeded.\n\n**Why**: Core reliability metric.\n\n**Targets**: >95% (good) | 90-95% (warning) | <90% (critical).\n\n**Actions**: If low, check upload failure reasons."
         },
         {
             "datasource": {
@@ -491,7 +497,8 @@
                 }
             ],
             "title": "Track Upload Activity Over Time",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Upload, deduplication, and failure rates over time.\n\n**Why**: Trends reveal patterns in user behavior and system health.\n\n**Actions**: Look for correlation between spikes and deployments."
         },
         {
             "datasource": {
@@ -558,7 +565,8 @@
                 }
             ],
             "title": "Tracks by Source (24h)",
-            "type": "piechart"
+            "type": "piechart",
+            "description": "**What**: Upload breakdown by source (web, mobile, API).\n\n**Why**: Shows which platforms drive usage.\n\n**Actions**: Low mobile usage may indicate mobile UX issues."
         },
         {
             "collapsed": false,
@@ -658,13 +666,13 @@
             "targets": [
                 {
                     "expr": "sum(increase(track_length_km_bucket_bucket{job=\"trackly_backend\"}[24h])) by (le)",
-                    "format": "heatmap",
                     "legendFormat": "{{le}} km",
                     "refId": "A"
                 }
             ],
             "title": "Track Length Distribution (24h)",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Distribution of track lengths uploaded in the last 24h.\n\n**Why**: Understanding the length distribution helps identify typical use cases (short walks vs long hikes).\n\n**Actions**: Most tracks should fall in expected length ranges. Unexpected spikes may indicate data quality issues."
         },
         {
             "datasource": {
@@ -731,61 +739,8 @@
                 }
             ],
             "title": "Track Categories (7d)",
-            "type": "piechart"
-        },
-        {
-            "datasource": {
-                "uid": "victoriametrics"
-            },
-            "fieldConfig": {
-                "defaults": {},
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 1,
-                "w": 6,
-                "x": 18,
-                "y": 16
-            },
-            "id": 310,
-            "options": {
-                "wideLayout": true
-            },
-            "pluginVersion": "12.3.1",
-            "targets": [
-                {
-                    "expr": "sum(increase(track_category_edits_total{job=\"trackly_backend\"}[24h]))",
-                    "refId": "A"
-                }
-            ],
-            "title": "Category Edits (24h)",
-            "type": "stat"
-        },
-        {
-            "datasource": {
-                "uid": "victoriametrics"
-            },
-            "fieldConfig": {
-                "defaults": {},
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 1,
-                "w": 6,
-                "x": 12,
-                "y": 16
-            },
-            "id": 311,
-            "pluginVersion": "12.3.1",
-            "targets": [
-                {
-                    "expr": "sum(increase(track_category_edits_by_category_total{job=\"trackly_backend\"}[7d])) by (category)",
-                    "legendFormat": "{{category}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Category Edits by Category (7d)",
-            "type": "piechart"
+            "type": "piechart",
+            "description": "**What**: Distribution of track categories (hiking, walking, running, cycling).\n\n**Why**: Shows which activities are most popular.\n\n**Actions**: Focus marketing on dominant categories."
         },
         {
             "collapsed": false,
@@ -856,7 +811,8 @@
                 }
             ],
             "title": "Elevation Enrichments (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Successful elevation enrichment requests in 24h.\n\n**Why**: Elevation adds value to tracks.\n\n**Actions**: Low adoption may indicate feature discovery issues."
         },
         {
             "datasource": {
@@ -914,7 +870,8 @@
                 }
             ],
             "title": "POIs Created (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: POIs created automatically in 24h.\n\n**Why**: POIs enrich the map experience.\n\n**Actions**: If 0 during active uploads, check POI detection logic."
         },
         {
             "datasource": {
@@ -972,7 +929,8 @@
                 }
             ],
             "title": "POIs Deleted/Unlinked (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: POIs deleted or unlinked in 24h.\n\n**Why**: Cleanup activity.\n\n**Actions**: High deletion rates may indicate over-creation or bugs."
         },
         {
             "datasource": {
@@ -1038,7 +996,8 @@
                 }
             ],
             "title": "Elevation Success Rate",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Percentage of elevation enrichment requests that succeeded.\n\n**Why**: External API dependency.\n\n**Targets**: >70% (good) | 50-70% (warning) | <50% (critical).\n\n**Actions**: If low, check external API status."
         },
         {
             "datasource": {
@@ -1130,7 +1089,8 @@
                 }
             ],
             "title": "Elevation Enrichment Activity",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Elevation enrichment request rate by status.\n\n**Why**: Shows enrichment volume and success patterns.\n\n**Actions**: Spikes in failed status need investigation."
         },
         {
             "datasource": {
@@ -1227,7 +1187,8 @@
                 }
             ],
             "title": "POI Activity",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: POI creation and deletion rates by source.\n\n**Why**: Shows POI lifecycle.\n\n**Actions**: Healthy systems have balanced create/delete ratios."
         },
         {
             "collapsed": false,
@@ -1332,7 +1293,8 @@
                 }
             ],
             "title": "Top 10 API Endpoints by Request Rate",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Top 10 API endpoints by request rate.\n\n**Why**: Identifies most-used features.\n\n**Actions**: Optimize performance for high-traffic endpoints."
         },
         {
             "datasource": {
@@ -1404,7 +1366,8 @@
                     }
                 }
             ],
-            "type": "table"
+            "type": "table",
+            "description": "**What**: Total requests per endpoint in 24h.\n\n**Why**: Usage patterns and API health.\n\n**Actions**: Zero usage on key endpoints may indicate broken clients."
         },
         {
             "collapsed": false,
@@ -1508,7 +1471,8 @@
                 }
             ],
             "title": "Track Exports by Format",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Track export operations by format (GPX, KML, etc).\n\n**Why**: Shows which formats users prefer.\n\n**Actions**: Deprioritize unused formats, improve popular ones."
         },
         {
             "datasource": {
@@ -1566,7 +1530,8 @@
                 }
             ],
             "title": "Total Exports (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Total track exports in 24h.\n\n**Why**: Indicates user engagement with their data.\n\n**Actions**: Growth here suggests healthy engagement."
         },
         {
             "datasource": {
@@ -1631,7 +1596,8 @@
                 }
             ],
             "title": "Upload Failures by Reason (24h)",
-            "type": "piechart"
+            "type": "piechart",
+            "description": "**What**: Upload failure breakdown by reason.\n\n**Why**: Identifies common failure modes.\n\n**Actions**: Address the most common failure reason first."
         },
         {
             "datasource": {
@@ -2080,7 +2046,8 @@
                 }
             ],
             "title": "Zero-Result Rate (7d)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Percentage of searches that returned no results.\n\n**Why**: Zero-result searches indicate content gaps.\n\n**Targets**: <10% (good) | 10-20% (warning) | >20% (critical).\n\n**Actions**: Improve search relevance or content coverage."
         },
         {
             "datasource": {
@@ -2138,7 +2105,8 @@
                 }
             ],
             "title": "Track Edits (7d)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Track edits (name, description, categories) in 7d.\n\n**Why**: Shows user investment in their content.\n\n**Actions**: Growth here suggests healthy engagement."
         },
         {
             "datasource": {
@@ -2196,7 +2164,8 @@
                 }
             ],
             "title": "Track Exports (7d)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Track exports in the last 7 days.\n\n**Why**: Longer-term engagement view.\n\n**Actions**: Track week-over-week trends."
         },
         {
             "datasource": {
@@ -2254,7 +2223,8 @@
                 }
             ],
             "title": "Map Interactions (24h)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Map interactions (pan, zoom, etc) in 24h.\n\n**Why**: Indicates map feature usage.\n\n**Actions**: Low usage may indicate map UX issues."
         },
         {
             "collapsed": false,
@@ -2392,7 +2362,8 @@
                 }
             ],
             "title": "Map Interactions (7d)",
-            "type": "stat"
+            "type": "stat",
+            "description": "**What**: Map interactions in the last 7 days.\n\n**Why**: Weekly engagement view.\n\n**Actions**: Compare week-over-week."
         },
         {
             "datasource": {
@@ -2491,7 +2462,8 @@
                 }
             ],
             "title": "Engagement Score (per session, 7d)",
-            "type": "timeseries"
+            "type": "timeseries",
+            "description": "**What**: Engagement score per session (7d).\n\n**Why**: Composite engagement metric.\n\n**Actions**: Track trends and correlate with product changes."
         },
         {
             "collapsed": false,
@@ -2859,7 +2831,26 @@
                 }
             ],
             "title": "Funnel: Upload → View → Enrich → Export → Edit → Delete (7d)",
-            "type": "bargauge"
+            "type": "bargauge",
+            "description": "**What**: User engagement funnel showing absolute counts for each stage (7d).\n\n**Why**: Funnels help identify where users drop off in the product journey.\n\n**Stages**: Upload, View, Enrich, Export, Edit, Delete.\n\n**Actions**: If drop-off is high between stages, investigate UX friction at that point.",
+            "transformations": [
+                {
+                    "id": "calculateField",
+                    "options": {
+                        "alias": "Conversion %",
+                        "mode": "reduceRow",
+                        "reduce": {
+                            "reducer": "last"
+                        },
+                        "binary": {
+                            "left": "Value",
+                            "right": "funnel_uploads_7d",
+                            "operator": "/"
+                        },
+                        "replaceFields": false
+                    }
+                }
+            ]
         },
         {
             "collapsed": false,
@@ -3152,10 +3143,45 @@
         "business"
     ],
     "templating": {
-        "list": []
+        "list": [
+            {
+                "name": "source",
+                "label": "Source",
+                "type": "query",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                },
+                "query": "label_values(tracks_uploaded_total{job=\"trackly_backend\"}, source)",
+                "includeAll": true,
+                "multi": true,
+                "refresh": 2,
+                "current": {
+                    "text": "All",
+                    "value": "$__all"
+                }
+            },
+            {
+                "name": "category",
+                "label": "Category",
+                "type": "query",
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "victoriametrics"
+                },
+                "query": "label_values(track_categories_total{job=\"trackly_backend\"}, category)",
+                "includeAll": true,
+                "multi": true,
+                "refresh": 2,
+                "current": {
+                    "text": "All",
+                    "value": "$__all"
+                }
+            }
+        ]
     },
     "time": {
-        "from": "now-5m",
+        "from": "now-1d",
         "to": "now"
     },
     "timepicker": {},
