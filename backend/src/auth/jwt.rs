@@ -130,71 +130,92 @@ pub fn validate_access_token(token: &str) -> Result<Claims, AuthError> {
 mod tests {
     use super::*;
 
-    fn setup_test_env() {
-        // SAFETY: Tests are run serially and these environment variables
-        // are only read during test initialization
-        unsafe {
-            std::env::set_var("GOOGLE_CLIENT_ID", "test-client-id");
-            std::env::set_var("GOOGLE_CLIENT_SECRET", "test-secret");
-            std::env::set_var("GOOGLE_REDIRECT_URI", "http://localhost/callback");
-            std::env::set_var(
-                "JWT_SECRET",
-                "a-very-secure-secret-key-that-is-32-bytes-long!",
-            );
-            std::env::set_var("JWT_EXPIRY_SECS", "3600");
-        }
-    }
-
     #[test]
     fn test_create_and_validate_token() {
-        setup_test_env();
+        temp_env::with_vars(
+            vec![
+                ("GOOGLE_CLIENT_ID", Some("test-client-id")),
+                ("GOOGLE_CLIENT_SECRET", Some("test-secret")),
+                ("GOOGLE_REDIRECT_URI", Some("http://localhost/callback")),
+                (
+                    "JWT_SECRET",
+                    Some("a-very-secure-secret-key-that-is-32-bytes-long!"),
+                ),
+                ("JWT_EXPIRY_SECS", Some("3600")),
+            ],
+            || {
+                let user = TokenUser {
+                    user_id: Uuid::new_v4(),
+                    email: "test@example.com".to_string(),
+                    name: "Test User".to_string(),
+                    nickname: Some("tester".to_string()),
+                    avatar_url: Some("https://example.com/avatar.jpg".to_string()),
+                };
 
-        let user = TokenUser {
-            user_id: Uuid::new_v4(),
-            email: "test@example.com".to_string(),
-            name: "Test User".to_string(),
-            nickname: Some("tester".to_string()),
-            avatar_url: Some("https://example.com/avatar.jpg".to_string()),
-        };
+                let token = create_access_token(&user).expect("Failed to create token");
+                assert!(!token.is_empty());
 
-        let token = create_access_token(&user).expect("Failed to create token");
-        assert!(!token.is_empty());
-
-        let claims = validate_access_token(&token).expect("Failed to validate token");
-        assert_eq!(claims.email, "test@example.com");
-        assert_eq!(claims.name, "Test User");
-        assert_eq!(claims.nickname, Some("tester".to_string()));
-        assert_eq!(claims.user_id().unwrap(), user.user_id);
-        assert_eq!(claims.roles, vec!["user"]);
-        assert_eq!(claims.iss, "trackly-app");
-        assert_eq!(claims.aud, "trackly-web");
+                let claims = validate_access_token(&token).expect("Failed to validate token");
+                assert_eq!(claims.email, "test@example.com");
+                assert_eq!(claims.name, "Test User");
+                assert_eq!(claims.nickname, Some("tester".to_string()));
+                assert_eq!(claims.user_id().unwrap(), user.user_id);
+                assert_eq!(claims.roles, vec!["user"]);
+                assert_eq!(claims.iss, "trackly-app");
+                assert_eq!(claims.aud, "trackly-web");
+            },
+        );
     }
 
     #[test]
     fn test_invalid_token() {
-        setup_test_env();
-
-        let result = validate_access_token("invalid.token.here");
-        assert!(result.is_err());
+        temp_env::with_vars(
+            vec![
+                ("GOOGLE_CLIENT_ID", Some("test-client-id")),
+                ("GOOGLE_CLIENT_SECRET", Some("test-secret")),
+                ("GOOGLE_REDIRECT_URI", Some("http://localhost/callback")),
+                (
+                    "JWT_SECRET",
+                    Some("a-very-secure-secret-key-that-is-32-bytes-long!"),
+                ),
+                ("JWT_EXPIRY_SECS", Some("3600")),
+            ],
+            || {
+                let result = validate_access_token("invalid.token.here");
+                assert!(result.is_err());
+            },
+        );
     }
 
     #[test]
     fn test_token_expiry_check() {
-        setup_test_env();
+        temp_env::with_vars(
+            vec![
+                ("GOOGLE_CLIENT_ID", Some("test-client-id")),
+                ("GOOGLE_CLIENT_SECRET", Some("test-secret")),
+                ("GOOGLE_REDIRECT_URI", Some("http://localhost/callback")),
+                (
+                    "JWT_SECRET",
+                    Some("a-very-secure-secret-key-that-is-32-bytes-long!"),
+                ),
+                ("JWT_EXPIRY_SECS", Some("3600")),
+            ],
+            || {
+                let user = TokenUser {
+                    user_id: Uuid::new_v4(),
+                    email: "test@example.com".to_string(),
+                    name: "Test User".to_string(),
+                    nickname: None,
+                    avatar_url: None,
+                };
 
-        let user = TokenUser {
-            user_id: Uuid::new_v4(),
-            email: "test@example.com".to_string(),
-            name: "Test User".to_string(),
-            nickname: None,
-            avatar_url: None,
-        };
+                let token = create_access_token(&user).unwrap();
+                let claims = validate_access_token(&token).unwrap();
 
-        let token = create_access_token(&user).unwrap();
-        let claims = validate_access_token(&token).unwrap();
-
-        // Token should not be expiring soon (it's valid for 1 hour in tests)
-        assert!(!claims.is_expiring_soon());
+                // Token should not be expiring soon (it's valid for 1 hour in tests)
+                assert!(!claims.is_expiring_soon());
+            },
+        );
     }
 
     #[test]
@@ -255,39 +276,63 @@ mod tests {
 
     #[test]
     fn test_malformed_token() {
-        setup_test_env();
+        temp_env::with_vars(
+            vec![
+                ("GOOGLE_CLIENT_ID", Some("test-client-id")),
+                ("GOOGLE_CLIENT_SECRET", Some("test-secret")),
+                ("GOOGLE_REDIRECT_URI", Some("http://localhost/callback")),
+                (
+                    "JWT_SECRET",
+                    Some("a-very-secure-secret-key-that-is-32-bytes-long!"),
+                ),
+                ("JWT_EXPIRY_SECS", Some("3600")),
+            ],
+            || {
+                // Test various malformed tokens
+                let malformed_tokens = vec![
+                    "",
+                    "not-a-token",
+                    "one-part",
+                    "two.parts",
+                    "too.many.parts.here",
+                    "invalid-base64.data.here",
+                ];
 
-        // Test various malformed tokens
-        let malformed_tokens = vec![
-            "",
-            "not-a-token",
-            "one-part",
-            "two.parts",
-            "too.many.parts.here",
-            "invalid-base64.data.here",
-        ];
-
-        for token in malformed_tokens {
-            let result = validate_access_token(token);
-            assert!(result.is_err(), "Token '{}' should be invalid", token);
-        }
+                for token in malformed_tokens {
+                    let result = validate_access_token(token);
+                    assert!(result.is_err(), "Token '{}' should be invalid", token);
+                }
+            },
+        );
     }
 
     #[test]
     fn test_token_with_roles() {
-        setup_test_env();
+        temp_env::with_vars(
+            vec![
+                ("GOOGLE_CLIENT_ID", Some("test-client-id")),
+                ("GOOGLE_CLIENT_SECRET", Some("test-secret")),
+                ("GOOGLE_REDIRECT_URI", Some("http://localhost/callback")),
+                (
+                    "JWT_SECRET",
+                    Some("a-very-secure-secret-key-that-is-32-bytes-long!"),
+                ),
+                ("JWT_EXPIRY_SECS", Some("3600")),
+            ],
+            || {
+                let user = TokenUser {
+                    user_id: Uuid::new_v4(),
+                    email: "admin@example.com".to_string(),
+                    name: "Admin User".to_string(),
+                    nickname: Some("admin".to_string()),
+                    avatar_url: None,
+                };
 
-        let user = TokenUser {
-            user_id: Uuid::new_v4(),
-            email: "admin@example.com".to_string(),
-            name: "Admin User".to_string(),
-            nickname: Some("admin".to_string()),
-            avatar_url: None,
-        };
+                let token = create_access_token(&user).unwrap();
+                let claims = validate_access_token(&token).unwrap();
 
-        let token = create_access_token(&user).unwrap();
-        let claims = validate_access_token(&token).unwrap();
-
-        assert!(claims.roles.contains(&"user".to_string()));
+                assert!(claims.roles.contains(&"user".to_string()));
+            },
+        );
     }
 }
