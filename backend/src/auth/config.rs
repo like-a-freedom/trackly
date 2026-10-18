@@ -114,7 +114,7 @@ impl AuthConfig {
 
         // The signing key must be at least as long as the HMAC-SHA256 digest.
         let jwt_secret = non_blank_env("JWT_SECRET")?;
-        if jwt_secret.trim().len() < MIN_JWT_SECRET_BYTES {
+        if jwt_secret.len() < MIN_JWT_SECRET_BYTES {
             warn!(
                 variable = "JWT_SECRET",
                 min_bytes = MIN_JWT_SECRET_BYTES,
