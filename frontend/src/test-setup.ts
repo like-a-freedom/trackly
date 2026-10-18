@@ -99,8 +99,8 @@ config.global.stubs = {
     'TrackMap': {
         name: 'TrackMap',
         template: '<div class="track-map-stub"></div>',
-        props: ['polylines', 'zoom', 'center', 'bounds', 'markerLatLng', 'activeTrackId', 'url', 'attribution', 'heatmapPoints', 'showHeatmap', 'selectedTrackDetail'],
-        emits: ['update:center', 'update:zoom', 'update:bounds', 'trackClick', 'mapReady']
+        props: ['polylines', 'zoom', 'center', 'bounds', 'markerLatLng', 'activeTrackId', 'url', 'attribution', 'heatmapPoints', 'showHeatmap', 'selectedTrackDetail', 'autoPanOnChartHover'],
+        emits: ['update:center', 'update:zoom', 'update:bounds', 'trackClick', 'mapReady', 'trackMouseOver', 'trackMouseMove', 'trackMouseOut', 'open-search', 'filter-changed']
     }
 };
 
