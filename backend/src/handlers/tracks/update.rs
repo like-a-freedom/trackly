@@ -109,6 +109,12 @@ pub async fn update_track_categories(
     auth_user: OptionalAuthUser,
     Json(request): Json<crate::models::UpdateTrackCategoriesRequest>,
 ) -> Result<Json<serde_json::Value>> {
+    // Reject empty / blank category selections, mirroring the upload path, so the
+    // stored track never ends up with no (or whitespace-only) categories.
+    if request.categories.is_empty() || request.categories.iter().any(|c| c.trim().is_empty()) {
+        return Err(AppError::BadRequest("no categories selected".into()));
+    }
+
     crate::input_validation::validate_track_fields(None, None, &request.categories)?;
 
     verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
