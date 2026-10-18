@@ -2,6 +2,33 @@
 
 use once_cell::sync::Lazy;
 use std::env;
+use tracing::warn;
+
+/// Minimum accepted length, in bytes, of the JWT signing secret.
+///
+/// An HMAC-SHA256 key shorter than the digest adds no security margin. `from_env`
+/// documents this minimum, but nothing enforced it, so a short key was accepted.
+const MIN_JWT_SECRET_BYTES: usize = 32;
+
+/// Read an environment variable, treating a blank value as unset.
+///
+/// `env::var` yields `Ok("")` for a variable that is present but empty, so emptiness
+/// must be checked explicitly: a blank credential has to mean "not configured",
+/// never "configured with an empty value". Present-but-blank values are logged,
+/// because silently disabling authentication would hide a misconfiguration.
+fn non_blank_env(name: &str) -> Option<String> {
+    match env::var(name) {
+        Ok(value) if value.trim().is_empty() => {
+            warn!(
+                variable = name,
+                "blank auth credential ignored; authentication stays disabled"
+            );
+            None
+        }
+        Ok(value) => Some(value),
+        Err(_) => None,
+    }
+}
 
 /// Authentication configuration loaded from environment variables.
 #[derive(Debug, Clone)]
@@ -33,9 +60,12 @@ pub struct AuthConfig {
 impl AuthConfig {
     /// Load configuration from environment variables.
     ///
+    /// Prefer [`Self::try_from_env`], which validates the credentials. This
+    /// constructor is private so the fail-closed check cannot be bypassed.
+    ///
     /// # Panics
     /// Panics if required environment variables are missing.
-    pub fn from_env() -> Self {
+    fn from_env() -> Self {
         let jwt_expiry = env::var("JWT_EXPIRY_SECS")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -72,11 +102,27 @@ impl AuthConfig {
 
     /// Load configuration from environment, returning None if auth is not configured.
     /// This allows the application to run without auth in development.
+    ///
+    /// Fails closed. Absent variables are the normal "dev without auth" case; a
+    /// variable that is *present but blank*, or a `JWT_SECRET` shorter than
+    /// [`MIN_JWT_SECRET_BYTES`], also disables auth instead of enabling it with an
+    /// empty client id / signing key, or panicking at startup on a partial setup.
     pub fn try_from_env() -> Option<Self> {
-        // Check if the minimum required variables are set
-        if env::var("GOOGLE_CLIENT_ID").is_err() || env::var("JWT_SECRET").is_err() {
+        non_blank_env("GOOGLE_CLIENT_ID")?;
+        non_blank_env("GOOGLE_CLIENT_SECRET")?;
+        non_blank_env("GOOGLE_REDIRECT_URI")?;
+
+        // The signing key must be at least as long as the HMAC-SHA256 digest.
+        let jwt_secret = non_blank_env("JWT_SECRET")?;
+        if jwt_secret.trim().len() < MIN_JWT_SECRET_BYTES {
+            warn!(
+                variable = "JWT_SECRET",
+                min_bytes = MIN_JWT_SECRET_BYTES,
+                "auth credential too short; authentication stays disabled"
+            );
             return None;
         }
+
         Some(Self::from_env())
     }
 }
@@ -100,12 +146,37 @@ pub fn is_auth_configured() -> bool {
 mod tests {
     use super::*;
 
+    /// A complete, valid set of auth credentials.
+    const VALID_VARS: [(&str, &str); 4] = [
+        ("GOOGLE_CLIENT_ID", "test-client-id"),
+        ("GOOGLE_CLIENT_SECRET", "test-client-secret"),
+        ("GOOGLE_REDIRECT_URI", "http://localhost/callback"),
+        ("JWT_SECRET", "a-very-secure-secret-key-32-bytes!"),
+    ];
+
+    /// Run `f` with valid credentials in place, except for `name` set to `value`.
+    fn with_override<T>(name: &str, value: &str, f: impl FnOnce() -> T) -> T {
+        let vars: Vec<(&str, Option<&str>)> = VALID_VARS
+            .iter()
+            .map(|(key, valid)| (*key, Some(if *key == name { value } else { *valid })))
+            .collect();
+        temp_env::with_vars(vars, f)
+    }
+
     #[test]
     fn test_default_values() {
         // When env vars are not set, try_from_env returns None
-        temp_env::with_vars_unset(vec!["GOOGLE_CLIENT_ID", "JWT_SECRET"], || {
-            assert!(AuthConfig::try_from_env().is_none());
-        });
+        temp_env::with_vars_unset(
+            vec![
+                "GOOGLE_CLIENT_ID",
+                "GOOGLE_CLIENT_SECRET",
+                "GOOGLE_REDIRECT_URI",
+                "JWT_SECRET",
+            ],
+            || {
+                assert!(AuthConfig::try_from_env().is_none());
+            },
+        );
     }
 
     #[test]
@@ -125,5 +196,72 @@ mod tests {
                 assert_eq!(config.refresh_token_expiry_secs, 604800); // default
             },
         );
+    }
+
+    /// Regression: a blank value is *present* (`env::var` yields `Ok("")`), not
+    /// missing, so gating on `env::var(..).is_err()` used to *enable* auth with an
+    /// empty client id and an empty signing key.
+    #[test]
+    fn blank_credentials_do_not_configure_auth() {
+        for name in [
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "GOOGLE_REDIRECT_URI",
+            "JWT_SECRET",
+        ] {
+            let configured = with_override(name, "", || AuthConfig::try_from_env().is_some());
+            assert!(!configured, "{name} = \"\" must not enable authentication");
+        }
+    }
+
+    #[test]
+    fn whitespace_only_credentials_do_not_configure_auth() {
+        for name in [
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "GOOGLE_REDIRECT_URI",
+            "JWT_SECRET",
+        ] {
+            let configured = with_override(name, "   ", || AuthConfig::try_from_env().is_some());
+            assert!(
+                !configured,
+                "{name} = \"   \" must not enable authentication"
+            );
+        }
+    }
+
+    /// The documented requirement is a 32-byte minimum, so 31 bytes must be refused.
+    #[test]
+    fn short_jwt_secret_does_not_configure_auth() {
+        let secret = "a".repeat(31);
+        assert!(!with_override("JWT_SECRET", &secret, || {
+            AuthConfig::try_from_env().is_some()
+        }));
+    }
+
+    /// Regression: a partial configuration (client id + signing key, no secret or
+    /// redirect URI) used to pass `try_from_env` and then panic inside `from_env`,
+    /// aborting startup instead of disabling authentication.
+    #[test]
+    fn partial_credentials_do_not_configure_auth() {
+        temp_env::with_vars(
+            vec![
+                ("GOOGLE_CLIENT_ID", Some("test-client-id")),
+                ("GOOGLE_CLIENT_SECRET", None),
+                ("GOOGLE_REDIRECT_URI", None),
+                ("JWT_SECRET", Some("a-very-secure-secret-key-32-bytes!")),
+            ],
+            || assert!(AuthConfig::try_from_env().is_none()),
+        );
+    }
+
+    #[test]
+    fn minimum_length_secret_configures_auth() {
+        let secret = "a".repeat(32);
+        let config = with_override("JWT_SECRET", &secret, AuthConfig::try_from_env)
+            .expect("a 32-byte secret must configure auth");
+
+        assert_eq!(config.google_client_id, "test-client-id");
+        assert_eq!(config.jwt_secret, secret);
     }
 }
