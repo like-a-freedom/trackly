@@ -317,7 +317,7 @@
     <!-- Context menu -->
     <div
       v-if="contextMenu.visible"
-      class="context-menu"
+      class="context-menu ui-reveal"
       :style="{ insetInlineStart: contextMenu.x + 'px', insetBlockStart: contextMenu.y + 'px' }"
       data-testid="context-menu"
       role="menu"

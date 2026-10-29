@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trackly Architecture & Maintainability Audit — 2026-10-20</title>
+<style>
+  :root {
+    --ink: #17212b;
+    --muted: #5b6775;
+    --line: #dfe5ec;
+    --accent: #245bd7;
+    --accent-soft: #eef3ff;
+    --warm: #fff8e8;
+    --bg: #f7f9fc;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.62;
+    font-size: 16px;
+  }
+  .layout { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; }
+  nav.toc { position: sticky; top: 28px; align-self: start; max-height: calc(100vh - 56px); overflow: auto; padding-right: 8px; }
+  nav.toc .label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 12px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  nav.toc li { margin: 0; }
+  nav.toc a { display: block; padding: 6px 0 6px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); text-decoration: none; font-size: 13.5px; }
+  nav.toc a:hover { color: var(--accent); border-left-color: var(--accent); }
+  main { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 52px 58px 64px; box-shadow: 0 10px 40px rgba(23,33,43,.05); min-width: 0; }
+  h1 { font-size: 34px; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 8px; }
+  h1 + p { color: var(--muted); margin-top: 0; }
+  h2 { font-size: 24px; line-height: 1.25; margin: 48px 0 14px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h2:first-of-type { border-top: 0; padding-top: 0; }
+  h3 { font-size: 18px; margin: 30px 0 8px; color: #1f2c3a; }
+  p { margin: 12px 0; }
+  a { color: var(--accent); }
+  ul, ol { padding-left: 24px; }
+  li { margin: 5px 0; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+  code { background: #eef1f5; padding: 2px 6px; border-radius: 5px; font-size: .9em; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+  pre { background: #101820; color: #e7edf5; padding: 18px 20px; border-radius: 10px; overflow: auto; line-height: 1.55; }
+  pre code { background: transparent; padding: 0; color: inherit; }
+  blockquote { margin: 18px 0; padding: 12px 18px; background: var(--warm); border-left: 4px solid #d9a441; color: #4d3b16; border-radius: 0 8px 8px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0 24px; font-size: 14.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: #f1f4f8; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:nth-child(even) { background: #fbfcfe; }
+  strong { color: #0f1b28; }
+  .doc-meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 30px; }
+  .pill { display: inline-block; background: var(--accent-soft); color: #1946a8; border: 1px solid #d5e0ff; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600; }
+  .callout { margin: 22px 0; padding: 16px 18px; background: #f0f7f2; border: 1px solid #cfe6d7; border-radius: 10px; }
+  @media (max-width: 920px) {
+    .layout { grid-template-columns: 1fr; padding: 20px 14px 60px; }
+    nav.toc { position: static; max-height: none; order: 2; }
+    main { padding: 32px 24px 44px; order: 1; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 21px; }
+  }
+  @media print {
+    body { background: #fff; }
+    .layout { display: block; max-width: none; padding: 0; }
+    nav.toc { display: none; }
+    main { border: 0; box-shadow: none; padding: 0; }
+    h2 { break-after: avoid; }
+    table, pre { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc">
+    <div class="label">Contents</div>
+    <ol><li><a href="#1-executive-summary">1. Executive summary</a></li>
+<li><a href="#2-backend-findings-fixed">2. Backend findings fixed</a></li>
+<li><a href="#3-frontend-findings-fixed">3. Frontend findings fixed</a></li>
+<li><a href="#4-remaining-findings">4. Remaining findings</a></li>
+<li><a href="#5-dangling-and-unwired-functionality">5. Dangling and unwired functionality</a></li>
+<li><a href="#6-architecture-assessment">6. Architecture assessment</a></li>
+<li><a href="#7-verification">7. Verification</a></li>
+<li><a href="#8-recommended-sequence">8. Recommended sequence</a></li>
+<li><a href="#appendix-changed-areas">Appendix — changed areas</a></li></ol>
+  </nav>
+  <main>
+    <div class="doc-meta">
+      <span class="pill">Architecture audit</span>
+      <span class="pill">2026-10-20</span>
+      <span class="pill">Backend + frontend + CI</span>
+    </div>
+    <h1 id="trackly-architecture-maintainability-audit">Trackly Architecture &amp; Maintainability Audit</h1>
+<p><strong>Date:</strong> 2026-10-20<br>
+<strong>Scope:</strong> Rust/Axum backend, Vue frontend, database access layer, CI, and <code>docs/</code> intent artifacts.<br>
+<strong>Method:</strong> Three parallel read-only audits (backend, frontend, plans/docs/CI), followed by direct verification against the current source tree. Every finding below was reproduced in code before being changed.<br>
+<strong>Result:</strong> All backend and frontend quality gates are green after the applied fixes. End-to-end tests compile but were not executed because the frontend dev server on port 81 was not running.</p>
+<hr>
+<h2 id="1-executive-summary">1. Executive summary</h2>
+<p>Trackly is a modular monolith with a clean domain error type, parameterized SQL, a typed HTTP wrapper, and strong pure-logic test coverage. The audit found three classes of problems:</p>
+<ol>
+<li><strong>Security and data-exposure defects</strong> — owner identifiers were serialized to clients, private tracks could be read/exported by ID, owner filters trusted client-supplied query parameters, and several mutating endpoints lacked ownership checks.</li>
+<li><strong>Dead or misleading abstractions</strong> — an unused service/repository layer, an unused file-hash utility, a dead bottom-deck component, and a <code>simplify-preview</code> endpoint that computed simplifications and then discarded them.</li>
+<li><strong>Test and documentation drift</strong> — database-backed tests are globally <code>#[ignore]</code>d and never run in CI; the frontend test harness suppressed component errors; <code>docs/superpowers/plans/</code> was deleted but still referenced by five documents.</li>
+</ol>
+<p>The fixes are deliberately narrow. They remove dead code instead of wiring it, make ownership checks explicit, bind list filters to verified identity, and align tests with the current editor shell. The tracked diff changes <strong>61 files</strong> with <strong>1,848 insertions and 1,219 deletions</strong>.</p>
+<h3 id="quality-gate-snapshot">Quality gate snapshot</h3>
+<table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cargo fmt --all -- --check</code></td>
+<td>Pass</td>
+</tr>
+<tr>
+<td><code>cargo clippy --all-targets -- -D warnings</code></td>
+<td>Pass</td>
+</tr>
+<tr>
+<td><code>cargo test</code></td>
+<td>312 passed, 12 ignored (no database)</td>
+</tr>
+<tr>
+<td><code>cargo test</code> with <code>DATABASE_URL</code></td>
+<td>329 passed — all 13 database-backed tests execute and pass</td>
+</tr>
+<tr>
+<td><code>bun run lint</code></td>
+<td>0 errors, 76 warnings</td>
+</tr>
+<tr>
+<td><code>bun run typecheck</code></td>
+<td>Pass</td>
+</tr>
+<tr>
+<td><code>bun run test</code></td>
+<td>126 files, 2,103 tests passed</td>
+</tr>
+<tr>
+<td>Playwright <code>--list</code></td>
+<td>21 tests compile</td>
+</tr>
+</tbody>
+</table>
+<p>The 76 ESLint warnings are pre-existing (<code>no-explicit-any</code>, unused directives). They are not introduced by this work and are tracked as a cleanup item rather than suppressed.</p>
+<hr>
+<h2 id="2-backend-findings-fixed">2. Backend findings fixed</h2>
+<p>IDs are consolidated for this report; the detailed backend input is retained in <code>docs/audit/backend-architecture-audit.md</code>. That file predates the fixes and is useful as a historical snapshot, not as current status.</p>
+<h3 id="b1-owner-identifiers-leaked-in-api-payloads">B1 — Owner identifiers leaked in API payloads</h3>
+<p><code>TrackDetail</code> serialized <code>session_id</code> and <code>user_id</code>, exposing anonymous and authenticated owner IDs to any reader. <code>Poi</code> also serialized <code>session_id</code>.</p>
+<p><strong>Fix:</strong> Both fields are now <code>#[serde(skip_serializing)]</code>. <code>TrackDetail</code> exposes <code>is_public</code> and a request-scoped <code>is_owner</code> boolean instead. The frontend uses <code>is_owner</code>, never a client-side comparison of owner IDs.</p>
+<p><strong>Evidence:</strong> <code>backend/src/models.rs:104-113</code>, <code>backend/src/models.rs:627</code>; <code>frontend/src/types/index.ts</code>.</p>
+<h3 id="b2-private-tracks-readable-and-exportable-by-id">B2 — Private tracks readable and exportable by ID</h3>
+<p><code>GET /api/tracks/{id}</code>, <code>GET /api/tracks/{id}/simplified</code>, export endpoints, and the slope profile could return a private track to anyone who knew its UUID.</p>
+<p><strong>Fix:</strong> A shared visibility check (<code>ensure_track_visible</code>) returns the track only when it is public or the caller owns it. Non-owners receive <code>NotFound</code>, not <code>Forbidden</code>, so private IDs cannot be probed for existence. Detail reads compute <code>is_owner</code> per request.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/util.rs</code>, <code>backend/src/handlers/tracks/detail.rs:70-90</code>, <code>backend/src/handlers/tracks/export.rs:42</code>.</p>
+<h3 id="b3-any-caller-could-duplicate-a-track">B3 — Any caller could duplicate a track</h3>
+<p>The duplicate endpoint copied any track by ID without checking whether the caller could see the source.</p>
+<p><strong>Fix:</strong> <code>duplicate_track</code> now calls <code>ensure_track_visible</code> before copying.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/editor.rs:72-89</code>.</p>
+<h3 id="b4-owner-filters-trusted-client-query-parameters">B4 — Owner filters trusted client query parameters</h3>
+<p><code>owner_user_id</code> and <code>owner_session_id</code> were accepted from the query string. A caller could ask for another identity’s private tracks.</p>
+<p><strong>Fix:</strong> Both parameters are ignored on input. <code>bind_owner_filter</code> binds ownership exclusively from the verified JWT identity or the <code>x-session-id</code> header. The JWT wins; a forged session header cannot override an authenticated identity. <code>mine=true</code> filters to the caller’s own tracks; without it, the caller sees their private tracks plus all public tracks.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/list.rs:57-82</code>, <code>backend/src/db/tracks/queries.rs:12-46</code>.</p>
+<h3 id="b5-unauthenticated-enrichment-and-slope-mutation-uncapped-elevation-preview">B5 — Unauthenticated enrichment and slope mutation; uncapped elevation preview</h3>
+<p>Elevation enrichment and slope recalculation could mutate a track without proving ownership. The elevation preview accepted an unbounded point list.</p>
+<p><strong>Fix:</strong> Both mutations call <code>verify_track_owner</code>. The preview is capped at 5,000 points and validates coordinate shape before processing.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/elevation.rs:24-28</code>, <code>backend/src/handlers/tracks/elevation.rs:40-44</code>, <code>backend/src/handlers/tracks/slope.rs:69</code>.</p>
+<h3 id="b6-editor-routes-registered-regardless-of-feature-flag">B6 — Editor routes registered regardless of feature flag</h3>
+<p><code>FEATURE_EDITOR</code> hid the UI but left <code>/api/tracks/create</code>, <code>/{id}/geometry</code>, <code>/{id}/duplicate</code>, and <code>/{id}/publish</code> reachable.</p>
+<p><strong>Fix:</strong> Router construction is now mutable and editor routes are registered only when <code>editor_enabled</code> is true.</p>
+<p><strong>Evidence:</strong> <code>backend/src/main.rs:119-122</code>, <code>backend/src/main.rs:181-193</code>.</p>
+<h3 id="b7-duplicate-editor-geometry-returned-500">B7 — Duplicate editor geometry returned 500</h3>
+<p>A unique-constraint violation from <code>track_exists</code>/insert surfaced as a database error instead of a domain conflict.</p>
+<p><strong>Fix:</strong> Editor create and update pre-check the geometry hash and map SQLSTATE <code>23505</code> to <code>AppError::DuplicateTrack</code>, which serializes as HTTP 409 with the existing track ID when available.</p>
+<p><strong>Evidence:</strong> <code>backend/src/services/track_editor.rs:134-141</code>, <code>backend/src/services/track_editor.rs:244-251</code>, <code>backend/src/services/track_editor.rs:317-318</code>.</p>
+<h3 id="b8-track-updates-skipped-namedescription-validation">B8 — Track updates skipped name/description validation</h3>
+<p>Metadata updates accepted empty or oversized values that upload and editor paths already rejected.</p>
+<p><strong>Fix:</strong> Update handlers validate name and description through the shared validation helpers before writing.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/update.rs</code>.</p>
+<h3 id="b9-poi-mutation-authorization-gaps">B9 — POI mutation authorization gaps</h3>
+<p>POI update, delete, and unlink accepted requests without proving ownership. Unowned legacy POIs had no clear authorization rule.</p>
+<p><strong>Fix:</strong> <code>verify_poi_access</code> requires a matching session for owned POIs. For unowned legacy POIs it requires ownership of at least one linked track. Unlinking requires track ownership. POI creation now requires a <code>session_id</code> from the body or the <code>x-session-id</code> header.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/pois.rs:50-80</code>, <code>backend/src/handlers/pois.rs:190-196</code>.</p>
+<h3 id="b10-poi-list-ignored-filters-and-returned-a-global-total">B10 — POI list ignored filters and returned a global total</h3>
+<p><code>GET /api/pois</code> accepted <code>bbox</code>, <code>track_id</code>, <code>categories</code>, and <code>search</code> but only some were applied; the total count ignored filters entirely.</p>
+<p><strong>Fix:</strong> A single <code>PoiFilter</code> value drives both <code>list_filtered</code> and <code>count_filtered</code>, so pagination and totals describe the same result set.</p>
+<p><strong>Evidence:</strong> <code>backend/src/db/pois.rs:14</code>, <code>backend/src/db/pois.rs:80-128</code>, <code>backend/src/handlers/pois.rs:106-114</code>.</p>
+<h3 id="b11-simplify-preview-discarded-its-own-work">B11 — <code>simplify-preview</code> discarded its own work</h3>
+<p>The handler computed simplified segments, waypoints, and stats, then returned none of them.</p>
+<p><strong>Fix:</strong> The response now contains the simplified waypoints and the full stats object, including <code>tolerance_used</code>.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/geometry.rs:18-42</code>.</p>
+<h3 id="b12-apitracks-was-unbounded">B12 — <code>/api/tracks</code> was unbounded</h3>
+<p>A dense viewport could return every stored track and exhaust memory.</p>
+<p><strong>Fix:</strong> The GeoJSON query applies <code>ORDER BY created_at DESC LIMIT</code> with <code>TRACK_LIST_MAX_RESULTS</code> (default 5,000, clamped to 1–20,000).</p>
+<p><strong>Evidence:</strong> <code>backend/src/db/tracks/queries.rs:155-165</code>, <code>backend/src/db/tracks/queries.rs:239-240</code>.</p>
+<h3 id="b13-debug-endpoint-always-registered">B13 — Debug endpoint always registered</h3>
+<p><code>/debug/background_task</code> was registered unconditionally despite a comment claiming feature-flag protection.</p>
+<p><strong>Fix:</strong> It is registered only when <code>DEBUG_ENDPOINTS=true</code>.</p>
+<p><strong>Evidence:</strong> <code>backend/src/main.rs:122-125</code>, <code>backend/src/main.rs:262-267</code>.</p>
+<h3 id="b14-dead-servicerepository-abstraction-layer">B14 — Dead service/repository abstraction layer</h3>
+<p><code>TrackService</code>, <code>PostgresTrackService</code>, <code>TrackRepository</code>, and <code>PostgresTrackRepository</code> were compiled but never constructed. Their implementations were also lossy: one dropped geometry hash, waypoints, POIs, and session ID; another ignored the user ID. Wiring them later would have silently lost data.</p>
+<p><strong>Fix:</strong> Deleted the entire <code>backend/src/repositories/</code> tree, both service implementations, and the related exports in <code>lib.rs</code> and <code>services.rs</code>.</p>
+<h3 id="b15-raw-sql-in-the-upload-path">B15 — Raw SQL in the upload path</h3>
+<p><code>track_upload.rs</code> embedded an ownership lookup directly in business logic.</p>
+<p><strong>Fix:</strong> The lookup now uses <code>db::get_track_visibility</code>, keeping SQL inside <code>db::*</code>.</p>
+<p><strong>Evidence:</strong> <code>backend/src/track_upload.rs:107-111</code>.</p>
+<h3 id="b16-dead-file-hash-utility">B16 — Dead file-hash utility</h3>
+<p><code>track_utils/hash.rs</code> had no production or test consumer. Track identity uses a SHA-256 hash of normalized geometry, not file bytes.</p>
+<p><strong>Fix:</strong> Deleted <code>hash.rs</code> and its module/re-export entries.</p>
+<h3 id="b17-duplicated-bulk-validation">B17 — Duplicated bulk validation</h3>
+<p>Bulk visibility and bulk delete repeated identical empty-list and size guards.</p>
+<p><strong>Fix:</strong> Extracted <code>bulk_request_is_empty</code> and reused it in both handlers.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/update.rs:258-280</code>.</p>
+<h3 id="b18-unbounded-search-input-and-like-wildcard-semantics">B18 — Unbounded search input and LIKE wildcard semantics</h3>
+<p>Search accepted arbitrary-length input, and <code>%</code>/<code>_</code> acted as SQL <code>LIKE</code> wildcards.</p>
+<p><strong>Fix:</strong> Search queries are capped at 200 characters and matched with <code>POSITION</code> against lowercase text, so wildcard characters are literal. Results remain limited to 50 public tracks.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/search.rs:30-37</code>, <code>backend/src/db/tracks/queries.rs:448-477</code>.</p>
+<h3 id="b19-authenticated-uploads-were-persisted-as-anonymous">B19 — Authenticated uploads were persisted as anonymous</h3>
+<p>The upload handler never extracted the auth identity, and <code>insert_track</code> wrote only <code>session_id</code>. A logged-in uploader’s track was missing from account and <code>mine=true</code> listings; after ownership moved to the server-provided <code>is_owner</code> flag, the uploader could not open the private track because authenticated checks read <code>user_id</code> only.</p>
+<p><strong>Fix:</strong> The upload handler extracts <code>OptionalAuthUser</code>. Authenticated uploads persist <code>user_id</code> and discard the body-supplied session id; anonymous uploads keep session ownership. Duplicate detection and editor create/duplicate use the same precedence, so a new track never has two owners.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/upload.rs:41-43</code>, <code>backend/src/handlers/tracks/upload.rs:123</code>, <code>backend/src/db/tracks/crud.rs:57-96</code>, <code>backend/src/db/tracks/crud.rs:154-198</code>, <code>backend/src/services/track_editor.rs:99-102</code>.</p>
+<h3 id="b20-editor-identity-protocol-and-duplicate-hash-handling-were-brittle">B20 — Editor identity protocol and duplicate-hash handling were brittle</h3>
+<p>A dedicated code review of this diff found three follow-on defects in the editor path, all fixed:</p>
+<ol>
+<li><strong><code>duplicate_track</code> read the session header only.</strong> The editor client sends the anonymous session in the JSON body, so an anonymous owner duplicating a private track got a 404. The handler now accepts either (<code>session_id_from_headers(&amp;headers).or(request.session_id)</code>).</li>
+<li><strong>Concurrent <code>create_track</code> with the same <code>request_id</code> could fail.</strong> Two simultaneous creates raced the insert; the loser returned a 409 instead of converging. The insert error path now re-reads the row and returns the winner’s identity as an idempotent success when the caller owns it.</li>
+<li><strong>The <code>update_track_geometry</code> duplicate check rejected edits the database accepts.</strong> The <code>UPDATE</code> rewrites <code>hash</code> only for plain, non-recorded tracks, but the pre-check compared hashes unconditionally — re-saving a duplicate (whose <code>dup_*</code> hash is preserved) was wrongly rejected as a duplicate of the original. The conflicting track is now resolved from the write result instead.</li>
+</ol>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/editor.rs:86-87</code>, <code>backend/src/services/track_editor.rs:177-206</code>, <code>backend/src/services/track_editor.rs:272-312</code>.</p>
+<h3 id="b21-new-authorization-and-sql-paths-had-no-coverage">B21 — New authorization and SQL paths had no coverage</h3>
+<p>The review flagged that <code>bind_owner_filter</code>, <code>parse_bbox</code>, <code>verify_poi_access</code>, <code>list_filtered</code>/<code>count_filtered</code>, and <code>editor_write_error</code> shipped without tests, and that three <code>#[ignore]</code>d database tests were empty placeholders.</p>
+<p><strong>Fix:</strong> <code>bind_owner_filter</code> gained three unit tests pinning the spoofing-precedence rules; <code>parse_bbox</code> gained four (valid, wrong arity, non-finite/non-numeric, inverted); <code>verify_poi_access</code> gained two database-backed tests (owner passes, foreign session and header-less caller rejected, unowned POI requires a track-owning identity); <code>list_filtered</code>/<code>count_filtered</code> gained two database-backed tests covering search, bbox, category, and track-link branches; the two meaningful placeholders were implemented as real database tests (<code>test_owner_filter_in_list_tracks_geojson</code>, <code>test_elevation_filters_in_list_tracks_geojson</code>) and the vacuous performance placeholder was deleted. A new database test pins the duplicate-geometry 409 carrying the existing track id.</p>
+<p><strong>Evidence:</strong> <code>backend/src/handlers/tracks/list.rs:135-234</code>, <code>backend/src/handlers/pois.rs:279-410</code>, <code>backend/src/db/pois.rs:429-683</code>, <code>backend/src/db/tracks/tests.rs:393-616</code>, <code>backend/src/services/track_editor.rs:765-820</code>.</p>
+<hr>
+<h2 id="3-frontend-findings-fixed">3. Frontend findings fixed</h2>
+<h3 id="f1-event-bus-returned-no-usable-unsubscribe">F1 — Event bus returned no usable unsubscribe</h3>
+<p><code>events.on()</code> returned <code>void</code>, so callers could not release a listener without keeping a reference to the callback. <code>TrackDetailPanel</code> and <code>HomeView</code> already called <code>events.off</code>, but <code>TrackView</code> needed a cleanup handle.</p>
+<p><strong>Fix:</strong> <code>on()</code> now returns an unsubscribe closure. <code>TrackView</code> stores and invokes it on unmount/deactivation.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/events.ts</code>, <code>frontend/src/views/TrackView.vue:231</code>, <code>frontend/src/views/TrackView.vue:998</code>.</p>
+<h3 id="f2-routeraftereach-leaked-on-every-mount">F2 — <code>router.afterEach</code> leaked on every mount</h3>
+<p><code>ElevationChart</code> registered a global router hook and never removed it.</p>
+<p><strong>Fix:</strong> The unregister function is stored and called in <code>onBeforeUnmount</code>.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/components/ElevationChart.vue:1320</code>.</p>
+<h3 id="f3-viewport-fetches-ignored-active-filters-and-raced">F3 — Viewport fetches ignored active filters and raced</h3>
+<p><code>useTracks</code> fetched bounding-box and heatmap data without the active category/length/elevation/slope filters, cached both by bounds alone, and did not send the session header. That produced stale or incorrect map contents after filter changes and omitted the caller’s own private tracks.</p>
+<p><strong>Fix:</strong> Bbox and heatmap requests now include every filter, both cache keys include filters, session id, and the current auth identity (user id, falling back to the access token), and requests send <code>x-session-id</code>. “My tracks” is expressed as <code>mine=true</code> with the identity header, not <code>owner_session_id</code>; post-upload refreshes reuse the active filters.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/composables/useTracks.ts:104-128</code>, <code>frontend/src/composables/useTracks.ts:166-214</code>, <code>frontend/src/composables/useTracks.ts:216-270</code>.</p>
+<h3 id="f4-ownership-was-inferred-from-client-side-ids">F4 — Ownership was inferred from client-side IDs</h3>
+<p><code>TrackView</code> compared <code>track.session_id</code>/<code>user_id</code> with local session/user state. Once the backend stopped serializing owner IDs, this was both broken and unnecessary.</p>
+<p><strong>Fix:</strong> Ownership now trusts the server-provided <code>is_owner</code> flag only. The editor persistence layer does the same.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/views/TrackView.vue:449</code>, <code>frontend/src/composables/editor/useTrackPersistence.ts:270</code>.</p>
+<h3 id="f5-unguarded-localstorage">F5 — Unguarded <code>localStorage</code></h3>
+<p>Several production paths read or wrote <code>localStorage</code> without handling blocked storage or quota errors.</p>
+<p><strong>Fix:</strong> Guarded the filter-control reads and writes, including reset and watcher persistence. Existing guarded paths (<code>useDraftSave</code>, <code>useMapState</code>, <code>session.ts</code>, units store) were verified.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/components/TrackFilterControl.vue:547-617</code>, <code>frontend/src/components/TrackFilterControl.vue:666-810</code>.</p>
+<h3 id="f6-dead-trackeditorbottomdeck">F6 — Dead <code>TrackEditorBottomDeck</code></h3>
+<p>The component and its test were never wired into the current editor shell.</p>
+<p><strong>Fix:</strong> Deleted the component and its 190-line test, and removed the stub/registration from <code>TrackEditorView.test.ts</code>.</p>
+<h3 id="f7-stale-e2e-assertions-for-the-old-layout">F7 — Stale E2E assertions for the old layout</h3>
+<p>The Playwright editor spec asserted a right inspector and bottom deck that no longer exist.</p>
+<p><strong>Fix:</strong> Assertions now target <code>editor-left-panel</code> and <code>track-editor-inspector</code>, and verify the inspector sits inside the left panel.</p>
+<p><strong>Evidence:</strong> <code>frontend/e2e/track-editor.spec.ts:36-45</code>, <code>frontend/e2e/track-editor.spec.ts:86-148</code>.</p>
+<h3 id="f8-test-setup-swallowed-component-errors">F8 — Test setup swallowed component errors</h3>
+<p>The Vue <code>errorHandler</code> ignored errors, hiding real defects behind green runs. Removing the suppression exposed two latent defects and one outdated mock, all fixed:</p>
+<ul>
+<li><code>HomeView.mapPersistence</code> mocked a debounce without <code>.cancel</code>.</li>
+<li><code>useTrackEditor</code> mocks still supplied <code>session_id</code> instead of <code>is_owner</code>.</li>
+<li><code>trackFilter</code> assumed every caller supplied all filter ranges.</li>
+</ul>
+<p><strong>Fix:</strong> <code>errorHandler</code> now rethrows. The mock and filter-state assumptions were corrected. The legacy <code>TrackEditorMap.trace.test.js</code> also mocks <code>@vue-leaflet/vue-leaflet</code>, preventing Node from trying to load Leaflet marker PNGs.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/test-setup.ts:357-359</code>, <code>frontend/src/utils/trackFilter.ts:94-120</code>.</p>
+<h3 id="f9-child-components-mutated-props">F9 — Child components mutated props</h3>
+<p><code>TrackDetailPanel</code> wrote directly to <code>props.track.distance_markers_enabled</code> and <code>props.track.categories</code>, mutating parent state outside the event contract.</p>
+<p><strong>Fix:</strong> The panel updates its local <code>track</code> copy and emits the existing events. <code>TrackView</code> handles <code>categories-updated</code> and replaces its shallow ref immutably. Name/description handlers were changed to replace the object instead of mutating it, so shallow-ref reactivity works.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/components/TrackDetailPanel.vue:793-825</code>, <code>frontend/src/views/TrackView.vue:800-830</code>.</p>
+<h3 id="f10-keep-alive-double-subscription">F10 — Keep-alive double subscription</h3>
+<p><code>TrackView</code> subscribed to <code>track-elevation-updated</code> in both <code>onMounted</code> and <code>onActivated</code>. Vue keep-alive fires both on first render, so the first unsubscribe handle was overwritten and its listener leaked.</p>
+<p><strong>Fix:</strong> A single <code>subscribeElevationUpdates()</code> helper unsubscribes before subscribing and is used in both hooks.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/views/TrackView.vue:790-800</code>, <code>frontend/src/views/TrackView.vue:988-1020</code>.</p>
+<h3 id="f11-latent-filter-state-crash">F11 — Latent filter-state crash</h3>
+<p><code>trackFilter.matchesAll</code> dereferenced <code>lengthRange</code>/<code>elevationGainRange</code> unconditionally. The test harness had been hiding the resulting exception. Defensive defaults now treat missing ranges as unbounded and missing categories as empty.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/utils/trackFilter.ts:36-120</code>.</p>
+<h3 id="f12-legacy-trace-test-failed-on-leaflet-assets">F12 — Legacy trace test failed on Leaflet assets</h3>
+<p><code>test/components/TrackEditorMap.trace.test.js</code> imported the real <code>@vue-leaflet</code> package, whose icon reset dynamically imports PNGs that Node’s ESM loader cannot read. This produced unhandled rejections even when the test body passed.</p>
+<p><strong>Fix:</strong> The test now mocks the package with the same lightweight components used by the canonical test.</p>
+<h3 id="f13-private-track-reads-failed-for-anonymous-session-owners">F13 — Private-track reads failed for anonymous session owners</h3>
+<p>The review of this diff found three frontend call sites that hit newly restricted endpoints without the <code>x-session-id</code> header, so an anonymous owner’s private track rendered as if empty: POI loading on the track view (<code>usePois.fetchTrackPois</code>), POI loading in the editor (<code>useTrackPersistence.loadTrackPois</code>), and both elevation-enrichment background fetches (<code>useElevationEnrichment</code>).</p>
+<p><strong>Fix:</strong> All four requests now send <code>sessionHeaders(getSessionId())</code>, matching the pattern already used by the track list and detail fetches. Regression tests assert the header on each path.</p>
+<p><strong>Evidence:</strong> <code>frontend/src/composables/usePois.ts:32-34</code>, <code>frontend/src/composables/editor/useTrackPersistence.ts:229-231</code>, <code>frontend/src/composables/useElevationEnrichment.ts:168-171</code>, <code>frontend/src/composables/useElevationEnrichment.ts:342-346</code>.</p>
+<hr>
+<h2 id="4-remaining-findings">4. Remaining findings</h2>
+<p>These were verified but not changed, either because they require a product/security decision or because they are structural work with a larger blast radius.</p>
+<h3 id="strong-should-be-scheduled">Strong — should be scheduled</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Finding</th>
+<th>Why it matters</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td>OAuth <code>state</code> is generated and returned to the client, but the callback never verifies it</td>
+<td>A forged callback can bypass CSRF protection; the current flow is documented as “simplified”</td>
+<td>Store <code>state</code> in a short-lived HttpOnly cookie (or server session) and verify it on callback. This is an auth-flow change, so it needs a deliberate rollout.</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>13 database-backed tests are <code>#[ignore]</code>d and CI runs <code>cargo test</code> without a database</td>
+<td>The highest-value integration paths (ownership SQL, track CRUD, editor round-trip, duplicate handling) never execute in CI. All 13 now contain real assertions and were verified green locally against Postgres, so the only gap left is CI wiring</td>
+<td>Add a Postgres service job (or extend the existing E2E job) that runs <code>cargo test -- --ignored</code> with <code>DATABASE_URL</code> set.</td>
+</tr>
+<tr>
+<td>R3</td>
+<td><code>@ts-nocheck</code> remains in 8 production files, including <code>HomeView.vue</code>, <code>TrackView.vue</code>, <code>ElevationChart.vue</code>, and <code>AuthCallbackView.vue</code></td>
+<td>Type errors in the most complex views are invisible to <code>vue-tsc</code>; the audit’s rethrow change already exposed latent defects</td>
+<td>Remove one file at a time, starting with <code>HomeView</code> and <code>TrackView</code>, adding types at the Leaflet/component boundary.</td>
+</tr>
+<tr>
+<td>R4</td>
+<td><code>extract_client_ip_from_headers</code> trusts the first <code>X-Forwarded-For</code> value</td>
+<td>Rate limiting and suspicious-activity checks can be spoofed unless the app is behind a trusted proxy</td>
+<td>Make proxy trust explicit via configuration; otherwise prefer the socket peer address.</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>Playwright E2E runs only when a PR has the <code>run-e2e</code> label</td>
+<td>Editor/layout regressions can merge without browser coverage</td>
+<td>Keep the label for cost control, but run a small smoke subset unconditionally.</td>
+</tr>
+<tr>
+<td>R6</td>
+<td>Draft/publish flow is dormant</td>
+<td>The frontend always sends <code>is_draft: false</code>; nothing calls <code>POST /api/tracks/{id}/publish</code></td>
+<td>Either add a publish action and draft list, or remove the endpoint and <code>is_draft</code> surface. Decide before more editor work depends on it.</td>
+</tr>
+<tr>
+<td>R7</td>
+<td>Account-owned tracks can retain a second, anonymous owner</td>
+<td><code>migrate_session_tracks</code> sets <code>user_id</code> but leaves <code>session_id</code>; anonymous ownership checks accept that session even when a <code>user_id</code> exists, and POIs keep their session owner. New track writes discard the session for authenticated requests, but existing rows and editor POIs created before this change still carry both.</td>
+<td>Decide whether session ownership should survive account migration. If not, clear <code>session_id</code> in the migration and reject anonymous session ownership when <code>user_id</code> is present; migrate existing POIs the same way.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="worth-exploring">Worth exploring</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Finding</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R8</td>
+<td>Monolithic frontend components</td>
+<td><code>TrackDetailPanel.vue</code> 3,577 lines, <code>TrackEditorMap.vue</code> 1,722, <code>ElevationChart.vue</code> 1,569, <code>HomeView.vue</code> 1,198, <code>TrackView.vue</code> 1,175. Extract panel sections and chart lifecycle into composables; do it opportunistically when touching each file.</td>
+</tr>
+<tr>
+<td>R9</td>
+<td>Split HTTP/auth paths</td>
+<td>Most API calls use <code>http-instance.ts</code>, but <code>auth/profile.ts</code>, <code>auth/refresh.ts</code>, and <code>auth/oauth-client.ts</code> call <code>fetch</code> directly. Some duplication is justified by token-bootstrap cycles; document the boundary or consolidate profile calls.</td>
+</tr>
+<tr>
+<td>R10</td>
+<td>Large backend modules</td>
+<td><code>slope.rs</code> 1,124 lines, <code>elevation_enrichment.rs</code> 1,080, <code>gpx_parser.rs</code> 963, <code>pace_filter.rs</code> 820. Not violations, but split parsing/computation/aggregation when next touched.</td>
+</tr>
+<tr>
+<td>R11</td>
+<td>Inline SQL in <code>poi_deduplication.rs</code></td>
+<td>Specialized service still embeds SQL, unlike <code>db::pois</code>. Move it when the dedup logic changes.</td>
+</tr>
+<tr>
+<td>R12</td>
+<td>Inconsistent pool handle types</td>
+<td><code>db::*</code> uses <code>Arc&lt;PgPool&gt;</code>, some services take <code>&amp;PgPool</code>. Cosmetic; standardize when adding new DB functions.</td>
+</tr>
+<tr>
+<td>R13</td>
+<td><code>TrackEditorToolbar.vue</code> remains on disk</td>
+<td>Deliberately retained by ADR 0041, not dangling by accident. Revisit that ADR before deleting.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-dangling-and-unwired-functionality">5. Dangling and unwired functionality</h2>
+<h3 id="docssuperpowersplans-no-longer-exists"><code>docs/superpowers/plans/</code> no longer exists</h3>
+<p>The directory was deleted in commit <code>3d0b261</code>; only <code>docs/superpowers/specs/2026-03-18-track-editor-ui-redesign-design.md</code> survives. Five documents still pointed at the deleted path:</p>
+<ul>
+<li><code>.agents/prompts/refactoring-request.prompt.md</code></li>
+<li><code>docs/adr/0034-editor-shell-layout.md</code></li>
+<li><code>.commandcode/taste/taste.md</code></li>
+<li>two generated <code>.commandcode/taste/*/taste.md</code> entries</li>
+</ul>
+<p>All now point at the surviving <code>docs/</code> artifacts (<code>docs/superpowers/specs/</code>, <code>docs/adr/</code>, <code>docs/audit/</code>) or state explicitly that the plans directory was removed.</p>
+<h3 id="adr-0034-is-superseded">ADR 0034 is superseded</h3>
+<p>ADR 0034 described a bottom deck and a standalone right inspector. The bottom deck was deleted, and the current inspector is nested in the left panel. The ADR is now marked <strong>Superseded</strong> by <code>docs/audit/2026-10-04-design-mitigation-plan.md</code>, while preserving its historical context.</p>
+<h3 id="draftpublish-path">Draft/publish path</h3>
+<p>The backend supports drafts (<code>is_draft</code>) and a publish endpoint; the frontend always creates published tracks. This is a complete backend feature with no UI entry point. It is listed as R6 rather than deleted, because removing it is a product decision.</p>
+<h3 id="backend-audit-artifact">Backend audit artifact</h3>
+<p><code>docs/audit/backend-architecture-audit.md</code> was an untracked input to this audit. Its findings are incorporated here; it is retained as a historical backend snapshot rather than as a second source of truth.</p>
+<hr>
+<h2 id="6-architecture-assessment">6. Architecture assessment</h2>
+<h3 id="what-is-healthy">What is healthy</h3>
+<ul>
+<li><strong>Backend layering:</strong> handlers → <code>db::*</code> / <code>services::*</code>, one <code>AppError</code>, localized <code>IntoResponse</code>, no SQL string concatenation with user input. The dead repository/service layer was the main violation and is gone.</li>
+<li><strong>Ownership model:</strong> JWT first, anonymous session second. Private reads return <code>NotFound</code>; list queries bind identity server-side; POI mutations have an explicit authorization helper.</li>
+<li><strong>Frontend data flow:</strong> <code>http-instance.ts</code> centralizes auth headers; composables own fetching; Leaflet is isolated behind map components; tests are behavior-oriented.</li>
+<li><strong>Test depth:</strong> 2,103 frontend tests and 329 backend tests cover parsing, geometry, filtering, editor state, error mapping, and ownership SQL. All 13 database-backed tests were executed against the local Postgres and pass; the failures exposed by removing the test error handler show the suite can now catch real component errors.</li>
+</ul>
+<h3 id="what-still-limits-maintainability">What still limits maintainability</h3>
+<ul>
+<li><strong>Frontend component size</strong> is the largest structural risk. <code>TrackDetailPanel</code> and <code>ElevationChart</code> combine rendering, chart lifecycle, map interaction, export, and polling.</li>
+<li><strong><code>@ts-nocheck</code> in core views</strong> removes the safety net exactly where component contracts are most complex.</li>
+<li><strong>Database integration coverage is not enforced</strong> by CI, so schema and ownership SQL can regress silently.</li>
+<li><strong>Auth flow simplification</strong> is documented but is still a production security gap.</li>
+</ul>
+<hr>
+<h2 id="7-verification">7. Verification</h2>
+<p>Backend, from <code>backend/</code>:</p>
+<pre><code class="language-text">cargo fmt --all -- --check                  pass
+cargo clippy --all-targets -- -D warnings   pass
+cargo test                                  312 passed, 12 ignored (no database)
+DATABASE_URL=... cargo test                 316 passed, 13 ignored
+DATABASE_URL=... cargo test -- --ignored    13 passed  (the ignored set above)
+</code></pre>
+<p>Every test that touches the database was executed against the running Postgres on <code>:5432</code>; the three empty <code>#[ignore]</code>d placeholders found in review were implemented or removed, so the ignored set now contains only real assertions.</p>
+<p>Frontend, from <code>frontend/</code>:</p>
+<pre><code class="language-text">bun run lint        0 errors, 76 warnings
+bun run typecheck   pass
+bun run test        126 files, 2,103 tests passed
+bunx playwright test e2e/track-editor.spec.ts --list   21 tests listed
+</code></pre>
+<p>Playwright was not executed because <code>http://localhost:81</code> was not listening. The backend on <code>:8080</code> and Postgres on <code>:5432</code> were reachable. The spec compiles and all 21 tests were discovered; run <code>bun run test:e2e</code> after starting the frontend to execute them.</p>
+<hr>
+<h2 id="8-recommended-sequence">8. Recommended sequence</h2>
+<ol>
+<li><strong>Decide and implement the OAuth state/PKCE fix</strong> (R1). This is the only remaining security finding that needs an auth-flow design.</li>
+<li><strong>Run DB-backed tests in CI</strong> (R2). Extend the Postgres job with <code>cargo test -- --ignored</code>; keep the E2E label gate for browser cost.</li>
+<li><strong>Remove <code>@ts-nocheck</code> from <code>HomeView</code> and <code>TrackView</code></strong> (R3). Fix the boundary types first; the rest of the file will follow.</li>
+<li><strong>Resolve the draft/publish product question</strong> (R6). Either ship the UI or delete the dormant surface.</li>
+<li><strong>Decompose <code>TrackDetailPanel</code> and <code>ElevationChart</code></strong> (R8) when those files are next modified.</li>
+<li><strong>Run the full Playwright suite</strong> once the frontend is up, then keep a smoke subset in CI (R5).</li>
+</ol>
+<hr>
+<h2 id="appendix-changed-areas">Appendix — changed areas</h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Files</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend ownership/visibility</td>
+<td><code>models.rs</code>, <code>handlers/util.rs</code>, <code>handlers/tracks/{detail,export,elevation,slope,list}.rs</code>, <code>db/tracks/{crud,queries}.rs</code></td>
+</tr>
+<tr>
+<td>Backend editor/POI</td>
+<td><code>handlers/tracks/{editor,geometry,update}.rs</code>, <code>handlers/pois.rs</code>, <code>db/pois.rs</code>, <code>services/track_editor.rs</code></td>
+</tr>
+<tr>
+<td>Backend dead code</td>
+<td><code>repositories/**</code>, <code>services/{track_service,postgres_track_service}.rs</code>, <code>track_utils/hash.rs</code></td>
+</tr>
+<tr>
+<td>Backend routing/security</td>
+<td><code>main.rs</code>, <code>handlers/tracks/search.rs</code>, <code>track_upload.rs</code></td>
+</tr>
+<tr>
+<td>Frontend data flow</td>
+<td><code>composables/useTracks.ts</code>, <code>views/HomeView.vue</code>, <code>views/TrackView.vue</code>, <code>composables/editor/useTrackPersistence.ts</code>, <code>composables/useTrackEditor.ts</code>, <code>types/index.ts</code></td>
+</tr>
+<tr>
+<td>Frontend lifecycle/storage</td>
+<td><code>events.ts</code>, <code>components/ElevationChart.vue</code>, <code>components/TrackDetailPanel.vue</code>, <code>components/TrackFilterControl.vue</code>, <code>utils/trackFilter.ts</code></td>
+</tr>
+<tr>
+<td>Frontend tests</td>
+<td><code>test-setup.ts</code>, <code>e2e/track-editor.spec.ts</code>, editor/track tests, legacy trace test</td>
+</tr>
+<tr>
+<td>Documentation</td>
+<td><code>docs/adr/0034-editor-shell-layout.md</code>, <code>.agents/prompts/refactoring-request.prompt.md</code>, <code>.commandcode/taste/**</code></td>
+</tr>
+</tbody>
+</table>
+
+  </main>
+</div>
+</body>
+</html>

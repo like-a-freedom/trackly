@@ -177,7 +177,7 @@
       </button>
       <div
         v-if="showExportMenu"
-        class="export-dropdown"
+        class="export-dropdown ui-reveal"
         data-testid="export-dropdown"
       >
         <button

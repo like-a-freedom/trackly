@@ -12,7 +12,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::db;
-use crate::error::Result;
+use crate::error::{AppError, Result};
 use crate::handlers::util::session_id_from_headers;
 use crate::metrics;
 use crate::models::{TrackSearchQuery, TrackSearchResult};
@@ -31,6 +31,11 @@ pub async fn search_tracks(
     let query = params.query.trim();
     if query.is_empty() {
         return Ok(Json(Vec::new()));
+    }
+    if query.chars().count() > 200 {
+        return Err(AppError::BadRequest(
+            "search query must be 200 characters or fewer".into(),
+        ));
     }
 
     metrics::record_session_activity(session_id_from_headers(&headers), "search");

@@ -676,7 +676,7 @@ describe('useTrackEditor', () => {
 
     describe('loadTrack', () => {
         it('uses the canonical stored distance until the route geometry changes', async () => {
-            vi.stubGlobal('fetch',vi.fn().mockImplementation((url:string)=>Promise.resolve({ok:true,json:async()=>url.endsWith('/pois')?[]:{name:'Canonical recording',length_km:1.25,session_id:'test-session-id',geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}}})));
+            vi.stubGlobal('fetch',vi.fn().mockImplementation((url:string)=>Promise.resolve({ok:true,json:async()=>url.endsWith('/pois')?[]:{name:'Canonical recording',length_km:1.25,is_owner:true,geom_geojson:{type:'MultiLineString',coordinates:[[[30,50],[31,51]]]}}})));
             await editor.loadTrack('canonical'); expect(editor.totalDistanceKm.value).toBe(1.25);
             editor.addWaypoint(52,32); expect(editor.totalDistanceKm.value).toBeGreaterThan(1.25);
             editor.handleUndo(); expect(editor.totalDistanceKm.value).toBe(1.25);
@@ -696,7 +696,7 @@ describe('useTrackEditor', () => {
                         description: 'A description',
                         categories: ['hiking'],
                         waypoints: [],
-                        session_id: 'test-session-id',
+                        is_owner: true,
                     },
                 }],
             };

@@ -166,6 +166,7 @@ async fn test_update_track_categories_db() {
         hash: &hash,
         recorded_at: None,
         session_id: None,
+        user_id: None,
         speed_data_json: None,
         pace_data_json: None,
     })
@@ -247,6 +248,7 @@ async fn test_update_track_categories_handler_owner_check() {
         hash: &hash,
         recorded_at: None,
         session_id: Some(owner),
+        user_id: None,
         speed_data_json: None,
         pace_data_json: None,
     })
@@ -350,6 +352,7 @@ async fn test_update_track_categories_empty_rejected() {
         hash: &hash,
         recorded_at: None,
         session_id: Some(owner),
+        user_id: None,
         speed_data_json: None,
         pace_data_json: None,
     })
@@ -388,31 +391,228 @@ async fn test_update_track_categories_empty_rejected() {
 #[tokio::test]
 #[ignore] // Requires database setup
 async fn test_elevation_filters_in_list_tracks_geojson() {
-    // This test would verify that elevation filters work correctly
-    // in the list_tracks_geojson function by:
-    // 1. Creating test tracks with different elevation values
-    // 2. Applying various elevation filters
-    // 3. Verifying correct tracks are returned
-    // Requires test database setup and transaction rollback
+    use sqlx::postgres::PgPoolOptions;
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+    let pool = Arc::new(
+        PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&db_url)
+            .await
+            .unwrap(),
+    );
+
+    let geom_geojson = serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
+    let ids: Vec<Uuid> = vec![Uuid::new_v4(), Uuid::new_v4()];
+    let gains = [100.0f32, 900.0f32];
+    for (id, gain) in ids.iter().zip(gains) {
+        let hash = format!("testhash-elevfilter-{id}");
+        let cats = ["hiking"];
+        insert_track(InsertTrackParams {
+            pool: &pool,
+            id: *id,
+            name: "Elevation Filter Track",
+            description: None,
+            categories: &cats[..],
+            geom_geojson: &geom_geojson,
+            length_km: 1.0,
+            elevation_profile_json: None,
+            hr_data_json: None,
+            temp_data_json: None,
+            time_data_json: None,
+            elevation_gain: Some(gain),
+            elevation_loss: None,
+            elevation_min: None,
+            elevation_max: None,
+            elevation_enriched: None,
+            elevation_enriched_at: None,
+            elevation_dataset: None,
+            elevation_api_calls: None,
+            slope_min: None,
+            slope_max: None,
+            slope_avg: None,
+            slope_histogram: None,
+            slope_segments: None,
+            avg_speed: None,
+            avg_hr: None,
+            hr_min: None,
+            hr_max: None,
+            moving_time: None,
+            pause_time: None,
+            moving_avg_speed: None,
+            moving_avg_pace: None,
+            duration_seconds: Some(3600),
+            hash: &hash,
+            recorded_at: None,
+            session_id: None,
+            user_id: None,
+            speed_data_json: None,
+            pace_data_json: None,
+        })
+        .await
+        .unwrap();
+    }
+
+    let filter = crate::models::TrackGeoJsonQuery {
+        bbox: None,
+        zoom: None,
+        mode: None,
+        categories: None,
+        min_length: None,
+        max_length: None,
+        elevation_gain_min: Some(500.0),
+        elevation_gain_max: None,
+        slope_min: None,
+        slope_max: None,
+        owner_session_id: None,
+        owner_user_id: None,
+        mine: None,
+    };
+
+    let collection = super::list_tracks_geojson(&pool, None, None, None, &filter)
+        .await
+        .unwrap();
+    let returned: Vec<String> = collection
+        .features
+        .iter()
+        .filter_map(|f| {
+            f.properties
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
+        .collect();
+    assert!(
+        returned.contains(&ids[1].to_string()),
+        "high-gain track must be returned"
+    );
+    assert!(
+        !returned.contains(&ids[0].to_string()),
+        "low-gain track must be filtered out"
+    );
 }
 
 #[tokio::test]
 #[ignore] // Requires database setup
 async fn test_owner_filter_in_list_tracks_geojson() {
-    // This test would verify that owner_session_id filter works correctly
-    // in the list_tracks_geojson function by:
-    // 1. Creating a test track owned by a specific session id (private)
-    // 2. Ensuring it is not returned by default (public-only query)
-    // 3. Querying with owner_session_id set and ensuring the track is returned
-    // Requires test database setup and transaction rollback
-}
+    use sqlx::postgres::PgPoolOptions;
+    use std::sync::Arc;
+    use uuid::Uuid;
 
-#[tokio::test]
-#[ignore] // Requires database setup
-async fn test_elevation_filters_performance() {
-    // This test would verify that elevation filters perform well
-    // with large datasets and proper indexing
-    // Requires test database setup with large dataset
+    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+    let pool = Arc::new(
+        PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&db_url)
+            .await
+            .unwrap(),
+    );
+
+    let session = Uuid::new_v4();
+    let id = Uuid::new_v4();
+    let hash = format!("testhash-ownerfilter-{id}");
+    let cats = ["hiking"];
+    let geom_geojson = serde_json::json!({"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]});
+
+    insert_track(InsertTrackParams {
+        pool: &pool,
+        id,
+        name: "Private Owner Track",
+        description: None,
+        categories: &cats[..],
+        geom_geojson: &geom_geojson,
+        length_km: 1.0,
+        elevation_profile_json: None,
+        hr_data_json: None,
+        temp_data_json: None,
+        time_data_json: None,
+        elevation_gain: None,
+        elevation_loss: None,
+        elevation_min: None,
+        elevation_max: None,
+        elevation_enriched: None,
+        elevation_enriched_at: None,
+        elevation_dataset: None,
+        elevation_api_calls: None,
+        slope_min: None,
+        slope_max: None,
+        slope_avg: None,
+        slope_histogram: None,
+        slope_segments: None,
+        avg_speed: None,
+        avg_hr: None,
+        hr_min: None,
+        hr_max: None,
+        moving_time: None,
+        pause_time: None,
+        moving_avg_speed: None,
+        moving_avg_pace: None,
+        duration_seconds: Some(3600),
+        hash: &hash,
+        recorded_at: None,
+        session_id: Some(session),
+        user_id: None,
+        speed_data_json: None,
+        pace_data_json: None,
+    })
+    .await
+    .unwrap();
+
+    // Privacy is applied via the visibility PATCH flow, not the insert path.
+    sqlx::query("UPDATE tracks SET is_public = FALSE WHERE id = $1")
+        .bind(id)
+        .execute(&*pool)
+        .await
+        .unwrap();
+
+    let public_filter = crate::models::TrackGeoJsonQuery {
+        bbox: None,
+        zoom: None,
+        mode: None,
+        categories: None,
+        min_length: None,
+        max_length: None,
+        elevation_gain_min: None,
+        elevation_gain_max: None,
+        slope_min: None,
+        slope_max: None,
+        owner_session_id: None,
+        owner_user_id: None,
+        mine: None,
+    };
+    let feature_ids = |c: &crate::models::TrackGeoJsonCollection| -> Vec<String> {
+        c.features
+            .iter()
+            .filter_map(|f| {
+                f.properties
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
+            .collect()
+    };
+
+    let anonymous = super::list_tracks_geojson(&pool, None, None, None, &public_filter)
+        .await
+        .unwrap();
+    assert!(
+        !feature_ids(&anonymous).contains(&id.to_string()),
+        "private track must not be visible without an identity"
+    );
+
+    let owner_filter = crate::models::TrackGeoJsonQuery {
+        owner_session_id: Some(session),
+        ..public_filter
+    };
+    let as_owner = super::list_tracks_geojson(&pool, None, None, None, &owner_filter)
+        .await
+        .unwrap();
+    assert!(
+        feature_ids(&as_owner).contains(&id.to_string()),
+        "owner session must see its own private track"
+    );
 }
 
 // Additional integration tests for track operations
@@ -479,6 +679,7 @@ async fn test_track_exists_and_insert() {
         hash: &hash,
         recorded_at: None,
         session_id: None,
+        user_id: None,
         speed_data_json: None,
         pace_data_json: None,
     })
@@ -556,6 +757,7 @@ async fn test_insert_track_with_time_data() {
         hash: &hash,
         recorded_at: None,
         session_id: None,
+        user_id: None,
         speed_data_json: None,
         pace_data_json: None,
     })
@@ -639,6 +841,7 @@ async fn test_search_tracks_by_name() {
         hash: &unique_hash,
         recorded_at: None,
         session_id: None,
+        user_id: None,
         speed_data_json: None,
         pace_data_json: None,
     })
@@ -723,6 +926,7 @@ async fn test_search_tracks_case_insensitive() {
         hash: &unique_hash,
         recorded_at: None,
         session_id: None,
+        user_id: None,
         speed_data_json: None,
         pace_data_json: None,
     })

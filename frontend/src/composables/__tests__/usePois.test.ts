@@ -70,6 +70,21 @@ describe('usePois', () => {
             );
         });
 
+        it('sends the session header so private-track owners can read their POIs', async () => {
+            mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+
+            await pois.fetchTrackPois('track-123');
+
+            // The backend 404s a private track without an identity; anonymous
+            // owners are identified only by this header.
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/tracks/track-123/pois',
+                expect.objectContaining({
+                    headers: expect.objectContaining({ 'x-session-id': expect.any(String) }),
+                }),
+            );
+        });
+
         it('handles 404 response', async () => {
             mockFetch.mockResolvedValue({ ok: false, status: 404 });
 

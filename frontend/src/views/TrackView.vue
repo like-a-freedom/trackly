@@ -111,6 +111,7 @@
       @close="goHome"
       @description-updated="handleDescriptionUpdated"
       @name-updated="handleNameUpdated"
+      @categories-updated="handleCategoriesUpdated"
       @distance-markers-updated="handleDistanceMarkersUpdated"
       @chart-point-hover="handleChartPointHover"
       @chart-point-leave="handleChartPointLeave"
@@ -156,7 +157,6 @@ import TrackEndpoints from "../components/TrackEndpoints.vue";
 import TrackDistanceMarkers from "../components/TrackDistanceMarkers.vue";
 import TrackDirectionLayer from "../components/TrackDirectionLayer.vue";
 import { useToastStore } from "../stores/toast.js";
-import { useAuth } from "../composables/useAuth";
 import { useTracks } from "../composables/useTracks";
 import { usePois } from "../composables/usePois";
 import { events } from "../events";
@@ -310,8 +310,6 @@ useHead(headConfig);
 // Use tracks composable
 const { fetchTrackDetail } = useTracks();
 
-const { user } = useAuth();
-
 // Use POIs composable
 const { pois, fetchTrackPois } = usePois();
 
@@ -448,14 +446,7 @@ const distanceMarkersEnabled = computed(() => {
 });
 
 // Computed properties
-const isOwner = computed(() => {
-  if (!track.value) return false;
-  const userId = user.value?.id || user.value?.user_id;
-  if (userId && track.value.user_id) {
-    return userId === track.value.user_id;
-  }
-  return sessionId === track.value.session_id;
-});
+const isOwner = computed(() => track.value?.is_owner === true);
 
 // Check if track is a loop (start and finish within 15m)
 const isTrackLoop = computed(() => {
@@ -800,17 +791,33 @@ function handleTrackElevationUpdated(payload) {
   }
 }
 
+// Keep exactly one elevation listener even when Vue keep-alive fires both
+// onMounted and onActivated for the first render.
+function subscribeElevationUpdates() {
+  offElevationUpdated.value?.();
+  offElevationUpdated.value = events.on(
+    "track-elevation-updated",
+    handleTrackElevationUpdated
+  );
+}
+
 function handleDescriptionUpdated(newDescription) {
   if (track.value) {
-    track.value.description = newDescription;
+    track.value = { ...track.value, description: newDescription };
     showToast("Description updated successfully", "success");
   }
 }
 
 function handleNameUpdated(newName) {
   if (track.value) {
-    track.value.name = newName;
+    track.value = { ...track.value, name: newName };
     showToast("Track name updated successfully", "success");
+  }
+}
+
+function handleCategoriesUpdated(categories) {
+  if (track.value) {
+    track.value = { ...track.value, categories };
   }
 }
 
@@ -988,10 +995,7 @@ onMounted(async () => {
   // Add ESC key listener
   document.addEventListener("keydown", handleKeyDown);
   // Add track elevation update listener (via events bus, not DOM)
-  offElevationUpdated.value = events.on(
-    "track-elevation-updated",
-    handleTrackElevationUpdated
-  );
+  subscribeElevationUpdates();
 
   // Initialize E2E hooks for testing
   e2eHooks.initE2E();
@@ -1020,10 +1024,7 @@ onActivated(() => {
   // Add ESC key listener when component is activated from keep-alive
   document.addEventListener("keydown", handleKeyDown);
   // Add track elevation update listener (via events bus, not DOM)
-  offElevationUpdated.value = events.on(
-    "track-elevation-updated",
-    handleTrackElevationUpdated
-  );
+  subscribeElevationUpdates();
 });
 
 // Handle keep-alive deactivation

@@ -43,7 +43,7 @@ vi.mock('../../composables/useTracks', () => ({
                 ]
             },
             length_km: 5.2,
-            session_id: 'test-session'
+            is_owner: true
         })
     })
 }));
@@ -447,11 +447,10 @@ describe('TrackView Auto-Scaling', () => {
         // The error message test is covered by the loading state test below
     });
 
-    it('should compute isOwner based on session_id when user is null', async () => {
+    it('should compute isOwner from the server-provided is_owner flag', async () => {
         wrapper = createWrapper();
         await vi.waitUntil(() => wrapper.vm.track);
 
-        // Track has session_id 'test-session' and our sessionId is 'test-session'
         expect(wrapper.vm.isOwner).toBe(true);
     });
 

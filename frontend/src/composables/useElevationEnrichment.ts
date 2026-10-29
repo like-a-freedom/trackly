@@ -3,6 +3,7 @@ import type { Ref } from "vue";
 import { clearCacheByPattern } from "./useMemoization";
 import { events } from "../events";
 import { http } from "../http-instance";
+import { getSessionId, sessionHeaders } from "../utils/session";
 
 const POLLING_MAX_ATTEMPTS = 15;
 const POLLING_BASE_INTERVAL_MS = 3000;
@@ -165,7 +166,9 @@ export function useElevationEnrichment(options: ElevationEnrichmentOptions) {
             }
 
             // background=1: this is a poll for enrichment progress, not a track view.
-            const response = await http(`/api/tracks/${effectiveTrackId}?background=1`);
+            const response = await http(`/api/tracks/${effectiveTrackId}?background=1`, {
+                headers: sessionHeaders(getSessionId())
+            });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -338,7 +341,8 @@ export function useElevationEnrichment(options: ElevationEnrichmentOptions) {
             try {
                 // background=1: refresh after enrichment completes, not a new track view.
                 const trackResponse = await http(
-                    `/api/tracks/${target.id}?background=1`
+                    `/api/tracks/${target.id}?background=1`,
+                    { headers: sessionHeaders(getSessionId()) }
                 );
                 if (trackResponse.ok) {
                     const updatedTrack = (await trackResponse.json()) as EnrichableTrack;

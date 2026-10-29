@@ -46,7 +46,15 @@
           @selectstart.stop
           @dragstart.prevent
         >
-        <TrackCategoryPicker v-model="categoryValues" :disabled="uploading" class="track-category-select" />
+        <details class="upload-categories">
+          <summary>
+            <span>{{ categoryValues.length ? `Categories (${categoryValues.length})` : 'Select or create categories' }}</span>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6" /></svg>
+          </summary>
+          <div class="upload-categories-content">
+            <TrackCategoryPicker v-model="categoryValues" :disabled="uploading" class="track-category-select" />
+          </div>
+        </details>
       </template>
       <transition name="fade-slide">
         <div
@@ -539,4 +547,59 @@ async function copyTrackUrl() {
       transform 0.15s var(--ease-out, ease-out);
   }
 }
+</style>
+
+<style scoped>
+/* Border-box is explicit here: ui-field includes padding and a border. */
+.upload-form,
+.upload-form :deep(*) { box-sizing: border-box; }
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-inline-size: 0;
+  inline-size: 100%;
+  margin: 0;
+  padding: 0;
+}
+.upload-form > * { min-inline-size: 0; max-inline-size: 100%; }
+.upload-form .drop-area {
+  min-block-size: 80px;
+  margin: 0;
+  padding: 16px;
+  overflow-wrap: anywhere;
+  border-color: var(--color-action);
+  background: var(--color-soft);
+}
+.upload-form .track-name-input {
+  inline-size: 100%;
+  margin: 0;
+  min-block-size: 44px;
+  padding: 10px 12px;
+}
+.upload-form > label:not(.drop-area) { margin-block-end: -6px; font-size: var(--text-sm); }
+.upload-categories { border: 1px solid var(--color-line); border-radius: var(--radius-control); }
+.upload-categories summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: 44px;
+  padding: 10px 12px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+.upload-categories summary::-webkit-details-marker { display: none; }
+.upload-categories summary svg { inline-size: 20px; block-size: 20px; flex-shrink: 0; }
+.upload-categories[open] summary svg { rotate: 180deg; }
+.upload-categories summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.upload-categories summary:active { background: var(--color-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .upload-categories summary:hover { background: var(--color-canvas); }
+}
+.upload-categories-content { padding: 0 12px 12px; }
+.upload-categories-content :deep(legend) { display: none; }
+.upload-form .upload-btn { inline-size: 100%; margin: 0; min-block-size: 44px; }
 </style>

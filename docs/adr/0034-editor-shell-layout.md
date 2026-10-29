@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted
+Superseded by `docs/audit/2026-10-04-design-mitigation-plan.md`. The bottom deck was later removed and the right inspector was reworked into the left panel; this ADR is retained for historical context.
 
 ## Context
 
-The track editor had two parallel layout paradigms — a left panel with embedded header/alerts, and a centered toolbar. Four components (`TrackEditorTopBar`, `TrackEditorLeftRail`, `TrackEditorTopAlertStrip`, `TrackEditorBottomDeck`) were built during the UI redesign (`docs/superpowers/plans/2026-03-18-track-editor-ui-redesign.md`) but never wired in, leaving the codebase with duplicate layout concepts and sunk test costs.
+The track editor had two parallel layout paradigms — a left panel with embedded header/alerts, and a centered toolbar. Four components (`TrackEditorTopBar`, `TrackEditorLeftRail`, `TrackEditorTopAlertStrip`, `TrackEditorBottomDeck`) were built during the UI redesign (original design: `docs/superpowers/specs/2026-03-18-track-editor-ui-redesign-design.md`) but never wired in, leaving the codebase with duplicate layout concepts and sunk test costs.
 
 The `TrackEditorToolbar` was fully redundant once TopBar (routing controls + save/export + track context) and LeftRail (mode buttons + undo/redo + POI) were integrated.
 

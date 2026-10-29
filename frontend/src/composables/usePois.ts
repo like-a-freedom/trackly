@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { http } from '../http-instance';
+import { getSessionId, sessionHeaders } from '../utils/session';
 import type { Poi } from '@/types';
 
 /**
@@ -26,7 +27,11 @@ export function usePois() {
 
         try {
             console.log(`[usePois] Fetching POIs for track ${trackId}`);
-            const response = await http(`/api/tracks/${trackId}/pois`);
+            // Private tracks require the caller's session header to pass the
+            // backend visibility check; without it the owner sees an empty list.
+            const response = await http(`/api/tracks/${trackId}/pois`, {
+                headers: sessionHeaders(getSessionId())
+            });
 
             if (!response.ok) {
                 if (response.status === 404) {

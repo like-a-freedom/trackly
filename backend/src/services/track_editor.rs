@@ -94,6 +94,13 @@ pub async fn create_track(
     user_id: Option<Uuid>,
 ) -> Result<TrackUploadResponse> {
     let start = Instant::now();
+    // An authenticated create belongs to the account, never to the anonymous
+    // session sent by the client.
+    let session_id = if user_id.is_some() {
+        None
+    } else {
+        request.session_id
+    };
 
     // Validate inputs
     validate_create_request(&request)?;
@@ -111,7 +118,7 @@ pub async fn create_track(
             .map_err(|e| AppError::Internal(e.into()))?
     {
         let owns = user_id.is_some() && existing.user_id == user_id
-            || request.session_id.is_some() && existing.session_id == request.session_id;
+            || session_id.is_some() && existing.session_id == session_id;
         if !owns {
             return Err(AppError::BadRequest(
                 "Create request identity is unavailable".into(),
@@ -122,6 +129,17 @@ pub async fn create_track(
             url: format!("/track/{track_id}"),
         });
     }
+
+    // Give duplicate geometry a 409 instead of letting the unique hash index
+    // surface as an opaque 500.
+    if let Some(existing_id) = db::track_exists(pool, &hash)
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?
+        && existing_id != track_id
+    {
+        return Err(AppError::DuplicateTrack(Some(existing_id)));
+    }
+
     let waypoints_json = if request.waypoints.is_empty() {
         None
     } else {
@@ -136,7 +154,10 @@ pub async fn create_track(
 
     let category_refs: Vec<&str> = request.categories.iter().map(|c| c.as_str()).collect();
 
-    db::insert_track_from_editor(db::InsertTrackFromEditorParams {
+    let pois_json =
+        serde_json::to_value(&request.pois).map_err(|e| AppError::Internal(e.into()))?;
+
+    let insert_params = db::InsertTrackFromEditorParams {
         pool,
         id: track_id,
         name: &sanitized_name,
@@ -146,18 +167,43 @@ pub async fn create_track(
         length_km,
         waypoints: waypoints_json,
         segment_meta: request.segment_meta.clone(),
-        pois: serde_json::to_value(&request.pois).map_err(|e| AppError::Internal(e.into()))?,
+        pois: pois_json,
         hash: &hash,
-        session_id: request.session_id,
+        session_id,
         user_id,
         is_draft: request.is_draft,
         source: "editor",
-    })
-    .await
-    .map_err(|e| {
-        error!(?e, "failed to insert track from editor");
-        AppError::Internal(e.into())
-    })?;
+    };
+
+    if let Err(e) = db::insert_track_from_editor(insert_params).await {
+        // A concurrent create with the same request_id can lose the insert race.
+        // Converge to the winner: if the row now exists and is owned by this
+        // caller, treat the create as an idempotent replay instead of failing.
+        let write_error = editor_write_error(e);
+        if matches!(write_error, AppError::DuplicateTrack(_))
+            && request.request_id.is_some()
+            && let Some(existing) = db::get_track_detail(pool, track_id)
+                .await
+                .map_err(|e| AppError::Internal(e.into()))?
+        {
+            let owns = user_id.is_some() && existing.user_id == user_id
+                || session_id.is_some() && existing.session_id == session_id;
+            if owns {
+                metrics::observe_track_length_km("editor", length_km);
+                metrics::record_track_uploaded("editor");
+                metrics::observe_track_pipeline_latency(
+                    "editor_create",
+                    start.elapsed().as_secs_f64(),
+                );
+                return Ok(TrackUploadResponse {
+                    id: track_id,
+                    url: format!("/track/{track_id}"),
+                });
+            }
+        }
+        error!(error = ?write_error, "failed to insert track from editor");
+        return Err(write_error);
+    }
 
     metrics::observe_track_length_km("editor", length_km);
     metrics::record_track_uploaded("editor");
@@ -223,7 +269,11 @@ pub async fn update_track_geometry(
 
     let hash = compute_geometry_hash(&geojson);
 
-    db::update_track_geometry(
+    // The UPDATE statement only rewrites `hash` for plain, non-recorded tracks,
+    // so the conflicting track must be discovered from the write result instead
+    // of an eager lookup: an eager lookup rejects edits the database accepts
+    // (e.g. re-saving a duplicate, whose `dup_*` hash is preserved).
+    if let Err(e) = db::update_track_geometry(
         pool,
         track_id,
         &geojson,
@@ -242,10 +292,24 @@ pub async fn update_track_geometry(
         &hash,
     )
     .await
-    .map_err(|e| {
-        error!(?e, "failed to update track geometry");
-        AppError::Internal(e.into())
-    })?;
+    {
+        let write_error = editor_write_error(e);
+        if matches!(write_error, AppError::DuplicateTrack(_)) {
+            // Resolve which existing track owns the conflicting hash so the 409
+            // can carry `existing_track_id`; a failed lookup keeps the plain 409.
+            match db::track_exists(pool, &hash).await {
+                Ok(Some(existing_id)) if existing_id != track_id => {
+                    return Err(AppError::DuplicateTrack(Some(existing_id)));
+                }
+                Ok(_) => {}
+                Err(lookup_error) => {
+                    error!(?lookup_error, "failed to resolve duplicate hash conflict");
+                }
+            }
+        }
+        error!(error = ?write_error, "failed to update track geometry");
+        return Err(write_error);
+    }
 
     info!(track_id = %track_id, length_km, elapsed_ms = start.elapsed().as_millis(), "track geometry updated");
 
@@ -260,7 +324,12 @@ pub async fn duplicate_track(
     request: DuplicateTrackRequest,
     user_id: Option<Uuid>,
 ) -> Result<TrackUploadResponse> {
-    let new_id = db::duplicate_track(pool, source_id, request.name, request.session_id, user_id)
+    let session_id = if user_id.is_some() {
+        None
+    } else {
+        request.session_id
+    };
+    let new_id = db::duplicate_track(pool, source_id, request.name, session_id, user_id)
         .await
         .map_err(|e| {
             error!(?e, "failed to duplicate track");
@@ -276,6 +345,17 @@ pub async fn duplicate_track(
         id: new_id,
         url: format!("/tracks/{new_id}"),
     })
+}
+
+/// Map a write error from the editor pipeline.
+///
+/// The `tracks_hash_idx` unique index is the only expected unique violation;
+/// exposing it as a 409 keeps duplicate geometry out of the 500 bucket.
+fn editor_write_error(error: sqlx::Error) -> AppError {
+    if matches!(&error, sqlx::Error::Database(db) if db.code().as_deref() == Some("23505")) {
+        return AppError::DuplicateTrack(None);
+    }
+    AppError::Internal(error.into())
 }
 
 fn validate_editor_pois(pois: &[PoiInput]) -> Result<()> {
@@ -675,5 +755,66 @@ mod tests {
         assert!(!is_valid_coordinate(0.0, 180.001));
         assert!(!is_valid_coordinate(-90.001, 0.0));
         assert!(!is_valid_coordinate(0.0, -180.001));
+    }
+
+    /// A second track with identical geometry must 409 with the id of the
+    /// existing track, proving the unique violation maps to
+    /// `DuplicateTrack(Some(id))` rather than a generic failure.
+    #[tokio::test]
+    #[ignore = "requires the local migrated PostgreSQL database"]
+    async fn create_track_conflicting_geometry_returns_duplicate_with_existing_id() {
+        use sqlx::postgres::PgPoolOptions;
+        use std::sync::Arc;
+        use uuid::Uuid;
+
+        let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
+        let pool = Arc::new(
+            PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&db_url)
+                .await
+                .expect("test database"),
+        );
+
+        // Random offset keeps the fixture geometry unique across runs.
+        let offset = f64::from(Uuid::new_v4().as_bytes()[0]) / 100000.0;
+        let geometry = json!({
+            "type": "LineString",
+            "coordinates": [
+                [37.0 + offset, 55.0],
+                [37.01 + offset, 55.01],
+                [37.02 + offset, 55.02]
+            ]
+        });
+        let request = |name: &str| CreateTrackFromEditorRequest {
+            request_id: None,
+            name: name.into(),
+            description: None,
+            categories: vec!["walking".into()],
+            geometry: geometry.clone(),
+            waypoints: vec![],
+            pois: vec![],
+            segment_meta: None,
+            session_id: Some(Uuid::new_v4()),
+            is_draft: false,
+        };
+
+        let first = create_track(&pool, request("conflict fixture"), None)
+            .await
+            .expect("first create");
+
+        let second = create_track(&pool, request("conflict fixture twin"), None).await;
+        let duplicate_id = match second {
+            Err(AppError::DuplicateTrack(Some(id))) => id,
+            Err(other) => panic!("expected DuplicateTrack with existing id, got {other}"),
+            Ok(_) => panic!("expected DuplicateTrack with existing id, but create succeeded"),
+        };
+        assert_eq!(duplicate_id, first.id);
+
+        sqlx::query("DELETE FROM tracks WHERE id = ANY($1)")
+            .bind([first.id])
+            .execute(&*pool)
+            .await
+            .expect("remove fixture tracks");
     }
 }

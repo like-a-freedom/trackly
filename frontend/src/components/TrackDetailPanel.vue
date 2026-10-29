@@ -1,6 +1,6 @@
 <template>
   <div
-    class="track-detail-flyout"
+    class="track-detail-flyout ui-reveal"
     :class="{ closing: isClosing, collapsed: isCollapsed }"
     @wheel="handleWheel"
     @touchstart="handleTouchStart"
@@ -43,7 +43,7 @@
       @dragstart.prevent
     >
       <!-- Collapsible content -->
-      <div v-show="!isCollapsed" class="collapsible-content">
+      <div v-show="!isCollapsed" class="collapsible-content ui-reveal">
         <!-- Track Header -->
         <div class="track-header">
           <!-- Name Edit Mode -->
@@ -796,8 +796,7 @@ async function handleDistanceMarkersToggle(event) {
 
   try {
     await updateTrackDistanceMarkers(props.track.id, nextValue);
-    props.track.distance_markers_enabled = nextValue;
-    track.value = { ...props.track };
+    track.value = { ...track.value, distance_markers_enabled: nextValue };
     emit("distance-markers-updated", nextValue);
     showToast(
       nextValue ? "Distance markers enabled" : "Distance markers hidden",
@@ -805,7 +804,7 @@ async function handleDistanceMarkersToggle(event) {
     );
   } catch (err) {
     distanceMarkersEnabled.value =
-      props.track?.distance_markers_enabled !== false;
+      track.value?.distance_markers_enabled !== false;
     showToast(err.message || "Failed to update overlays", "error");
   }
 }
@@ -816,7 +815,7 @@ async function handleCategoriesUpdated(categoryValues) {
     await updateTrackCategories(props.track.id, categoryValues);
 
     // Update local track data to reflect changes immediately
-    props.track.categories = categoryValues;
+    track.value = { ...track.value, categories: categoryValues };
 
     // Update the track in polylines list if it exists
     updateTrackInPolylines(props.track.id, { categories: categoryValues });

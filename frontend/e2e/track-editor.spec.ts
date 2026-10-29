@@ -42,7 +42,7 @@ test.describe("Track Editor", () => {
         page.locator('[data-testid="editor-map-region"]'),
       ).toBeVisible();
       await expect(
-        page.locator('[data-testid="editor-right-inspector"]'),
+        page.locator('[data-testid="track-editor-inspector"]'),
       ).toBeVisible();
     });
 
@@ -89,12 +89,9 @@ test.describe("Track Editor", () => {
           '[data-testid="editor-left-rail"]',
         );
         const inspector = document.querySelector(
-          '[data-testid="editor-right-inspector"]',
+          '[data-testid="track-editor-inspector"]',
         );
         const topBar = document.querySelector(".track-editor-top-bar");
-        const bottomDeck = document.querySelector(
-          '[data-testid="track-editor-bottom-deck"]',
-        );
 
         const panelRect = rect(panel);
         const railZoneRect = rect(railZone);
@@ -104,14 +101,11 @@ test.describe("Track Editor", () => {
           stage: rect(stage),
           overlay: rect(overlay),
           topBar: rect(topBar),
-          bottomDeck: rect(bottomDeck),
           panel: panelRect,
           railZone: railZoneRect,
           inspector: inspectorRect,
           overlayOverlaps: {
-            panelInspector: overlaps(panelRect, inspectorRect),
             panelRail: overlaps(panelRect, railZoneRect),
-            railInspector: overlaps(railZoneRect, inspectorRect),
           },
         };
       });
@@ -121,7 +115,7 @@ test.describe("Track Editor", () => {
 
       // Stage width matches viewport
       expect(geometry.stage!.width).toBeGreaterThan(0);
-      // Stage height is positive (fills space between top bar and bottom deck)
+      // Stage height is positive (fills space below the top bar)
       expect(geometry.stage!.height).toBeGreaterThan(100);
 
       // Overlay matches stage dimensions
@@ -136,12 +130,8 @@ test.describe("Track Editor", () => {
       expect(geometry.topBar!.bottom).toBeLessThanOrEqual(
         geometry.stage!.top + 2,
       );
-      // Bottom deck is below the stage
-      expect(geometry.bottomDeck!.top).toBeGreaterThanOrEqual(
-        geometry.stage!.bottom - 2,
-      );
 
-      for (const key of ["panel", "railZone", "inspector"] as const) {
+      for (const key of ["panel", "railZone"] as const) {
         const box = geometry[key];
         expect(box).not.toBeNull();
         expect(box!.right).toBeGreaterThan(geometry.stage!.left);
@@ -150,10 +140,17 @@ test.describe("Track Editor", () => {
         expect(box!.top).toBeLessThan(geometry.stage!.bottom);
       }
 
-      // No visual overlaps between the three overlay regions
-      expect(geometry.overlayOverlaps.panelInspector).toBe(false);
+      // Inspector sits inside the left panel, not as a separate right zone
+      expect(geometry.inspector).not.toBeNull();
+      expect(geometry.inspector!.right).toBeLessThanOrEqual(
+        geometry.panel!.right + 2,
+      );
+      expect(geometry.inspector!.left).toBeGreaterThanOrEqual(
+        geometry.panel!.left - 2,
+      );
+
+      // No visual overlaps between the overlay regions
       expect(geometry.overlayOverlaps.panelRail).toBe(false);
-      expect(geometry.overlayOverlaps.railInspector).toBe(false);
     });
 
     test("keeps the new shell usable on desktop and mobile", async ({
@@ -173,7 +170,7 @@ test.describe("Track Editor", () => {
         page.locator('[data-testid="editor-map-region"]'),
       ).toBeVisible();
       await expect(
-        page.locator('[data-testid="editor-right-inspector"]'),
+        page.locator('[data-testid="track-editor-inspector"]'),
       ).toBeVisible();
 
       // Mobile layout — rail is hidden by design below 768px

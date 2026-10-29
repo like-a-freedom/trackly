@@ -13,9 +13,10 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::auth::OptionalAuthUser;
 use crate::db;
 use crate::error::{AppError, Result};
-use crate::handlers::util::session_id_from_headers;
+use crate::handlers::util::{ensure_track_visible, session_id_from_headers};
 use crate::metrics;
 use crate::models::TrackDetail;
 use crate::services::gpx_export;
@@ -34,8 +35,12 @@ pub async fn export_track(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
     Query(query): Query<ExportQuery>,
+    auth_user: OptionalAuthUser,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse> {
+    let viewer_session = session_id_from_headers(&headers);
+    ensure_track_visible(&pool, track_id, &auth_user, viewer_session).await?;
+
     let track = db::get_track_detail(&pool, track_id)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -43,7 +48,7 @@ pub async fn export_track(
     let format = query.format.as_deref().unwrap_or("gpx");
 
     // Record session engagement heartbeat once per export request.
-    metrics::record_session_activity(session_id_from_headers(&headers), "export");
+    metrics::record_session_activity(viewer_session, "export");
 
     // The timer starts after the track is loaded so the histogram measures
     // serialization cost, not database latency (which `HttpMetricsLayer`

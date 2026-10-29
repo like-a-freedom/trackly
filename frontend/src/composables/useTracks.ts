@@ -1,6 +1,7 @@
 import { computed, type ComputedRef } from 'vue';
 import { useTracksStore } from '../stores/tracks';
 import { useSearchStore } from '../stores/search';
+import { useAuthStore } from '../stores/auth';
 import { http } from '../http-instance';
 import { getSessionId, sessionHeaders } from '../utils/session';
 import { LRUCache } from '../utils/lru-cache';
@@ -91,7 +92,6 @@ function isExternalDocumentReferrer(): boolean {
 }
 
 interface FilterOptions {
-    ownerSessionId?: string;
     mine?: boolean;
     categories?: string[];
     lengthRange?: number[];
@@ -103,7 +103,6 @@ interface FilterOptions {
 
 function buildFilterQueryParams(options: FilterOptions = {}): URLSearchParams {
     const params = new URLSearchParams();
-    if (options.ownerSessionId) params.set('owner_session_id', options.ownerSessionId);
     if (options.mine) params.set('mine', 'true');
     const categories = normalizeCategories(options.categories);
     if (categories?.length) params.set('categories', categories.join(','));
@@ -128,7 +127,6 @@ function buildFilterQueryParams(options: FilterOptions = {}): URLSearchParams {
 interface FetchTracksOptions {
     zoom?: number;
     mode?: string;
-    ownerSessionId?: string;
     mine?: boolean;
     forceRefresh?: boolean;
     categories?: string[];
@@ -146,6 +144,14 @@ interface UploadTrackOptions {
 
 export function useTracks() {
     const store = useTracksStore();
+    const authStore = useAuthStore();
+
+    // The backend prefers JWT identity over the anonymous session, so cached
+    // private tracks must not cross auth boundaries. The token fallback covers
+    // the window before the profile has loaded.
+    function currentViewerIdentity(): string {
+        return authStore.user?.id ?? authStore.accessToken ?? 'anonymous';
+    }
 
     // Per-instance controllers — each component calling useTracks() gets its own,
     // preventing cross-component abort interference.
@@ -165,26 +171,33 @@ export function useTracks() {
         const [swLng, swLat] = bounds.sw;
         const [neLng, neLat] = bounds.ne;
         const bboxString = `${swLng},${swLat},${neLng},${neLat}`;
+        const zoom = options.zoom || 12;
+        const mode = options.mode || 'overview';
+        const sessionId = getSessionId();
+        const viewerIdentity = currentViewerIdentity();
+        const filterParams = buildFilterQueryParams(options);
+        const cacheKey = `${bboxString}|${zoom}|${mode}|${filterParams.toString()}|${sessionId}|${viewerIdentity}`;
 
-        const cachedData = getCachedTracks(bboxString);
-        if (cachedData && !options.forceRefresh && !options.mine) {
+        const cachedData = getCachedTracks(cacheKey);
+        if (cachedData && !options.forceRefresh) {
             store.updatePolylines(cachedData);
             return;
         }
 
-        const zoom = options.zoom || 12;
-        const mode = options.mode || 'overview';
-        let url = `/api/tracks?bbox=${bboxString}&zoom=${zoom}&mode=${mode}`;
-        if (options.ownerSessionId) url += `&owner_session_id=${encodeURIComponent(options.ownerSessionId)}`;
-        if (options.mine) url += '&mine=true';
+        filterParams.set('bbox', bboxString);
+        filterParams.set('zoom', String(zoom));
+        filterParams.set('mode', mode);
 
         try {
             currentController = new AbortController();
-            const response = await http(url, { signal: currentController.signal });
+            const response = await http(`/api/tracks?${filterParams.toString()}`, {
+                signal: currentController.signal,
+                headers: sessionHeaders(sessionId),
+            });
             if (!response.ok) throw new Error('Failed to fetch tracks');
             const data = await response.json();
             if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
-                setCachedTracks(bboxString, data as GeoJSON.FeatureCollection);
+                setCachedTracks(cacheKey, data as GeoJSON.FeatureCollection);
                 store.updatePolylines(data as GeoJSON.FeatureCollection);
             } else {
                 store.polylines = [];
@@ -209,6 +222,8 @@ export function useTracks() {
         const [neLng, neLat] = bounds.ne;
         const bboxString = `${swLng},${swLat},${neLng},${neLat}`;
         const zoom = options.zoom || 12;
+        const sessionId = getSessionId();
+        const viewerIdentity = currentViewerIdentity();
         const filterParams = buildFilterQueryParams(options);
         const filterKey = JSON.stringify({
             zoom,
@@ -217,7 +232,8 @@ export function useTracks() {
             elevationGainRange: options.elevationGainRange || null,
             slopeRange: options.slopeRange || null,
             mine: !!options.mine,
-            ownerSessionId: options.ownerSessionId || null
+            sessionId,
+            viewerIdentity,
         });
         const cacheKey = `${bboxString}|${filterKey}`;
 
@@ -234,6 +250,7 @@ export function useTracks() {
             heatmapController = new AbortController();
             const response = await http(`/api/tracks/heatmap?${filterParams.toString()}`, {
                 signal: heatmapController.signal,
+                headers: sessionHeaders(sessionId),
             });
             if (!response.ok) throw new Error('Failed to fetch heatmap data');
             const data = await response.json();

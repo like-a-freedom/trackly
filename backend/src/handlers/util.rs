@@ -77,6 +77,55 @@ pub async fn verify_track_owner(
     Ok(())
 }
 
+/// Whether the request identity owns the track.
+///
+/// Uses the same precedence as [`check_track_ownership`]: an authenticated
+/// request is evaluated against `user_id` only.
+pub fn viewer_owns_track(
+    track_user_id: Option<Uuid>,
+    track_session_id: Option<Uuid>,
+    auth_user: &OptionalAuthUser,
+    request_session_id: Option<Uuid>,
+) -> bool {
+    check_track_ownership(
+        track_user_id,
+        track_session_id,
+        auth_user,
+        request_session_id,
+    )
+    .is_ok()
+}
+
+/// Ensure the caller may read a track.
+///
+/// Public tracks are visible to everyone. Private tracks are visible only to
+/// their owner. Non-owners get `NotFound` rather than `Forbidden` so private
+/// track ids cannot be probed for existence.
+pub async fn ensure_track_visible(
+    pool: &std::sync::Arc<sqlx::PgPool>,
+    track_id: uuid::Uuid,
+    auth_user: &OptionalAuthUser,
+    request_session_id: Option<Uuid>,
+) -> Result<(), AppError> {
+    let visibility = crate::db::get_track_visibility(pool, track_id)
+        .await
+        .map_err(handle_db_error)?
+        .ok_or(AppError::NotFound)?;
+
+    if visibility.is_public
+        || viewer_owns_track(
+            visibility.user_id,
+            visibility.session_id,
+            auth_user,
+            request_session_id,
+        )
+    {
+        return Ok(());
+    }
+
+    Err(AppError::NotFound)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +230,54 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("x-session-id", "not-a-uuid".parse().unwrap());
         assert_eq!(session_id_from_headers(&headers), None);
+    }
+
+    #[test]
+    fn test_viewer_owns_track_session_owner() {
+        let session_id = Uuid::new_v4();
+        let auth_user = OptionalAuthUser(None);
+        assert!(viewer_owns_track(
+            None,
+            Some(session_id),
+            &auth_user,
+            Some(session_id)
+        ));
+    }
+
+    #[test]
+    fn test_viewer_does_not_own_track_with_another_session() {
+        let auth_user = OptionalAuthUser(None);
+        assert!(!viewer_owns_track(
+            None,
+            Some(Uuid::new_v4()),
+            &auth_user,
+            Some(Uuid::new_v4())
+        ));
+    }
+
+    #[test]
+    fn test_authenticated_user_ignores_matching_session_id() {
+        // An authenticated request must match user_id only. A stale/forged
+        // x-session-id matching the track must not grant ownership.
+        let track_session_id = Uuid::new_v4();
+        let auth_user = make_auth_user(Uuid::new_v4());
+        assert!(!viewer_owns_track(
+            Some(Uuid::new_v4()),
+            Some(track_session_id),
+            &auth_user,
+            Some(track_session_id)
+        ));
+    }
+
+    #[test]
+    fn test_authenticated_user_owns_track_by_user_id() {
+        let user_id = Uuid::new_v4();
+        let auth_user = make_auth_user(user_id);
+        assert!(viewer_owns_track(
+            Some(user_id),
+            Some(Uuid::new_v4()),
+            &auth_user,
+            None
+        ));
     }
 }

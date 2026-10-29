@@ -84,7 +84,7 @@
                <button> cannot reliably receive a drop in every browser. -->
           <button
             v-if="!uploadFormExpanded"
-            class="upload-button-compact"
+            class="upload-button-compact map-disclosure-button"
             :class="{ 'drag-active': dragActive }"
             type="button"
             title="Upload track file"
@@ -103,15 +103,14 @@
               />
               <path d="M12,11L16,15H13V19H11V15H8L12,11Z" />
             </svg>
-            <span>Import GPX / KML</span>
           </button>
 
           <!-- Expanded state: full upload form -->
-          <div v-if="uploadFormExpanded" class="upload-form-expanded">
+          <div v-if="uploadFormExpanded" class="upload-form-expanded map-disclosure-panel ui-reveal">
             <div class="upload-form-header">
               <span class="upload-form-title">Upload track</span>
               <button
-                class="collapse-button"
+                class="collapse-button map-disclosure-close"
                 title="Collapse upload form"
                 type="button"
                 @click="toggleUploadForm"
@@ -179,7 +178,6 @@ import { useSearchStore } from "../stores/search.js";
 import { useMapUrlState } from "../composables/useMapUrlState";
 import { useFeatureFlagsStore } from "../stores/featureFlags";
 import { events } from "../events";
-import { getSessionId } from "../utils/session";
 import {
   useAdvancedDebounce,
   useThrottle,
@@ -265,7 +263,6 @@ const searchQuery = computed({
 const hasSearchState = () => searchStore.hasSearchState;
 const featureFlags = useFeatureFlagsStore();
 const activeTrackId = ref(null);
-const sessionId = getSessionId();
 
 // Search state
 const searchVisible = ref(false);
@@ -321,14 +318,10 @@ function loadMapPosition() {
 // Debounced and throttled functions for performance
 // Increased debounce to 500ms to reduce multiple requests as recommended in optimization spec
 const debouncedFetchTracks = useAdvancedDebounce(
-  (bounds) => {
+  (bounds, filterState) => {
     hideTooltip();
     // Pass current zoom level for backend optimization
-    const options = {
-      zoom: zoom.value,
-      mode: "overview", // Use overview mode for track lists
-    };
-    fetchTracksInBounds(bounds, options);
+    fetchTracksInBounds(bounds, buildTrackOptions(filterState));
   },
   500,
   { leading: false, trailing: true, maxWait: 1000 }
@@ -456,14 +449,8 @@ function onMapReady(e) {
   const map = e.target || e;
   mapInstance.value = map; // Save map instance for later use
   bounds.value = map.getBounds();
-  const options = {
-    zoom: zoom.value,
-    mode: "overview",
-    // Include owner_session_id if "My tracks" filter is active
-    ownerSessionId: currentFilterState.value?.myTracks ? sessionId : undefined,
-  };
   const domainBounds = toBounds(bounds.value);
-  if (domainBounds) fetchTracksInBounds(domainBounds, options);
+  if (domainBounds) fetchTracksInBounds(domainBounds, buildTrackOptions());
   if (showHeatmap.value) {
     fetchHeatmapInBounds(toBounds(bounds.value), buildHeatmapOptions());
   }
@@ -479,7 +466,7 @@ function onBoundsUpdate(newBounds) {
   bounds.value = newBounds;
 
   // Use debounced function for API calls
-  debouncedFetchTracks(toBounds(newBounds));
+  debouncedFetchTracks(toBounds(newBounds), currentFilterState.value);
   debouncedFetchHeatmap(toBounds(newBounds), currentFilterState.value);
 }
 
@@ -490,13 +477,10 @@ function onFilterChanged(newFilterState) {
   // Immediately refresh tracks to reflect server-side filters like "My tracks"
   const domainBounds = toBounds(bounds.value);
   if (domainBounds) {
-    const options = {
-      zoom: zoom.value,
-      mode: "overview",
+    fetchTracksInBounds(domainBounds, {
+      ...buildTrackOptions(newFilterState),
       forceRefresh: true,
-      ownerSessionId: newFilterState?.myTracks ? sessionId : undefined,
-    };
-    fetchTracksInBounds(domainBounds, options);
+    });
     if (showHeatmap.value) {
       fetchHeatmapInBounds(domainBounds, {
         ...buildHeatmapOptions(newFilterState),
@@ -508,6 +492,22 @@ function onFilterChanged(newFilterState) {
   }
 }
 
+function buildTrackOptions(filterState = currentFilterState.value) {
+  if (!filterState) {
+    return { zoom: zoom.value, mode: "overview" };
+  }
+
+  return {
+    zoom: zoom.value,
+    mode: "overview",
+    mine: !!filterState.myTracks,
+    categories: filterState.categories,
+    lengthRange: filterState.lengthRange,
+    elevationGainRange: filterState.elevationGainRange,
+    slopeRange: filterState.slopeRange,
+  };
+}
+
 function buildHeatmapOptions(filterState = currentFilterState.value) {
   if (!filterState) {
     return { zoom: zoom.value };
@@ -515,7 +515,6 @@ function buildHeatmapOptions(filterState = currentFilterState.value) {
 
   return {
     zoom: zoom.value,
-    ownerSessionId: filterState.myTracks ? sessionId : undefined,
     mine: !!filterState.myTracks,
     categories: filterState.categories,
     lengthRange: filterState.lengthRange,
@@ -582,12 +581,10 @@ function updateTooltipPosition(event) {
 function refreshTracks() {
   const domainBounds = toBounds(bounds.value);
   if (domainBounds) {
-    const options = {
-      zoom: zoom.value,
-      mode: "overview",
+    fetchTracksInBounds(domainBounds, {
+      ...buildTrackOptions(),
       forceRefresh: true, // Force refresh to bypass cache
-    };
-    fetchTracksInBounds(domainBounds, options);
+    });
   }
 }
 
@@ -999,9 +996,6 @@ body,
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  /* Optimize for smooth animations */
-  will-change: transform;
-  backface-visibility: hidden;
   /* Remove any inherited sizing */
   width: auto;
   height: auto;
@@ -1027,8 +1021,8 @@ body,
 
 /* Compact upload button styles */
 .upload-button-compact {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: var(--control-radius);
   background: var(--control-bg);
@@ -1046,16 +1040,12 @@ body,
   /* Ensure visibility across different zoom levels */
   position: relative;
   z-index: 1100;
-  /* Force layer creation for better rendering */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .upload-button-compact:hover {
     background: oklch(100% 0 none);
     box-shadow: 0 4px 12px oklch(0% 0 none / 0.12);
-    transform: translateY(-1px);
   }
 
   .upload-button-compact:hover .upload-icon {
@@ -1063,9 +1053,6 @@ body,
   }
 }
 
-.upload-button-compact:active {
-  transform: scale(0.97);
-}
 
 .upload-button-compact.drag-active {
   border-color: var(--accent);
@@ -1091,23 +1078,6 @@ body,
   box-shadow: 0 2px 8px oklch(0% 0 none / 0.12);
   box-sizing: border-box;
   font-size: var(--text-sm);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .upload-form-expanded {
-    animation: expandForm 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-}
-
-@keyframes expandForm {
-  from {
-    opacity: 0;
-    transform: scale(0.9) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
 }
 
 .upload-form-header {
@@ -1190,9 +1160,9 @@ body,
 
 .create-track-btn { position:fixed; inset-block-start:12px; inset-inline-start:64px; width:auto; min-height:44px; display:flex; gap:8px; padding:0 12px; font-size:14px; color:var(--color-ink); }
 .create-track-btn svg { width:20px; height:20px; flex-shrink:0; }
-.upload-form-container { inset-block-start:64px; inset-block-end:auto; inset-inline-start:64px; inset-inline-end:auto; max-width:calc(100vw - 80px); }
-.upload-button-compact { width:auto; min-height:44px; display:flex; gap:8px; padding:0 12px; font-size:14px; color:var(--color-ink); }
+.upload-form-container { max-width:calc(100% - 32px); }
+
 .upload-button-compact .upload-icon { width:20px; height:20px; }
 .collapsible-upload.expanded .upload-form-expanded { width:100%; min-width:0; max-width:100%; }
-.collapsible-upload.expanded { width:min(360px,calc(100vw - 80px)); max-height:calc(100dvh - 100px); overflow-y:auto; }
+.collapsible-upload.expanded { width:min(360px,calc(100dvw - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; }
 </style>

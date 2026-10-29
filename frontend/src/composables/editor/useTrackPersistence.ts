@@ -39,8 +39,7 @@ export function useTrackPersistence() {
         return value.map(normalizeCoordinates);
     }
     const savedTrackId = ref<string | null>(null);
-    const ownerSessionId = ref<string | null>(null);
-    const ownerUserId = ref<string | null>(null);
+    const isOwner = ref(false);
 
     /** Build a minimal GPX XML string from an array of [lat, lng] points. */
     function buildFragmentGpx(points: LatLngTuple[], name: string = 'Fragment'): string {
@@ -226,7 +225,11 @@ ${trkpts}
 
     async function loadTrackPois(store: PersistenceStore, id: string): Promise<void> {
         try {
-            const resp = await http(`${API_BASE}/api/tracks/${id}/pois`);
+            // Private tracks require the caller's session header to pass the
+            // backend visibility check.
+            const resp = await http(`${API_BASE}/api/tracks/${id}/pois`, {
+                headers: sessionHeaders(getSessionId())
+            });
             if (!resp.ok) throw new Error(`Places could not be loaded (HTTP ${resp.status}). Retry before saving.`);
             const data = await resp.json();
             if (Array.isArray(data)) {
@@ -268,8 +271,7 @@ ${trkpts}
             const geometry = raw.geometry ?? raw.geom_geojson;
             const feature = { ...raw, properties, geometry: typeof geometry === 'string' ? JSON.parse(geometry) : geometry };
 
-            ownerSessionId.value = feature.session_id ?? feature.properties?.session_id ?? null;
-            ownerUserId.value = feature.user_id ?? feature.properties?.user_id ?? null;
+            isOwner.value = Boolean(feature.is_owner ?? feature.properties?.is_owner);
 
             store.trackName = properties.name ?? '';
             store.trackDescription = properties.description ?? '';
@@ -504,8 +506,7 @@ ${trkpts}
         loadFailed,
         error,
         savedTrackId,
-        ownerSessionId,
-        ownerUserId,
+        isOwner,
         buildFragmentGpx,
         buildSegmentMetaPayload,
         extractSegmentAsTrack,

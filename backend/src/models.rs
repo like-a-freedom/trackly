@@ -101,10 +101,18 @@ pub struct TrackDetail {
     pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub session_id: Option<Uuid>, // Add session_id for owner check
-    pub user_id: Option<Uuid>,    // User ID for authenticated ownership
+    /// Anonymous owner id. Never serialized: clients use [`Self::is_owner`].
+    #[serde(skip_serializing)]
+    pub session_id: Option<Uuid>,
+    /// Authenticated owner id. Never serialized: clients use [`Self::is_owner`].
+    #[serde(skip_serializing)]
+    pub user_id: Option<Uuid>,
+    /// Whether anonymous viewers may read the track.
+    pub is_public: bool,
+    /// Whether the current viewer owns the track (request-scoped).
+    pub is_owner: bool,
     pub speed_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
-    pub pace_data: Option<serde_json::Value>, // Store as JSON for compatibility with DB jsonb
+    pub pace_data: Option<serde_json::Value>,  // Store as JSON for compatibility with DB jsonb
 }
 
 #[derive(Serialize)]
@@ -615,6 +623,8 @@ pub struct Poi {
     #[sqlx(skip)]
     #[serde(skip_deserializing)]
     pub geom: serde_json::Value, // GeoJSON Point
+    /// Anonymous owner id. Never serialized: it is an authorization secret.
+    #[serde(skip_serializing)]
     pub session_id: Option<Uuid>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,

@@ -65,7 +65,7 @@
           v-if="showOverflowMenu"
           id="track-editor-top-bar-overflow"
           ref="overflowPanel"
-          class="top-bar-overflow-menu"
+          class="top-bar-overflow-menu ui-reveal"
           :style="overflowMenuStyle"
           data-testid="top-bar-overflow-menu"
           aria-label="Editor secondary controls"

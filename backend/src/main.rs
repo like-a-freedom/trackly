@@ -116,7 +116,14 @@ async fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("data/graphs"));
 
-    let app = Router::new()
+    let editor_enabled = std::env::var("FEATURE_EDITOR")
+        .map(|value| value != "false")
+        .unwrap_or(true);
+    let debug_enabled = std::env::var("DEBUG_ENDPOINTS")
+        .map(|value| value == "true")
+        .unwrap_or(false);
+
+    let mut app = Router::new()
         .route("/health", get(handlers::health))
         .route("/api/feature-flags", get(handlers::get_feature_flags))
         .route("/metrics", get(metrics::serve_metrics))
@@ -167,21 +174,28 @@ async fn main() {
         .route(
             "/api/tracks/{id}",
             axum::routing::delete(handlers::delete_track),
-        )
-        // Track editor routes
-        .route(
-            "/api/tracks/create",
-            post(handlers::create_track_from_editor),
-        )
-        .route(
-            "/api/tracks/{id}/geometry",
-            axum::routing::put(handlers::update_track_geometry),
-        )
-        .route(
-            "/api/tracks/{id}/duplicate",
-            post(handlers::duplicate_track),
-        )
-        .route("/api/tracks/{id}/publish", post(handlers::publish_track))
+        );
+
+    // Editor routes are part of the FEATURE_EDITOR surface: registering them
+    // unconditionally while the UI was disabled made them reachable anyway.
+    if editor_enabled {
+        app = app
+            .route(
+                "/api/tracks/create",
+                post(handlers::create_track_from_editor),
+            )
+            .route(
+                "/api/tracks/{id}/geometry",
+                axum::routing::put(handlers::update_track_geometry),
+            )
+            .route(
+                "/api/tracks/{id}/duplicate",
+                post(handlers::duplicate_track),
+            )
+            .route("/api/tracks/{id}/publish", post(handlers::publish_track));
+    }
+
+    app = app
         .route(
             "/observability/map-interactions",
             post(handlers::record_map_interaction),
@@ -241,12 +255,18 @@ async fn main() {
             "/api/tracks/{id}/visibility",
             axum::routing::patch(handlers::update_track_visibility),
         )
-        // Debug endpoints (disabled by default)
-        .route(
+        .route("/sitemap.xml", get(handlers::sitemap));
+
+    // Debug endpoints are opt-in; a static OK handler should not be exposed
+    // in normal deployments.
+    if debug_enabled {
+        app = app.route(
             "/debug/background_task",
             get(handlers::debug_background_task),
-        )
-        .route("/sitemap.xml", get(handlers::sitemap))
+        );
+    }
+
+    let app = app
         .layer(DefaultBodyLimit::max(max_body_size))
         .layer(metrics::HttpMetricsLayer::new())
         .layer(cors)

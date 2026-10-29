@@ -93,3 +93,101 @@
 
 .leaflet-control-attribution { color: var(--color-muted) !important; background: var(--color-surface) !important; }
 .leaflet-control-attribution a { text-decoration: underline !important; color: var(--color-action) !important; }
+
+/* Shared disclosure motion: opacity only keeps anchored surfaces stationary.
+   Opt in on the outer surface, never on both a backdrop and its content. */
+:root {
+  --motion-reveal-duration: 180ms;
+}
+@keyframes ui-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ui-reveal {
+    animation: ui-reveal var(--motion-reveal-duration) var(--ease-out) !important;
+  }
+  details::details-content {
+    animation: ui-reveal var(--motion-reveal-duration) var(--ease-out);
+  }
+}
+/* Remove legacy nested entry animations: the outer surface owns motion. */
+.dialog-overlay.ui-reveal > .dialog,
+.toast.ui-reveal {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-reveal,
+  .ui-reveal > .dialog,
+  details::details-content {
+    animation: none !important;
+  }
+}
+
+.ui-reveal.filter-slide-fade-enter-active,
+.ui-reveal.filter-slide-fade-leave-active,
+.ui-reveal.dialog-fade-enter-active,
+.ui-reveal.dialog-fade-leave-active,
+.ui-reveal.toast-fade-enter-active,
+.ui-reveal.toast-fade-leave-active {
+  transition: opacity var(--motion-reveal-duration) var(--ease-out) !important;
+}
+
+/* One contract for corner-anchored filter/import disclosures. Overrides
+   legacy component rules until those surfaces no longer carry local skins. */
+.map-disclosure-button {
+  position: relative !important;
+  inline-size: 44px !important;
+  block-size: 44px !important;
+  padding: 0 !important;
+  border: 1px solid var(--control-border) !important;
+  border-radius: var(--control-radius) !important;
+  background: var(--control-bg) !important;
+  color: var(--color-action) !important;
+  box-shadow: var(--control-shadow) !important;
+  transform: none !important;
+  will-change: auto !important;
+  backdrop-filter: none !important;
+  transition: background-color var(--motion-reveal-duration) var(--ease-out),
+    box-shadow var(--motion-reveal-duration) var(--ease-out) !important;
+}
+.map-disclosure-button svg {
+  inline-size: 20px !important;
+  block-size: 20px !important;
+  color: inherit !important;
+}
+.map-disclosure-button:active { background: var(--color-soft) !important; }
+@media (hover: hover) and (pointer: fine) {
+  .map-disclosure-button:hover {
+    background: var(--color-surface) !important;
+    box-shadow: var(--control-shadow-hover) !important;
+    color: var(--color-action-hover) !important;
+  }
+}
+.map-disclosure-panel {
+  inline-size: min(360px, calc(100dvw - 32px)) !important;
+  width: min(360px, calc(100dvw - 32px)) !important;
+  min-inline-size: 0 !important;
+  max-inline-size: none !important;
+  max-width: none !important;
+  max-block-size: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  margin-block-start: 0 !important;
+  padding: 16px !important;
+  border-radius: var(--radius-control) !important;
+  background: var(--color-surface);
+  box-shadow: var(--control-shadow) !important;
+  overflow-y: auto;
+  transition: none !important;
+}
+
+.map-disclosure-close {
+  inline-size: 44px !important;
+  block-size: 44px !important;
+  color: var(--color-muted) !important;
+  transform: none !important;
+}
+.map-disclosure-close svg { inline-size: 20px; block-size: 20px; }
+.map-disclosure-close:active { background: var(--color-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .map-disclosure-close:hover { background: var(--color-canvas); color: var(--color-ink) !important; }
+}

@@ -6,14 +6,17 @@
 use axum::{
     Json,
     extract::{Path, State},
+    http::HeaderMap,
 };
 
 use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::info;
 
+use crate::auth::OptionalAuthUser;
 use crate::db;
 use crate::error::{AppError, Result};
+use crate::handlers::util::{ensure_track_visible, session_id_from_headers, verify_track_owner};
 use crate::track_utils::{
     can_calculate_slopes, extract_segments_from_geojson, recalculate_slope_metrics,
 };
@@ -26,7 +29,17 @@ use crate::track_utils::{
 pub async fn get_track_slope_profile(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
+    auth_user: OptionalAuthUser,
+    headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>> {
+    ensure_track_visible(
+        &pool,
+        track_id,
+        &auth_user,
+        session_id_from_headers(&headers),
+    )
+    .await?;
+
     let track = db::get_track_detail(&pool, track_id)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -50,7 +63,17 @@ pub async fn get_track_slope_profile(
 pub async fn recalculate_track_slopes(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
+    auth_user: OptionalAuthUser,
+    headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>> {
+    verify_track_owner(
+        &pool,
+        track_id,
+        &auth_user,
+        session_id_from_headers(&headers),
+    )
+    .await?;
+
     let track = db::get_track_detail(&pool, track_id)
         .await?
         .ok_or(AppError::NotFound)?;

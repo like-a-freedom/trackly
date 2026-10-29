@@ -8,7 +8,7 @@
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
 };
 
 use sqlx::PgPool;
@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use crate::auth::OptionalAuthUser;
 use crate::error::{AppError, Result};
-use crate::handlers::util::verify_track_owner;
+use crate::handlers::util::{ensure_track_visible, session_id_from_headers, verify_track_owner};
 use crate::models::TrackUploadResponse;
 use crate::services::track_editor;
 use crate::services::track_editor::{
@@ -50,8 +50,14 @@ pub async fn update_track_geometry(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
     auth_user: OptionalAuthUser,
-    Json(request): Json<UpdateTrackGeometryRequest>,
+    Json(mut request): Json<UpdateTrackGeometryRequest>,
 ) -> Result<Json<serde_json::Value>> {
+    // An authenticated edit belongs to the account. Dropping the session here
+    // prevents editor POIs from acquiring a second, anonymous owner.
+    if auth_user.user().is_some() {
+        request.session_id = None;
+    }
+
     // Ownership check - require authenticated user or valid session
     verify_track_owner(&pool, track_id, &auth_user, request.session_id).await?;
 
@@ -72,8 +78,14 @@ pub async fn duplicate_track(
     State(pool): State<Arc<PgPool>>,
     Path(source_id): Path<uuid::Uuid>,
     auth_user: OptionalAuthUser,
+    headers: HeaderMap,
     Json(request): Json<DuplicateTrackRequest>,
 ) -> Result<(StatusCode, Json<TrackUploadResponse>)> {
+    // The editor client sends the session in the JSON body, not the header.
+    // Accept either so an anonymous owner can duplicate a private track.
+    let viewer_session = session_id_from_headers(&headers).or(request.session_id);
+    ensure_track_visible(&pool, source_id, &auth_user, viewer_session).await?;
+
     let user_id = auth_user.user().map(|u| u.user_id);
 
     let response = track_editor::duplicate_track(&pool, source_id, request, user_id).await?;
@@ -91,9 +103,16 @@ pub async fn publish_track(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
     auth_user: OptionalAuthUser,
+    headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>> {
     // For publishing, we require either authenticated user or session ownership
-    verify_track_owner(&pool, track_id, &auth_user, None).await?;
+    verify_track_owner(
+        &pool,
+        track_id,
+        &auth_user,
+        session_id_from_headers(&headers),
+    )
+    .await?;
 
     crate::db::publish_track(&pool, track_id)
         .await

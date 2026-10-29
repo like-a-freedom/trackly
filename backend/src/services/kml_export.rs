@@ -103,6 +103,8 @@ mod tests {
             updated_at: None,
             session_id: None,
             user_id: None,
+            is_public: false,
+            is_owner: false,
             speed_data: None,
             pace_data: None,
         }

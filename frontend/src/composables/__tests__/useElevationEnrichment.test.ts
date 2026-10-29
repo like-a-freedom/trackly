@@ -160,11 +160,14 @@ describe('useElevationEnrichment', () => {
 
             await enrichment.forceEnrichElevation();
 
-            // The refresh must be flagged as background work, not a new track view.
+            // The refresh must be flagged as background work, not a new track view,
+            // and must carry the session header: private tracks 404 without it.
             expect(mockFetch).toHaveBeenNthCalledWith(
                 2,
                 '/api/tracks/1?background=1',
-                expect.objectContaining({ headers: expect.any(Object) })
+                expect.objectContaining({
+                    headers: expect.objectContaining({ 'x-session-id': expect.any(String) })
+                })
             );
             expect(track.value!.elevation_gain).toBe(650);
             expect(track.value!.elevation_profile).toEqual([{ distance: 0, elevation: 90 }]);
@@ -266,9 +269,13 @@ describe('useElevationEnrichment', () => {
             enrichment.startElevationPolling('1');
             await vi.advanceTimersByTimeAsync(3000);
 
+            // The poll reads a possibly private track, so it must send the
+            // session header the backend's visibility check requires.
             expect(mockFetch).toHaveBeenCalledWith(
                 '/api/tracks/1?background=1',
-                expect.objectContaining({ headers: expect.any(Object) })
+                expect.objectContaining({
+                    headers: expect.objectContaining({ 'x-session-id': expect.any(String) })
+                })
             );
             expect(track.value!.elevation_gain).toBe(200);
             expect(enrichment.isPollingForElevation.value).toBe(false);

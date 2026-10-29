@@ -7,7 +7,7 @@
          but hidden from assistive tech. -->
     <button
       v-show="!isOpen"
-      class="filter-button-compact"
+      class="filter-button-compact map-disclosure-button"
       type="button"
       title="Show filters"
       :aria-expanded="isOpen"
@@ -26,11 +26,11 @@
     </button>
 
     <!-- Sliding panel when expanded -->
-    <transition name="filter-slide-fade">
+
       <div
-        v-show="isOpen"
+        v-if="isOpen"
         id="track-filter-panel"
-        class="track-filter-control"
+        class="track-filter-control map-disclosure-panel ui-reveal"
         role="group"
         aria-label="Track filters"
       >
@@ -56,7 +56,7 @@
               </svg>
             </button>
             <button
-              class="collapse-btn"
+              class="collapse-btn map-disclosure-close"
               type="button"
               title="Collapse"
               aria-label="Collapse filters"
@@ -80,7 +80,7 @@
         <!-- Filter options dropdown -->
         <div
           v-if="showFilterOptions"
-          class="filter-options-panel"
+          class="filter-options-panel ui-reveal"
         >
           <div class="options-header">
             <span class="options-title">Show filters</span>
@@ -330,7 +330,7 @@
           </div>
         </div>
       </div>
-    </transition>
+
   </div>
 </template>
 
@@ -571,7 +571,10 @@ onMounted(() => {
   let initialElevationGainRange = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
   let initialSlopeRange = [props.globalMinSlope || 0, props.globalMaxSlope || 20];
   
-  const savedFiltersRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+  let savedFiltersRaw = null;
+  try {
+    savedFiltersRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+  } catch { /* storage unavailable */ }
   if (savedFiltersRaw) {
     try {
       const savedFilters = JSON.parse(savedFiltersRaw);
@@ -772,14 +775,16 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
   
   // Always persist user's actual choice (not the clamped values)
   if (cats !== null && cats !== undefined && lengthRange && lengthRange.length === 2 && elevationGainRange && elevationGainRange.length === 2 && slopeRange && slopeRange.length === 2) {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
-      categories: cats,
-      lengthRange: lengthRange,
-      elevationGainRange: elevationGainRange,
-      slopeRange: slopeRange,
-      myTracks: showMyTracks.value,
-      showHeatmap: showHeatmap.value,
-    }));
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+        categories: cats,
+        lengthRange: lengthRange,
+        elevationGainRange: elevationGainRange,
+        slopeRange: slopeRange,
+        myTracks: showMyTracks.value,
+        showHeatmap: showHeatmap.value,
+      }));
+    } catch { /* storage unavailable */ }
   }
 }, { deep: true });
 
@@ -792,14 +797,16 @@ function resetFilters() {
   slopeRange.value = [props.globalMinSlope || 0, props.globalMaxSlope || 20];
   showMyTracks.value = false;
   // Immediately persist reset state
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
-    categories: selectedCategories.value,
-    lengthRange: lengthRange.value,
-    elevationGainRange: elevationGainRange.value,
-    slopeRange: slopeRange.value,
-    myTracks: showMyTracks.value,
-    showHeatmap: showHeatmap.value,
-  }));
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+      categories: selectedCategories.value,
+      lengthRange: lengthRange.value,
+      elevationGainRange: elevationGainRange.value,
+      slopeRange: slopeRange.value,
+      myTracks: showMyTracks.value,
+      showHeatmap: showHeatmap.value,
+    }));
+  } catch { /* storage unavailable */ }
   // Also persist options (visibility checkbox state)
   try {
     localStorage.setItem(LOCAL_FILTER_OPTIONS_KEY, JSON.stringify({
@@ -849,9 +856,9 @@ onUnmounted(() => {
 
 <style scoped>
 .track-filter-wrapper {
-  position: absolute;
-  inset-block-start: 16px;
-  inset-inline-end: 16px;
+  position: fixed;
+  inset-block-start: calc(16px + env(safe-area-inset-top, 0px));
+  inset-inline-end: calc(16px + env(safe-area-inset-right, 0px));
   z-index: 1300; /* Higher than SearchButton's 1200 */
 }
 
@@ -1192,7 +1199,7 @@ onUnmounted(() => {
 .filter-slide-fade-enter-from,
 .filter-slide-fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+
 }
 
 /* Touch sizing keys on the input mode, not the viewport — a touch iPad is
@@ -1219,31 +1226,6 @@ onUnmounted(() => {
     height: 22px;
   }
 
-  /* On phones the panel is full-bleed, so it cannot also sit beside the
-     map-tool stack in the same corner. It opens into the free band between
-     the map-tool stack (top-left) and the upload control (bottom-right).
-     The stack is now five 44px controls with 8px gaps — search 12-56,
-     geolocation 64-108, zoom-in 116-160, zoom-out 168-212, create 220-264 —
-     so the panel starts below 264 and stays clear of both corners. */
-  .track-filter-control {
-    position: fixed !important;
-    inset-block-start: calc(272px + env(safe-area-inset-top, 0px)) !important;
-    inset-inline-start: calc(12px + env(safe-area-inset-left, 0px));
-    inset-inline-end: calc(12px + env(safe-area-inset-right, 0px));
-    width: auto !important;
-    max-width: none;
-    margin-block-start: 0;
-    /* Hugs the top of the band and grows only as far as its content: an
-       empty panel stretched to 500px of dead white is worse than a short
-       one. The max-height keeps tall filter content inside the band, where
-       it scrolls instead of growing down into the upload control. 376 is the
-       sum of both bounds: 272px above (the tool stack) and 104px below (the
-       upload control plus its safe-area inset). */
-    max-height: calc(100dvh - 376px - env(safe-area-inset-top, 0px));
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
-  }
 
   .collapse-btn {
     width: 44px;

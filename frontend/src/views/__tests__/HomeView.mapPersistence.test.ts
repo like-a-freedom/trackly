@@ -56,6 +56,7 @@ vi.mock('../../composables/useAdvancedDebounce', () => ({
     useAdvancedDebounce: (fn) => {
         const debouncedFn = vi.fn(fn);
         debouncedFn.pending = () => false;
+        debouncedFn.cancel = vi.fn();
         return debouncedFn;
     },
     useThrottle: (fn) => vi.fn(fn)

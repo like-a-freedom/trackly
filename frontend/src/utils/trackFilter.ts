@@ -75,7 +75,7 @@ export function geoJsonFilter(
 
     // During transition, maintain the same filter behavior as before the transition
     if (isTransitioning) {
-        if (filterState.categories.length > 0) {
+        if ((filterState.categories?.length ?? 0) > 0) {
             return matchesAll(filterState, cats, len, effectiveGain, slopeMin, slopeMax, epsilon, epsilonElevation, epsilonSlope);
         }
         return true;
@@ -87,7 +87,7 @@ export function geoJsonFilter(
         return props != null && props.id === selectedTrackId;
     }
 
-    if (filterState.categories.length === 0) {
+    if ((filterState.categories?.length ?? 0) === 0) {
         return false;
     }
 
@@ -105,14 +105,14 @@ function matchesAll(
     epsilonElevation: number,
     epsilonSlope: number,
 ): boolean {
-    const catMatch = filterState.categories.some((cat) => cats.includes(cat));
+    const catMatch = (filterState.categories ?? []).some((cat) => cats.includes(cat));
 
-    const min = filterState.lengthRange[0];
-    const max = filterState.lengthRange[1];
+    const min = filterState.lengthRange?.[0] ?? 0;
+    const max = filterState.lengthRange?.[1] ?? Number.POSITIVE_INFINITY;
     const lenMatch = len !== undefined && len >= min - epsilon && len <= max + epsilon;
 
-    const elevationMin = filterState.elevationGainRange[0];
-    const elevationMax = filterState.elevationGainRange[1];
+    const elevationMin = filterState.elevationGainRange?.[0] ?? 0;
+    const elevationMax = filterState.elevationGainRange?.[1] ?? Number.POSITIVE_INFINITY;
     const elevationMatch =
         effectiveGain === null ||
         (effectiveGain >= elevationMin - epsilonElevation &&

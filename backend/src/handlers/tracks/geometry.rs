@@ -27,33 +27,18 @@ pub async fn simplify_track_preview(
 
     let target_ratio = request.target_ratio.clamp(0.01, 1.0);
 
-    let total_original_points: usize = segments.iter().map(|s| s.len()).sum();
+    let waypoints = (!request.waypoints.is_empty()).then_some(request.waypoints.as_slice());
+    let (simplified_segments, simplified_waypoints, stats) =
+        simplify_segments_to_ratio(&segments, waypoints, target_ratio);
 
-    let (simplified_segments, _simplified_waypoints, _stats) =
-        simplify_segments_to_ratio(&segments, None, target_ratio);
-
-    let total_simplified_points: usize = simplified_segments.iter().map(|s| s.len()).sum();
-
-    let tolerance_used = crate::track_utils::get_tolerance_for_zoom(12.0);
-
-    // Rebuild GeoJSON from simplified segments
     let simplified_geojson = crate::track_utils::geojson_from_segments(&simplified_segments);
-
-    let compression_ratio = if total_original_points > 0 {
-        total_simplified_points as f64 / total_original_points as f64
-    } else {
-        1.0
-    };
-
-    // Simple waypoint re-mapping: keep original waypoints indices that still exist
-    let simplified_waypoints = request.waypoints;
 
     Ok(Json(TrackSimplifyPreviewResponse {
         geometry: simplified_geojson,
         waypoints: simplified_waypoints,
-        original_points: total_original_points,
-        simplified_points: total_simplified_points,
-        compression_ratio,
-        tolerance_used,
+        original_points: stats.original_points,
+        simplified_points: stats.simplified_points,
+        compression_ratio: stats.compression_ratio,
+        tolerance_used: stats.tolerance_used,
     }))
 }

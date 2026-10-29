@@ -8,10 +8,16 @@ const _subs = new Map<string, Set<(payload: unknown) => void>>();
 export const events = {
     /**
      * Subscribe to an event.
+     *
+     * Returns an unsubscribe function so callers can release the subscription
+     * in lifecycle cleanup without keeping a reference to `fn`.
      */
-    on(name: string, fn: (payload: unknown) => void): void {
+    on(name: string, fn: (payload: unknown) => void): () => void {
         if (!_subs.has(name)) _subs.set(name, new Set());
         _subs.get(name)!.add(fn);
+        return () => {
+            _subs.get(name)?.delete(fn);
+        };
     },
 
     /**

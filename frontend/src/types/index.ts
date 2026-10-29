@@ -80,8 +80,10 @@ export interface Track {
   max_speed?: number;
   avg_hr?: number;
   duration_seconds?: number;
-  owner_user_id?: string;
-  owner_session_id?: string;
+  /** Whether anonymous viewers may read the track. */
+  is_public?: boolean;
+  /** Request-scoped: whether the current viewer owns the track. */
+  is_owner?: boolean;
   created_at: string;
   updated_at: string;
 }

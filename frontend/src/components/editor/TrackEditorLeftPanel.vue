@@ -26,7 +26,7 @@
       <!-- Segments tab -->
       <div
         v-show="activeTab === 'route'"
-        class="panel-tab-body"
+        class="panel-tab-body ui-reveal"
       >
         <div
           v-if="totalPoints < 2"
@@ -56,7 +56,7 @@
       <!-- Info tab: metadata + actions -->
       <div
         v-show="activeTab === 'description'"
-        class="panel-tab-body"
+        class="panel-tab-body ui-reveal"
       >
         <TrackEditorMetaCard
           :track-name="trackName"
@@ -72,7 +72,7 @@
       <!-- Elevation tab -->
       <div
         v-show="activeTab === 'review'"
-        class="panel-tab-body"
+        class="panel-tab-body ui-reveal"
       >
         <TrackEditorChartCard
           :recorded-series="recordedSeries"

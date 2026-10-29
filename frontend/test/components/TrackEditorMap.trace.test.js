@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
+
+// The real vue-leaflet package dynamically imports Leaflet marker PNGs, which
+// Node's ESM loader cannot handle. Component stubs below already replace every
+// leaflet component this test renders, so a lightweight module mock is enough.
+vi.mock("@vue-leaflet/vue-leaflet", () => ({
+  LMap: { name: "LMap", template: "<div><slot /></div>" },
+  LTileLayer: { name: "LTileLayer", template: "<div />" },
+  LPolyline: { name: "LPolyline", template: "<div />" },
+  LCircleMarker: { name: "LCircleMarker", template: "<div />" },
+  LTooltip: { name: "LTooltip", template: "<div><slot /></div>" },
+}));
+
 import TrackEditorMap from "../../src/components/TrackEditorMap.vue";
 
 const LMapStub = {

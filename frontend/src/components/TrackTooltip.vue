@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="visible && data"
-    class="custom-tooltip"
+    class="custom-tooltip ui-reveal"
     :style="{ insetInlineStart: x + 'px', insetBlockStart: y + 'px', position: 'fixed', zIndex: 2000 }"
   >
     <div class="upload-form">

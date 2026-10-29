@@ -120,63 +120,6 @@ const TrackEditorLeftRailStub = defineComponent({
     },
 });
 
-const TrackEditorBottomDeckStub = defineComponent({
-    name: 'TrackEditorBottomDeck',
-    props: [
-        'trackName',
-        'trackDescription',
-        'trackCategories',
-        'segmentStats',
-        'activeSegmentIndex',
-        'totalDistanceKm',
-        'totalPoints',
-        'estimatedTimeMinutes',
-        'pois',
-        'elevationProfile',
-        'elevationStats',
-        'elevationLoading',
-        'elevationError',
-        'coordinateData',
-        'highlightedSegmentIndex',
-        'fragmentInfo',
-        'optimizerTargetRatio',
-        'optimizerPreview',
-        'optimizerStats',
-        'optimizerLoading',
-        'optimizerError',
-    ],
-    emits: [
-        'update:trackName',
-        'update:trackDescription',
-        'update:trackCategories',
-        'updateSegmentName',
-        'updateSegmentColor',
-        'addSegment',
-        'deleteSegment',
-        'reverseSegment',
-        'setActiveSegment',
-        'joinSegments',
-        'newTrackFromSegment',
-        'clearFragment',
-        'deleteFragmentConnect',
-        'deleteFragmentSplit',
-        'reverseFragment',
-        'rerouteFragment',
-        'exportFragment',
-        'closeLoop',
-        'closeLoopSameWay',
-        'closeLoopDifferentRoute',
-        'reverseTrack',
-        'duplicateTrack',
-        'update:optimizerTargetRatio',
-        'previewOptimization',
-        'applyOptimization',
-    ],
-    setup() {
-        return () => h('div', { 'data-testid': 'track-editor-bottom-deck-stub' });
-    },
-});
-
 const TrackEditorLeftPanelStub = defineComponent({
     name: 'TrackEditorLeftPanel',
     emits: ['addSegment', 'chart-point-click', 'save', 'export'],
@@ -353,7 +296,6 @@ describe('TrackEditorView keyboard shortcuts', () => {
                     TrackEditorTopBar: TrackEditorTopBarStub,
                     TrackEditorTopAlertStrip: TrackEditorTopAlertStripStub,
                     TrackEditorLeftRail: TrackEditorLeftRailStub,
-                    TrackEditorBottomDeck: TrackEditorBottomDeckStub,
                     Toast: ToastStub,
                 },
             },
@@ -373,7 +315,6 @@ describe('TrackEditorView keyboard shortcuts', () => {
         const leftRail = wrapper.find('[data-testid="editor-left-rail"]');
         const mapRegion = wrapper.find('[data-testid="editor-map-region"]');
         const inspector = wrapper.find('[data-testid="editor-right-inspector"]');
-        const bottomDeck = wrapper.find('[data-testid="track-editor-bottom-deck-stub"]');
 
         expect(topBar.exists()).toBe(true);
         expect(alertStrip.exists()).toBe(true);
@@ -381,7 +322,6 @@ describe('TrackEditorView keyboard shortcuts', () => {
         expect(leftRail.exists()).toBe(true);
         expect(mapRegion.exists()).toBe(true);
         expect(inspector.exists()).toBe(false);
-        expect(bottomDeck.exists()).toBe(false);
     });
 
     it('mounts the editor as a full-screen map stage with a dedicated overlay layer', () => {

@@ -22,7 +22,10 @@ pub struct UploadRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub categories: Vec<String>,
+    /// Anonymous owner. `None` when the upload is authenticated.
     pub session_id: Option<Uuid>,
+    /// Authenticated owner. Takes precedence over `session_id`.
+    pub user_id: Option<Uuid>,
     pub file_name: String,
     pub file_bytes: Bytes,
 }
@@ -101,15 +104,13 @@ async fn upload_inner(pool: &Arc<PgPool>, request: UploadRequest) -> Result<Trac
     let parsed_data = match parse_and_check_duplicates(pool, &request.file_bytes, &extension).await
     {
         Err(AppError::DuplicateTrack(Some(id))) => {
-            let (public, owner): (bool, Option<Uuid>) =
-                sqlx::query_as("SELECT is_public, session_id FROM tracks WHERE id=$1")
-                    .bind(id)
-                    .fetch_one(&**pool)
-                    .await?;
-            return Err(AppError::DuplicateTrack(
-                (public || request.session_id.is_some() && request.session_id == owner)
-                    .then_some(id),
-            ));
+            let visibility = db::get_track_visibility(pool, id)
+                .await?
+                .ok_or(AppError::NotFound)?;
+            let visible_to_caller = visibility.is_public
+                || request.user_id.is_some() && request.user_id == visibility.user_id
+                || request.session_id.is_some() && request.session_id == visibility.session_id;
+            return Err(AppError::DuplicateTrack(visible_to_caller.then_some(id)));
         }
         result => result?,
     };
@@ -186,6 +187,7 @@ async fn upload_inner(pool: &Arc<PgPool>, request: UploadRequest) -> Result<Trac
         hash: &parsed_data.hash,
         recorded_at: parsed_data.recorded_at,
         session_id: request.session_id,
+        user_id: request.user_id,
         speed_data_json,
         pace_data_json,
     })
@@ -435,6 +437,7 @@ mod tests {
             description: None,
             categories: vec!["hiking".into()],
             session_id: None,
+            user_id: None,
             file_name: "test.gpx".into(),
             file_bytes: Bytes::from_static(b"<gpx></gpx>"),
         };

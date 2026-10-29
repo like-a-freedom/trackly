@@ -2,7 +2,7 @@
   <transition name="toast-fade">
     <div
       v-if="internalVisible"
-      class="toast"
+      class="toast ui-reveal"
       :class="type"
       role="status"
       aria-live="polite"

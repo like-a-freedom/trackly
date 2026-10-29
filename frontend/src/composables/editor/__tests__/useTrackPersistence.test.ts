@@ -369,6 +369,13 @@ describe('useTrackPersistence', () => {
             const store = createTestStore();
             await persistence.loadTrackPois(store, 'track-123');
 
+            // Private tracks 404 without the caller's session header.
+            expect(mockFetch).toHaveBeenCalledWith(
+                '/api/tracks/track-123/pois',
+                expect.objectContaining({
+                    headers: expect.objectContaining({ 'x-session-id': expect.any(String) })
+                })
+            );
             expect(store.pois).toHaveLength(2);
             expect(store.pois[0].name).toBe('POI 1');
             expect(store.pois[0].distFromStart).toBe(100);

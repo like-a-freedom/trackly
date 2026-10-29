@@ -36,7 +36,7 @@
 
         <div
           v-if="activeSegment"
-          class="inspector-panel"
+          class="inspector-panel ui-reveal"
           data-testid="active-segment-summary"
         >
           <span class="inspector-kicker">Active segment</span>
@@ -49,7 +49,7 @@
 
         <div
           v-if="showQuickHelp"
-          class="inspector-panel"
+          class="inspector-panel ui-reveal"
         >
           <span class="inspector-kicker">Quick help</span>
           <strong>{{ contextualHeadline }}</strong>

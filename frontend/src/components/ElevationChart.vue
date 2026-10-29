@@ -1307,17 +1307,21 @@ function handleRouteChange() {
 }
 
 // Setup event listeners
+let removeAfterEachHook: (() => void) | null = null;
+
 onMounted(() => {
   // Listen for ESC key globally
   document.addEventListener('keydown', handleEscapeKey);
   
   // Listen for route changes
-  router.afterEach(handleRouteChange);
+  removeAfterEachHook = router.afterEach(handleRouteChange);
 });
 
 onBeforeUnmount(() => {
   // Remove event listeners
   document.removeEventListener('keydown', handleEscapeKey);
+  removeAfterEachHook?.();
+  removeAfterEachHook = null;
   
   // Clean up tooltip before unmounting
   cleanupTooltip();

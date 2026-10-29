@@ -48,7 +48,7 @@ const handleAdd = () => {
         <input v-model="custom" type="text" aria-label="Custom category" placeholder="Custom category" class="min-h-11 min-w-0 flex-1 rounded border border-line bg-surface px-3 text-base" :aria-invalid="!!error" :aria-describedby="helpId" @keydown.enter.prevent="handleAdd" />
         <button type="button" data-testid="add-category" class="min-h-11 rounded border border-line bg-surface px-3 text-sm font-semibold" :disabled="disabled || !custom.trim()" @click="handleAdd">Add</button>
       </div>
-      <p :id="helpId" class="mbe-0 mbs-2 text-sm text-muted">Optional. Up to 50 categories; 100 UTF-8 bytes each.</p>
+      <p :id="helpId" class="mbe-0 mbs-2 text-sm text-muted">Optional. Choose activities or add your own.</p>
       <p v-if="error" role="alert" class="mbe-0 mbs-2 text-sm text-danger">{{ error }}</p>
     </template>
   </fieldset>

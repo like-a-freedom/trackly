@@ -5,9 +5,144 @@
 
 use crate::models::{CreatePoiRequest, Poi, PoiWithDistance, UpdatePoiRequest};
 use crate::poi_deduplication;
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Filter set shared by POI list and count queries.
+#[derive(Debug, Default)]
+pub struct PoiFilter<'a> {
+    /// `[min_lon, min_lat, max_lon, max_lat]`.
+    pub bbox: Option<[f64; 4]>,
+    pub track_id: Option<Uuid>,
+    pub categories: Option<&'a [String]>,
+    pub search: Option<&'a str>,
+}
+
+/// Escape LIKE metacharacters so user input is matched literally.
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+fn begin_condition(builder: &mut QueryBuilder<Postgres>, first: &mut bool) {
+    if *first {
+        builder.push(" WHERE ");
+        *first = false;
+    } else {
+        builder.push(" AND ");
+    }
+}
+
+fn push_poi_conditions(
+    builder: &mut QueryBuilder<Postgres>,
+    filter: &PoiFilter<'_>,
+    first: &mut bool,
+) {
+    if let Some([min_lon, min_lat, max_lon, max_lat]) = filter.bbox {
+        begin_condition(builder, first);
+        builder.push("ST_Intersects(p.geom::geometry, ST_MakeEnvelope(");
+        builder.push_bind(min_lon);
+        builder.push(", ");
+        builder.push_bind(min_lat);
+        builder.push(", ");
+        builder.push_bind(max_lon);
+        builder.push(", ");
+        builder.push_bind(max_lat);
+        builder.push(", 4326))");
+    }
+
+    if let Some(categories) = filter.categories
+        && !categories.is_empty()
+    {
+        begin_condition(builder, first);
+        builder.push("p.category = ANY(");
+        builder.push_bind(categories);
+        builder.push(")");
+    }
+
+    if let Some(search) = filter.search
+        && !search.trim().is_empty()
+    {
+        let pattern = format!("%{}%", escape_like(search.trim()));
+        begin_condition(builder, first);
+        builder.push("(p.name ILIKE ");
+        builder.push_bind(pattern.clone());
+        builder.push(" ESCAPE '\\' OR p.description ILIKE ");
+        builder.push_bind(pattern);
+        builder.push(" ESCAPE '\\')");
+    }
+}
+
+/// List POIs matching `filter`.
+pub async fn list_filtered(
+    pool: &PgPool,
+    filter: &PoiFilter<'_>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Poi>, sqlx::Error> {
+    let mut builder = QueryBuilder::<Postgres>::new(
+        "SELECT p.id, p.name, p.description, p.category, p.elevation, \
+         ST_AsGeoJSON(p.geom::geometry)::jsonb as geom, \
+         p.session_id, p.created_at, p.updated_at FROM pois p",
+    );
+
+    if filter.track_id.is_some() {
+        builder.push(" JOIN track_pois tp ON p.id = tp.poi_id");
+    }
+
+    let mut first = true;
+    if let Some(track_id) = filter.track_id {
+        begin_condition(&mut builder, &mut first);
+        builder.push("tp.track_id = ");
+        builder.push_bind(track_id);
+    }
+    push_poi_conditions(&mut builder, filter, &mut first);
+
+    if filter.track_id.is_some() {
+        builder.push(" ORDER BY tp.sequence_order");
+    } else {
+        builder.push(" ORDER BY p.created_at DESC");
+    }
+    builder.push(" LIMIT ");
+    builder.push_bind(limit);
+    builder.push(" OFFSET ");
+    builder.push_bind(offset);
+
+    builder.build_query_as::<Poi>().fetch_all(pool).await
+}
+
+/// Count POIs matching `filter`.
+pub async fn count_filtered(pool: &PgPool, filter: &PoiFilter<'_>) -> Result<i64, sqlx::Error> {
+    let mut builder = QueryBuilder::<Postgres>::new("SELECT COUNT(*) FROM pois p");
+
+    if filter.track_id.is_some() {
+        builder.push(" JOIN track_pois tp ON p.id = tp.poi_id");
+    }
+
+    let mut first = true;
+    if let Some(track_id) = filter.track_id {
+        begin_condition(&mut builder, &mut first);
+        builder.push("tp.track_id = ");
+        builder.push_bind(track_id);
+    }
+    push_poi_conditions(&mut builder, filter, &mut first);
+
+    builder.build_query_scalar::<i64>().fetch_one(pool).await
+}
+
+/// Track ids linked to a POI.
+///
+/// Used to authorize mutations of legacy POIs that have no `session_id` owner:
+/// such a POI is editable only by an owner of one of its linked tracks.
+pub async fn track_ids_for_poi(pool: &PgPool, poi_id: i32) -> Result<Vec<Uuid>, sqlx::Error> {
+    sqlx::query_scalar("SELECT track_id FROM track_pois WHERE poi_id = $1")
+        .bind(poi_id)
+        .fetch_all(pool)
+        .await
+}
 
 /// List POIs intersecting a bbox (minLon,minLat,maxLon,maxLat).
 pub async fn find_by_bbox(
@@ -293,6 +428,12 @@ pub async fn bulk_link_to_track(
 mod tests {
     use super::*;
 
+    #[test]
+    fn escape_like_escapes_wildcards() {
+        assert_eq!(escape_like("100%_a\\b"), "100\\%\\_a\\\\b");
+        assert_eq!(escape_like("plain"), "plain");
+    }
+
     // These three run without a database: they only exercise request -> binding shapes.
     #[test]
     fn create_request_binds_name_trimmed() {
@@ -358,5 +499,185 @@ mod tests {
             return; // no DATABASE_URL: skip
         };
         let _ = count_all(&pool).await.expect("count query");
+    }
+
+    /// `list_filtered`/`count_filtered` replaced the separate bbox and
+    /// track-scoped queries; exercise every filter branch they now share.
+    #[tokio::test]
+    async fn list_and_count_filtered_apply_search_bbox_and_categories() {
+        let Some(pool) = maybe_pool().await else {
+            return; // no DATABASE_URL: skip
+        };
+        let session = Uuid::new_v4();
+        // `pois.session_id` references `sessions`, so the owner must exist.
+        sqlx::query("INSERT INTO sessions (id) VALUES ($1)")
+            .bind(session)
+            .execute(&pool)
+            .await
+            .expect("insert fixture session");
+        let water = create(
+            &pool,
+            &CreatePoiRequest {
+                name: "Filtered water source".into(),
+                description: None,
+                category: Some("water".into()),
+                elevation: None,
+                lon: 37.0,
+                lat: 55.0,
+                session_id: Some(session),
+            },
+        )
+        .await
+        .expect("create water poi");
+        let view = create(
+            &pool,
+            &CreatePoiRequest {
+                name: "Filtered viewpoint".into(),
+                description: None,
+                category: Some("view".into()),
+                elevation: None,
+                lon: 37.5,
+                lat: 55.5,
+                session_id: Some(session),
+            },
+        )
+        .await
+        .expect("create view poi");
+
+        // Search: only the water POI matches, and count agrees with the list.
+        let filter = PoiFilter {
+            bbox: None,
+            track_id: None,
+            categories: None,
+            search: Some("Filtered water source"),
+        };
+        let listed = list_filtered(&pool, &filter, 100, 0).await.expect("list");
+        assert_eq!(listed.len(), 1, "search must match exactly one POI");
+        assert_eq!(listed[0].id, water.id);
+        assert_eq!(
+            count_filtered(&pool, &filter).await.expect("count"),
+            1,
+            "count must agree with the search filter"
+        );
+
+        // Bbox: only the viewpoint falls inside the window.
+        let filter = PoiFilter {
+            bbox: Some([37.4, 55.4, 37.6, 55.6]),
+            track_id: None,
+            categories: None,
+            search: None,
+        };
+        let listed = list_filtered(&pool, &filter, 100, 0).await.expect("list");
+        assert!(
+            listed.iter().any(|p| p.id == view.id),
+            "bbox must include the viewpoint"
+        );
+        assert!(
+            !listed.iter().any(|p| p.id == water.id),
+            "bbox must exclude the water POI"
+        );
+
+        // Categories combined with search: narrowing, not widening.
+        let categories = ["view".to_string()];
+        let filter = PoiFilter {
+            bbox: None,
+            track_id: None,
+            categories: Some(&categories),
+            search: Some("Filtered"),
+        };
+        let listed = list_filtered(&pool, &filter, 100, 0).await.expect("list");
+        assert_eq!(listed.len(), 1, "category filter must narrow the search");
+        assert_eq!(listed[0].id, view.id);
+        assert_eq!(
+            count_filtered(&pool, &filter).await.expect("count"),
+            1,
+            "count must agree with the category filter"
+        );
+
+        delete(&pool, water.id).await.expect("remove water poi");
+        delete(&pool, view.id).await.expect("remove view poi");
+        sqlx::query("DELETE FROM sessions WHERE id = $1")
+            .bind(session)
+            .execute(&pool)
+            .await
+            .expect("remove fixture session");
+    }
+
+    /// A POI linked to a track must be returned by the track-scoped filter and
+    /// counted once, not once per query branch.
+    #[tokio::test]
+    async fn list_and_count_filtered_follow_track_link() {
+        let Some(pool) = maybe_pool().await else {
+            return; // no DATABASE_URL: skip
+        };
+        let track_id = Uuid::new_v4();
+        let session = Uuid::new_v4();
+        sqlx::query("INSERT INTO sessions (id) VALUES ($1)")
+            .bind(session)
+            .execute(&pool)
+            .await
+            .expect("insert fixture session");
+        sqlx::query(
+            "INSERT INTO tracks (id, name, categories, geom, length_km, hash, session_id) \
+             VALUES ($1, 'poi track fixture', ARRAY['walking']::TEXT[], \
+             ST_SetSRID(ST_GeomFromGeoJSON($2), 4326), 1.0, $3, $4)",
+        )
+        .bind(track_id)
+        .bind(serde_json::json!({
+            "type": "LineString",
+            "coordinates": [[37.0, 55.0], [37.01, 55.01]]
+        }))
+        .bind(format!("poi-track-fixture-{track_id}"))
+        .bind(session)
+        .execute(&pool)
+        .await
+        .expect("insert fixture track");
+
+        let poi = create(
+            &pool,
+            &CreatePoiRequest {
+                name: "Track-linked fixture".into(),
+                description: None,
+                category: None,
+                elevation: None,
+                lon: 37.0,
+                lat: 55.0,
+                session_id: Some(session),
+            },
+        )
+        .await
+        .expect("create poi");
+        // `bulk_link_to_track` takes the Arc handle the handlers hold.
+        let arc_pool = Arc::new(pool.clone());
+        bulk_link_to_track(&arc_pool, track_id, &[(poi.id, 0)])
+            .await
+            .expect("link poi to track");
+
+        let filter = PoiFilter {
+            bbox: None,
+            track_id: Some(track_id),
+            categories: None,
+            search: None,
+        };
+        let listed = list_filtered(&pool, &filter, 100, 0).await.expect("list");
+        assert_eq!(listed.len(), 1, "track filter must return the linked POI");
+        assert_eq!(listed[0].id, poi.id);
+        assert_eq!(
+            count_filtered(&pool, &filter).await.expect("count"),
+            1,
+            "count must agree with the track filter"
+        );
+
+        delete(&pool, poi.id).await.expect("remove poi");
+        sqlx::query("DELETE FROM tracks WHERE id = $1")
+            .bind(track_id)
+            .execute(&pool)
+            .await
+            .expect("remove fixture track");
+        sqlx::query("DELETE FROM sessions WHERE id = $1")
+            .bind(session)
+            .execute(&pool)
+            .await
+            .expect("remove fixture session");
     }
 }

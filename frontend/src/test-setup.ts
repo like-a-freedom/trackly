@@ -352,14 +352,11 @@ if (typeof window !== "undefined") {
 // `waitFor` shim: vitest 4.1 `vi.waitFor` resolves as soon as its callback produces a
 // non-thenable value, so it never actually waits (trap recorded in ADR 0018 and ADR 0033).
 
-// Suppress Vue warnings during tests
+// Surface Vue warnings during tests, but fail the test when a component throws.
+// Swallowing component errors here hides real regressions.
 config.global.config.warnHandler = () => { };
-config.global.config.errorHandler = () => { };
-
-// Suppress Vue warnings in tests
-config.global.config = {
-    warnHandler: () => { }, // Suppress all Vue warnings
-    errorHandler: () => { } // Suppress all Vue errors
+config.global.config.errorHandler = (err: unknown) => {
+    throw err;
 };
 
 // Suppress console warnings/errors and info/log to keep test output clean by default.

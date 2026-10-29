@@ -64,6 +64,8 @@ pub async fn update_track_description(
     auth_user: OptionalAuthUser,
     Json(request): Json<crate::models::UpdateTrackDescriptionRequest>,
 ) -> Result<Json<serde_json::Value>> {
+    crate::input_validation::validate_track_fields(None, Some(&request.description), &[])?;
+
     // Ownership check
     verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
 
@@ -87,6 +89,8 @@ pub async fn update_track_name(
     auth_user: OptionalAuthUser,
     Json(request): Json<crate::models::UpdateTrackNameRequest>,
 ) -> Result<Json<serde_json::Value>> {
+    crate::input_validation::validate_track_fields(Some(&request.name), None, &[])?;
+
     verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
 
     db::update_track_name(&pool, track_id, &request.name).await?;
@@ -247,6 +251,22 @@ pub struct BulkVisibilityResponse {
     pub count: usize,
 }
 
+/// Validate a bulk track operation.
+///
+/// Returns `true` when the request is empty and the caller can return an empty
+/// result without touching the database.
+fn bulk_request_is_empty(track_ids: &[Uuid]) -> Result<bool> {
+    if track_ids.is_empty() {
+        return Ok(true);
+    }
+    if track_ids.len() > 100 {
+        return Err(AppError::from(AuthError::InvalidInput(
+            "Maximum 100 tracks per bulk operation".into(),
+        )));
+    }
+    Ok(false)
+}
+
 /// Toggle visibility for multiple tracks at once.
 ///
 /// PATCH /api/account/tracks/bulk/visibility
@@ -255,17 +275,11 @@ pub async fn bulk_toggle_visibility(
     auth_user: AuthUser,
     Json(request): Json<BulkTrackRequest>,
 ) -> Result<Json<BulkVisibilityResponse>> {
-    if request.track_ids.is_empty() {
+    if bulk_request_is_empty(&request.track_ids)? {
         return Ok(Json(BulkVisibilityResponse {
             updated: Vec::new(),
             count: 0,
         }));
-    }
-
-    if request.track_ids.len() > 100 {
-        return Err(AppError::from(AuthError::InvalidInput(
-            "Maximum 100 tracks per bulk operation".into(),
-        )));
     }
 
     let updated =
@@ -299,17 +313,11 @@ pub async fn bulk_delete_tracks(
     auth_user: AuthUser,
     Json(request): Json<BulkTrackRequest>,
 ) -> Result<Json<BulkDeleteResponse>> {
-    if request.track_ids.is_empty() {
+    if bulk_request_is_empty(&request.track_ids)? {
         return Ok(Json(BulkDeleteResponse {
             deleted: Vec::new(),
             count: 0,
         }));
-    }
-
-    if request.track_ids.len() > 100 {
-        return Err(AppError::from(AuthError::InvalidInput(
-            "Maximum 100 tracks per bulk operation".into(),
-        )));
     }
 
     let deleted = db::bulk_delete_tracks(&pool, auth_user.user_id, &request.track_ids).await?;

@@ -13,13 +13,13 @@ pub use api_usage::{
 
 // Re-export track-related functions and types
 pub use tracks::{
-    GeometryUpdateOptions, InsertTrackFromEditorParams, InsertTrackParams, UpdateElevationParams,
-    UpdateSlopeParams, delete_track, duplicate_track, get_track_by_id, get_track_detail,
-    get_track_detail_adaptive, get_track_ownership, insert_track, insert_track_from_editor,
-    list_public_tracks_for_sitemap, list_tracks, list_tracks_geojson, list_tracks_heatmap,
-    publish_track, search_tracks, track_exists, update_track_categories, update_track_description,
-    update_track_distance_markers, update_track_elevation, update_track_geometry,
-    update_track_name, update_track_slope,
+    GeometryUpdateOptions, InsertTrackFromEditorParams, InsertTrackParams, TrackVisibility,
+    UpdateElevationParams, UpdateSlopeParams, delete_track, duplicate_track, get_track_by_id,
+    get_track_detail, get_track_detail_adaptive, get_track_ownership, get_track_visibility,
+    insert_track, insert_track_from_editor, list_public_tracks_for_sitemap, list_tracks,
+    list_tracks_geojson, list_tracks_heatmap, publish_track, search_tracks, track_exists,
+    update_track_categories, update_track_description, update_track_distance_markers,
+    update_track_elevation, update_track_geometry, update_track_name, update_track_slope,
 };
 
 // Re-export user-related functions and types
@@ -32,7 +32,7 @@ pub use users::{
 
 // Re-export POI-related functions
 pub use pois::{
-    bulk_link_to_track, count_all, create, delete, find_by_bbox, find_by_track_id,
-    find_by_track_with_distance, get, list_all, owner_session_id, unlink_from_track, update,
-    usage_count,
+    PoiFilter, bulk_link_to_track, count_all, count_filtered, create, delete, find_by_bbox,
+    find_by_track_id, find_by_track_with_distance, get, list_all, list_filtered, owner_session_id,
+    track_ids_for_poi, unlink_from_track, update, usage_count,
 };

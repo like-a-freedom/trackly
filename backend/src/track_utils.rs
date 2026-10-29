@@ -5,7 +5,6 @@ pub mod elevation;
 pub mod elevation_enrichment;
 pub mod geometry;
 pub mod gpx_parser;
-pub mod hash;
 pub mod kml_parser;
 pub mod metrics;
 
@@ -25,7 +24,6 @@ pub use geometry::{
     haversine_distance, length_km_for_segments, parse_linestring_wkt, split_points_by_gap,
 };
 pub use gpx_parser::{MinimalGpxData, parse_gpx, parse_gpx_minimal};
-pub use hash::calculate_file_hash;
 pub use kml_parser::parse_kml;
 
 pub use pace_filter::{

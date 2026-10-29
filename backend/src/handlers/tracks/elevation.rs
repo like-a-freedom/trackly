@@ -12,12 +12,20 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::info;
 
+use crate::auth::OptionalAuthUser;
 use crate::db;
 use crate::error::{AppError, Result};
+use crate::handlers::util::verify_track_owner;
 use crate::metrics;
 use crate::models::{ElevationPreviewRequest, ElevationPreviewResponse, EnrichElevationRequest};
 use crate::track_utils::ElevationEnrichmentService;
 use crate::track_utils::extract_coordinates_from_geojson;
+
+/// Upper bound for ad-hoc elevation previews.
+///
+/// Preview requests are unauthenticated and each coordinate fans out to the
+/// remote elevation service, so the payload must stay small.
+const MAX_ELEVATION_PREVIEW_POINTS: usize = 5_000;
 
 /// Trigger elevation enrichment for a track.
 ///
@@ -28,8 +36,13 @@ use crate::track_utils::extract_coordinates_from_geojson;
 pub async fn enrich_elevation(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
+    auth_user: OptionalAuthUser,
     Json(request): Json<EnrichElevationRequest>,
 ) -> Result<Json<serde_json::Value>> {
+    // Enrichment mutates the track, so it requires the same ownership proof as
+    // any other edit: JWT identity or the anonymous session that created it.
+    verify_track_owner(&pool, track_id, &auth_user, Some(request.session_id)).await?;
+
     let track = db::get_track_by_id(&pool, track_id)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -97,6 +110,24 @@ pub async fn preview_elevation(
 ) -> Result<Json<ElevationPreviewResponse>> {
     if request.coordinates.is_empty() {
         return Err(AppError::BadRequest("No coordinates provided".into()));
+    }
+
+    if request.coordinates.len() > MAX_ELEVATION_PREVIEW_POINTS {
+        return Err(AppError::BadRequest(format!(
+            "Too many coordinates: {} (max {MAX_ELEVATION_PREVIEW_POINTS})",
+            request.coordinates.len()
+        )));
+    }
+
+    if request.coordinates.iter().any(|[lat, lon]| {
+        !lat.is_finite()
+            || !lon.is_finite()
+            || !(-90.0..=90.0).contains(lat)
+            || !(-180.0..=180.0).contains(lon)
+    }) {
+        return Err(AppError::BadRequest(
+            "Coordinates must be finite and within valid latitude/longitude ranges".into(),
+        ));
     }
 
     let service = ElevationEnrichmentService::new();

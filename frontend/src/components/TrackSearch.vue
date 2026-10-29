@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="isVisible"
-    class="search-overlay"
+    class="search-overlay ui-reveal"
     @click.self="closeSearch"
     @keydown.esc.stop="closeSearch"
   >

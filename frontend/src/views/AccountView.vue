@@ -80,7 +80,7 @@
         <div
           v-if="settingsMenu.showMenu.value"
           :ref="el => { settingsMenu.menuRef.value = el }"
-          class="settings-menu"
+          class="settings-menu ui-reveal"
         >
           <button
             class="menu-item"
@@ -154,7 +154,7 @@
     <Teleport to="body">
       <div
         v-if="nicknameEdit.showModal.value"
-        class="modal-overlay"
+        class="modal-overlay ui-reveal"
         @click="nicknameEdit.close"
       >
         <div

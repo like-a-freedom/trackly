@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::auth::OptionalAuthUser;
 use crate::db;
 use crate::error::{AppError, Result};
-use crate::handlers::util::session_id_from_headers;
+use crate::handlers::util::{session_id_from_headers, viewer_owns_track};
 use crate::metrics;
 use crate::models::{TrackDetail, TrackSimplificationQuery};
 
@@ -61,14 +61,22 @@ pub async fn get_track(
     auth_user: OptionalAuthUser,
     headers: HeaderMap,
 ) -> Result<Json<TrackDetail>> {
-    let track = db::get_track_detail_adaptive(&pool, track_id, params.zoom, params.mode.as_deref())
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let mut track =
+        db::get_track_detail_adaptive(&pool, track_id, params.zoom, params.mode.as_deref())
+            .await?
+            .ok_or(AppError::NotFound)?;
+
+    let viewer_session = session_id_from_headers(&headers);
+    let is_owner = viewer_owns_track(track.user_id, track.session_id, &auth_user, viewer_session);
+
+    // Private tracks are indistinguishable from missing ones for non-owners.
+    if !track.is_public && !is_owner {
+        return Err(AppError::NotFound);
+    }
 
     // Record the view: product metric (ownership + referrer) and engagement heartbeat.
     // Background refreshes (elevation polling, post-enrich refetch) are not views.
     if !params.background {
-        let viewer_session = session_id_from_headers(&headers);
         let ownership = track_view_ownership(
             track.user_id,
             track.session_id,
@@ -79,6 +87,7 @@ pub async fn get_track(
         metrics::record_session_activity(viewer_session, "view");
     }
 
+    track.is_owner = is_owner;
     Ok(Json(track))
 }
 
@@ -90,11 +99,24 @@ pub async fn get_track(
 pub async fn get_track_simplified(
     State(pool): State<Arc<PgPool>>,
     Path(track_id): Path<uuid::Uuid>,
+    auth_user: OptionalAuthUser,
+    headers: HeaderMap,
 ) -> Result<Json<TrackDetail>> {
-    let track = db::get_track_detail(&pool, track_id)
+    let mut track = db::get_track_detail(&pool, track_id)
         .await?
         .ok_or(AppError::NotFound)?;
 
+    let is_owner = viewer_owns_track(
+        track.user_id,
+        track.session_id,
+        &auth_user,
+        session_id_from_headers(&headers),
+    );
+    if !track.is_public && !is_owner {
+        return Err(AppError::NotFound);
+    }
+
+    track.is_owner = is_owner;
     Ok(Json(track))
 }
 

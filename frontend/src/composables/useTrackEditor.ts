@@ -4,10 +4,9 @@
  * Each sub-module owns a single concern; this facade wires cross-module dependencies.
  */
 import { ref, computed, watch, type Ref } from 'vue';
-import { generateSessionId, getSessionId } from '../utils/session';
+import { generateSessionId } from '../utils/session';
 import { validateCategories } from '@/domain/trackCategories';
 import { haversineDistance } from '../utils/haversine';
-import { useAuth } from './useAuth';
 import { useUndoRedo } from './useUndoRedo';
 import { useDraftSave, type DraftState } from './useDraftSave';
 import { useRouting } from './useRouting';
@@ -41,7 +40,6 @@ const CATEGORY_SLOPE_PENALTY: Record<string, number> = {
 };
 
 export function useTrackEditor({ trackId = null }: { trackId?: string | null } = {}) {
-    const { user } = useAuth();
     const routing = useRouting();
     const undoRedo = useUndoRedo(50);
     const draftSave = useDraftSave({ trackId });
@@ -792,19 +790,7 @@ export function useTrackEditor({ trackId = null }: { trackId?: string | null } =
 
     const isNewTrack = computed(() => !persistence.savedTrackId.value);
 
-    const isOwner = computed(() => {
-        const sessionId = getSessionId();
-        const currentUser = user.value as { user_id?: string; id?: string } | null;
-        const currentUserId = currentUser?.user_id ?? currentUser?.id ?? null;
-
-        if (currentUserId && persistence.ownerUserId.value) {
-            return String(currentUserId) === String(persistence.ownerUserId.value);
-        }
-        if (sessionId && persistence.ownerSessionId.value) {
-            return String(sessionId) === String(persistence.ownerSessionId.value);
-        }
-        return false;
-    });
+    const isOwner = computed(() => persistence.isOwner.value);
 
     const estimatedTimeMinutes = computed(() => {
         const dist = canonicalDistanceKm.value;

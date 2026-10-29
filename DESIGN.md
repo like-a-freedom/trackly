@@ -186,3 +186,13 @@ Existing top-bar metrics use pale blue rounded pills on desktop and transparent 
 - **Don't** duplicate editing controls across competing panes in the editor.
 - **Don't** claim legacy components already conform to the shared system.
 - **Don't** replace visible state, labels or status copy with color alone.
+
+### Disclosure motion
+
+All mounted or display-toggled overlay surfaces use `ui-reveal`: import,
+filters, search, Details, account/editor menus, context menus, dialogs,
+inspector disclosures, editor tabs and notifications. Native details use the
+same entry keyframes. Motion is a 180ms opacity fade with `--ease-out`, owned
+by the outer surface; no scaling or movement of anchored controls. Reduced
+motion disables entry animations. Existing Vue transitions retain removal
+and focus lifecycle; their shared overlays use the same opacity timing.

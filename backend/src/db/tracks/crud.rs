@@ -26,6 +26,34 @@ pub async fn track_exists(pool: &Arc<PgPool>, hash: &str) -> Result<Option<Uuid>
     }
 }
 
+/// Authorization-relevant track fields.
+#[derive(Debug, Clone, Copy)]
+pub struct TrackVisibility {
+    pub is_public: bool,
+    pub session_id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
+}
+
+/// Read visibility and ownership fields for a track.
+///
+/// Returns `None` when the track does not exist. Handlers use this to gate
+/// private reads and to compute the request-scoped `is_owner` flag.
+pub async fn get_track_visibility(
+    pool: &Arc<PgPool>,
+    track_id: Uuid,
+) -> Result<Option<TrackVisibility>, sqlx::Error> {
+    let row = sqlx::query("SELECT is_public, session_id, user_id FROM tracks WHERE id = $1")
+        .bind(track_id)
+        .fetch_optional(&**pool)
+        .await?;
+
+    Ok(row.map(|row| TrackVisibility {
+        is_public: row.try_get("is_public").unwrap_or(false),
+        session_id: row.try_get("session_id").ok(),
+        user_id: row.try_get("user_id").ok(),
+    }))
+}
+
 pub struct InsertTrackParams<'a> {
     pub pool: &'a Arc<PgPool>,
     pub id: Uuid,
@@ -65,6 +93,7 @@ pub struct InsertTrackParams<'a> {
     pub hash: &'a str,
     pub recorded_at: Option<chrono::DateTime<chrono::Utc>>,
     pub session_id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
     pub speed_data_json: Option<serde_json::Value>,
     pub pace_data_json: Option<serde_json::Value>,
 }
@@ -112,6 +141,7 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         hash,
         recorded_at,
         session_id,
+        user_id,
         speed_data_json,
         pace_data_json,
     } = params;
@@ -121,12 +151,12 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
         INSERT INTO tracks (
             id, name, description, categories, geom, length_km, elevation_profile,
             elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, elevation_api_calls, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, hr_data, temp_data, time_data, duration_seconds,
-            hash, recorded_at, created_at, session_id, is_public, speed_data, pace_data
+            hash, recorded_at, created_at, session_id, user_id, is_public, speed_data, pace_data
         )
         VALUES (
             $1, $2, $3, $4, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326), $6, $7,
             $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
-            $33, $34, DEFAULT, $35, $36, $37, $38
+            $33, $34, DEFAULT, $35, $36, $37, $38, $39
         )
     "#,
     )
@@ -165,6 +195,7 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
     .bind(hash)
     .bind(recorded_at)
     .bind(session_id)
+    .bind(user_id)
     .bind(true) // is_public, default to true
     .bind(speed_data_json)
     .bind(pace_data_json)
@@ -183,7 +214,7 @@ pub async fn insert_track(params: InsertTrackParams<'_>) -> Result<(), sqlx::Err
 /// — the full-detail path selects it and ignores it rather than duplicating the
 /// statement. It is a `&'static str`, so SQLx 0.9's `SqlSafeStr` check passes
 /// without needing an `AssertSqlSafe` audit for a `format!`-built string.
-const TRACK_DETAIL_SQL: &str = "SELECT id, name, description, categories, distance_markers_enabled, segment_meta, waypoints, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, speed_data, pace_data, ST_NPoints(geom) as original_points FROM tracks WHERE id = $1";
+const TRACK_DETAIL_SQL: &str = "SELECT id, name, description, categories, distance_markers_enabled, segment_meta, waypoints, ST_AsGeoJSON(geom)::jsonb as geom_geojson, length_km, elevation_profile, hr_data, temp_data, time_data, elevation_gain, elevation_loss, elevation_min, elevation_max, elevation_enriched, elevation_enriched_at, elevation_dataset, slope_min, slope_max, slope_avg, slope_histogram, slope_segments, avg_speed, avg_hr, hr_min, hr_max, moving_time, pause_time, moving_avg_speed, moving_avg_pace, duration_seconds, hash, recorded_at, created_at, updated_at, session_id, user_id, is_public, speed_data, pace_data, ST_NPoints(geom) as original_points FROM tracks WHERE id = $1";
 
 /// Map the columns shared by both track-detail queries onto [`TrackDetail`].
 ///
@@ -234,6 +265,9 @@ fn read_track_common(row: &sqlx::postgres::PgRow) -> Result<TrackDetail, sqlx::E
         recorded_at: row.try_get("recorded_at").ok(),
         session_id: row.try_get("session_id").ok(),
         user_id: row.try_get("user_id").ok(),
+        is_public: row.try_get("is_public").unwrap_or(false),
+        // Request-scoped; handlers set this once the viewer identity is known.
+        is_owner: false,
         speed_data: row.try_get("speed_data").ok(),
         pace_data: row.try_get("pace_data").ok(),
     })

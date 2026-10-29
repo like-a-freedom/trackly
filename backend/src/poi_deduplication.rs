@@ -46,7 +46,7 @@ fn deduplicate_waypoints(waypoints: &[ParsedWaypoint]) -> Vec<(usize, &ParsedWay
 
 /// Bulk insert or update POIs using QueryBuilder
 /// Returns vector of (index, poi_id) for successfully inserted/updated POIs
-pub async fn bulk_find_or_create_pois(
+async fn bulk_find_or_create_pois(
     pool: &PgPool,
     waypoints: &[ParsedWaypoint],
 ) -> Result<Vec<(usize, i32)>, sqlx::Error> {

@@ -4,6 +4,7 @@ import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { useTracks, resetTracksCaches } from '../useTracks';
 import { useSearchStore } from '../../stores/search';
+import { useAuthStore } from '../../stores/auth';
 
 // Mock session utility (spread the real module so `sessionHeaders` stays real
 // and only the session id is overridden)
@@ -67,7 +68,7 @@ describe('useTracks composable', () => {
             await fetchTracksInBounds(mockBounds);
 
             expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining('/api/tracks?bbox=10,50,11,51'),
+                expect.stringContaining('/api/tracks?bbox=10%2C50%2C11%2C51'),
                 expect.objectContaining({ signal: expect.any(Object) })
             );
             expect(polylines.value).toHaveLength(1);
@@ -241,6 +242,47 @@ describe('useTracks composable', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1); // Should not call fetch again
         });
 
+        it('should not reuse a cached response when filters differ', async () => {
+            const mockBounds = {
+                sw: [10, 50],
+                ne: [11, 51]
+            };
+
+            fetchMock.mockResolvedValue({
+                ok: true,
+                json: async () => ({ type: 'FeatureCollection', features: [] })
+            });
+
+            const { fetchTracksInBounds } = useTracks();
+
+            await fetchTracksInBounds(mockBounds, { categories: ['hiking'] });
+            await fetchTracksInBounds(mockBounds, { categories: ['running'] });
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it('should not reuse a cached response across auth identities', async () => {
+            const mockBounds = {
+                sw: [10, 50],
+                ne: [11, 51]
+            };
+
+            fetchMock.mockResolvedValue({
+                ok: true,
+                json: async () => ({ type: 'FeatureCollection', features: [] })
+            });
+
+            const auth = useAuthStore();
+            const { fetchTracksInBounds } = useTracks();
+
+            await fetchTracksInBounds(mockBounds);
+            auth.accessToken = 'token-for-another-user';
+            auth.tokenExpiresAt = Date.now() + 10 * 60_000;
+            await fetchTracksInBounds(mockBounds);
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
         it('should include zoom and mode parameters in request', async () => {
             const mockBounds = {
                 sw: [10, 50],
@@ -265,7 +307,7 @@ describe('useTracks composable', () => {
             );
         });
 
-        it('should include owner_session_id when provided', async () => {
+        it('should send mine=true and the session header when ownership filtering is requested', async () => {
             const mockBounds = {
                 sw: [10, 50],
                 ne: [11, 51]
@@ -277,12 +319,12 @@ describe('useTracks composable', () => {
             });
 
             const { fetchTracksInBounds } = useTracks();
-            await fetchTracksInBounds(mockBounds, { ownerSessionId: 'abc-123' });
+            await fetchTracksInBounds(mockBounds, { mine: true });
 
-            expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining('owner_session_id=abc-123'),
-                expect.any(Object)
-            );
+            const [url, init] = fetchMock.mock.calls[0];
+            expect(url).toContain('mine=true');
+            expect(url).not.toContain('owner_session_id');
+            expect(init.headers).toMatchObject({ 'x-session-id': 'test-session-id' });
         });
 
         it('should handle invalid response data', async () => {
@@ -725,6 +767,26 @@ describe('useTracks composable', () => {
             const { checkTrackDuplicate } = useTracks();
             const result = checkTrackDuplicate();
             expect(result).toEqual({ alreadyExists: false });
+        });
+    });
+
+    describe('fetchHeatmapInBounds', () => {
+        it('sends the session header so private tracks are attributed correctly', async () => {
+            const mockBounds = {
+                sw: [10, 50],
+                ne: [11, 51]
+            };
+
+            fetchMock.mockResolvedValue({
+                ok: true,
+                json: async () => ({ points: [[50, 10]] })
+            });
+
+            const { fetchHeatmapInBounds } = useTracks();
+            await fetchHeatmapInBounds(mockBounds);
+
+            const [, init] = fetchMock.mock.calls[0];
+            expect(init.headers).toMatchObject({ 'x-session-id': 'test-session-id' });
         });
     });
 

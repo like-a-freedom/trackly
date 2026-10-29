@@ -2,7 +2,7 @@
   <transition name="dialog-fade">
     <div
       v-if="visible"
-      class="dialog-overlay"
+      class="dialog-overlay ui-reveal"
       @click="onOverlayClick"
     >
       <div

@@ -152,6 +152,18 @@ pub async fn list_public_tracks_for_sitemap(
     Ok(out)
 }
 
+/// Upper bound for `/api/tracks` results.
+///
+/// The endpoint powers the map viewport, so a bounded page is enough; without
+/// a limit a dense area can return every stored track and exhaust memory.
+fn list_result_limit() -> i64 {
+    std::env::var("TRACK_LIST_MAX_RESULTS")
+        .ok()
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(5000)
+        .clamp(1, 20_000)
+}
+
 pub async fn list_tracks_geojson(
     pool: &Arc<PgPool>,
     bbox: Option<&str>,
@@ -223,6 +235,9 @@ pub async fn list_tracks_geojson(
             });
         }
     }
+
+    builder.push(" ORDER BY created_at DESC LIMIT ");
+    builder.push_bind(list_result_limit());
 
     let rows = builder.build().fetch_all(&**pool).await?;
 
@@ -430,7 +445,9 @@ pub async fn search_tracks(
     query: &str,
 ) -> Result<Vec<TrackSearchResult>, sqlx::Error> {
     let start = Instant::now();
-    let search_query = format!("%{}%", query.to_lowercase());
+    // Use POSITION instead of LIKE so `%` and `_` in user input are treated as
+    // literal characters rather than wildcards.
+    let search_query = query.to_lowercase();
 
     let rows = sqlx::query(
         r#"
@@ -448,13 +465,13 @@ pub async fn search_tracks(
         FROM tracks 
         WHERE is_public = true 
         AND (
-            LOWER(name) LIKE $1 
-            OR LOWER(COALESCE(description, '')) LIKE $1
+            POSITION($1 IN LOWER(name)) > 0
+            OR POSITION($1 IN LOWER(COALESCE(description, ''))) > 0
         )
         ORDER BY 
             CASE 
-                WHEN LOWER(name) LIKE $1 THEN 1 
-                ELSE 2 
+                WHEN POSITION($1 IN LOWER(name)) > 0 THEN 1
+                ELSE 2
             END,
             name
         LIMIT 50
