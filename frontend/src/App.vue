@@ -28,7 +28,7 @@
     </template>
     <template v-else>
       <div class="loading-screen">
-        <div class="loading-spinner"></div>
+        <div class="app-loading-spinner"></div>
       </div>
     </template>
   </div>
@@ -245,7 +245,7 @@ body,
   width: 100vw;
 }
 
-.loading-spinner {
+.app-loading-spinner {
   width: 32px;
   height: 32px;
   border: 3px solid var(--color-line);
@@ -256,7 +256,7 @@ body,
 /* Spinners are the one animation that often survives reduced motion, but
    the preference asks for calm: reduced-motion users get a static ring. */
 @media (prefers-reduced-motion: no-preference) {
-  .loading-spinner {
+  .app-loading-spinner {
     animation: spin 0.6s linear infinite;
   }
 }

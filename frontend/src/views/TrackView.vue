@@ -127,8 +127,9 @@
       <button class="btn-home" @click="goHome">Go to Home</button>
     </div>
   </div>
-  <div v-else class="loading-container">
-    <div class="loading-spinner">Loading track...</div>
+  <div v-else class="loading-container" role="status" aria-live="polite">
+    <span class="app-loading-spinner" aria-hidden="true"></span>
+    <span class="track-loading-label">Loading track...</span>
   </div>
 </template>
 
@@ -1112,6 +1113,8 @@ defineExpose({
 
 .loading-container {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
   justify-content: center;
   align-items: center;
   height: 100vh;
@@ -1119,7 +1122,7 @@ defineExpose({
   background: oklch(97% 0 none);
 }
 
-.loading-spinner {
+.track-loading-label {
   font-size: 18px;
   color: var(--color-muted);
 }
