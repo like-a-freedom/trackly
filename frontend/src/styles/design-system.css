@@ -191,3 +191,48 @@
 @media (hover: hover) and (pointer: fine) {
   .map-disclosure-close:hover { background: var(--color-canvas); color: var(--color-ink) !important; }
 }
+
+@layer components {
+  .track-tag {
+    display: inline-flex;
+    align-items: center;
+    padding-block: 4px;
+    padding-inline: 12px;
+    border-radius: 6px;
+    background: oklch(95.3% 0.0218 239.4);
+    color: var(--color-action);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .track-tag-auto {
+    background: oklch(93.8% 0.026 321.9);
+    color: oklch(45.3% 0.1988 313);
+  }
+  .track-tag-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-block-size: 44px;
+    padding-inline: 12px;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .track-tag-option:is(.selected-category, :has(input:checked)) {
+    background: oklch(95.3% 0.0218 239.4);
+    border-color: var(--color-action);
+    color: var(--color-action);
+    font-weight: 600;
+  }
+  .track-tag-option:has(:focus-visible) { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+  .track-tag-option:active { background: var(--color-soft); }
+  .track-tag-option:has(:disabled) { opacity: 0.5; cursor: not-allowed; }
+  @media (hover: hover) and (pointer: fine) {
+    .track-tag-option:not(:has(:disabled)):hover { border-color: var(--color-action); }
+  }
+}

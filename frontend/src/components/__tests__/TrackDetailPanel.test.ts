@@ -464,7 +464,7 @@ describe('TrackDetailPanel', () => {
         props: { track: mockTrackComplete, isOwner: true }
       });
 
-      expect(wrapper.find('.categories-inline-edit').exists()).toBe(true);
+      expect(wrapper.find('[aria-label="Edit categories"]').exists()).toBe(true);
       expect(wrapper.find('.track-category-select-inline').exists()).toBe(true);
     });
 

@@ -64,7 +64,7 @@
           <span
             v-for="cat in data.categories"
             :key="cat"
-            class="category-tag"
+            class="category-tag track-tag"
           >{{ capitalize(cat) }}</span>
         </span>
       </div>
@@ -194,30 +194,6 @@ function formatDataset(dataset: string | undefined): string {
   gap: 4px;
   margin-inline-start: 4px;
   vertical-align: middle;
-}
-.category-tag {
-  display: inline-block;
-  background: oklch(95.3% 0.0218 239.4);
-  color: var(--accent);
-  border-radius: 6px;
-  padding: 2px 10px 2px 8px;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  line-height: 1.3;
-  border: 1px solid oklch(88.5% 0.0546 243.4);
-  box-shadow: 0 1px 2px color-mix(in oklch, var(--color-action) 4%, transparent);
-  user-select: none;
-  white-space: nowrap;
-  transition:
-    background-color 0.18s var(--ease-out, ease-out),
-    color 0.18s var(--ease-out, ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .category-tag:hover {
-    background: oklch(88.5% 0.0546 243.4);
-    color: var(--accent-active);
-  }
 }
 @media (max-width: 600px) {
   .custom-tooltip {

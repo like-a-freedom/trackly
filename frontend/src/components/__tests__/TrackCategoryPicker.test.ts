@@ -20,3 +20,11 @@ describe('Track categories', () => {
         expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([[]]);
     });
 });
+
+it('uses the shared chip treatment for selection and read-only tags', () => {
+    const picker = mount(TrackCategoryPicker, {props:{modelValue:['hiking']}});
+    expect(picker.findAll('.track-tag-option')).toHaveLength(6);
+    const view = mount(TrackCategoryPicker, {props:{modelValue:['hiking'],readonly:true}});
+    expect(view.get('.track-tag').text()).toBe('Hiking');
+    expect(view.find('input').exists()).toBe(false);
+});

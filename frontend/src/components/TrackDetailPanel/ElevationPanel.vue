@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import TrackActionButton from "../TrackActionButton.vue";
 import ElevationChart from '../ElevationChart.vue';
 
 const props = defineProps({
@@ -83,19 +84,15 @@ function handleChartModeChange(mode) {
             <h3>Elevation</h3>
             <div class="header-actions">
                 <!-- Force Update Elevation Button -->
-                <button
+                <TrackActionButton
                     v-if="isOwner && hasElevationData"
-                    class="force-update-btn inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-1.5 text-muted disabled:cursor-not-allowed disabled:opacity-50"
-                    type="button"
-                    aria-label="Recalculate elevation"
-                    :disabled="enrichingElevation"
+                    action="refresh"
+                    class="force-update-btn"
+                    label="Recalculate elevation"
+                    :loading="enrichingElevation"
                     title="Force update elevation data from external service"
                     @click="emit('force-enrich-elevation')"
-                >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
-                    </svg>
-                </button>
+                />
 
                 <!-- Stop Polling Button (only shown when polling is active) -->
                 <button
@@ -238,18 +235,8 @@ function handleChartModeChange(mode) {
 </template>
 
 <style scoped>
-.force-update-btn:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-}
-.force-update-btn:active:not(:disabled) {
-    background: color-mix(in oklch, var(--color-action) 16%, transparent);
-    transform: scale(0.97);
-}
-@media (hover: hover) and (pointer: fine) {
-    .force-update-btn:hover:not(:disabled) {
-        background: color-mix(in oklch, var(--color-action) 10%, transparent);
-        color: var(--color-action);
-    }
-}
+.section-header { flex-wrap: wrap; gap: 12px; }
+.section-header h3 { margin: 0; }
+.header-actions { display: flex; align-items: center; gap: 12px; min-inline-size: 0; max-inline-size: 100%; }
+.chart-toggles { flex-wrap: wrap; min-inline-size: 0; }
 </style>

@@ -151,19 +151,20 @@
           </div>
         </div>
       </transition>
-      <button
+      <TrackActionButton action="upload" :loading="uploading"
         v-if="selectedFile"
         type="submit"
         class="upload-btn ui-primary"
         :disabled="uploading || !selectedFile || !trackName.trim() || trackExists || checkingExists || !categoryValues.length"
       >
         {{ uploading ? 'Uploading…' : 'Upload track' }}
-      </button>
+      </TrackActionButton>
       <p v-if="uploading" role="status">Uploading your file. Keep this window open.</p>
     </form>
   </div>
 </template>
 <script setup>
+import TrackActionButton from "./TrackActionButton.vue";
 import { TRACK_CATEGORIES, validateCategories } from "../domain/trackCategories";
 import { ref, shallowRef, nextTick, watch, computed } from 'vue';
 import { useRouter } from 'vue-router';

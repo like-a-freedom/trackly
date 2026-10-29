@@ -140,3 +140,12 @@ describe('ElevationPanel', () => {
         expect(wrapper.find('.chart-toggles').exists()).toBe(true);
     });
 });
+
+it('uses the shared compact action and blocks repeat recalculation while loading', () => {
+ const wrapper = mount(ElevationPanel, {props:{track:{elevation_gain:100},isOwner:true,enrichingElevation:true}});
+ const action = wrapper.get('.force-update-btn');
+ expect(action.classes()).toContain('track-action-icon');
+ expect(action.attributes('aria-label')).toBe('Recalculate elevation');
+ expect(action.attributes('disabled')).toBeDefined();
+ expect(action.attributes('aria-busy')).toBe('true');
+});

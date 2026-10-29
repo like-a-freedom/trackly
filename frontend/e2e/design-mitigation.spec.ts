@@ -221,3 +221,91 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844}]) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
  });
 }
+
+for (const width of [1280, 390]) {
+ test(`category tags share view and edit styles at ${width}px`, async ({page}) => {
+  await page.setViewportSize({width,height:844});
+  await page.route('**/api/tracks**', route => {
+   if (new URL(route.request().url()).pathname.endsWith('/pois')) return route.fulfill({json:[]});
+   return route.fulfill({json:{...fixtureTrack,is_owner:true,categories:['hiking','running'],auto_classifications:['Long Run']}});
+  });
+  await page.goto('/track/'+fixtureId);
+  const nameEdit = page.getByRole('button',{name:'Edit track name',exact:true});
+  await expect(nameEdit).toHaveClass(/track-action-button/);
+  await nameEdit.click();
+  const nameForm = page.locator('.name-edit-block');
+  await expect(nameForm.locator('.track-action-button')).toHaveCount(2);
+  await nameForm.screenshot({path:`../.impeccable/review/name-actions-${width}.png`});
+  await nameForm.getByRole('button',{name:'Cancel',exact:true}).click();
+  const descriptionEdit = page.locator('.edit-description-btn');
+  await expect(descriptionEdit).toHaveClass(/track-action-button/);
+  await descriptionEdit.click();
+  const descriptionForm = page.locator('.description-edit-block');
+  await expect(descriptionForm.locator('.track-action-button')).toHaveCount(2);
+  await descriptionForm.screenshot({path:`../.impeccable/review/description-actions-${width}.png`});
+  await descriptionForm.getByRole('button',{name:'Cancel',exact:true}).click();
+  const categories = page.getByRole('region',{name:'Track categories',exact:true});
+  await expect(categories.locator('.track-tag')).toHaveCount(2);
+  await expect(categories.locator('input')).toHaveCount(0);
+  const editAction = categories.getByRole('button',{name:'Edit categories',exact:true});
+  await expect(editAction).toHaveClass(/ui-secondary/);
+  const headingBox = await categories.locator('legend').boundingBox();
+  const editBox = await editAction.boundingBox();
+  const labelBox = await categories.locator('legend > span > span').boundingBox();
+  expect(editBox!.x - labelBox!.x - labelBox!.width).toBeCloseTo(8, 0);
+  expect(editBox!.height).toBe(28);
+  expect(await editAction.evaluate(el => { const box = el.getBoundingClientRect(); const inset = parseFloat(getComputedStyle(el, "::after").top); return box.height - 2 * inset; })).toBeGreaterThanOrEqual(44);
+  await categories.scrollIntoViewIfNeeded();
+  await categories.screenshot({path:`../.impeccable/review/categories-view-${width}.png`});
+  await categories.getByRole('button',{name:'Edit categories',exact:true}).click();
+  await expect(categories.getByRole('checkbox')).toHaveCount(6);
+  await expect(categories.getByRole('checkbox').first()).toBeFocused();
+  await categories.getByRole('checkbox',{name:'Walking',exact:true}).check();
+  await expect(categories.getByRole('button',{name:'Save categories',exact:true})).toBeEnabled();
+  const saveAction = categories.getByRole('button',{name:'Save categories',exact:true});
+  const cancelAction = categories.getByRole('button',{name:'Cancel',exact:true});
+  await expect(saveAction).toHaveClass(/ui-primary/);
+  await expect(cancelAction).toHaveClass(/ui-secondary/);
+  const saveBox = await saveAction.boundingBox();
+  const cancelBox = await cancelAction.boundingBox();
+  expect(saveBox!.x).toBeCloseTo(headingBox!.x, 0);
+  expect(saveBox!.y).toBeCloseTo(cancelBox!.y, 0);
+  expect(saveBox!.height).toBeCloseTo(cancelBox!.height, 0);
+  expect(cancelBox!.x - saveBox!.x - saveBox!.width).toBeCloseTo(12, 0);
+  const option = categories.locator('.track-tag-option').first();
+  expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await categories.screenshot({path:`../.impeccable/review/categories-edit-${width}.png`});
+  await categories.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(categories.locator('input')).toHaveCount(0);
+  await expect(categories.locator('.track-tag')).toHaveText(['Hiking','Running']);
+  await expect(categories.getByRole('button',{name:'Edit categories',exact:true})).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ });
+}
+
+for (const width of [1280, 390, 320]) {
+ test(`elevation refresh aligns with chart controls at ${width}px`, async ({page}) => {
+  await page.setViewportSize({width,height:844});
+  await page.route('**/api/tracks**', route => {
+   if (new URL(route.request().url()).pathname.endsWith('/pois')) return route.fulfill({json:[]});
+   return route.fulfill({json:{...fixtureTrack,is_owner:true,slope_segments:[{start_index:0,end_index:2,slope:3}]}});
+  });
+  await page.goto('/track/'+fixtureId);
+  const refresh = page.getByRole('button',{name:'Recalculate elevation',exact:true});
+  await refresh.scrollIntoViewIfNeeded();
+  const controls = refresh.locator('..');
+  const tabs = controls.locator('.chart-toggles');
+  const refreshBox = await refresh.boundingBox();
+  const tabsBox = await tabs.boundingBox();
+  expect(Math.abs(refreshBox!.y + refreshBox!.height / 2 - tabsBox!.y - tabsBox!.height / 2)).toBeLessThan(1);
+  expect(tabsBox!.x - refreshBox!.x - refreshBox!.width).toBeCloseTo(12, 0);
+  const edit = page.getByRole('button',{name:'Edit categories',exact:true});
+  const dimensions = (locator: typeof edit) => locator.evaluate(el => { const style = getComputedStyle(el); return [style.width,style.height,style.color,style.borderRadius]; });
+  expect(await dimensions(refresh)).toEqual(await dimensions(edit));
+  await expect(page.getByTestId('elevation-slope-toggle')).toBeVisible();
+  await page.getByTestId('elevation-slope-toggle').click();
+  await expect(page.getByTestId('elevation-slope-toggle')).toHaveClass(/active/);
+  await controls.screenshot({path:`../.impeccable/review/elevation-actions-${width}.png`});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ });
+}

@@ -19,6 +19,7 @@ describe('CategoriesPanel', () => {
         let rejectSave: (error: Error) => void;
         const saveCategories = vi.fn(() => new Promise<void>((_, reject) => { rejectSave = reject; }));
         const wrapper = mount(CategoriesPanel, {props: {track:{id:'t1',categories:['hiking']},isOwner:true,saveCategories}});
+        await wrapper.get('button[aria-label="Edit categories"]').trigger('click');
         await wrapper.get('input[value="walking"]').setValue(true);
         await wrapper.get('button[data-testid="save-categories"]').trigger('click');
         expect(saveCategories).toHaveBeenCalledWith(['hiking','walking']);
@@ -62,17 +63,19 @@ describe('CategoriesPanel', () => {
         expect(wrapper.text()).toContain('Running');
     });
 
-    it('renders multiselect for owner', () => {
+    it('shows compact view and explicit editing for owner', () => {
         const wrapper = mount(CategoriesPanel, {
             props: { ...props, isOwner: true },
         });
-        expect(wrapper.find('.categories-inline-edit').exists()).toBe(true);
+        expect(wrapper.find('input').exists()).toBe(false);
+        expect(wrapper.find('button[aria-label="Edit categories"]').exists()).toBe(true);
     });
 
     it('emits categories-updated event', async () => {
         const wrapper = mount(CategoriesPanel, {
             props: { ...props, isOwner: true },
         });
+        await wrapper.get('button[aria-label="Edit categories"]').trigger('click');
         await wrapper.get('input[value="running"]').setValue(false);
         await wrapper.get('button[data-testid="save-categories"]').trigger('click');
         await flushPromises();
@@ -85,4 +88,14 @@ describe('CategoriesPanel', () => {
         expect(wrapper.text()).toContain('Hiking');
         expect(wrapper.text()).toContain('Running');
     });
+});
+
+it('discards unsaved edits on cancel', async () => {
+    const save = vi.fn();
+    const wrapper = mount(CategoriesPanel, {props:{track:{categories:['hiking']},isOwner:true,saveCategories:save}});
+    await wrapper.get('[aria-label="Edit categories"]').trigger('click');
+    await wrapper.get('input[value="walking"]').setValue(true);
+    await wrapper.findAll('button').find(button => button.text() === 'Cancel')!.trigger('click');
+    expect(wrapper.findAll('.track-tag').map(tag => tag.text())).toEqual(['Hiking']);
+    expect(save).not.toHaveBeenCalled();
 });

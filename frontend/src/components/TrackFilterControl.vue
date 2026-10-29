@@ -76,7 +76,7 @@
             </button>
           </div>
         </div>
-        
+
         <!-- Filter options dropdown -->
         <div
           v-if="showFilterOptions"
@@ -196,10 +196,11 @@
                 @touchmove.stop
                 @touchend.stop
               >
-                <div 
-                  v-for="category in stableCategories" 
-                  :key="category" 
-                  class="checkbox-item"
+                <label
+                  v-for="category in stableCategories"
+                  :key="category"
+                  class="track-tag-option"
+                  :for="`category-${category}`"
                 >
                   <input
                     :id="`category-${category}`"
@@ -208,13 +209,10 @@
                     :value="category"
                     class="category-checkbox"
                   >
-                  <label
-                    :for="`category-${category}`"
-                    class="checkbox-label"
-                  >
+                  <span>
                     {{ capitalize(category) }}
-                  </label>
-                </div>
+                  </span>
+                </label>
               </div>
             </div>
 
@@ -272,7 +270,7 @@
               </button>
             </div>
           </template>
-          
+
           <!-- Show message when My tracks is active but no tracks found -->
           <div
             v-else-if="showMyTracks"
@@ -381,24 +379,24 @@ const emitFilter = (filterState) => {
   // Check if myTracks filter specifically changed (this triggers server refetch)
   const myTracksChanged = filterState.myTracks !== previousMyTracksValue;
   previousMyTracksValue = filterState.myTracks;
-  
+
   // If myTracks changed and we currently have tracks, mark as pending
   // to prevent flickering during data refresh
   if (myTracksChanged && props.hasTracksInViewport) {
     hadTracksBeforeFilter.value = true;
     isFilterPending.value = true;
-    
+
     // Clear any existing timeout
     if (pendingClearTimeout) {
       clearTimeout(pendingClearTimeout);
     }
-    
+
     // Auto-clear pending state after a reasonable time (in case watch doesn't fire)
     pendingClearTimeout = setTimeout(() => {
       isFilterPending.value = false;
     }, 1000);
   }
-  
+
   if (import.meta.env.MODE === 'test') {
     // In test mode, emit immediately without debouncing
     emit('update:filter', filterState);
@@ -424,13 +422,13 @@ const hasTracksInArea = computed(() => {
   if (isFilterPending.value && hadTracksBeforeFilter.value) {
     return true;
   }
-  
+
   // If we have stable categories (meaning data was loaded at some point), show filters
   // This prevents hiding filters when polylines temporarily becomes empty during updates
   if (stableCategories.value.length > 0) {
     return true;
   }
-  
+
   // Use the prop passed from TrackMap that reflects actual tracks in viewport
   return props.hasTracksInViewport;
 });
@@ -445,7 +443,7 @@ watch(() => props.hasTracksInViewport, (newValue, oldValue) => {
     if (pendingClearTimeout) {
       clearTimeout(pendingClearTimeout);
     }
-    
+
     // Use a small timeout to allow for any rapid state changes to settle
     pendingClearTimeout = setTimeout(() => {
       isFilterPending.value = false;
@@ -469,7 +467,7 @@ function updateStableValues() {
     // If we have no stable categories yet, use global categories as fallback
     stableCategories.value = [...props.globalCategories];
   }
-  
+
   if (typeof props.minLength === 'number') {
     stableMinLength.value = props.minLength;
   }
@@ -570,7 +568,7 @@ onMounted(() => {
   let initialLengthRange = [props.globalMinLength, props.globalMaxLength];
   let initialElevationGainRange = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
   let initialSlopeRange = [props.globalMinSlope || 0, props.globalMaxSlope || 20];
-  
+
   let savedFiltersRaw = null;
   try {
     savedFiltersRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -617,12 +615,12 @@ onMounted(() => {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
   }
-  
+
   selectedCategories.value = initialCategories;
   lengthRange.value = initialLengthRange;
   elevationGainRange.value = initialElevationGainRange;
   slopeRange.value = initialSlopeRange;
-  
+
   // Initialize stable values from props, preferring globalCategories to avoid empty state
   // Use categories if available and non-empty, otherwise use globalCategories
   if (props.categories && props.categories.length > 0) {
@@ -632,21 +630,21 @@ onMounted(() => {
   } else {
     stableCategories.value = [];
   }
-  
+
   // For ranges, prefer current viewport values if available, otherwise use global defaults
-  stableMinLength.value = typeof props.minLength === 'number' ? props.minLength : 
+  stableMinLength.value = typeof props.minLength === 'number' ? props.minLength :
                            (typeof props.globalMinLength === 'number' ? props.globalMinLength : 0);
-  stableMaxLength.value = typeof props.maxLength === 'number' ? props.maxLength : 
+  stableMaxLength.value = typeof props.maxLength === 'number' ? props.maxLength :
                            (typeof props.globalMaxLength === 'number' ? props.globalMaxLength : 50);
-  stableMinElevationGain.value = typeof props.minElevationGain === 'number' ? props.minElevationGain : 
+  stableMinElevationGain.value = typeof props.minElevationGain === 'number' ? props.minElevationGain :
                                   (typeof props.globalMinElevationGain === 'number' ? props.globalMinElevationGain : 0);
-  stableMaxElevationGain.value = typeof props.maxElevationGain === 'number' ? props.maxElevationGain : 
+  stableMaxElevationGain.value = typeof props.maxElevationGain === 'number' ? props.maxElevationGain :
                                   (typeof props.globalMaxElevationGain === 'number' ? props.globalMaxElevationGain : 2000);
-  stableMinSlope.value = typeof props.minSlope === 'number' ? props.minSlope : 
+  stableMinSlope.value = typeof props.minSlope === 'number' ? props.minSlope :
                           (typeof props.globalMinSlope === 'number' ? props.globalMinSlope : 0);
-  stableMaxSlope.value = typeof props.maxSlope === 'number' ? props.maxSlope : 
+  stableMaxSlope.value = typeof props.maxSlope === 'number' ? props.maxSlope :
                           (typeof props.globalMaxSlope === 'number' ? props.globalMaxSlope : 20);
-  
+
   // Synchronize previousMyTracksValue with the initial showMyTracks state
   // to prevent false positive detection of "change" on first emit
   previousMyTracksValue = showMyTracks.value;
@@ -685,11 +683,11 @@ watch(() => props.categories, (newCategories) => {
   if (isFilterPending.value) {
     return;
   }
-  
+
   // Don't automatically change user selections based on viewport changes
   // But we need to re-emit so parent gets filtered values for the new viewport
   const validCategories = newCategories ? selectedCategories.value.filter(cat => newCategories.includes(cat)) : selectedCategories.value;
-  
+
   emitFilter({
     categories: validCategories,
     lengthRange: lengthRange.value,
@@ -727,7 +725,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
   let validLengthRange = lengthRange;
   let validElevationGainRange = elevationGainRange;
   let validSlopeRange = slopeRange;
-  
+
   // Clamp length range to current viewport bounds
   if (props.minLength !== undefined && props.maxLength !== undefined) {
     const [min, max] = lengthRange;
@@ -739,7 +737,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
       validLengthRange = [props.minLength, props.maxLength];
     }
   }
-  
+
   // Clamp elevation gain range to current viewport bounds
   if (props.minElevationGain !== undefined && props.maxElevationGain !== undefined) {
     const [min, max] = elevationGainRange;
@@ -751,7 +749,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
       validElevationGainRange = [props.minElevationGain, props.maxElevationGain];
     }
   }
-  
+
   // Clamp slope range to current viewport bounds
   if (props.minSlope !== undefined && props.maxSlope !== undefined) {
     const [min, max] = slopeRange;
@@ -763,7 +761,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
       validSlopeRange = [props.minSlope, props.maxSlope];
     }
   }
-  
+
   emitFilter({
     categories: validCategories,
     lengthRange: validLengthRange,
@@ -772,7 +770,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
     myTracks: showMyTracks.value,
     showHeatmap: showHeatmap.value,
   });
-  
+
   // Always persist user's actual choice (not the clamped values)
   if (cats !== null && cats !== undefined && lengthRange && lengthRange.length === 2 && elevationGainRange && elevationGainRange.length === 2 && slopeRange && slopeRange.length === 2) {
     try {
@@ -900,9 +898,9 @@ onUnmounted(() => {
   transform: translateY(0);
 }
 
-.filter-icon { 
-  width: 20px; 
-  height: 20px; 
+.filter-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .track-filter-control {
@@ -971,7 +969,7 @@ onUnmounted(() => {
 }
 
 .options-icon,
-.collapse-icon { 
+.collapse-icon {
   display: block;
   flex-shrink: 0;
 }

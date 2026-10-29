@@ -166,14 +166,14 @@
         </Teleport>
       </div>
 
-      <button
+      <TrackActionButton action="save" :loading="saving"
         class="top-bar-save-btn ui-primary"
         :disabled="!canSave || saving"
         data-testid="top-bar-save"
         @click="$emit('save')"
       >
         {{ saving ? "Saving..." : "Save" }}
-      </button>
+      </TrackActionButton>
       <span v-if="!canSave && !saving" class="text-sm text-muted" data-testid="save-requirements">{{ !trackName.trim() ? 'Add a name in Description' : 'Add at least two route points' }}</span>
     </div>
 
@@ -213,6 +213,7 @@
 </template>
 
 <script setup>
+import TrackActionButton from "../TrackActionButton.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 
 const props = defineProps({

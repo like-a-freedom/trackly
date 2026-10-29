@@ -82,37 +82,18 @@
               @selectstart.stop
               @dragstart.prevent
             >
-              <button :disabled="savingName" class="save-btn" @click="saveName">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <polyline points="20,6 9,17 4,12" />
-                </svg>
+              <TrackActionButton action="save" :loading="savingName" :disabled="savingName" class="save-btn" @click="saveName">
+
                 {{ savingName ? "Saving..." : "Save" }}
-              </button>
-              <button
+              </TrackActionButton>
+              <TrackActionButton action="cancel"
                 :disabled="savingName"
                 class="cancel-btn"
                 @click="cancelEditName"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+
                 Cancel
-              </button>
+              </TrackActionButton>
             </div>
             <div v-if="nameError" class="edit-name-error">
               {{ nameError }}
@@ -123,28 +104,14 @@
           <div v-else class="track-name-block" :class="{ editable: isOwner }">
             <div class="title-with-edit">
               <h2>{{ track.name || "Unnamed Track" }}</h2>
-              <button
+              <TrackActionButton action="edit" label="Edit track name"
                 v-if="isOwner"
                 class="edit-name-btn"
                 title="Edit track name"
                 @click="startEditName"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                  />
-                  <path
-                    d="m18.5 2.5 a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                  />
-                </svg>
-              </button>
+
+              </TrackActionButton>
             </div>
             <div class="header-actions grouped">
               <div
@@ -332,41 +299,22 @@
               @selectstart.stop
               @dragstart.prevent
             >
-              <button
+              <TrackActionButton action="save" :loading="savingDescription"
                 :disabled="savingDescription"
                 class="save-btn"
                 @click="saveDescription"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <polyline points="20,6 9,17 4,12" />
-                </svg>
+
                 {{ savingDescription ? "Saving..." : "Save" }}
-              </button>
-              <button
+              </TrackActionButton>
+              <TrackActionButton action="cancel"
                 :disabled="savingDescription"
                 class="cancel-btn"
                 @click="cancelEditDescription"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+
                 Cancel
-              </button>
+              </TrackActionButton>
             </div>
             <div v-if="descriptionError" class="edit-description-error">
               {{ descriptionError }}
@@ -389,7 +337,7 @@
                 No description added yet
               </p>
             </div>
-            <button
+            <TrackActionButton action="edit" :label="track.description ? 'Edit description' : 'Add description'"
               v-if="isOwner"
               class="edit-description-btn"
               :title="
@@ -397,22 +345,8 @@
               "
               @click.stop="startEditDescription"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path
-                  d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                />
-                <path
-                  d="m18.5 2.5 a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                />
-              </svg>
-            </button>
+
+            </TrackActionButton>
           </div>
         <!-- Basic Track Info, Map Overlays, Statistics (extracted to StatisticsPanel) -->
         <StatisticsPanel
@@ -475,7 +409,7 @@
             <span
               v-for="classification in track.auto_classifications"
               :key="classification"
-              class="classification-tag"
+              class="classification-tag track-tag track-tag-auto"
             >
               {{ formatClassification(classification) }}
             </span>
@@ -584,6 +518,7 @@
 </template>
 
 <script setup>
+import TrackActionButton from "./TrackActionButton.vue";
 import { useFeatureFlagsStore } from "../stores/featureFlags";
 const featureFlags = useFeatureFlagsStore();
 import { TRACK_CATEGORIES } from "../domain/trackCategories";
@@ -2314,39 +2249,6 @@ defineExpose({
   gap: 8px;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .track-name-block.editable:hover .edit-name-btn {
-    opacity: 1;
-  }
-}
-
-.edit-name-btn {
-  background: none;
-  border: none;
-  color: var(--color-muted);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  opacity: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .edit-name-btn:hover {
-    background: oklch(95.5% 0 none);
-    color: var(--accent-hover);
-    transform: scale(1.05);
-  }
-}
-
-.edit-name-btn:active {
-  transform: scale(0.95);
-}
-
 /* Name Edit Mode */
 .name-edit-block {
   background: oklch(98.2% 0.0017 none);
@@ -2390,20 +2292,6 @@ defineExpose({
   margin-block-end: 0;
 }
 
-.edit-name-actions button {
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 90px;
-  justify-content: center;
-}
-
 .edit-name-error {
   color: oklch(56.8% 0.2002 26.4);
   font-size: 0.9em;
@@ -2419,6 +2307,9 @@ defineExpose({
 
 /* Track Description */
 .track-description-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   background: oklch(98.2% 0.0017 none);
   border-radius: 12px;
   padding: 16px 20px;
@@ -2453,7 +2344,8 @@ defineExpose({
 }
 
 .description-content {
-  padding-inline-end: 50px; /* Space for edit button */
+  flex: 1;
+  min-inline-size: 0;
 }
 
 .track-description-text {
@@ -2471,38 +2363,6 @@ defineExpose({
   line-height: 1.6;
   margin: 0;
   font-style: italic;
-}
-
-.edit-description-btn {
-  position: absolute;
-  inset-block-start: 50%;
-  inset-inline-end: 12px;
-  transform: translateY(-50%);
-  background: color-mix(in oklch, var(--color-action) 10%, transparent);
-  color: var(--color-action);
-  border: none;
-  border-radius: 6px;
-  padding: 6px;
-  font-size: 0;
-  cursor: pointer;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.7;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .edit-description-btn:hover {
-    background: color-mix(in oklch, var(--color-action) 20%, transparent);
-    opacity: 1;
-    transform: translateY(-50%) scale(1.05);
-  }
-}
-
-.edit-description-btn:active {
-  transform: translateY(-50%) scale(0.95);
 }
 
 .description-edit-block {
@@ -2552,69 +2412,6 @@ defineExpose({
   display: flex;
   gap: 12px;
   margin-block-end: 0;
-}
-
-.edit-description-actions button {
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 90px;
-  justify-content: center;
-}
-
-.save-btn {
-  background: var(--accent-hover);
-  color: var(--color-surface);
-  box-shadow: 0 2px 8px color-mix(in oklch, var(--color-action) 30%, transparent);
-}
-
-.save-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.save-btn:disabled {
-  background: oklch(86.2% 0.0592 247);
-  color: oklch(94.9% 0 none);
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .save-btn:not(:disabled):hover {
-    background: var(--accent);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in oklch, var(--color-action) 40%, transparent);
-  }
-}
-
-.cancel-btn {
-  background: oklch(97% 0 none);
-  color: var(--color-muted);
-  border: 2px solid oklch(89.8% 0 none);
-}
-
-.cancel-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.cancel-btn:disabled {
-  background: oklch(98.2% 0 none);
-  color: oklch(84.5% 0 none);
-  cursor: not-allowed;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .cancel-btn:not(:disabled):hover {
-    background: oklch(94.9% 0 none);
-    border-color: oklch(79.2% 0 none);
-    color: oklch(38.7% 0 none);
-  }
 }
 
 .edit-description-error {
@@ -2899,42 +2696,6 @@ defineExpose({
 }
 
 /* Force Update Button */
-.force-update-btn {
-  background: none;
-  border: none;
-  color: var(--color-muted);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  box-sizing: border-box;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .force-update-btn:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--color-action) 10%, transparent);
-    color: var(--accent);
-    transform: scale(1.05);
-  }
-
-  .force-update-btn:hover:not(:disabled) svg {
-    transform: rotate(180deg);
-  }
-}
-
-.force-update-btn:active {
-  transform: scale(0.95);
-}
-
-.force-update-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
 
 /* Stop Polling Button in Header */
 .stop-polling-btn-header {
@@ -3042,14 +2803,7 @@ defineExpose({
   gap: 8px;
 }
 
-:deep(.category-tag) {
-  background: oklch(95.3% 0.0218 239.4);
-  color: var(--color-action);
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-size: 0.85em;
-  font-weight: 500;
-}
+
 
 .category-tag.editable {
   display: inline-flex;
@@ -3203,14 +2957,7 @@ defineExpose({
   gap: 8px;
 }
 
-.classification-tag {
-  background: oklch(93.8% 0.026 321.9);
-  color: oklch(45.3% 0.1988 313);
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-size: 0.85em;
-  font-weight: 500;
-}
+
 
 /* Chart Section */
 .chart-section {
@@ -3447,26 +3194,10 @@ defineExpose({
   .export-gpx-btn,
   .delete-track-btn,
   .edit-track-geometry-btn,
-  .stop-polling-btn-header,
-  .force-update-btn {
+  .stop-polling-btn-header {
     transition:
       background-color 0.2s var(--ease-out, ease-out),
       color 0.2s var(--ease-out, ease-out),
-      transform 0.2s var(--ease-out, ease-out);
-  }
-
-  .edit-name-btn {
-    transition:
-      background-color 0.2s var(--ease-out, ease-out),
-      color 0.2s var(--ease-out, ease-out),
-      opacity 0.2s var(--ease-out, ease-out),
-      transform 0.2s var(--ease-out, ease-out);
-  }
-
-  .edit-description-btn {
-    transition:
-      background-color 0.2s var(--ease-out, ease-out),
-      opacity 0.2s var(--ease-out, ease-out),
       transform 0.2s var(--ease-out, ease-out);
   }
 
@@ -3478,24 +3209,10 @@ defineExpose({
       transform 0.2s var(--ease-out, ease-out);
   }
 
-  .save-btn,
-  .cancel-btn {
-    transition:
-      background-color 0.2s var(--ease-out, ease-out),
-      border-color 0.2s var(--ease-out, ease-out),
-      color 0.2s var(--ease-out, ease-out),
-      box-shadow 0.2s var(--ease-out, ease-out),
-      transform 0.2s var(--ease-out, ease-out);
-  }
-
   .remove-tag {
     transition:
       background-color 0.2s var(--ease-out, ease-out),
       transform 0.2s var(--ease-out, ease-out);
-  }
-
-  .force-update-btn svg {
-    transition: transform 0.3s var(--ease-out, ease-out);
   }
 
   :deep(.unit-toggle),
