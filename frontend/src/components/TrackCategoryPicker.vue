@@ -1,28 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue';
+import { ref, useId } from 'vue';
 import { TRACK_CATEGORIES, validateCategories } from '../domain/trackCategories';
 
 const props = withDefaults(defineProps<{ modelValue: string[]; disabled?: boolean; readonly?: boolean }>(), { disabled: false, readonly: false });
 const emit = defineEmits<{ 'update:modelValue': [categories: string[]] }>();
-const custom = ref('');
 const error = ref('');
 const helpId = useId();
-const customValues = computed(() => props.modelValue.filter(value => !TRACK_CATEGORIES.some(option => option.value === value)));
 const handleToggle = (value: string) => {
     if (props.disabled) return;
     const next = props.modelValue.includes(value) ? props.modelValue.filter(category => category !== value) : [...props.modelValue, value];
     error.value = validateCategories(next) ?? '';
     if (!error.value) emit('update:modelValue', next);
-};
-const handleAdd = () => {
-    const value = custom.value.trim().normalize('NFC');
-    if (!value || props.disabled) return;
-    if (props.modelValue.includes(value)) { custom.value = ''; return; }
-    const next = [...props.modelValue, value];
-    error.value = validateCategories(next) ?? '';
-    if (error.value) return;
-    emit('update:modelValue', next);
-    custom.value = '';
 };
 </script>
 
@@ -41,14 +29,7 @@ const handleAdd = () => {
           {{ option.label }}
         </label>
       </div>
-      <div v-if="customValues.length" class="mbs-2 flex flex-wrap gap-2">
-        <button v-for="value in customValues" :key="value" type="button" class="min-h-11 max-w-full break-words rounded border border-line bg-canvas px-3 text-sm" :aria-label="`Remove category ${value}`" @click="handleToggle(value)">{{ value }} ×</button>
-      </div>
-      <div class="mbs-3 flex gap-2">
-        <input v-model="custom" type="text" aria-label="Custom category" placeholder="Custom category" class="min-h-11 min-w-0 flex-1 rounded border border-line bg-surface px-3 text-base" :aria-invalid="!!error" :aria-describedby="helpId" @keydown.enter.prevent="handleAdd" />
-        <button type="button" data-testid="add-category" class="min-h-11 rounded border border-line bg-surface px-3 text-sm font-semibold" :disabled="disabled || !custom.trim()" @click="handleAdd">Add</button>
-      </div>
-      <p :id="helpId" class="mbe-0 mbs-2 text-sm text-muted">Optional. Choose activities or add your own.</p>
+      <p :id="helpId" class="mbe-0 mbs-2 text-sm text-muted">Optional. Choose activities from the list.</p>
       <p v-if="error" role="alert" class="mbe-0 mbs-2 text-sm text-danger">{{ error }}</p>
     </template>
   </fieldset>

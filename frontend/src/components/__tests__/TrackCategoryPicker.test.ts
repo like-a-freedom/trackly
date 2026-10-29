@@ -8,16 +8,15 @@ describe('Track categories', () => {
         await wrapper.get('input[value="walking"]').setValue(true);
         expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['Мой маршрут', 'walking']]);
     });
-    it('explains byte limits before sending a custom category', async () => {
+    it('offers only the fixed categories without custom creation controls', () => {
         const wrapper = mount(TrackCategoryPicker, { props: { modelValue: [] } });
-        await wrapper.get('input[type="text"]').setValue('я'.repeat(51));
-        await wrapper.get('[data-testid="add-category"]').trigger('click');
-        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
-        expect(wrapper.get('[role="alert"]').text()).toContain('100 UTF-8 bytes');
+        expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(6);
+        expect(wrapper.find('input[type="text"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="add-category"]').exists()).toBe(false);
     });
-    it('allows removing the last category and retains custom spelling', async () => {
-        const wrapper = mount(TrackCategoryPicker, { props: { modelValue: ['Trail Run'] } });
-        await wrapper.get('button[aria-label="Remove category Trail Run"]').trigger('click');
+    it('allows removing the last supported category', async () => {
+        const wrapper = mount(TrackCategoryPicker, { props: { modelValue: ['walking'] } });
+        await wrapper.get('input[value="walking"]').setValue(false);
         expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([[]]);
     });
 });
