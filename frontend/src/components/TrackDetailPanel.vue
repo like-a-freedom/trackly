@@ -298,22 +298,6 @@
             </div>
           </div>
 
-        <!-- Basic Track Info, Map Overlays, Statistics (extracted to StatisticsPanel) -->
-        <StatisticsPanel
-          :track="track"
-          :is-owner="isOwner"
-          :speed-unit="speedUnit"
-          :formatted-distance="formattedDistance"
-          :formatted-duration="formattedDuration"
-          :formatted-moving-avg-speed="formattedMovingAvgSpeed"
-          :formatted-moving-avg-pace="formattedMovingAvgPace"
-          :distance-markers-enabled="distanceMarkersEnabled"
-          :preference-persisted="preferencePersisted"
-          @speed-unit-change="setSpeedUnit"
-          @distance-markers-toggle="handleDistanceMarkersToggle"
-        />
-
-
           <!-- Description Edit Mode -->
           <div
             v-if="isEditingDescription"
@@ -430,6 +414,22 @@
               </svg>
             </button>
           </div>
+        <!-- Basic Track Info, Map Overlays, Statistics (extracted to StatisticsPanel) -->
+        <StatisticsPanel
+          :track="track"
+          :is-owner="isOwner"
+          :speed-unit="speedUnit"
+          :formatted-distance="formattedDistance"
+          :formatted-duration="formattedDuration"
+          :formatted-moving-avg-speed="formattedMovingAvgSpeed"
+          :formatted-moving-avg-pace="formattedMovingAvgPace"
+          :distance-markers-enabled="distanceMarkersEnabled"
+          :preference-persisted="preferencePersisted"
+          @speed-unit-change="setSpeedUnit"
+          @distance-markers-toggle="handleDistanceMarkersToggle"
+        />
+
+
         </div>
 
         <!-- Categories (extracted to CategoriesPanel component) -->

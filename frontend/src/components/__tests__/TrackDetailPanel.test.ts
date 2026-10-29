@@ -2350,3 +2350,13 @@ describe('geometry editor feature visibility', () => {
     }
   );
 });
+
+describe('track description hierarchy', () => {
+  it('places the description immediately after the title and before statistics', () => {
+    const wrapper = mount(TrackDetailPanel, { props: { track: { id: 'description-order', name: 'Route', description: 'Route context', categories: [] } } });
+    const description = wrapper.get('.track-description-block').element;
+    expect(description.previousElementSibling?.classList.contains('track-name-block')).toBe(true);
+    expect(description.nextElementSibling?.classList.contains('stats-section')).toBe(true);
+    wrapper.unmount();
+  });
+});
