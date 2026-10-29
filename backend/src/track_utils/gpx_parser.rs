@@ -532,7 +532,33 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     let max_gap_meters = std::env::var("TRACK_MAX_GAP_METERS")
         .ok()
         .and_then(|v| v.parse::<f64>().ok());
-    let segments = split_points_by_gap(&points, max_gap_meters);
+    let mut segments = split_points_by_gap(&points, max_gap_meters);
+    // A GPS outlier can become a singleton after gap splitting. PostGIS rejects
+    // it (and stationary-only segments) as a line. Remove the same samples from
+    // every measurement array so the retained route and charts stay aligned.
+    let keep: Vec<bool> = segments
+        .iter()
+        .flat_map(|segment| {
+            let drawable = segment.iter().skip(1).any(|point| point != &segment[0]);
+            std::iter::repeat_n(drawable, segment.len())
+        })
+        .collect();
+    segments.retain(|segment| segment.iter().skip(1).any(|point| point != &segment[0]));
+    if segments.is_empty() {
+        return Err("GPX needs at least two distinct points in a continuous segment".into());
+    }
+    let removed = keep.iter().filter(|&&retain| !retain).count();
+    if removed > 0 {
+        tracing::warn!(
+            removed_points = removed,
+            "Ignoring GPX points outside drawable segments"
+        );
+    }
+    let points = retain_samples(points, &keep);
+    let elevation_profile_data = retain_samples(elevation_profile_data, &keep);
+    let hr_data_points = retain_samples(hr_data_points, &keep);
+    let temp_data_points = retain_samples(temp_data_points, &keep);
+    let time_points = retain_samples(time_points, &keep);
     let geom_geojson = geojson_from_segments(&segments);
     let length_km = length_km_for_segments(&segments);
 
@@ -777,9 +803,74 @@ pub fn parse_gpx(bytes: &[u8]) -> Result<ParsedTrackData, String> {
     })
 }
 
+fn retain_samples<T>(samples: Vec<T>, keep: &[bool]) -> Vec<T> {
+    samples
+        .into_iter()
+        .zip(keep)
+        .filter_map(|(sample, &retain)| retain.then_some(sample))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{parse_gpx, parse_gpx_minimal};
+
+    #[test]
+    fn excludes_isolated_and_stationary_segments_with_their_samples() {
+        with_env_var("TRACK_MAX_GAP_METERS", "500", || {
+            let gpx = br#"<gpx><trk><trkseg>
+                <trkpt lat="43" lon="76"><ele>9999</ele><time>2026-10-29T00:00:00Z</time></trkpt>
+                <trkpt lat="44" lon="77"><ele>9999</ele><time>2026-10-29T00:01:00Z</time></trkpt>
+                <trkpt lat="44" lon="77"><ele>9999</ele><time>2026-10-29T00:02:00Z</time></trkpt>
+                <trkpt lat="55" lon="37"><ele>100</ele><time>2026-10-29T01:00:00Z</time></trkpt>
+                <trkpt lat="55.001" lon="37.001"><ele>110</ele><time>2026-10-29T01:01:00Z</time></trkpt>
+                <trkpt lat="56" lon="38"><ele>120</ele><time>2026-10-29T02:00:00Z</time></trkpt>
+                <trkpt lat="56.001" lon="38.001"><ele>130</ele><time>2026-10-29T02:01:00Z</time></trkpt>
+            </trkseg></trk></gpx>"#;
+            let gpx = String::from_utf8_lossy(gpx).replace("</trkpt>", "<extensions><TrackPointExtension><hr>120</hr><atemp>10</atemp></TrackPointExtension></extensions></trkpt>");
+            let parsed = parse_gpx(gpx.as_bytes()).expect("usable route remains");
+            assert_eq!(
+                parsed.geom_geojson,
+                serde_json::json!({
+                    "type":"MultiLineString", "coordinates":[
+                        [[37.0,55.0],[37.001,55.001]], [[38.0,56.0],[38.001,56.001]]
+                    ]
+                })
+            );
+            assert_eq!(
+                parsed.elevation_profile,
+                Some(vec![Some(100.0), Some(110.0), Some(120.0), Some(130.0)])
+            );
+            assert_eq!(parsed.time_data.as_ref().map(Vec::len), Some(4));
+            assert_eq!(parsed.hr_data, Some(vec![Some(120); 4]));
+            assert_eq!(parsed.temp_data, Some(vec![Some(10.0); 4]));
+            assert_eq!(parsed.speed_data.as_ref().map(Vec::len), Some(4));
+            assert!(parsed.pace_data.as_ref().is_none_or(|data| data.len() == 4));
+            assert_eq!(
+                parsed.time_data.as_ref().unwrap()[0].unwrap().to_rfc3339(),
+                "2026-10-29T01:00:00+00:00"
+            );
+            assert_eq!(parsed.elevation_max, Some(130.0));
+        });
+    }
+
+    #[test]
+    fn rejects_gpx_without_a_drawable_segment() {
+        with_env_var("TRACK_MAX_GAP_METERS", "500", || {
+            for points in [
+                r#"<trkpt lat="43" lon="76"></trkpt>"#,
+                r#"<trkpt lat="43" lon="76"></trkpt><trkpt lat="43" lon="76"></trkpt>"#,
+                r#"<trkpt lat="43" lon="76"></trkpt><trkpt lat="55" lon="37"></trkpt>"#,
+            ] {
+                assert!(
+                    parse_gpx(
+                        format!("<gpx><trk><trkseg>{points}</trkseg></trk></gpx>").as_bytes()
+                    )
+                    .is_err()
+                );
+            }
+        });
+    }
 
     fn with_env_var(key: &str, value: &str, f: impl FnOnce()) {
         // Delegate to `temp-env` to safely set/unset for the closure
@@ -855,7 +946,9 @@ mod tests {
 <gpx version="1.1" creator="test">
     <trk><name>Teleport</name><trkseg>
         <trkpt lat="0.0" lon="0.0"><ele>0.0</ele></trkpt>
+        <trkpt lat="0.0" lon="0.001"><ele>0.0</ele></trkpt>
         <trkpt lat="0.0" lon="1.1"><ele>0.0</ele></trkpt>
+        <trkpt lat="0.0" lon="1.101"><ele>0.0</ele></trkpt>
     </trkseg></trk>
 </gpx>"#;
 

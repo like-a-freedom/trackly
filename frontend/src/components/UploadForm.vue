@@ -46,13 +46,13 @@
           @selectstart.stop
           @dragstart.prevent
         >
-        <details class="upload-categories">
+        <details class="upload-categories" open>
           <summary>
-            <span>{{ categoryValues.length ? `Categories (${categoryValues.length})` : 'Select categories' }}</span>
+            <span>{{ categoryValues.length ? `Categories (${categoryValues.length})` : 'Categories (required)' }}</span>
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6" /></svg>
           </summary>
           <div class="upload-categories-content">
-            <TrackCategoryPicker v-model="categoryValues" :disabled="uploading" class="track-category-select" />
+            <TrackCategoryPicker v-model="categoryValues" :disabled="uploading" class="track-category-select" required />
           </div>
         </details>
       </template>
@@ -81,6 +81,7 @@
           {{ warning }}
         </div>
       </transition>
+      <ErrorNotice v-if="uploadError" ref="errorNotice" title="Track was not uploaded" :error="uploadError" />
 
       <transition name="fade-slide">
         <div
@@ -154,7 +155,7 @@
         v-if="selectedFile"
         type="submit"
         class="upload-btn ui-primary"
-        :disabled="uploading || !selectedFile || !trackName.trim() || trackExists || checkingExists"
+        :disabled="uploading || !selectedFile || !trackName.trim() || trackExists || checkingExists || !categoryValues.length"
       >
         {{ uploading ? 'Uploading…' : 'Upload track' }}
       </button>
@@ -164,9 +165,11 @@
 </template>
 <script setup>
 import { TRACK_CATEGORIES, validateCategories } from "../domain/trackCategories";
-import { ref, watch, computed } from 'vue';
+import { ref, shallowRef, nextTick, watch, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import TrackCategoryPicker from './TrackCategoryPicker.vue';
+import ErrorNotice from './ErrorNotice.vue';
+import { toApiError } from '../errors/apiError';
 import { useTracks } from '../composables/useTracks';
 const { uploadTrack, checkTrackDuplicate } = useTracks();
 const router = useRouter();
@@ -180,6 +183,8 @@ const trackExists = ref(false);
 const existingTrackId = ref(null); // Store existing track ID for duplicate case
 const checkingExists = ref(false);
 const warning = ref("");
+const uploadError = shallowRef(null);
+const errorNotice = ref(null);
 const uploadSuccess = ref(false);
 const uploading = ref(false);
 const uploadedTrackData = ref(null); // Store uploaded track data (id, url)
@@ -190,6 +195,7 @@ const categoryValues = computed({get: () => trackCategories.value.map(option => 
 watch(() => props.dragActive, v => dragActive.value = v);
 watch(selectedFile, async (file) => {
   warning.value = "";
+  uploadError.value = null;
   trackExists.value = false;
   existingTrackId.value = null;
   // Do not reset uploadSuccess here, so the message stays visible after upload
@@ -250,8 +256,11 @@ function onDrop(event) {
 }
 async function handleUpload() {
   if (uploading.value || !selectedFile.value || trackExists.value || checkingExists.value) return;
+  if (!categoryValues.value.length) { warning.value = 'Select at least one category before uploading.'; return; }
   const categoryError = validateCategories(categoryValues.value);
   if (categoryError) { warning.value = categoryError; return; }
+  warning.value = '';
+  uploadError.value = null;
   uploading.value = true;
   try {
     const response = await uploadTrack({
@@ -276,11 +285,9 @@ async function handleUpload() {
     uploadSuccess.value = true;
     emit('uploaded');
   } catch (e) {
-    if (e && e.message && e.message.includes('10 seconds')) {
-      warning.value = 'Please, wait 10 seconds between uploads.';
-    } else {
-      warning.value = (e && e.message) || 'Error uploading track';
-    }
+    uploadError.value = toApiError(e, {method:'POST',path:'/api/tracks/upload'});
+    await nextTick();
+    errorNotice.value?.$el.focus();
   } finally {
     uploading.value = false;
   }

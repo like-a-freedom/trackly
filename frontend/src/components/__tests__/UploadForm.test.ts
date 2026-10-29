@@ -65,6 +65,29 @@ describe('UploadForm', () => {
         }
     });
 
+    it('shows a safe contextual error, keeps the form and lets the user retry', async () => {
+        mockUploadTrack.mockRejectedValueOnce(new Error('{"code":500,"error":"Internal server error"}'));
+        wrapper = mount(UploadForm);
+        const file = new File(['route'], 'retry.gpx');
+        Object.defineProperty(wrapper.get('input[type="file"]').element, 'files', {value:[file], configurable:true});
+        await wrapper.get('input[type="file"]').trigger('change');
+        await flushPromises();
+        await wrapper.get('input[value="hiking"]').setValue(true);
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(wrapper.get('[role="alert"]').text()).toContain('Track was not uploaded');
+        expect(wrapper.get('[role="alert"]').text()).toContain('Try again');
+        expect(wrapper.text()).not.toContain('Internal server error');
+        expect(wrapper.get('input[type="text"]').element.value).toBe('retry');
+        expect(wrapper.get('input[value="hiking"]').element.checked).toBe(true);
+        expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined();
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(mockUploadTrack).toHaveBeenLastCalledWith({file,name:'retry',categories:['hiking']});
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+        expect(wrapper.find('.upload-success').exists()).toBe(true);
+    });
+
     describe('Initial state', () => {
         it('renders upload form correctly', () => {
             wrapper = mount(UploadForm);
@@ -170,7 +193,7 @@ describe('UploadForm', () => {
             expect(wrapper.find('input[value="walking"]').exists()).toBe(true);
         });
 
-        it('enables upload button after valid file selection', async () => {
+        it('requires an explicit category before upload', async () => {
             wrapper = mount(UploadForm);
 
             const file = new File(['test'], 'test.gpx', { type: 'application/gpx+xml' });
@@ -190,8 +213,13 @@ describe('UploadForm', () => {
             await flushPromises();
 
             const uploadBtn = wrapper.find('.upload-btn');
-            // Categories are optional across upload, editor and metadata updates.
+            expect(uploadBtn.attributes('disabled')).toBeDefined();
+            await wrapper.find('.upload-form').trigger('submit');
+            expect(mockUploadTrack).not.toHaveBeenCalled();
+            await wrapper.find('input[value="walking"]').setValue(true);
             expect(uploadBtn.attributes('disabled')).toBeUndefined();
+            await wrapper.find('input[value="walking"]').setValue(false);
+            expect(uploadBtn.attributes('disabled')).toBeDefined();
         });
     });
 
@@ -484,6 +512,7 @@ describe('UploadForm', () => {
             // Update track name
             const nameInput = wrapper.find('.track-name-input');
             await nameInput.setValue('My Custom Track');
+            await wrapper.find('input[value="walking"]').setValue(true);
 
             // Submit form
             await wrapper.find('.upload-form').trigger('submit');
@@ -492,7 +521,7 @@ describe('UploadForm', () => {
             await wrapper.vm.$nextTick();
             await flushPromises();
 
-            expect(mockUploadTrack).toHaveBeenCalledWith({file, name: 'My Custom Track', categories: []});
+            expect(mockUploadTrack).toHaveBeenCalledWith({file, name: 'My Custom Track', categories: ['walking']});
             expect(wrapper.emitted('uploaded')).toBeTruthy();
         });
 

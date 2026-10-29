@@ -70,6 +70,11 @@ describe('TrackFilterControl', () => {
         clear: vi.fn(),
     };
 
+    // Filter state and disclosure state use different storage keys.
+    const setStoredFilters = (value: string | null) => mockLocalStorage.getItem.mockImplementation(
+        key => key === LOCAL_STORAGE_KEY ? value : null
+    );
+
     // Helper function to create default props with all required properties
     const createDefaultProps = (overrides = {}) => ({
         categories: ['hiking', 'running'],
@@ -99,7 +104,7 @@ describe('TrackFilterControl', () => {
             value: mockLocalStorage,
             writable: true,
         });
-        mockLocalStorage.getItem.mockReturnValue(null);
+        setStoredFilters(null);
         mockLocalStorage.setItem.mockClear();
         mockLocalStorage.removeItem.mockClear();
 
@@ -596,7 +601,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('restores filters from localStorage', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [5, 25],
             }));
@@ -620,7 +625,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('restores empty categories from localStorage on page reload', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: [],
                 lengthRange: [0, 50],
             }));
@@ -644,7 +649,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('handles invalid localStorage data', async () => {
-            mockLocalStorage.getItem.mockReturnValue('invalid json');
+            setStoredFilters('invalid json');
 
             wrapper = mount(TrackFilterControl, {
                 props: createDefaultProps({
@@ -664,7 +669,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('handles missing categories in localStorage', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['oldCategory', 'hiking'],
                 lengthRange: [5, 25],
             }));
@@ -720,7 +725,7 @@ describe('TrackFilterControl', () => {
             // 4. Only "running" should remain selected
 
             // Step 1: Start with fresh app - no localStorage initially
-            mockLocalStorage.getItem.mockReturnValue(null);
+            setStoredFilters(null);
 
             let wrapper1 = mount(TrackFilterControl, {
                 props: createDefaultProps({
@@ -767,7 +772,7 @@ describe('TrackFilterControl', () => {
             wrapper1.unmount();
 
             // Now mock localStorage to return the saved state
-            mockLocalStorage.getItem.mockReturnValue(savedState.value);
+            setStoredFilters(savedState.value);
 
             // Step 4: Create new component (simulating page refresh)
             const wrapper2 = mount(TrackFilterControl, {
@@ -799,7 +804,7 @@ describe('TrackFilterControl', () => {
             // 4. Custom range [5, 25] should be restored
 
             // Step 1: Start with fresh app - no localStorage initially
-            mockLocalStorage.getItem.mockReturnValue(null);
+            setStoredFilters(null);
 
             let wrapper1 = mount(TrackFilterControl, {
                 props: createDefaultProps({
@@ -832,7 +837,7 @@ describe('TrackFilterControl', () => {
             wrapper1.unmount();
 
             // Now mock localStorage to return the saved state
-            mockLocalStorage.getItem.mockReturnValue(savedState.value);
+            setStoredFilters(savedState.value);
 
             // Step 4: Create new component (simulating page refresh)
             const wrapper2 = mount(TrackFilterControl, {
@@ -855,7 +860,7 @@ describe('TrackFilterControl', () => {
             // and then updated to the final values
 
             // Mock localStorage with user's saved custom range
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [10, 30],
             }));
@@ -896,7 +901,7 @@ describe('TrackFilterControl', () => {
             // 3. User's saved range should be preserved throughout
 
             // Mock localStorage with user's saved custom range
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [8, 25],
             }));
@@ -981,7 +986,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('preserves user selection when categories change', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [0, 50],
             }));
@@ -1012,7 +1017,7 @@ describe('TrackFilterControl', () => {
 
         it('preserves empty selection when categories change', async () => {
             // User has explicitly deactivated all categories
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: [],
                 lengthRange: [0, 50],
             }));
@@ -1075,7 +1080,7 @@ describe('TrackFilterControl', () => {
 
     describe('Edge cases', () => {
         it('handles empty localStorage response', async () => {
-            mockLocalStorage.getItem.mockReturnValue(null);
+            setStoredFilters(null);
 
             wrapper = mount(TrackFilterControl, {
                 props: createDefaultProps({
@@ -1091,7 +1096,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('handles malformed length range in localStorage', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [100, 5], // Invalid: min > max
             }));
@@ -1141,7 +1146,7 @@ describe('TrackFilterControl', () => {
             // 3. User selection should be preserved
 
             // Step 1: Mock localStorage with user's saved "running" selection
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['running'],
                 lengthRange: [0, 50],
             }));
@@ -1205,7 +1210,7 @@ describe('TrackFilterControl', () => {
             // 4. Component should still restore user's saved selection
 
             // Mock localStorage with user's saved "running" selection
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['running'],
                 lengthRange: [0, 50],
             }));
@@ -1349,7 +1354,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('restores elevation gain range from localStorage', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [5, 25],
                 elevationGainRange: [150, 1200]
@@ -1396,7 +1401,7 @@ describe('TrackFilterControl', () => {
 
         it('clamps elevation gain range to viewport bounds', async () => {
             // Mock saved range that exceeds new viewport bounds
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [50, 2500] // Max exceeds new viewport
@@ -1470,7 +1475,7 @@ describe('TrackFilterControl', () => {
 
         it('preserves elevation gain range after page refresh workflow', async () => {
             // Step 1: Start with fresh app - no localStorage initially
-            mockLocalStorage.getItem.mockReturnValue(null);
+            setStoredFilters(null);
 
             let wrapper1 = mount(TrackFilterControl, {
                 props: createDefaultProps({
@@ -1500,7 +1505,7 @@ describe('TrackFilterControl', () => {
             wrapper1.unmount();
 
             // Step 4: Mock page refresh with saved state
-            mockLocalStorage.getItem.mockReturnValue(savedState.value);
+            setStoredFilters(savedState.value);
 
             const wrapper2 = mount(TrackFilterControl, {
                 props: createDefaultProps({
@@ -1520,7 +1525,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('handles invalid elevation gain range in localStorage', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [2000, 100] // Invalid: min > max
@@ -1563,7 +1568,7 @@ describe('TrackFilterControl', () => {
 
         it('preserves elevation gain range through viewport changes during app startup', async () => {
             // Mock localStorage with saved elevation gain range
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [300, 1200]
@@ -1643,7 +1648,7 @@ describe('TrackFilterControl', () => {
                 categories: ['running'],
                 lengthRange: [2.0, 8.0]
             };
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify(savedFilter));
+            setStoredFilters(JSON.stringify(savedFilter));
 
             const wrapper = mount(TrackFilterControl, {
                 props: createDefaultProps({
@@ -1774,7 +1779,7 @@ describe('TrackFilterControl', () => {
         });
 
         it('restores slope range from localStorage', async () => {
-            mockLocalStorage.getItem.mockReturnValue(JSON.stringify({
+            setStoredFilters(JSON.stringify({
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [0, 2000],
@@ -1812,7 +1817,7 @@ describe('TrackFilterControl', () => {
 
             // Open the filter panel first
             const compactButton = wrapper.find('.filter-button-compact');
-            await compactButton.trigger('click');
+            if (compactButton.isVisible()) await compactButton.trigger('click');
             await nextTick();
 
             // Change slope range
@@ -1919,7 +1924,7 @@ describe('TrackFilterControl', () => {
 
             // Open the panel by clicking the compact button
             const compactButton = wrapper.find('.filter-button-compact');
-            await compactButton.trigger('click');
+            if (compactButton.isVisible()) await compactButton.trigger('click');
 
             const optionsButton = wrapper.find('.filter-options-btn');
             expect(optionsButton.exists()).toBe(true);
@@ -1934,7 +1939,7 @@ describe('TrackFilterControl', () => {
 
             // Open the main panel
             const compactButton = wrapper.find('.filter-button-compact');
-            await compactButton.trigger('click');
+            if (compactButton.isVisible()) await compactButton.trigger('click');
 
             const optionsButton = wrapper.find('.filter-options-btn');
             await optionsButton.trigger('click');
@@ -1963,7 +1968,7 @@ describe('TrackFilterControl', () => {
 
             // Open panels
             const compactButton = wrapper.find('.filter-button-compact');
-            await compactButton.trigger('click');
+            if (compactButton.isVisible()) await compactButton.trigger('click');
             const optionsButton = wrapper.find('.filter-options-btn');
             await optionsButton.trigger('click');
 

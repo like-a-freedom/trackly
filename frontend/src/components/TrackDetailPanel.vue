@@ -811,25 +811,16 @@ async function handleDistanceMarkersToggle(event) {
 
 // Handle categories update from CategoriesPanel component
 async function handleCategoriesUpdated(categoryValues) {
-  try {
-    await updateTrackCategories(props.track.id, categoryValues);
+  await updateTrackCategories(props.track.id, categoryValues);
 
-    // Update local track data to reflect changes immediately
-    track.value = { ...track.value, categories: categoryValues };
+  // Update local track data only after persistence succeeds.
+  track.value = { ...track.value, categories: categoryValues };
 
-    // Update the track in polylines list if it exists
-    updateTrackInPolylines(props.track.id, { categories: categoryValues });
+  // Update the track in polylines list if it exists.
+  updateTrackInPolylines(props.track.id, { categories: categoryValues });
 
-    emit("categories-updated", categoryValues);
-    showToast("Categories updated", "success");
-  } catch (err) {
-    if (err && err.message && err.message.includes("403")) {
-      showToast("You are not allowed to edit categories for this track.", "error");
-    } else {
-      showToast(err.message || "Failed to update categories.", "error");
-    }
-    throw err; // Re-throw so CategoriesPanel can revert
-  }
+  emit("categories-updated", categoryValues);
+  showToast("Categories updated", "success");
 }
 
 // --- Export state ---

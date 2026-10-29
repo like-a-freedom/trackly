@@ -416,7 +416,7 @@ describe('useTracks composable', () => {
             await expect(uploadTrack({ file: mockFile })).rejects.toThrow(
                 'Please, wait 10 seconds between uploads.'
             );
-            expect(error.value).toBe('Please, wait 10 seconds between uploads.');
+            expect(error.value).toBeNull();
         });
 
         it('should handle upload error', async () => {
@@ -431,20 +431,20 @@ describe('useTracks composable', () => {
             const { uploadTrack, error } = useTracks();
 
             await expect(uploadTrack({ file: mockFile })).rejects.toThrow();
-            expect(error.value).toBeTruthy();
+            expect(error.value).toBeNull();
         });
 
         it('should handle network error during upload', async () => {
             const mockFile = new File(['gpx content'], 'track.gpx');
 
-            fetchMock.mockRejectedValueOnce(new Error('Network failure'));
+            fetchMock.mockRejectedValueOnce(new TypeError('Network failure'));
 
             const { uploadTrack, error } = useTracks();
 
             await expect(uploadTrack({ file: mockFile })).rejects.toThrow(
-                'Network failure'
+                'Could not reach the server.'
             );
-            expect(error.value).toBe('Network failure');
+            expect(error.value).toBeNull();
         });
     });
 
@@ -896,7 +896,7 @@ describe('useTracks composable', () => {
 
             const { updateTrackCategories, error } = useTracks();
             await expect(updateTrackCategories('track-123', ['hiking'])).rejects.toThrow();
-            expect(error.value).toContain('Server error');
+            expect(error.value).toBeNull();
         });
     });
 
@@ -929,7 +929,7 @@ describe('useTracks composable', () => {
 
             const { updateTrackDistanceMarkers, error } = useTracks();
             await expect(updateTrackDistanceMarkers('track-123', true)).rejects.toThrow();
-            expect(error.value).toContain('Server error');
+            expect(error.value).toBe('The server could not complete this request.');
         });
     });
 
@@ -960,7 +960,7 @@ describe('useTracks composable', () => {
 
             const { updateTrackVisibility, error } = useTracks();
             await expect(updateTrackVisibility('track-123', false)).rejects.toThrow();
-            expect(error.value).toContain('Server error');
+            expect(error.value).toBe('The server could not complete this request.');
         });
     });
 });

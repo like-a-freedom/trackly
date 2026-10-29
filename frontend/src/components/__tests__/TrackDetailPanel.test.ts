@@ -536,6 +536,7 @@ describe('TrackDetailPanel', () => {
       // Try to change categories (should fail)
       await expect(wrapper.vm.handleCategoriesUpdated(['walking']))
         .rejects.toThrow('Network error');
+      expect(mockShowToast).not.toHaveBeenCalledWith(expect.any(String), 'error');
     });
   });
 

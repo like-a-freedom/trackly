@@ -196,3 +196,19 @@ same entry keyframes. Motion is a 180ms opacity fade with `--ease-out`, owned
 by the outer surface; no scaling or movement of anchored controls. Reduced
 motion disables entry animations. Existing Vue transitions retain removal
 and focus lifecycle; their shared overlays use the same opacity timing.
+
+### Request failures
+
+Place a failed action's feedback beside its form or control, using `ErrorNotice`.
+Use a contextual title, a short explanation and a concrete next action. Keep the
+user's input and allow an explicit retry; never automatically retry an upload.
+The upload form focuses its error notice after failure so it stays reachable
+inside the scrolling panel. Do not also publish the same failure as a global toast.
+
+`readApiError` maps HTTP responses to safe `ApiError` messages. Never render raw
+response bodies, JSON envelopes, HTML, SQL or browser exception messages. Known
+file/category validation errors receive specific guidance; unknown failures use
+safe fallback copy. The collapsed “Technical details” disclosure contains only
+the HTTP status, request method/path and optional error reference. Backend 500
+responses carry `error_id` and `x-error-id`; the same reference is logged with the
+underlying cause. These fields help support investigate without exposing internals.

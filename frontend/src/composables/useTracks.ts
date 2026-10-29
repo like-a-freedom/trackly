@@ -3,6 +3,7 @@ import { useTracksStore } from '../stores/tracks';
 import { useSearchStore } from '../stores/search';
 import { useAuthStore } from '../stores/auth';
 import { http } from '../http-instance';
+import { readApiError, toApiError } from '../errors/apiError';
 import { getSessionId, sessionHeaders } from '../utils/session';
 import { LRUCache } from '../utils/lru-cache';
 import type { Bounds } from '../map/MapAdapter';
@@ -282,21 +283,18 @@ export function useTracks() {
             const response = await http('/api/tracks/upload', { method: 'POST', body: formData });
             if (!response.ok) {
                 if (response.status === 409) {
-                    const duplicate = await response.json();
-                    if ('existing_track_id' in duplicate) {
+                    const duplicate = await response.clone().json().catch(() => null);
+                    if (duplicate && typeof duplicate === 'object' && 'existing_track_id' in duplicate) {
                         const id = typeof duplicate.existing_track_id === 'string' ? duplicate.existing_track_id : null;
                         return {alreadyExists:true,id,url:id ? `/track/${id}` : null};
                     }
-                    throw new Error(duplicate.error || 'This file has already been imported.');
                 }
-                const text = await response.text();
-                if (response.status === 429) throw new Error('Please, wait 10 seconds between uploads.');
-                throw new Error(text || 'Unknown error uploading track');
+                throw await readApiError(response, {method:'POST',path:'/api/tracks/upload'});
             }
             return await response.json();
         } catch (e: unknown) {
-            store.error = e instanceof Error ? e.message : 'Unknown upload error';
-            throw e;
+            const failure = toApiError(e, {method:'POST',path:'/api/tracks/upload'});
+            throw failure;
         }
     }
 
@@ -334,12 +332,12 @@ export function useTracks() {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ session_id: getSessionId(), categories })
             });
-            if (!response.ok) throw new Error(await response.text() || 'Failed to update categories');
+            if (!response.ok) throw await readApiError(response, {method:'PATCH',path:`/api/tracks/${id}/categories`});
             store.updateTrackInPolylines(id, { categories });
             return true;
         } catch (e: unknown) {
-            store.error = e instanceof Error ? e.message : 'Unknown error updating categories';
-            throw e;
+            const failure = toApiError(e, {method:'PATCH',path:`/api/tracks/${id}/categories`});
+            throw failure;
         }
     }
 
@@ -350,12 +348,13 @@ export function useTracks() {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ distance_markers_enabled: !!enabled, session_id: getSessionId() })
             });
-            if (!response.ok) throw new Error(await response.text() || 'Failed to update distance markers');
+            if (!response.ok) throw await readApiError(response, {method:'PATCH',path:`/api/tracks/${id}/distance-markers`});
             store.updateTrackInPolylines(id, { distance_markers_enabled: !!enabled });
             return true;
         } catch (e: unknown) {
-            store.error = e instanceof Error ? e.message : 'Unknown error updating distance markers';
-            throw e;
+            const failure = toApiError(e, {method:'PATCH',path:`/api/tracks/${id}/distance-markers`});
+            store.error = failure.message;
+            throw failure;
         }
     }
 
@@ -366,12 +365,13 @@ export function useTracks() {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_public: isPublic, session_id: getSessionId() })
             });
-            if (!response.ok) throw new Error(await response.text() || 'Failed to update visibility');
+            if (!response.ok) throw await readApiError(response, {method:'PATCH',path:`/api/tracks/${id}/visibility`});
             store.updateTrackInPolylines(id, { is_public: isPublic });
             return await response.json();
         } catch (e: unknown) {
-            store.error = e instanceof Error ? e.message : 'Unknown error updating visibility';
-            throw e;
+            const failure = toApiError(e, {method:'PATCH',path:`/api/tracks/${id}/visibility`});
+            store.error = failure.message;
+            throw failure;
         }
     }
 

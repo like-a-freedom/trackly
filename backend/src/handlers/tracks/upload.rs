@@ -36,7 +36,7 @@ fn resolve_upload_owner(
 /// - `file`: the GPX or KML file (required)
 /// - `name`: track name (optional)
 /// - `description`: track description (optional)
-/// - `categories`: comma-separated categories (optional)
+/// - `categories`: comma-separated categories (at least one required)
 /// - `session_id`: anonymous session UUID (optional)
 pub async fn upload_track(
     State(pool): State<Arc<PgPool>>,
@@ -115,9 +115,8 @@ pub async fn upload_track(
     })?;
     let file_name = file_name.unwrap_or_else(|| "upload.gpx".to_string());
 
-    // Default to "hiking" if no categories provided
     if categories.is_empty() {
-        categories.push("hiking".to_string());
+        return Err(AppError::BadRequest("Select at least one category".into()));
     }
 
     let (session_id, user_id) = resolve_upload_owner(&auth_user, session_id);
@@ -168,6 +167,35 @@ mod tests {
                 aud: "trackly-web".to_string(),
             },
         }))
+    }
+
+    #[tokio::test]
+    async fn upload_without_categories_is_rejected_before_database_access() {
+        use axum::{Router, body::Body, http::Request, routing::post};
+        use tower::ServiceExt;
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://test:test@127.0.0.1:1/test")
+            .unwrap();
+        for categories in [
+            "",
+            "\r\n--boundary\r\nContent-Disposition: form-data; name=\"categories\"\r\n\r\n , ",
+        ] {
+            let body = format!(
+                "--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"track.gpx\"\r\nContent-Type: application/gpx+xml\r\n\r\n<gpx/>{categories}\r\n--boundary--\r\n"
+            );
+            let response = Router::new()
+                .route("/upload", post(upload_track))
+                .with_state(Arc::new(pool.clone()))
+                .oneshot(
+                    Request::post("/upload")
+                        .header("content-type", "multipart/form-data; boundary=boundary")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        }
     }
 
     #[test]

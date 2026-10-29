@@ -137,28 +137,51 @@ impl IntoResponse for AppError {
             }
             AppError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, "Authentication required"),
             AppError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded"),
-            AppError::Database(_) => {
-                tracing::error!(error = ?self, "database error occurred");
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
-            }
-            AppError::Internal(_) => {
-                tracing::error!(error = ?self, "internal error occurred");
+            AppError::Database(_) | AppError::Internal(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
             }
         };
 
-        let body = Json(json!({
+        let mut body = json!({
             "error": error_message,
             "code": status.as_u16()
-        }));
+        });
+        if status.is_server_error() {
+            let error_id = uuid::Uuid::new_v4().to_string();
+            tracing::error!(%error_id, error = ?self, "request failed");
+            body["error_id"] = json!(error_id);
+            return (status, [("x-error-id", error_id)], Json(body)).into_response();
+        }
 
-        (status, body).into_response()
+        (status, Json(body)).into_response()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn internal_errors_include_a_safe_traceable_reference() {
+        let response =
+            AppError::Internal(anyhow::anyhow!("private database detail")).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let reference = response
+            .headers()
+            .get("x-error-id")
+            .expect("support reference")
+            .to_str()
+            .unwrap()
+            .to_owned();
+        uuid::Uuid::parse_str(&reference).expect("unique error reference");
+        let bytes = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error_id"], reference);
+        assert_eq!(body["error"], "Internal server error");
+        assert!(!String::from_utf8_lossy(&bytes).contains("private database detail"));
+    }
 
     fn status_of(err: AppError) -> StatusCode {
         err.into_response().status()

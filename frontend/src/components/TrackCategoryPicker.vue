@@ -2,7 +2,7 @@
 import { ref, useId } from 'vue';
 import { TRACK_CATEGORIES, validateCategories } from '../domain/trackCategories';
 
-const props = withDefaults(defineProps<{ modelValue: string[]; disabled?: boolean; readonly?: boolean }>(), { disabled: false, readonly: false });
+const props = withDefaults(defineProps<{ modelValue: string[]; disabled?: boolean; readonly?: boolean; required?: boolean }>(), { disabled: false, readonly: false, required: false });
 const emit = defineEmits<{ 'update:modelValue': [categories: string[]] }>();
 const error = ref('');
 const helpId = useId();
@@ -29,7 +29,7 @@ const handleToggle = (value: string) => {
           {{ option.label }}
         </label>
       </div>
-      <p :id="helpId" class="mbe-0 mbs-2 text-sm text-muted">Optional. Choose activities from the list.</p>
+      <p :id="helpId" class="mbe-0 mbs-2 text-sm text-muted">{{ required ? 'Select at least one category. You can choose more than one.' : 'Optional. Choose activities from the list.' }}</p>
       <p v-if="error" role="alert" class="mbe-0 mbs-2 text-sm text-danger">{{ error }}</p>
     </template>
   </fieldset>

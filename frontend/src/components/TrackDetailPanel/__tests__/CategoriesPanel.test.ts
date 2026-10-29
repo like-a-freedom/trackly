@@ -25,7 +25,7 @@ describe('CategoriesPanel', () => {
         expect(wrapper.get('button[data-testid="save-categories"]').attributes('disabled')).toBeDefined();
         rejectSave!(new Error('Could not save categories. Retry.'));
         await flushPromises();
-        expect(wrapper.get('[role="alert"]').text()).toContain('Retry');
+        expect(wrapper.get('[role="alert"]').text()).toContain('Try again');
         expect((wrapper.get('input[value="walking"]').element as HTMLInputElement).checked).toBe(true);
     });
     let props: {
