@@ -35,7 +35,9 @@ pub fn calculate_track_duration(time_points: &[Option<DateTime<Utc>>]) -> Option
     let start_time = sorted_times.first()?;
     let end_time = sorted_times.last()?;
     let duration = end_time.signed_duration_since(*start_time);
-    Some(duration.num_seconds() as i32)
+    i32::try_from(duration.num_seconds())
+        .ok()
+        .filter(|seconds| *seconds > 0)
 }
 
 #[cfg(test)]
@@ -51,6 +53,13 @@ mod tests {
         let dt2 = parse_gpx_time("2023-05-22T17:56:42.123Z").unwrap();
         assert_eq!(dt2.timestamp(), 1684778202); // Ignore milliseconds for this test
         assert!(parse_gpx_time("not-a-date").is_none());
+    }
+
+    #[test]
+    fn repeated_timestamps_have_no_recorded_duration() {
+        let time = Utc.with_ymd_and_hms(1970, 1, 1, 0, 0, 1).single();
+        assert_eq!(calculate_track_duration(&[time, time]), None);
+        assert_eq!(calculate_track_duration(&[None, None]), None);
     }
 
     #[test]

@@ -1234,7 +1234,7 @@ const formattedDistance = useMemoizedComputed(
 // Duration formatting - memoized
 const formattedDuration = useMemoizedComputed(
   (durationSeconds) => {
-    return utilFormatDuration(durationSeconds);
+    return durationSeconds > 0 ? utilFormatDuration(durationSeconds) : "N/A";
   },
   [() => track.value?.duration_seconds],
   {
