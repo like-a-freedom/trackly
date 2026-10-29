@@ -102,10 +102,11 @@ const fixtureTrack = {id:fixtureId,name:'Design verification route',description:
 for (const viewport of [{width:1280,height:800},{width:390,height:844},{width:320,height:568}]) {
  test(`home, import and track details remain usable at ${viewport.width}px`,async ({page}) => {
   await page.setViewportSize(viewport);
+  let trackName = fixtureTrack.name;
   await page.route('**/api/tracks**', route => {
    const pathname = new URL(route.request().url()).pathname;
    if (pathname.endsWith('/pois') || pathname.endsWith('/distance-markers')) return route.fulfill({json:[]});
-   if (pathname.includes(fixtureId)) return route.fulfill({json:fixtureTrack});
+   if (pathname.includes(fixtureId)) return route.fulfill({json:{...fixtureTrack,name:trackName}});
    return route.fulfill({json:{type:'FeatureCollection',features:[]}});
   });
   await page.goto('/');
@@ -117,16 +118,36 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844},{width:32
   await page.goto('/track/'+fixtureId);
   await expect(page.getByText('Design verification route',{exact:true}).first()).toBeVisible();
   await expect(page.getByText('Not recorded',{exact:true}).first()).toBeVisible();
-  if(viewport.width>900) { const panel=await page.locator('.track-detail-flyout').boundingBox(); expect(panel!.width).toBeLessThanOrEqual(381); expect(panel!.x).toBeGreaterThan(850); }
+  const panel = await page.locator('.track-detail-flyout').boundingBox();
+  expect(panel!.x).toBe(0);
+  expect(panel!.width).toBe(viewport.width);
+  expect(panel!.y + panel!.height).toBeCloseTo(viewport.height, 0);
+  expect(panel!.height).toBeLessThanOrEqual(viewport.height / 2 + 1);
+  if (viewport.width > 900) {
+   const title = await page.locator('.title-with-edit').boundingBox();
+   const actions = await page.locator('.track-name-block .header-actions').boundingBox();
+   expect(actions!.x).toBeGreaterThan(title!.x + title!.width);
+   expect(Math.abs(actions!.y - title!.y)).toBeLessThan(10);
+   await expect(page.locator('.basic-info-grid')).toHaveCSS('display', 'grid');
+   const stats = await page.locator('.basic-info-grid .stat-item').evaluateAll(items => items.map(item => item.getBoundingClientRect().y));
+   expect(stats[0]).toBe(stats[1]);
+  }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:path.join(evidence,`track-${viewport.width}.png`),fullPage:true,animations:'disabled'});
   if(viewport.width>900) {
-   await expect(page.locator('.fullscreen-map')).toHaveCSS('width',`${viewport.width-380}px`);
+   await expect(page.locator('.fullscreen-map')).toHaveCSS('width',`${viewport.width}px`);
    await page.getByRole('button',{name:'Collapse panel',exact:true}).click();
    await expect(page.locator('.fullscreen-map')).toHaveCSS('width',`${viewport.width}px`);
    await page.getByRole('button',{name:'Expand panel',exact:true}).click();
-   await expect(page.locator('.fullscreen-map')).toHaveCSS('width',`${viewport.width-380}px`);
+   await expect(page.locator('.fullscreen-map')).toHaveCSS('width',`${viewport.width}px`);
   }
+  trackName = 'LongUnbrokenTrackName'.repeat(12);
+  await page.reload();
+  await expect(page.locator('.track-name-block h2')).toHaveText('LongUnbrokenTrackName'.repeat(12));
+  const actions = await page.locator('.track-name-block .header-actions').boundingBox();
+  expect(actions!.x).toBeGreaterThanOrEqual(0);
+  expect(actions!.x + actions!.width).toBeLessThanOrEqual(viewport.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
  });
 }
 test('account distinguishes an empty collection from a loading failure and traps nickname focus', async ({page}) => {
@@ -148,3 +169,55 @@ test('account distinguishes an empty collection from a loading failure and traps
  await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
  expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
 });
+
+
+
+for (const viewport of [{width:1280,height:800},{width:390,height:844}]) {
+ test(`distance markers are a personal browser preference across segmented tracks at ${viewport.width}px`, async ({page, browserName}) => {
+  await page.setViewportSize(viewport);
+  let writes = 0;
+  await page.route('**/api/tracks**', route => {
+   if (route.request().method() === 'PATCH') {
+    writes++;
+    return route.fulfill({status:500,json:{error:'Unexpected API write'}});
+   }
+   if (new URL(route.request().url()).pathname.endsWith('/pois')) return route.fulfill({json:[]});
+   return route.fulfill({json:{...fixtureTrack,is_owner:false,length_km:94,distance_markers_enabled:false,
+    geom_geojson:{type:'MultiLineString',coordinates:[[[37,56],[37.001,56]],[[37.01,56],[38.5,56]]]}}});
+  });
+  await page.goto('/track/'+fixtureId+'?zoom=10&lat=56&lng=37.7');
+  const display = page.getByRole('region', {name:'Map display'});
+  const toggle = page.getByRole('switch', {name:'Distance markers',exact:true});
+  const markers = page.locator('.km-label');
+  await expect.poll(() => markers.count()).toBeGreaterThan(0);
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toBeChecked();
+  await display.scrollIntoViewIfNeeded();
+  await display.screenshot({path:`../.impeccable/review/distance-markers-${viewport.width}${browserName === 'webkit' ? '-webkit' : ''}.png`,animations:'disabled'});
+  const hint = page.getByRole('button', {name:'About distance markers'});
+  await hint.focus();
+  await expect(hint).toBeFocused();
+  await expect.poll(() => hint.evaluate(el => getComputedStyle(el, '::after').visibility)).toBe('visible');
+  expect(await hint.evaluate(el => parseFloat(getComputedStyle(el, '::after').top))).toBeLessThan(0);
+  await hint.press('Escape');
+  await expect(hint).toHaveAttribute('aria-expanded', 'false');
+  await hint.press('Enter');
+  await expect(hint).toHaveAttribute('aria-expanded', 'true');
+  await display.screenshot({path:`../.impeccable/review/distance-markers-hint-${viewport.width}${browserName === 'webkit' ? '-webkit' : ''}.png`,animations:'disabled'});
+  await toggle.uncheck();
+  await expect(markers).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('trackly_distance_markers'))).toBe('false');
+  await page.reload();
+  await expect(toggle).not.toBeChecked();
+  await expect(markers).toHaveCount(0);
+  await toggle.focus();
+  await toggle.press('Space');
+  await expect(toggle).toBeChecked();
+  await expect.poll(() => markers.count()).toBeGreaterThan(0);
+  await page.reload();
+  await expect(toggle).toBeChecked();
+  await expect.poll(() => markers.count()).toBeGreaterThan(0);
+  expect(writes).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ });
+}

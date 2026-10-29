@@ -52,6 +52,7 @@
         "
         :latlngs="track.latlngs"
         :track-id="track.id"
+        :segments="track.segments"
         :zoom="zoom"
         :track-length-km="track.length_km || 0"
         @marker-click="handleDistanceMarkerClick"
@@ -108,6 +109,8 @@
       :is-owner="isOwner"
       :session-id="sessionId"
       :coordinate-data="coordinateData"
+      :distance-markers-enabled="distanceMarkersEnabled"
+      :preference-persisted="mapDisplayStore.preferencePersisted"
       @close="goHome"
       @description-updated="handleDescriptionUpdated"
       @name-updated="handleNameUpdated"
@@ -136,6 +139,7 @@
 <!-- eslint-disable vue/block-lang -->
 <script setup lang="ts">
 // @ts-nocheck - Complex Vue component instance types and Leaflet integration
+import { useMapDisplayStore } from '../stores/mapDisplay';
 import { LCircleMarker, LPolyline, LTooltip } from "@vue-leaflet/vue-leaflet";
 import {
   ref,
@@ -442,9 +446,9 @@ const segmentBoundaryMarkers = computed(() => {
   return buildBoundaryMarkers(track.value?.segments, segmentColors.value);
 });
 
-const distanceMarkersEnabled = computed(() => {
-  return track.value?.distance_markers_enabled !== false;
-});
+const mapDisplayStore = useMapDisplayStore();
+const distanceMarkersEnabled = computed(() => mapDisplayStore.distanceMarkersEnabled);
+
 
 // Computed properties
 const isOwner = computed(() => track.value?.is_owner === true);
@@ -822,13 +826,8 @@ function handleCategoriesUpdated(categories) {
   }
 }
 
-function handleDistanceMarkersUpdated(enabled) {
-  if (track.value) {
-    track.value = {
-      ...track.value,
-      distance_markers_enabled: enabled,
-    };
-  }
+function handleDistanceMarkersUpdated(enabled: boolean) {
+  mapDisplayStore.setDistanceMarkersEnabled(enabled);
 }
 
 // Chart interaction handlers
@@ -1170,9 +1169,4 @@ defineExpose({
   }
 }
 
-@media(min-width:901px) {
-  /* Leaflet supplies an inline width; reserve the panel's actual workspace. */
-  .track-details-layout :deep(.fullscreen-map) { width:calc(100vw - 380px) !important; height:100dvh; }
-  .track-details-layout:has(.track-detail-flyout.collapsed) :deep(.fullscreen-map) { width:100vw !important; }
-}
 </style>

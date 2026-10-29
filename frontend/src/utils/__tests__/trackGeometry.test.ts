@@ -6,6 +6,7 @@ import {
     interpolatePoint,
     calculatePerpendicularOffset,
     computeDistanceMarkers,
+    computeSegmentDistanceMarkers,
     isLoopTrack,
     getMarkerInterval,
     getArrowRepeatInterval,
@@ -144,10 +145,24 @@ describe('trackGeometry.isLoopTrack', () => {
     });
 });
 
+describe('segmented distance markers', () => {
+    it('continues distance across segments without counting gaps as travelled', () => {
+        const markers = computeSegmentDistanceMarkers([
+            [[0, 0], [0, 0.01]],
+            [[10, 10], [10, 10.01]],
+        ], 1);
+        expect(markers.map(marker => marker.distanceKm)).toEqual([1, 2]);
+        expect(markers[0].position[0]).toBe(0);
+        expect(markers[1].position[0]).toBe(10);
+        expect(markers[1].position[1]).toBeGreaterThan(10);
+        expect(markers[1].position[1]).toBeLessThan(10.01);
+    });
+});
+
 describe('trackGeometry.getMarkerInterval', () => {
-    it('returns 0 for low zoom', () => {
-        expect(getMarkerInterval(8, 100)).toBe(0);
-        expect(getMarkerInterval(10, 100)).toBe(0);
+    it('keeps sparse markers at overview zoom', () => {
+        expect(getMarkerInterval(8, 100)).toBe(20);
+        expect(getMarkerInterval(10, 100)).toBe(10);
     });
 
     it('returns 0.1 for zoom >= 17 with short track', () => {
@@ -166,8 +181,8 @@ describe('trackGeometry.getMarkerInterval', () => {
         expect(getMarkerInterval(11, 10)).toBe(5);
     });
 
-    it('returns 0 for short tracks at low zoom', () => {
-        expect(getMarkerInterval(12, 0.5)).toBe(0);
+    it('keeps enabled markers useful for short tracks', () => {
+        expect(getMarkerInterval(12, 0.5)).toBe(0.2);
     });
 
     it('increases interval for very long tracks', () => {

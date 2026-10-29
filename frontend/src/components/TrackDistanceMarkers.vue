@@ -32,13 +32,14 @@
 import { computed } from 'vue';
 import { LMarker, LIcon } from '@vue-leaflet/vue-leaflet';
 import {
-  computeDistanceMarkers,
+  computeSegmentDistanceMarkers,
   getMarkerInterval
 } from '../utils/trackGeometry';
 import type { LatLngTuple } from '@/types';
 
 interface Props {
   latlngs: LatLngTuple[];
+  segments?: LatLngTuple[][];
   trackId: string;
   zoom: number;
   trackLengthKm: number;
@@ -52,7 +53,7 @@ const emit = defineEmits<{
 
 // Determine if markers should be shown based on zoom
 const shouldShow = computed(() => {
-  return props.zoom > 10 && props.trackLengthKm >= 0.1; // At least 100m
+  return props.trackLengthKm >= 0.1; // At least 100m
 });
 
 // Calculate marker interval based on zoom and track length
@@ -67,8 +68,8 @@ const markers = computed(() => {
     return [];
   }
   
-  return computeDistanceMarkers(
-    props.latlngs,
+  return computeSegmentDistanceMarkers(
+    props.segments ?? [props.latlngs],
     interval.value,
     100 // Max markers
   ).map(m => ({

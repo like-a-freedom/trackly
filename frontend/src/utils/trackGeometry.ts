@@ -144,58 +144,43 @@ export function computeDistanceMarkers(
     intervalKm: number,
     maxMarkers = 100
 ): DistanceMarker[] {
-    if (!latlngs || latlngs.length < 2 || intervalKm <= 0) {
-        return [];
-    }
+    return computeSegmentDistanceMarkers([latlngs], intervalKm, maxMarkers);
+}
 
-    const cumulativeDistances = computeCumulativeDistances(latlngs);
-    const totalDistance = cumulativeDistances[cumulativeDistances.length - 1] ?? 0;
-    const intervalMeters = intervalKm * 1000;
-
-    // Skip if track is too short
-    if (totalDistance < intervalMeters) {
-        return [];
-    }
-
+/** Place markers along all recorded segments, excluding gaps from distance. */
+export function computeSegmentDistanceMarkers(
+    segments: LatLngTuple[][],
+    intervalKm: number,
+    maxMarkers = 100
+): DistanceMarker[] {
+    if (!Number.isFinite(intervalKm) || intervalKm <= 0 || maxMarkers <= 0) return [];
     const markers: DistanceMarker[] = [];
+    const intervalMeters = intervalKm * 1000;
+    let travelled = 0;
     let nextMarkerDistance = intervalMeters;
 
-    for (let i = 1; i < latlngs.length && markers.length < maxMarkers; i++) {
-        const prevDistance = cumulativeDistances[i - 1] ?? 0;
-        const currDistance = cumulativeDistances[i] ?? 0;
-
-        // Check if marker falls within this segment
-        while (nextMarkerDistance <= currDistance && markers.length < maxMarkers) {
-            // Calculate position along segment
-            const segmentLength = currDistance - prevDistance;
-            if (segmentLength > 0) {
-                const fraction = (nextMarkerDistance - prevDistance) / segmentLength;
-                const prevPoint = latlngs[i - 1];
-                const currPoint = latlngs[i];
-                if (!prevPoint || !currPoint) break;
-                const position = interpolatePoint(prevPoint, currPoint, fraction);
-
-                // Calculate offset position (8px ≈ 2-3 meters at typical zoom)
-                const offsetPosition = calculatePerpendicularOffset(
-                    position,
-                    prevPoint,
-                    currPoint,
-                    3 // 3 meters offset to the right
-                );
-
+    for (const segment of segments) {
+        for (let i = 1; i < segment.length; i++) {
+            const prev = segment[i - 1];
+            const curr = segment[i];
+            if (!prev || !curr || ![...prev, ...curr].every(Number.isFinite)) continue;
+            const length = haversineMeters(prev[0], prev[1], curr[0], curr[1]);
+            const endDistance = travelled + length;
+            while (length > 0 && nextMarkerDistance <= endDistance) {
+                const position = interpolatePoint(prev, curr, (nextMarkerDistance - travelled) / length);
                 const distanceKm = nextMarkerDistance / 1000;
                 markers.push({
                     id: `km-${distanceKm}`,
                     position,
-                    offsetPosition,
-                    distanceKm
+                    offsetPosition: calculatePerpendicularOffset(position, prev, curr, 3),
+                    distanceKm,
                 });
+                if (markers.length >= maxMarkers) return markers;
+                nextMarkerDistance += intervalMeters;
             }
-
-            nextMarkerDistance += intervalMeters;
+            travelled = endDistance;
         }
     }
-
     return markers;
 }
 
@@ -231,11 +216,6 @@ export function isLoopTrack(latlngs: LatLngTuple[], thresholdMeters = 15): boole
  * @returns Interval in kilometers, or 0 if markers should be hidden
  */
 export function getMarkerInterval(zoom: number, trackLengthKm: number): number {
-    // Hide markers at low zoom
-    if (zoom <= 10) {
-        return 0;
-    }
-
     // Base interval based on zoom
     let interval: number;
     if (zoom >= 17) {
@@ -244,8 +224,12 @@ export function getMarkerInterval(zoom: number, trackLengthKm: number): number {
         interval = 0.5; // 500m
     } else if (zoom >= 13) {
         interval = 1; // 1km
+    } else if (zoom >= 11) {
+        interval = 5;
+    } else if (zoom >= 9) {
+        interval = 10;
     } else {
-        interval = 5; // 5km
+        interval = 20 * Math.pow(2, Math.max(0, 8 - zoom));
     }
 
     // For very long tracks, increase interval to limit marker count
@@ -261,9 +245,12 @@ export function getMarkerInterval(zoom: number, trackLengthKm: number): number {
         }
     }
 
-    // Hide markers for very short tracks at low/medium zoom levels
-    if (zoom <= 12 && trackLengthKm < 1) {
-        return 0;
+    // Keep at least one useful interval on short routes instead of hiding the layer.
+    if (trackLengthKm > 0 && trackLengthKm < interval) {
+        const target = trackLengthKm / 2;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(target)));
+        const fraction = target / magnitude;
+        interval = Math.max(0.1, (fraction >= 5 ? 5 : fraction >= 2 ? 2 : 1) * magnitude);
     }
 
     return interval;

@@ -200,13 +200,13 @@ describe('trackGeometry', () => {
             expect(getMarkerInterval(12, 50)).toBe(5);
         });
 
-        it('returns 0 for very low zoom', () => {
-            expect(getMarkerInterval(10, 5)).toBe(0);
-            expect(getMarkerInterval(8, 5)).toBe(0);
+        it('keeps sparse markers at overview zoom', () => {
+            expect(getMarkerInterval(10, 5)).toBe(2);
+            expect(getMarkerInterval(8, 5)).toBe(2);
         });
 
-        it('returns 0 for short tracks at low zoom', () => {
-            expect(getMarkerInterval(12, 0.5)).toBe(0);
+        it('keeps enabled markers useful for short tracks', () => {
+            expect(getMarkerInterval(12, 0.5)).toBe(0.2);
         });
     });
 

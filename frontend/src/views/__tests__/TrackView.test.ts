@@ -597,7 +597,8 @@ describe('TrackView Auto-Scaling', () => {
         wrapper.vm.handleDistanceMarkersUpdated(false);
         await nextTick();
 
-        expect(wrapper.vm.track.distance_markers_enabled).toBe(false);
+        expect(wrapper.vm.track.distance_markers_enabled).toBeUndefined();
+        expect(localStorage.getItem('trackly_distance_markers')).toBe('false');
         expect(wrapper.vm.distanceMarkersEnabled).toBe(false);
     });
 });

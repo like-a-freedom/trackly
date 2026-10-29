@@ -144,6 +144,8 @@ The editor uses a flexible map alongside one 360px task pane. Route, Description
 
 The top bar changes composition at 1100px; its overflow menu adjusts at 768px. Maintain readable actions and independent pane scrolling. These are editor contracts, not a requirement that every future screen use a map/sidebar composition.
 
+Track details use a full-width bottom panel on every screen, capped at half the viewport height with independently scrolling content. The map retains the full viewport width when details are expanded or collapsed. The title and actions share a row when space permits and wrap on narrow screens; long titles must not push actions outside the panel. This differs from the editor task pane.
+
 ## Elevation & Depth
 
 New task panes are flat, white and separated with thin borders. Floating map controls use the shared control shadows; their translucent white surface keeps the control plane distinct from arbitrary tile imagery. The existing editor top bar and overflow menu retain stronger local shadows. Exact shadow and focus values are captured in the sidecar.

@@ -308,6 +308,7 @@
           :formatted-moving-avg-speed="formattedMovingAvgSpeed"
           :formatted-moving-avg-pace="formattedMovingAvgPace"
           :distance-markers-enabled="distanceMarkersEnabled"
+          :preference-persisted="preferencePersisted"
           @speed-unit-change="setSpeedUnit"
           @distance-markers-toggle="handleDistanceMarkersToggle"
         />
@@ -640,6 +641,8 @@ const props = defineProps({
     type: String,
     default: "",
   },
+  distanceMarkersEnabled: { type: Boolean, default: true },
+  preferencePersisted: { type: Boolean, default: true },
   coordinateData: {
     type: Array,
     default: () => [],
@@ -773,40 +776,13 @@ const savingDescription = ref(false);
 const descriptionError = ref("");
 
 // --- Categories state (handled by CategoriesPanel component) ---
-const distanceMarkersEnabled = ref(true);
-
 const {
   updateTrackCategories,
   updateTrackInPolylines,
-  updateTrackDistanceMarkers,
 } = useTracks();
 
-watch(
-  () => props.track?.distance_markers_enabled,
-  (nextValue) => {
-    distanceMarkersEnabled.value = nextValue !== false;
-  },
-  { immediate: true }
-);
-
-async function handleDistanceMarkersToggle(event) {
-  if (!props.track?.id) return;
-  const nextValue = !!event.target.checked;
-  distanceMarkersEnabled.value = nextValue;
-
-  try {
-    await updateTrackDistanceMarkers(props.track.id, nextValue);
-    track.value = { ...track.value, distance_markers_enabled: nextValue };
-    emit("distance-markers-updated", nextValue);
-    showToast(
-      nextValue ? "Distance markers enabled" : "Distance markers hidden",
-      "success"
-    );
-  } catch (err) {
-    distanceMarkersEnabled.value =
-      track.value?.distance_markers_enabled !== false;
-    showToast(err.message || "Failed to update overlays", "error");
-  }
+function handleDistanceMarkersToggle(event) {
+  emit("distance-markers-updated", !!event.target.checked);
 }
 
 // Handle categories update from CategoriesPanel component
@@ -1977,9 +1953,9 @@ defineExpose({
   border-start-end-radius: 18px;
   box-shadow: 0 -4px 24px oklch(0% 0 none / 0.18);
   padding: 24px 0 0 0;
-  width: 100vw;
-  min-width: 100vw;
-  max-width: 100vw;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   min-height: 200px;
   max-height: 50vh;
@@ -2987,16 +2963,16 @@ defineExpose({
 }
 
 /* Speed/Pace Grid */
-.speed-pace-grid {
+:deep(.speed-pace-grid) {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 /* Basic Info Grid */
-.basic-info-grid {
+:deep(.basic-info-grid) {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3029,7 +3005,7 @@ defineExpose({
 /* Elevation Stats */
 :deep(.stats-section .elevation-stats) {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-block-start: 16px;
 }
@@ -3037,7 +3013,7 @@ defineExpose({
 /* Slope Stats Grid */
 :deep(.stats-section .slope-stats-grid) {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3051,7 +3027,7 @@ defineExpose({
 /* Heart Rate Stats */
 :deep(.stats-section .hr-stats) {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3341,7 +3317,7 @@ defineExpose({
     padding: 0 16px 28px 16px;
   }
 
-  .speed-pace-grid {
+  :deep(.speed-pace-grid) {
     grid-template-columns: 1fr;
   }
 
@@ -3349,7 +3325,7 @@ defineExpose({
     grid-template-columns: 1fr;
   }
 
-  .basic-info-grid {
+  :deep(.basic-info-grid) {
     grid-template-columns: 1fr;
   }
 
@@ -3410,17 +3386,34 @@ defineExpose({
     height: 44px;
   }
 }
-@media(min-width:901px) {
- .track-detail-flyout { inset-inline-start:auto; inset-inline-end:0; inset-block-start:0; inset-block-end:0; width:380px; min-width:0; max-width:380px; min-height:0; max-height:100dvh; padding:20px 0 0; border-radius:0; box-shadow:none; border-inline-start:1px solid var(--color-line); background:var(--color-surface); }
- .track-detail-flyout.collapsed { inset-block-start:auto; width:44px; max-height:0; }
- .flyout-content { padding:0 20px 24px; }
- :deep(.basic-info-grid), :deep(.speed-pace-grid) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.track-name-block {
+  flex-wrap: wrap;
+  align-items: center;
 }
-.track-name-block { flex-wrap:wrap; align-items:flex-start; }
- .title-with-edit { min-width:0; max-width:100%; flex:1 1 100%; }
- .track-header .title-with-edit h2 { overflow-wrap:anywhere; }
- .track-name-block .header-actions { flex:1 1 100%; width:100%; justify-content:flex-end; gap:4px; }
- .header-actions.grouped { gap:8px; flex-wrap:wrap; }
+
+.title-with-edit {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 240px;
+}
+
+.track-header .title-with-edit h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.track-name-block .header-actions {
+  flex: 0 0 auto;
+  width: auto;
+  margin-inline-start: auto;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.header-actions.grouped {
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 /* Motion is opt-in: transitions that move or scale an element, smooth panel
    scrolling and the saving spinner only run when the visitor has not asked for
