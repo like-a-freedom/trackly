@@ -85,7 +85,9 @@ function handleChartModeChange(mode) {
                 <!-- Force Update Elevation Button -->
                 <button
                     v-if="isOwner && hasElevationData"
-                    class="force-update-btn"
+                    class="force-update-btn inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-1.5 text-muted disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    aria-label="Recalculate elevation"
                     :disabled="enrichingElevation"
                     title="Force update elevation data from external service"
                     @click="emit('force-enrich-elevation')"
@@ -234,3 +236,20 @@ function handleChartModeChange(mode) {
         </div>
     </div>
 </template>
+
+<style scoped>
+.force-update-btn:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}
+.force-update-btn:active:not(:disabled) {
+    background: color-mix(in oklch, var(--color-action) 16%, transparent);
+    transform: scale(0.97);
+}
+@media (hover: hover) and (pointer: fine) {
+    .force-update-btn:hover:not(:disabled) {
+        background: color-mix(in oklch, var(--color-action) 10%, transparent);
+        color: var(--color-action);
+    }
+}
+</style>
