@@ -31,7 +31,7 @@
       <button
         class="btn-secondary btn-sm ui-secondary"
         data-testid="loop-btn"
-        title="Connect last point to first (straight)"
+        v-tooltip="'Connect last point to first (straight)'" :aria-label="'Connect last point to first (straight)'"
         @click="$emit('closeLoop')"
       >
         Close loop
@@ -42,7 +42,7 @@
       <button
         class="btn-secondary btn-sm ui-secondary"
         data-testid="loop-same-way-btn"
-        title="Return the same way (duplicate in reverse)"
+        v-tooltip="'Return the same way (duplicate in reverse)'" :aria-label="'Return the same way (duplicate in reverse)'"
         @click="$emit('closeLoopSameWay')"
       >
         Same way back
@@ -53,7 +53,7 @@
       <button
         class="btn-secondary btn-sm ui-secondary"
         data-testid="loop-different-route-btn"
-        title="Return via different route (auto-route)"
+        v-tooltip="'Return via different route (auto-route)'" :aria-label="'Return via different route (auto-route)'"
         @click="$emit('closeLoopDifferentRoute')"
       >
         Different route

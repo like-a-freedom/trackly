@@ -2,7 +2,9 @@
   <button
     class="geolocation-button"
     :disabled="gettingLocation"
-    :title="
+    v-tooltip="
+      gettingLocation ? 'Getting location...' : 'Center map on current location'
+    " :aria-label="
       gettingLocation ? 'Getting location...' : 'Center map on current location'
     "
     @click="getCurrentLocation"

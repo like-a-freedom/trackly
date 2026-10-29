@@ -46,7 +46,7 @@
         v-if="featureFlags.isEditorEnabled"
         class="create-track-btn"
         type="button"
-        title="Create new track"
+        v-tooltip="'Create new track'"
         aria-label="Create new track"
         @click="router.push({ name: 'TrackCreate' })"
       >
@@ -87,7 +87,7 @@
             class="upload-button-compact map-disclosure-button"
             :class="{ 'drag-active': dragActive }"
             type="button"
-            title="Upload track file"
+            v-tooltip="'Upload track file'"
             :aria-expanded="uploadFormExpanded"
             aria-label="Upload track file"
             @click="toggleUploadForm"
@@ -111,7 +111,7 @@
               <span class="upload-form-title">Upload track</span>
               <button
                 class="collapse-button map-disclosure-close"
-                title="Collapse upload form"
+                v-tooltip="'Collapse upload form'" :aria-label="'Collapse upload form'"
                 type="button"
                 @click="toggleUploadForm"
               >

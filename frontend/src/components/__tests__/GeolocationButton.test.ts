@@ -60,7 +60,7 @@ describe('GeolocationButton.vue', () => {
             const wrapper = mount(GeolocationButton);
 
             const button = wrapper.find('.geolocation-button');
-            expect(button.attributes('title')).toBe(
+            expect(button.attributes('data-tooltip')).toBe(
                 'Center map on current location'
             );
         });
@@ -76,7 +76,7 @@ describe('GeolocationButton.vue', () => {
             await nextTick();
 
             const button = wrapper.find('.geolocation-button');
-            expect(button.attributes('title')).toBe('Getting location...');
+            expect(button.attributes('data-tooltip')).toBe('Getting location...');
         });
 
         it('should be disabled while getting location', async () => {

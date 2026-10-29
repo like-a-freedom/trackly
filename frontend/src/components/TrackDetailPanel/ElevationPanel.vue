@@ -90,7 +90,7 @@ function handleChartModeChange(mode) {
                     class="force-update-btn"
                     label="Recalculate elevation"
                     :loading="enrichingElevation"
-                    title="Force update elevation data from external service"
+                    hint="Force update elevation data from external service"
                     @click="emit('force-enrich-elevation')"
                 />
 
@@ -98,7 +98,7 @@ function handleChartModeChange(mode) {
                 <button
                     v-if="isPollingForElevation"
                     class="stop-polling-btn-header"
-                    title="Stop automatic elevation data polling"
+                    v-tooltip="'Stop automatic elevation data polling'" :aria-label="'Stop automatic elevation data polling'"
                     @click="emit('stop-elevation-polling')"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -143,7 +143,7 @@ function handleChartModeChange(mode) {
                         v-if="hasSlopeData && hasElevationData"
                         class="chart-toggle"
                         :class="{ active: chartMode === 'elevation-with-slope' }"
-                        title="Elevation profile with slope gradient overlay"
+                        v-tooltip="'Elevation profile with slope gradient overlay'" :aria-label="'Elevation profile with slope gradient overlay'"
                         data-testid="elevation-slope-toggle"
                         @click="handleChartModeChange('elevation-with-slope')"
                     >

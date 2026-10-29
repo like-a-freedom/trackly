@@ -7,7 +7,7 @@
         :key="m.id"
         class="toolbar-btn"
         :class="{ active: mode === m.id }"
-        :title="`${m.label} (${m.key})`"
+        v-tooltip="`${m.label} (${m.key})`" :aria-label="`${m.label} (${m.key})`"
         :data-testid="`mode-${m.id}`"
         @click="$emit('setMode', m.id)"
       >
@@ -27,7 +27,7 @@
       <button
         class="toolbar-btn"
         :disabled="!canUndo"
-        title="Undo (Ctrl+Z)"
+        v-tooltip="'Undo (Ctrl+Z)'" :aria-label="'Undo (Ctrl+Z)'"
         data-testid="undo-btn"
         @click="$emit('undo')"
       >
@@ -36,7 +36,7 @@
       <button
         class="toolbar-btn"
         :disabled="!canRedo"
-        title="Redo (Ctrl+Y)"
+        v-tooltip="'Redo (Ctrl+Y)'" :aria-label="'Redo (Ctrl+Y)'"
         data-testid="redo-btn"
         @click="$emit('redo')"
       >
@@ -50,9 +50,8 @@
     <div class="toolbar-group">
       <label
         class="toolbar-toggle"
-        title="Auto-routing"
       >
-        <input
+        <input v-tooltip="'Auto-routing'" aria-label="Auto-routing"
           type="checkbox"
           :checked="routingMode === 'auto'"
           data-testid="routing-toggle"
@@ -62,9 +61,8 @@
       </label>
       <label
         class="toolbar-select"
-        title="Snap to road"
       >
-        <select
+        <select v-tooltip="'Snap to road'" aria-label="Snap to road"
           class="toolbar-select-input"
           :value="snapToRoadMode"
           data-testid="snap-mode"
@@ -77,9 +75,8 @@
       </label>
       <label
         class="toolbar-select"
-        title="Routing profile"
       >
-        <select
+        <select v-tooltip="'Routing profile'" aria-label="Routing profile"
           class="toolbar-select-input"
           :value="routingProfile"
           data-testid="routing-profile"
@@ -113,7 +110,7 @@
       <button
         class="toolbar-btn"
         :class="{ active: poiMode }"
-        title="POI add mode"
+        v-tooltip="'POI add mode'" :aria-label="'POI add mode'"
         data-testid="poi-mode-btn"
         @click="$emit('togglePoiMode')"
       >
@@ -123,7 +120,7 @@
       <button
         class="toolbar-btn"
         :class="{ active: showDistanceMarkers }"
-        title="Distance markers"
+        v-tooltip="'Distance markers'" :aria-label="'Distance markers'"
         data-testid="distance-markers-btn"
         @click="$emit('toggleDistanceMarkers')"
       >
@@ -142,24 +139,24 @@
     >
       <span
         class="stat-item"
-        title="Distance"
+        v-tooltip="'Distance'"
       > 📏 {{ distanceDisplay }} </span>
       <span
         class="stat-item"
-        title="Estimated time"
+        v-tooltip="'Estimated time'"
       >
         ⏱ {{ timeDisplay }}
       </span>
       <span
         v-if="manualRoutingPercent > 0"
         class="stat-item manual-warning"
-        title="Manual routing segments"
+        v-tooltip="'Manual routing segments'"
       >
         ⚠️ {{ manualRoutingPercent }}% manual
       </span>
       <span
         class="stat-item"
-        title="Points"
+        v-tooltip="'Points'"
       > 📍 {{ totalPoints }} </span>
     </div>
 
@@ -168,7 +165,7 @@
       <button
         class="toolbar-btn"
         :disabled="!savedTrackId"
-        title="Export track (Ctrl+E)"
+        v-tooltip="'Export track (Ctrl+E)'" :aria-label="'Export track (Ctrl+E)'"
         data-testid="export-btn"
         @click="showExportMenu = !showExportMenu"
       >
@@ -206,7 +203,7 @@
       <button
         class="toolbar-btn save-btn"
         :disabled="!canSave || saving"
-        title="Save (Ctrl+Shift+S)"
+        v-tooltip="'Save (Ctrl+Shift+S)'" :aria-label="'Save (Ctrl+Shift+S)'"
         data-testid="save-btn"
         @click="$emit('save')"
       >

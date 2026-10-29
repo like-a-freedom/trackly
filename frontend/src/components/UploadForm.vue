@@ -65,7 +65,7 @@
           <button
             v-if="existingTrackId"
             type="button" class="track-link-btn"
-            title="View existing track"
+            v-tooltip="'View existing track'"
             aria-label="View existing track"
             @click="navigateToExistingTrack"
           >
@@ -95,7 +95,7 @@
           >
             <button
               type="button" class="track-link-btn"
-              title="View uploaded track"
+              v-tooltip="'View uploaded track'"
               aria-label="View track"
               @click="navigateToTrack"
             >
@@ -104,7 +104,7 @@
             <button
               type="button" class="copy-link-btn"
               :disabled="copyingLink"
-              :title="copyingLink ? 'Copying...' : linkCopied ? 'Link copied!' : 'Copy track link'"
+              v-tooltip="copyingLink ? 'Copying...' : linkCopied ? 'Link copied!' : 'Copy track link'"
               aria-label="Copy track link"
               @click="copyTrackUrl"
             >

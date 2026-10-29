@@ -18,7 +18,7 @@ describe('SearchButton', () => {
 
     it('has correct title attribute', () => {
         const wrapper = mount(SearchButton);
-        expect(wrapper.find('.search-button').attributes('title')).toBe('Search tracks');
+        expect(wrapper.find('.search-button').attributes('data-tooltip')).toBe('Search tracks');
     });
 
     it('contains an SVG icon', () => {

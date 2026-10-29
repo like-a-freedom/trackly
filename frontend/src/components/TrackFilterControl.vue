@@ -9,7 +9,7 @@
       v-show="!isOpen"
       class="filter-button-compact map-disclosure-button"
       type="button"
-      title="Show filters"
+      v-tooltip="'Show filters'" :aria-label="'Show filters'"
       :aria-expanded="isOpen"
       aria-controls="track-filter-panel"
       @click="toggleOpen"
@@ -40,7 +40,7 @@
             <button
               class="filter-options-btn"
               type="button"
-              title="Filter options"
+              v-tooltip="'Filter options'"
               aria-label="Toggle filter options"
               @click="showFilterOptions = !showFilterOptions"
             >
@@ -58,7 +58,7 @@
             <button
               class="collapse-btn map-disclosure-close"
               type="button"
-              title="Collapse"
+              v-tooltip="'Collapse'"
               aria-label="Collapse filters"
               @click="toggleOpen"
             >

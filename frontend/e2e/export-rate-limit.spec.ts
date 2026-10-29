@@ -33,7 +33,7 @@ test('export: client reads cooldown header and starts cooldown', async ({ page }
     await exportBtn.click();
     await page.waitForTimeout(150);
     await expect(exportBtn).toHaveAttribute('disabled', '');
-    await expect(exportBtn).toHaveAttribute('title', /wait 7s/);
+    await expect(exportBtn).toHaveAttribute('data-tooltip', /wait 7s/);
 
     // Clean up route
     await page.unroute(`**/tracks/${trackId}/export`);
@@ -60,7 +60,7 @@ test('export: client handles 429 responses (shows toast and starts cooldown)', a
     await exportBtn.click();
     // Verify client started cooldown by checking button title and disabled state
     await expect(exportBtn).toHaveAttribute('disabled', '');
-    await expect(exportBtn).toHaveAttribute('title', /wait 5s/);
+    await expect(exportBtn).toHaveAttribute('data-tooltip', /wait 5s/);
 
     await page.unroute(`**/tracks/${trackId}/export`);
 });

@@ -57,7 +57,7 @@ describe('SearchButton', () => {
         const wrapper = mount(SearchButton);
         const button = wrapper.find('button');
 
-        expect(button.attributes('title')).toBe('Search tracks');
+        expect(button.attributes('data-tooltip')).toBe('Search tracks');
     });
 
     it('has hover interaction styles', () => {

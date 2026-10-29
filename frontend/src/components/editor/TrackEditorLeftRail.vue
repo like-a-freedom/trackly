@@ -12,7 +12,7 @@
         :class="{ active: mode === item.id }"
         :aria-pressed="mode === item.id ? 'true' : 'false'"
         :data-testid="`left-rail-mode-${item.id}`"
-        :title="`${item.label} (${item.key})`"
+        v-tooltip="`${item.label} (${item.key})`"
         @click="$emit('setMode', item.id)"
       >
         <component :is="item.icon" :size="18" aria-hidden="true" />
@@ -27,7 +27,7 @@
         class="left-rail-btn"
         :disabled="!canUndo"
         data-testid="left-rail-undo"
-        title="Undo"
+        v-tooltip="'Undo'"
         @click="$emit('undo')"
       >
         <Undo2 :size="18" aria-hidden="true" />
@@ -37,7 +37,7 @@
         class="left-rail-btn"
         :disabled="!canRedo"
         data-testid="left-rail-redo"
-        title="Redo"
+        v-tooltip="'Redo'"
         @click="$emit('redo')"
       >
         <Redo2 :size="18" aria-hidden="true" />
@@ -53,7 +53,7 @@
         :class="{ active: poiMode }"
         :aria-pressed="poiMode ? 'true' : 'false'"
         data-testid="left-rail-poi-toggle"
-        title="POI mode"
+        v-tooltip="'POI mode'"
         @click="$emit('togglePoiMode')"
       >
         <MapPin :size="18" aria-hidden="true" />

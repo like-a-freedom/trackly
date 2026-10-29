@@ -9,7 +9,7 @@
       </h3>
       <button
         class="btn-icon"
-        title="New segment (Ctrl+S)"
+        v-tooltip="'New segment (Ctrl+S)'" :aria-label="'New segment (Ctrl+S)'"
         data-testid="add-segment-btn"
         @click="$emit('addSegment')"
       >
@@ -68,7 +68,7 @@
           <button
             v-if="i < segmentStats.length - 1"
             class="btn-icon-sm"
-            title="Merge with next (Ctrl+J)"
+            v-tooltip="'Merge with next (Ctrl+J)'" :aria-label="'Merge with next (Ctrl+J)'"
             data-testid="join-segment-btn"
             @click.stop="$emit('joinSegments', i, i + 1)"
           >
@@ -76,7 +76,7 @@
           </button>
           <button
             class="btn-icon-sm"
-            title="New track from segment"
+            v-tooltip="'New track from segment'" :aria-label="'New track from segment'"
             data-testid="new-track-from-segment-btn"
             @click.stop="$emit('newTrackFromSegment', i)"
           >
@@ -84,14 +84,14 @@
           </button>
           <button
             class="btn-icon-sm"
-            title="Reverse"
+            v-tooltip="'Reverse'" :aria-label="'Reverse'"
             @click.stop="$emit('reverseSegment', i)"
           >
             ↔
           </button>
           <button
             class="btn-icon-sm danger"
-            title="Delete segment"
+            v-tooltip="'Delete segment'" :aria-label="'Delete segment'"
             @click.stop="$emit('deleteSegment', i)"
           >
             ✕

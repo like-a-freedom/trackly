@@ -149,7 +149,7 @@ describe('GeolocationButton', () => {
         const wrapper = mount(GeolocationButton);
         const button = wrapper.find('button');
 
-        expect(button.attributes('title')).toBe('Center map on current location');
+        expect(button.attributes('data-tooltip')).toBe('Center map on current location');
     });
 
     it('updates title when getting location', async () => {
@@ -164,7 +164,7 @@ describe('GeolocationButton', () => {
         await wrapper.vm.$nextTick();
 
         const button = wrapper.find('button');
-        expect(button.attributes('title')).toBe('Getting location...');
+        expect(button.attributes('data-tooltip')).toBe('Getting location...');
     });
 
     it('handles unsupported geolocation gracefully', async () => {

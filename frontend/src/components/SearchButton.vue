@@ -1,7 +1,7 @@
 <template>
   <button
     class="search-button"
-    title="Search tracks"
+    v-tooltip="'Search tracks'" :aria-label="'Search tracks'"
     @click="openSearch"
   >
     <svg

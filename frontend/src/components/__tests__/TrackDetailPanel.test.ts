@@ -667,7 +667,7 @@ describe('TrackDetailPanel', () => {
       const headerActions = wrapper.find('.header-actions');
       const collapseButton = headerActions.find('.collapse-toggle-btn');
       expect(collapseButton.exists()).toBe(true);
-      expect(collapseButton.attributes('title')).toBe('Collapse panel');
+      expect(collapseButton.attributes('data-tooltip')).toBe('Collapse panel');
     });
 
     it('toggles panel collapsed state when collapse button is clicked', async () => {
@@ -702,7 +702,7 @@ describe('TrackDetailPanel', () => {
       // Check the button inside the tab has the correct title
       const tabButton = tab.find('.collapse-toggle-btn');
       expect(tabButton.exists()).toBe(true);
-      expect(tabButton.attributes('title')).toBe('Expand panel');
+      expect(tabButton.attributes('data-tooltip')).toBe('Expand panel');
     });
 
     it('expands panel when tab is clicked', async () => {
@@ -1021,7 +1021,7 @@ describe('TrackDetailPanel', () => {
       const headerActions = wrapper.find('.header-actions');
       const exportButton = headerActions.find('.export-gpx-btn');
       expect(exportButton.exists()).toBe(true);
-      expect(exportButton.attributes('title')).toBe('Export track as GPX file');
+      expect(exportButton.attributes('data-tooltip')).toBe('Export track as GPX file');
     });
 
     it('should display share track button in header-actions', async () => {
@@ -1043,7 +1043,7 @@ describe('TrackDetailPanel', () => {
       const headerActions = wrapper.find('.header-actions');
       const shareButton = headerActions.find('.share-track-btn');
       expect(shareButton.exists()).toBe(true);
-      expect(shareButton.attributes('title')).toBe('Copy shareable link');
+      expect(shareButton.attributes('data-tooltip')).toBe('Copy shareable link');
     });
 
     it('should call export API when export button is clicked', async () => {
@@ -1159,7 +1159,7 @@ describe('TrackDetailPanel', () => {
       await wrapper.vm.$nextTick();
 
       expect(exportButton.attributes('disabled')).toBe('');
-      expect(exportButton.attributes('title')).toBe('Exporting...');
+      expect(exportButton.attributes('data-tooltip')).toBe('Exporting...');
     });
 
     it('should set export cooldown after successful export header', async () => {
@@ -1187,7 +1187,7 @@ describe('TrackDetailPanel', () => {
 
       // After success, cooldown should be active and button disabled
       expect(exportButton.attributes('disabled')).toBe('');
-      expect(exportButton.attributes('title')).toBe('Export disabled: wait 7s');
+      expect(exportButton.attributes('data-tooltip')).toBe('Export disabled: wait 7s');
     });
 
     it('should handle 429 by setting cooldown and showing toast', async () => {
@@ -1211,7 +1211,7 @@ describe('TrackDetailPanel', () => {
 
       expect(mockShowToast).toHaveBeenCalledWith('Please wait 5 seconds before exporting again.', 'error');
       expect(exportButton.attributes('disabled')).toBe('');
-      expect(exportButton.attributes('title')).toBe('Export disabled: wait 5s');
+      expect(exportButton.attributes('data-tooltip')).toBe('Export disabled: wait 5s');
     });
 
     it('should handle export error gracefully', async () => {
@@ -1538,7 +1538,7 @@ describe('TrackDetailPanel', () => {
       });
 
       expect(wrapper.find('.force-update-btn').exists()).toBe(true);
-      expect(wrapper.find('.force-update-btn').attributes('title')).toBe('Force update elevation data from external service');
+      expect(wrapper.find('.force-update-btn').attributes('data-tooltip')).toBe('Force update elevation data from external service');
     });
 
     it('should show confirmation dialog when track already has elevation data', async () => {

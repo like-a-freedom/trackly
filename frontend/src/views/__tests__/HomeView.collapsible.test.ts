@@ -445,14 +445,14 @@ describe('HomeView - Collapsible Upload Form', () => {
         it('has proper accessibility attributes', async () => {
             // Check compact button (initially visible when collapsed)
             const compactButton = wrapper.find('.upload-button-compact');
-            expect(compactButton.attributes('title')).toBe('Upload track file');
+            expect(compactButton.attributes('data-tooltip')).toBe('Upload track file');
 
             // Expand and check collapse button
             await compactButton.trigger('click');
             await nextTick();
 
             const collapseButton = wrapper.find('.collapse-button');
-            expect(collapseButton.attributes('title')).toBe('Collapse upload form');
+            expect(collapseButton.attributes('data-tooltip')).toBe('Collapse upload form');
             expect(collapseButton.attributes('type')).toBe('button');
         });
     });

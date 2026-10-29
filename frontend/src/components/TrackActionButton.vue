@@ -4,6 +4,7 @@ import { Check, LoaderCircle, Pencil, RefreshCw, Upload, X } from 'lucide-vue-ne
 const props = withDefaults(defineProps<{
   action: 'edit' | 'save' | 'cancel' | 'upload' | 'refresh';
   label?: string;
+  hint?: string;
   loading?: boolean;
   disabled?: boolean;
   type?: 'button' | 'submit' | 'reset';
@@ -11,7 +12,7 @@ const props = withDefaults(defineProps<{
 const icon = computed(() => props.loading ? LoaderCircle : ({edit:Pencil,save:Check,cancel:X,upload:Upload,refresh:RefreshCw})[props.action]);
 </script>
 <template>
-  <button :type="type" :disabled="disabled || loading" :aria-label="label" :title="action === 'edit' || action === 'refresh' ? label : undefined" :aria-busy="loading || undefined" :class="[action === 'save' || action === 'upload' ? 'ui-primary' : 'ui-secondary', {'track-action-icon':action === 'edit' || action === 'refresh'}]" class="track-action-button">
+  <button :type="type" :disabled="disabled || loading" :aria-label="label" v-tooltip="hint ?? (action === 'edit' || action === 'refresh' ? label : undefined)" :aria-busy="loading || undefined" :class="[action === 'save' || action === 'upload' ? 'ui-primary' : 'ui-secondary', {'track-action-icon':action === 'edit' || action === 'refresh'}]" class="track-action-button">
     <component :is="icon" aria-hidden="true" class="track-action-glyph" :class="{'track-action-loading':loading}" />
     <span v-if="action !== 'edit' && action !== 'refresh'"><slot>{{ label }}</slot></span>
   </button>

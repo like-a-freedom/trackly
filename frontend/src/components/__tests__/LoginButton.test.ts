@@ -156,7 +156,7 @@ describe('LoginButton.vue', () => {
         it('should have title attribute on login button', () => {
             const wrapper = mount(LoginButton);
 
-            expect(wrapper.find('.login-button').attributes('title')).toBe('Sign in with Google');
+            expect(wrapper.find('.login-button').attributes('data-tooltip')).toBe('Sign in with Google');
         });
 
         it('should have title attribute on user button', () => {
@@ -169,7 +169,7 @@ describe('LoginButton.vue', () => {
 
             const wrapper = mount(LoginButton);
 
-            expect(wrapper.find('.user-button').attributes('title')).toBe('Test User');
+            expect(wrapper.find('.user-button').attributes('data-tooltip')).toBe('Test User');
         });
     });
 });

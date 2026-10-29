@@ -7,11 +7,12 @@ import { createPinia } from 'pinia';
 import { createHead } from '@vueuse/head';
 import App from './App.vue';
 import router from './router';
+import { tooltip } from './directives/tooltip';
 
 const head = createHead();
 const pinia = createPinia();
 
-createApp(App).use(pinia).use(router).use(head).mount('#app');
+createApp(App).directive('tooltip', tooltip).use(pinia).use(router).use(head).mount('#app');
 
 if ('serviceWorker' in navigator) {
 	window.addEventListener('load', () => {

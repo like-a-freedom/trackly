@@ -87,7 +87,7 @@
         <button
           v-if="poiEditIndex !== i"
           class="btn-icon-sm"
-          title="Edit POI"
+          v-tooltip="'Edit POI'" :aria-label="'Edit POI'"
           data-testid="poi-edit-btn"
           @click.stop="startPoiEdit(i)"
         >
@@ -96,7 +96,7 @@
         <button
           v-if="poiEditIndex !== i"
           class="btn-icon-sm danger"
-          title="Delete POI"
+          v-tooltip="'Delete POI'" :aria-label="'Delete POI'"
           data-testid="poi-delete-btn"
           @click.stop="$emit('deletePoi', i)"
         >

@@ -64,7 +64,7 @@ test.describe('Auth Button UI', () => {
 
     test('login button has proper title attribute', async ({ page }) => {
         const loginButton = page.locator('button.login-button');
-        await expect(loginButton).toHaveAttribute('title', 'Sign in with Google');
+        await expect(loginButton).toHaveAttribute('data-tooltip', 'Sign in with Google');
     });
 
     test('login button is enabled and clickable', async ({ page }) => {

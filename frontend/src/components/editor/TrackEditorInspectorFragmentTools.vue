@@ -10,7 +10,7 @@
       </h3>
       <button
         class="btn-icon-sm"
-        title="Clear selection"
+        v-tooltip="'Clear selection'" :aria-label="'Clear selection'"
         data-testid="fragment-clear-btn"
         @click="$emit('clearFragment')"
       >

@@ -155,8 +155,8 @@ test.describe('Map Controls Icon Visibility', () => {
         const geoButton = page.locator('button.geolocation-button');
 
         // Check title attributes for accessibility
-        await expect(searchButton).toHaveAttribute('title', 'Search tracks');
-        await expect(geoButton).toHaveAttribute('title', /Center map on current location|Getting location.../);
+        await expect(searchButton).toHaveAttribute('data-tooltip', 'Search tracks');
+        await expect(geoButton).toHaveAttribute('data-tooltip', /Center map on current location|Getting location.../);
     });
 
     test('icons contrast is sufficient for visibility', async ({ page }) => {

@@ -709,6 +709,6 @@ test.describe('Account View - Accessibility', () => {
         await expect(backBtn).toContainText('Back');
         
         const settingsBtn = page.locator('.settings-btn');
-        await expect(settingsBtn).toHaveAttribute('title', 'Settings');
+        await expect(settingsBtn).toHaveAttribute('data-tooltip', 'Settings');
     });
 });

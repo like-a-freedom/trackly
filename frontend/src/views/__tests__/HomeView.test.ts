@@ -163,7 +163,7 @@ describe('HomeView', () => {
         it('should show expand button in collapsed state', () => {
             const compactButton = wrapper.find('.upload-button-compact');
             expect(compactButton.exists()).toBe(true);
-            expect(compactButton.attributes('title')).toBe('Upload track file');
+            expect(compactButton.attributes('data-tooltip')).toBe('Upload track file');
         });
 
         it('should show upload icon in compact state', () => {
@@ -195,7 +195,7 @@ describe('HomeView', () => {
 
             const collapseButton = wrapper.find('.collapse-button');
             expect(collapseButton.exists()).toBe(true);
-            expect(collapseButton.attributes('title')).toBe('Collapse upload form');
+            expect(collapseButton.attributes('data-tooltip')).toBe('Collapse upload form');
         });
 
         it('should toggle back to collapsed state when collapse button is clicked', async () => {

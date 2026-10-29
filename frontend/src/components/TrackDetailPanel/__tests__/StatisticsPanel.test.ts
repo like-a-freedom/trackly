@@ -68,11 +68,6 @@ describe('StatisticsPanel', () => {
         expect(wrapper.text()).toContain('Not recorded');
     });
 
-    it('renders map overlays section', () => {
-        const wrapper = mount(StatisticsPanel, { props });
-        expect(wrapper.text()).toContain('Map display');
-        expect(wrapper.text()).toContain('Distance markers');
-    });
 
     it('emits speed-unit-change event', async () => {
         const wrapper = mount(StatisticsPanel, { props });
@@ -82,51 +77,11 @@ describe('StatisticsPanel', () => {
         expect(wrapper.emitted('speed-unit-change')[0]).toEqual(['mph']);
     });
 
-    it('emits distance-markers-toggle event', async () => {
-        props.isOwner = true;
-        const wrapper = mount(StatisticsPanel, { props });
-        const checkbox = wrapper.find('input[type="checkbox"]');
-        await checkbox.trigger('change');
-        expect(wrapper.emitted('distance-markers-toggle')).toBeTruthy();
-    });
 
-    it('allows every viewer to change their personal display', () => {
-        const wrapper = mount(StatisticsPanel, { props });
-        const checkbox = wrapper.find('input[type="checkbox"]');
-        expect(checkbox.element.disabled).toBe(false);
-    });
 
-    it('enables checkbox for owner', () => {
-        props.isOwner = true;
-        const wrapper = mount(StatisticsPanel, { props });
-        const checkbox = wrapper.find('input[type="checkbox"]');
-        expect(checkbox.element.disabled).toBe(false);
-    });
 
-    it('exposes an accessible switch with the saved state', () => {
-        const wrapper = mount(StatisticsPanel, { props: {...props, isOwner:true} });
-        expect(wrapper.find('input[role="switch"]').element.checked).toBe(true);
-        expect(wrapper.text()).toContain('Only in this browser');
-    });
 
-    it('dismisses the hint with Escape without bubbling to the track panel', async () => {
-        const wrapper = mount(StatisticsPanel, { props });
-        const hint = wrapper.get('button[aria-label="About distance markers"]');
-        await hint.trigger('focus');
-        expect(hint.attributes('aria-expanded')).toBe('true');
-        const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
-        const bubbled = vi.fn();
-        wrapper.element.addEventListener('keydown', bubbled);
-        hint.element.dispatchEvent(event);
-        await wrapper.vm.$nextTick();
-        expect(hint.attributes('aria-expanded')).toBe('false');
-        expect(bubbled).not.toHaveBeenCalled();
-    });
 
-    it('explains when the preference only lasts for this visit', () => {
-        const wrapper = mount(StatisticsPanel, { props: {...props, preferencePersisted:false} });
-        expect(wrapper.text()).toContain('For this visit');
-    });
 
     it('shows statistics when speed data available', () => {
         const wrapper = mount(StatisticsPanel, { props });

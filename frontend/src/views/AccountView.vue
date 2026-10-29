@@ -9,7 +9,7 @@
     <header class="account-header">
       <button
         class="back-btn"
-        title="Back to map"
+        v-tooltip="'Back to map'" :aria-label="'Back to map'"
         @click="goBack"
       >
         <svg
@@ -53,7 +53,7 @@
         <button
           :ref="el => { settingsMenu.buttonRef.value = el }"
           class="settings-btn"
-          title="Settings"
+          v-tooltip="'Settings'" :aria-label="'Settings'"
           :disabled="!!accountActionPending"
           @click="settingsMenu.toggle"
         >
@@ -264,7 +264,7 @@
       <section class="account-section tracks-section">
         <div class="section-header">
           <h2>My Tracks</h2>
-          <span class="track-count" title="Search and selection apply to loaded tracks">{{ search.filteredTracks.value.length }} loaded tracks</span>
+          <span class="track-count" v-tooltip="'Search and selection apply to loaded tracks'">{{ search.filteredTracks.value.length }} loaded tracks</span>
         </div>
 
         <!-- Search and Bulk Actions Bar -->
@@ -478,7 +478,7 @@
                 class="visibility-toggle"
                 :class="{ public: track.is_public }"
                 :disabled="togglingVisibility === track.id"
-                :title="track.is_public ? 'Make private' : 'Make public'"
+                v-tooltip="track.is_public ? 'Make private' : 'Make public'"
                 :aria-label="track.is_public ? 'Make private' : 'Make public'"
                 @click.stop="handleToggleVisibility(track)"
               >

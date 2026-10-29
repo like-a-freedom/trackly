@@ -1,5 +1,7 @@
 // Test setup file for Vitest
 import { config } from '@vue/test-utils';
+import { tooltip } from './directives/tooltip';
+config.global.directives.tooltip = tooltip;
 import { vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 

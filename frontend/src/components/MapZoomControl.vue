@@ -7,7 +7,7 @@
     <button
       class="zoom-btn"
       type="button"
-      title="Zoom in"
+      v-tooltip="'Zoom in'"
       aria-label="Zoom in"
       @click="zoomBy(1)"
     >
@@ -28,7 +28,7 @@
     <button
       class="zoom-btn"
       type="button"
-      title="Zoom out"
+      v-tooltip="'Zoom out'"
       aria-label="Zoom out"
       @click="zoomBy(-1)"
     >

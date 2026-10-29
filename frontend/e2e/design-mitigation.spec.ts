@@ -172,7 +172,7 @@ test('account distinguishes an empty collection from a loading failure and traps
 
 
 
-for (const viewport of [{width:1280,height:800},{width:390,height:844}]) {
+for (const viewport of [{width:1280,height:800},{width:390,height:844},{width:320,height:740}]) {
  test(`distance markers are a personal browser preference across segmented tracks at ${viewport.width}px`, async ({page, browserName}) => {
   await page.setViewportSize(viewport);
   let writes = 0;
@@ -186,36 +186,53 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844}]) {
     geom_geojson:{type:'MultiLineString',coordinates:[[[37,56],[37.001,56]],[[37.01,56],[38.5,56]]]}}});
   });
   await page.goto('/track/'+fixtureId+'?zoom=10&lat=56&lng=37.7');
-  const display = page.getByRole('region', {name:'Map display'});
-  const toggle = page.getByRole('switch', {name:'Distance markers',exact:true});
+  const display = page.locator('.track-name-block .header-actions');
+  await expect(page.getByRole('region', {name:'Map display'})).toHaveCount(0);
+  const toggle = display.getByRole('button', {name:'Distance markers',exact:true});
   const markers = page.locator('.km-label');
   await expect.poll(() => markers.count()).toBeGreaterThan(0);
   await expect(toggle).toBeEnabled();
-  await expect(toggle).toBeChecked();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await display.scrollIntoViewIfNeeded();
   await display.screenshot({path:`../.impeccable/review/distance-markers-${viewport.width}${browserName === 'webkit' ? '-webkit' : ''}.png`,animations:'disabled'});
-  const hint = page.getByRole('button', {name:'About distance markers'});
-  await hint.focus();
-  await expect(hint).toBeFocused();
-  await expect.poll(() => hint.evaluate(el => getComputedStyle(el, '::after').visibility)).toBe('visible');
-  expect(await hint.evaluate(el => parseFloat(getComputedStyle(el, '::after').top))).toBeLessThan(0);
-  await hint.press('Escape');
-  await expect(hint).toHaveAttribute('aria-expanded', 'false');
-  await hint.press('Enter');
-  await expect(hint).toHaveAttribute('aria-expanded', 'true');
-  await display.screenshot({path:`../.impeccable/review/distance-markers-hint-${viewport.width}${browserName === 'webkit' ? '-webkit' : ''}.png`,animations:'disabled'});
-  await toggle.uncheck();
+  await toggle.focus();
+  await expect(page.getByRole('tooltip')).toBeVisible();
+  const hintBox = await page.getByRole('tooltip').boundingBox();
+  expect(hintBox!.x).toBeGreaterThanOrEqual(8);
+  expect(hintBox!.x + hintBox!.width).toBeLessThanOrEqual(viewport.width - 8);
+  expect(await page.getByRole('tooltip').evaluate(el => {
+   const box = el.getBoundingClientRect();
+   return el.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+  })).toBe(true);
+  const hintColor = await page.getByRole('tooltip').evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(hintColor).toBe(await page.evaluate(() => {
+   const surface = document.createElement('span');
+   surface.style.backgroundColor = 'var(--color-surface)';
+   document.body.append(surface);
+   const color = getComputedStyle(surface).backgroundColor;
+   surface.remove(); return color;
+  }));
+  await page.getByRole('tooltip').click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await display.getByRole('button', {name:'Share track',exact:true}).focus();
+  await expect(page.getByRole('tooltip')).toHaveText('Copy shareable link');
+  expect(await page.getByRole('tooltip').evaluate(el => getComputedStyle(el).backgroundColor)).toBe(hintColor);
+  await toggle.focus();
+  await page.screenshot({path:`../.impeccable/review/markers-toolbar-hint-${viewport.width}-${browserName}.png`,animations:'disabled'});
+  await toggle.press('Escape');
+  await expect(page.getByRole('tooltip')).not.toBeVisible();
+  await toggle.click();
   await expect(markers).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('trackly_distance_markers'))).toBe('false');
   await page.reload();
-  await expect(toggle).not.toBeChecked();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(markers).toHaveCount(0);
   await toggle.focus();
   await toggle.press('Space');
-  await expect(toggle).toBeChecked();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => markers.count()).toBeGreaterThan(0);
   await page.reload();
-  await expect(toggle).toBeChecked();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => markers.count()).toBeGreaterThan(0);
   expect(writes).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

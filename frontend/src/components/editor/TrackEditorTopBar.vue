@@ -73,7 +73,7 @@
         >
           <label
             class="top-bar-menu-toggle"
-            title="Auto routing"
+            v-tooltip="'Auto routing'"
           >
             <input
               type="checkbox"

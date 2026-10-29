@@ -17,7 +17,7 @@
     <div v-show="isCollapsed" class="panel-controls-tab">
       <button
         class="collapse-toggle-btn"
-        title="Expand panel"
+        v-tooltip="'Expand panel'"
         aria-label="Expand panel"
         @click="toggleCollapse"
       >
@@ -107,7 +107,7 @@
               <TrackActionButton action="edit" label="Edit track name"
                 v-if="isOwner"
                 class="edit-name-btn"
-                title="Edit track name"
+                hint="Edit track name"
                 @click="startEditName"
               >
 
@@ -118,10 +118,15 @@
                 class="action-group track-actions"
                 aria-label="Track actions"
               >
+                <DistanceMarkersButton
+                  :enabled="distanceMarkersEnabled"
+                  :persisted="preferencePersisted"
+                  @toggle="handleDistanceMarkersToggle"
+                />
                 <button
                   class="share-track-btn"
                   :disabled="copyingLink"
-                  :title="copyingLink ? 'Copying...' : 'Copy shareable link'"
+                  v-tooltip="copyingLink ? 'Copying...' : 'Copy shareable link'"
                   aria-label="Share track"
                   @click="shareTrack"
                 >
@@ -144,7 +149,7 @@
                 <button
                   class="export-gpx-btn"
                   :disabled="exportDisabled"
-                  :title="
+                  v-tooltip="
                     exportingTrack
                       ? 'Exporting...'
                       : exportCooldown > 0
@@ -170,7 +175,7 @@
                 <button
                   v-if="isOwner && featureFlags.isEditorEnabled"
                   class="edit-track-geometry-btn"
-                  title="Edit track geometry"
+                  v-tooltip="'Edit track geometry'"
                   aria-label="Edit track geometry"
                   @click="goToEditor"
                 >
@@ -195,7 +200,7 @@
                 <button
                   v-if="isOwner"
                   class="delete-track-btn"
-                  title="Delete track permanently"
+                  v-tooltip="'Delete track permanently'"
                   aria-label="Delete track"
                   @click="confirmDelete"
                 >
@@ -224,7 +229,7 @@
               >
                 <button
                   class="collapse-toggle-btn"
-                  title="Collapse panel"
+                  v-tooltip="'Collapse panel'"
                   aria-label="Collapse panel"
                   @click="toggleCollapse"
                 >
@@ -241,7 +246,7 @@
                 </button>
                 <button
                   class="close-button"
-                  title="Close panel"
+                  v-tooltip="'Close panel'"
                   aria-label="Close panel"
                   @click="handleClose"
                 >
@@ -340,7 +345,7 @@
             <TrackActionButton action="edit" :label="track.description ? 'Edit description' : 'Add description'"
               v-if="isOwner"
               class="edit-description-btn"
-              :title="
+              :hint="
                 track.description ? 'Edit description' : 'Add description'
               "
               @click.stop="startEditDescription"
@@ -357,10 +362,7 @@
           :formatted-duration="formattedDuration"
           :formatted-moving-avg-speed="formattedMovingAvgSpeed"
           :formatted-moving-avg-pace="formattedMovingAvgPace"
-          :distance-markers-enabled="distanceMarkersEnabled"
-          :preference-persisted="preferencePersisted"
           @speed-unit-change="setSpeedUnit"
-          @distance-markers-toggle="handleDistanceMarkersToggle"
         />
 
 
@@ -386,7 +388,7 @@
             <span
               class="info-icon"
               tabindex="0"
-              data-tooltip="Track types automatically classified by the system based on track characteristics"
+              v-tooltip="'Track types automatically classified by the system based on track characteristics'"
               aria-label="Track types automatically classified by the system based on track characteristics"
             >
               <svg
@@ -555,13 +557,13 @@ import { events } from "../events";
 import { useMemoizedComputed } from "../composables/useMemoization";
 import { clearCacheByPattern } from "../composables/useMemoization";
 import { useAdvancedDebounce } from "../composables/useAdvancedDebounce";
-import { useTooltipPlacement } from "../composables/useTooltipPlacement";
 import { useElevationEnrichment } from "../composables/useElevationEnrichment";
 import { http } from "../http-instance";
 import { useToastStore } from "@/stores/toast";
 import { useConfirm } from "../composables/useConfirm";
 import CategoriesPanel from "./TrackDetailPanel/CategoriesPanel.vue";
 import ElevationPanel from "./TrackDetailPanel/ElevationPanel.vue";
+import DistanceMarkersButton from "./TrackDetailPanel/DistanceMarkersButton.vue";
 import StatisticsPanel from "./TrackDetailPanel/StatisticsPanel.vue";
 import TrackInfoPanel from "./TrackDetailPanel/TrackInfoPanel.vue";
 
@@ -622,10 +624,6 @@ const nameInput = ref(null);
 
 const track = ref(props.track);
 
-// Icon tooltips (extracted to composables/useTooltipPlacement)
-const { attach: attachIconTooltips, detach: detachIconTooltips } =
-  useTooltipPlacement(flyoutContent);
-
 // Elevation enrichment + polling (extracted to composables/useElevationEnrichment)
 const {
   enrichingElevation,
@@ -657,8 +655,6 @@ onMounted(() => {
 
   // Do not auto-start polling on mount by default to avoid unnecessary repeated requests.
   // Polling is started manually via the 'Force update elevation' control or when the backend explicitly indicates in-progress state.
-  // Setup tooltip handlers within this panel
-  attachIconTooltips();
 });
 
 // NOTE: We do not auto-start polling on component activation.
@@ -666,8 +662,6 @@ onMounted(() => {
 // Cleanup on unmount
 onUnmounted(() => {
   stopElevationPolling();
-  // Detach tooltip handlers
-  detachIconTooltips();
   // Clear export cooldown timer if active
   if (exportCooldownInterval) {
     clearInterval(exportCooldownInterval);
@@ -718,8 +712,8 @@ const {
   updateTrackInPolylines,
 } = useTracks();
 
-function handleDistanceMarkersToggle(event) {
-  emit("distance-markers-updated", !!event.target.checked);
+function handleDistanceMarkersToggle(enabled) {
+  emit("distance-markers-updated", enabled);
 }
 
 // Handle categories update from CategoriesPanel component
@@ -2088,6 +2082,7 @@ defineExpose({
   border-radius: 1px;
 }
 
+.distance-markers-btn,
 .share-track-btn {
   background: none;
   border: none;
@@ -2105,17 +2100,20 @@ defineExpose({
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .share-track-btn:hover {
+  .distance-markers-btn:hover,
+.share-track-btn:hover {
     background: color-mix(in oklch, var(--color-action) 10%, transparent);
     color: var(--accent);
     transform: scale(1.05);
   }
 }
 
+.distance-markers-btn:active,
 .share-track-btn:active {
   transform: scale(0.95);
 }
 
+.distance-markers-btn:disabled,
 .share-track-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -2487,87 +2485,6 @@ defineExpose({
   }
 }
 
-/* Ensure tooltips work correctly for custom tooltip attr */
-:deep(.info-icon[data-tooltip]) {
-  position: relative;
-}
-
-/* Custom CSS tooltip */
-:deep(.info-icon::after) {
-  content: attr(data-tooltip);
-  position: absolute;
-  /* Anchored below the icon rather than above it: these hints sit inside a
-     panel header where "above" would cover the track name and description. */
-  inset-block-start: calc(100% + 8px);
-  inset-inline-start: 0;
-  transform: none;
-  background: var(--color-surface);
-  color: var(--color-ink);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: normal;
-  width: max-content;
-  max-width: 220px;
-  overflow-wrap: break-word;
-  word-break: break-word;
-  text-align: left;
-  box-sizing: border-box;
-  z-index: 10000;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.2s var(--ease-out, ease-out),
-    visibility 0.2s var(--ease-out, ease-out);
-  box-shadow: 0 2px 12px oklch(0% 0 none / 0.15);
-  border: 1px solid oklch(90.7% 0 none);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  :deep(.info-icon:hover::after) {
-    opacity: 1;
-    visibility: visible;
-  }
-}
-
-:deep(.info-icon:focus-visible::after) {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Tooltip arrow. Matches the bubble below the icon: the arrow sits directly
-   under the icon, pointing up at it. */
-:deep(.info-icon::before) {
-  content: "";
-  position: absolute;
-  inset-inline-start: 8px;
-  inset-block-start: calc(100% + 2px);
-  border: 6px solid transparent;
-  border-block-end-color: var(--color-surface);
-  z-index: 10001;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.2s var(--ease-out, ease-out),
-    visibility 0.2s var(--ease-out, ease-out);
-  filter: drop-shadow(0 1px 1px oklch(0% 0 none / 0.1));
-}
-
-@media (hover: hover) and (pointer: fine) {
-  :deep(.info-icon:hover::before) {
-    opacity: 1;
-    visibility: visible;
-  }
-}
-
-:deep(.info-icon:focus-visible::before) {
-  opacity: 1;
-  visibility: visible;
-}
-
 :deep(.info-icon:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -2582,27 +2499,7 @@ defineExpose({
   height: 14px;
 }
 
-/* off-DOM measurement element for tooltip sizing (visually hidden) */
-.info-icon__measure {
-  position: absolute;
-  inset-inline-start: -9999px;
-  inset-block-start: -9999px;
-  visibility: hidden;
-  pointer-events: none;
-  background: var(--color-surface);
-  color: var(--color-ink);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: normal;
-  width: max-content;
-  max-width: 220px;
-  overflow-wrap: break-word;
-  word-break: break-word;
-  text-align: left;
-  box-sizing: border-box;
-}
+
 
 /* Unit and chart toggles live in StatisticsPanel, so they need :deep() for
    the same scope reason as the stat rows above. */
@@ -3125,7 +3022,8 @@ defineExpose({
    stays the same size, so the visual weight does not change. */
 @media (max-width: 640px), (pointer: coarse) {
   .close-button,
-  .share-track-btn,
+  .distance-markers-btn,
+.share-track-btn,
   .export-gpx-btn,
   .collapse-toggle-btn,
   .delete-track-btn,
@@ -3190,7 +3088,8 @@ defineExpose({
   }
 
   .close-button,
-  .share-track-btn,
+  .distance-markers-btn,
+.share-track-btn,
   .export-gpx-btn,
   .delete-track-btn,
   .edit-track-geometry-btn,

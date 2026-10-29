@@ -7,7 +7,7 @@
     >
       <button
         class="user-button"
-        :title="user?.name || 'Account'"
+        v-tooltip="user?.name || 'Account'" :aria-label="user?.name || 'Account'"
         @click="goToAccount"
       >
         <img
@@ -40,7 +40,7 @@
       v-else
       class="login-button"
       :disabled="isLoading"
-      title="Sign in with Google"
+      v-tooltip="'Sign in with Google'" :aria-label="'Sign in with Google'"
       @click="handleLogin"
     >
       <svg
