@@ -6,6 +6,9 @@ import TrackDetailPanel from '../TrackDetailPanel.vue';
 import ElevationChart from '../ElevationChart.vue';
 import { resetMemoCache } from '../../composables/useMemoization';
 
+const mockEditorFlags = vi.hoisted(() => ({ isEditorEnabled: false }));
+vi.mock('../../stores/featureFlags', () => ({ useFeatureFlagsStore: () => mockEditorFlags }));
+
 // Mock the useToastStore
 const mockShowToast = vi.fn();
 vi.mock('@/stores/toast', () => {
@@ -2334,4 +2337,16 @@ describe('TrackDetailPanel', () => {
       // but we can verify that the elements exist and the template is correct
     });
   });
+});
+
+describe('geometry editor feature visibility', () => {
+  it.each([[false, true, false], [true, true, true], [true, false, false]])(
+    'editor=%s owner=%s shows action=%s', (enabled, owner, visible) => {
+      mockEditorFlags.isEditorEnabled = enabled;
+      const wrapper = mount(TrackDetailPanel, { props: { track: { id: 'test', categories: [] }, isOwner: owner } });
+      expect(wrapper.find('[aria-label="Edit track geometry"]').exists()).toBe(visible);
+      wrapper.unmount();
+      mockEditorFlags.isEditorEnabled = false;
+    }
+  );
 });

@@ -201,7 +201,7 @@
                   </svg>
                 </button>
                 <button
-                  v-if="isOwner"
+                  v-if="isOwner && featureFlags.isEditorEnabled"
                   class="edit-track-geometry-btn"
                   title="Edit track geometry"
                   aria-label="Edit track geometry"
@@ -584,6 +584,8 @@
 </template>
 
 <script setup>
+import { useFeatureFlagsStore } from "../stores/featureFlags";
+const featureFlags = useFeatureFlagsStore();
 import { TRACK_CATEGORIES } from "../domain/trackCategories";
 import {
   ref,
@@ -1396,7 +1398,7 @@ function startEditName() {
   });
 }
 function goToEditor() {
-  if (!props.track?.id) return;
+  if (!featureFlags.isEditorEnabled || !props.isOwner || !props.track?.id) return;
   router.push({ name: "TrackEdit", params: { id: props.track.id } });
 }
 async function confirmDelete() {
