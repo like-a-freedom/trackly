@@ -1,4 +1,6 @@
 // @ts-nocheck - Test mocks don't need full type fidelity
+vi.mock("../../utils/clusterFlight", () => ({flyToCluster:vi.fn()}));
+import { flyToCluster } from "../../utils/clusterFlight";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -370,8 +372,8 @@ describe("useMapEvents", () => {
 
       onClusterClick({ layer: cluster });
       expect(mockMap.stop).not.toHaveBeenCalled();
-      expect(mockMap.flyToBounds).toHaveBeenCalledWith(bounds, {
-        padding: [24, 24], maxZoom: 18, duration: 0.8,
+      expect(flyToCluster).toHaveBeenCalledWith(mockMap, bounds, {
+        padding: [24, 24], maxZoom: 18,
       });
       expect(mockMap.fitBounds).not.toHaveBeenCalled();
     });
@@ -501,7 +503,7 @@ describe("useMapEvents", () => {
       const { onClusterClick } = useMapEvents(deps);
       onClusterClick({ layer: mockCluster, target: mockCluster } as any);
 
-      expect(mockMap.flyToBounds).toHaveBeenCalled();
+      expect(flyToCluster).toHaveBeenCalled();
     });
 
     it("handles cluster marker click with trackData", () => {

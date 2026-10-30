@@ -1,3 +1,4 @@
+import { flyToCluster } from "../utils/clusterFlight";
 import { nextTick } from "vue";
 import type { Ref } from "vue";
 import L from "leaflet";
@@ -563,7 +564,7 @@ export function useMapEvents({
                 if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
                     map.fitBounds(bounds, { ...options, animate: false });
                 } else {
-                    map.flyToBounds(bounds, { ...options, duration: 0.8 });
+                    flyToCluster(map, bounds, options);
                 }
             }
         }
