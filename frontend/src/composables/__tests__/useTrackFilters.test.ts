@@ -200,11 +200,11 @@ describe("useTrackFilters", () => {
 
   // ── geoJsonFilter ────────────────────────────────────────────────────
   describe("geoJsonFilter", () => {
-    it("returns false when no categories are selected", () => {
+    it("returns true when no categories are selected", () => {
       const { geoJsonFilter, filterState } = setup();
       filterState.value = { ...filterState.value, categories: [] };
       const feature = { properties: { categories: ["hiking"], length_km: 5 } };
-      expect(geoJsonFilter(feature, null)).toBe(false);
+      expect(geoJsonFilter(feature, null)).toBe(true);
     });
 
     it("filters by matching category", () => {

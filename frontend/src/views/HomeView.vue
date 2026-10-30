@@ -502,9 +502,9 @@ function buildTrackOptions(filterState = currentFilterState.value) {
     mode: "overview",
     mine: !!filterState.myTracks,
     categories: filterState.categories,
-    lengthRange: filterState.lengthRange,
-    elevationGainRange: filterState.elevationGainRange,
-    slopeRange: filterState.slopeRange,
+    lengthRange: filterState.rangeFiltersActive?.length === false ? undefined : filterState.lengthRange,
+    elevationGainRange: filterState.rangeFiltersActive?.elevation === false ? undefined : filterState.elevationGainRange,
+    slopeRange: filterState.rangeFiltersActive?.slope === false ? undefined : filterState.slopeRange,
   };
 }
 
@@ -517,9 +517,9 @@ function buildHeatmapOptions(filterState = currentFilterState.value) {
     zoom: zoom.value,
     mine: !!filterState.myTracks,
     categories: filterState.categories,
-    lengthRange: filterState.lengthRange,
-    elevationGainRange: filterState.elevationGainRange,
-    slopeRange: filterState.slopeRange,
+    lengthRange: filterState.rangeFiltersActive?.length === false ? undefined : filterState.lengthRange,
+    elevationGainRange: filterState.rangeFiltersActive?.elevation === false ? undefined : filterState.elevationGainRange,
+    slopeRange: filterState.rangeFiltersActive?.slope === false ? undefined : filterState.slopeRange,
   };
 }
 

@@ -289,6 +289,7 @@ export function useMapEvents({
 
         emit("update:bounds", mapBoundsLocal);
         updateInitialMapState(e);
+        updateClustering();
 
         // If we have a marker persisted, re-draw the segment highlight after pan ends
         if (props.markerLatLng) {
@@ -326,6 +327,7 @@ export function useMapEvents({
 
                 // Clear zoom animating state after debounced update
                 isZoomAnimating.value = false;
+                updateClustering();
             } catch (error) {
                 console.error("[useMapEvents] Error updating clustering zoom level:", error);
                 // Ensure states are cleared even on error
@@ -557,7 +559,12 @@ export function useMapEvents({
                 // Clean up hover polylines before fitting bounds
                 removeMarkerPolyline(map);
                 const bounds = cluster.getBounds();
-                map.fitBounds(bounds, { padding: [20, 20] });
+                const options: L.FitBoundsOptions = { padding: [24, 24], maxZoom: 18 };
+                if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    map.fitBounds(bounds, { ...options, animate: false });
+                } else {
+                    map.flyToBounds(bounds, { ...options, duration: 0.8 });
+                }
             }
         }
     }
@@ -581,6 +588,9 @@ export function useMapEvents({
         clearClusteringUpdateTimeout();
 
         clusteringUpdateTimeout = setTimeout(() => {
+            clusteringUpdateTimeout = null;
+            // Keep the current layers intact until the camera has settled.
+            if (isPanningOrZooming.value || isZoomAnimating.value || isUnmounting.value) return;
             try {
                 if (displayMode.value === "cluster") {
                     // Add filtered tracks to cluster

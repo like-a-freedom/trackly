@@ -11,10 +11,10 @@ const DEFAULT_CLUSTER_CONFIG: L.MarkerClusterGroupOptions = {
     maxClusterRadius: 50,
     // Show coverage area when hovering over cluster
     showCoverageOnHover: false,
-    // Zoom to show all items in cluster when clicking
-    zoomToBoundsOnClick: true,
+    // The map event handler owns the camera flight on cluster click
+    zoomToBoundsOnClick: false,
     // Optimize animations for better performance
-    animate: false, // Disable animations to reduce lag
+    animate: true,
     // Animation duration
     animateAddingMarkers: false, // Disable for smoother zoom
     // Spiderfy clusters on max zoom
@@ -117,21 +117,6 @@ export function useTrackClustering() {
 
             // Store track data for event handling
             (marker as unknown as { trackData: TrackData }).trackData = track;
-
-            // Override _animateZoom to prevent errors during removal
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (marker as any)._animateZoom = function (this: any) {
-                try {
-                    if (!this._map || !this._icon) return;
-                    // Skip animation for better performance during zoom
-                    return;
-                } catch (err: unknown) {
-                    // Silently ignore zoom animation errors for cluster markers
-                    if (window.DEBUG_LEAFLET_ERRORS) {
-                        console.warn('[CLUSTER MARKER ZOOM ERROR]', err instanceof Error ? err.message : String(err));
-                    }
-                }
-            };
 
             return marker;
         } catch (error) {

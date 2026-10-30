@@ -31,6 +31,7 @@ function resetMockMap() {
     flyTo: vi.fn(),
     setView: vi.fn(),
     fitBounds: vi.fn(),
+    stop: vi.fn(),
   };
 }
 
@@ -147,6 +148,7 @@ describe("useMapEvents", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(window.matchMedia).mockReturnValue({matches:false} as MediaQueryList);
     deps = createDefaults() as UseMapEventsOptions;
   });
 
@@ -358,7 +360,7 @@ describe("useMapEvents", () => {
   // Cluster handlers
   // -----------------------------------------------------------------------
   describe("onClusterClick", () => {
-    it("zooms in to cluster bounds", () => {
+    it("uses one continuous flight to cluster bounds", () => {
       const { onClusterClick } = useMapEvents(deps);
       const bounds = {};
       const cluster = {
@@ -367,10 +369,36 @@ describe("useMapEvents", () => {
       };
 
       onClusterClick({ layer: cluster });
-      expect(mockMap.fitBounds).toHaveBeenCalledWith(bounds, {
-        padding: [20, 20],
+      expect(mockMap.stop).not.toHaveBeenCalled();
+      expect(mockMap.flyToBounds).toHaveBeenCalledWith(bounds, {
+        padding: [24, 24], maxZoom: 18, duration: 0.8,
       });
+      expect(mockMap.fitBounds).not.toHaveBeenCalled();
     });
+  });
+
+  it("fits clusters without animation when reduced motion is requested", () => {
+    vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList);
+    const bounds = {};
+    const { onClusterClick } = useMapEvents(deps);
+    onClusterClick({ layer: { getAllChildMarkers: vi.fn(), getBounds: () => bounds } });
+    expect(mockMap.fitBounds).toHaveBeenCalledWith(bounds, {padding: [24, 24], maxZoom: 18, animate: false});
+    expect(mockMap.flyToBounds).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("keeps existing cluster layers throughout a camera flight", () => {
+    vi.useFakeTimers();
+    const { updateClustering } = useMapEvents(deps);
+    updateClustering();
+    deps.isPanningOrZooming.value = true;
+    vi.advanceTimersByTime(200);
+    expect(deps.clustering.addTracksToCluster).not.toHaveBeenCalled();
+    deps.isPanningOrZooming.value = false;
+    updateClustering();
+    vi.advanceTimersByTime(200);
+    expect(deps.clustering.addTracksToCluster).toHaveBeenCalledOnce();
+    vi.useRealTimers();
   });
 
   describe("onClusterMarkerClick", () => {
@@ -465,7 +493,7 @@ describe("useMapEvents", () => {
         getBounds: vi.fn(() => mockBounds),
       };
       const mockMap = {
-        fitBounds: vi.fn(),
+        fitBounds: vi.fn(), flyToBounds: vi.fn(), stop: vi.fn(),
       };
       deps.getMapObject = vi.fn(() => mockMap);
       deps.removeMarkerPolyline = vi.fn();
@@ -473,7 +501,7 @@ describe("useMapEvents", () => {
       const { onClusterClick } = useMapEvents(deps);
       onClusterClick({ layer: mockCluster, target: mockCluster } as any);
 
-      expect(mockMap.fitBounds).toHaveBeenCalled();
+      expect(mockMap.flyToBounds).toHaveBeenCalled();
     });
 
     it("handles cluster marker click with trackData", () => {

@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+declare global {
+ interface Window {
+  __clusterMotion: {frames: string[]; blankFrames: number};
+  __clusterMotionDone: boolean;
+ }
+}
+
 const build = path.resolve('dist');
 const evidence = path.resolve('../docs/audit/2026-10-04-design-evidence/implementation');
 const types: Record<string,string> = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.wasm':'application/wasm', '.png':'image/png', '.svg':'image/svg+xml', '.json':'application/json' };
@@ -324,5 +331,93 @@ for (const width of [1280, 390, 320]) {
   await expect(page.getByTestId('elevation-slope-toggle')).toHaveClass(/active/);
   await controls.screenshot({path:`../.impeccable/review/elevation-actions-${width}.png`});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+ });
+}
+
+test('legacy automatic filter bounds do not hide uploaded routes on reload', async ({page}) => {
+ await page.addInitScript(() => localStorage.setItem('trackFiltersVue', JSON.stringify({categories:[],lengthRange:[0,50],elevationGainRange:[0,2000],slopeRange:[0,20],myTracks:false})));
+ const requests: URL[] = [];
+ await page.route('**/api/tracks?**', route => {
+  const url = new URL(route.request().url()); requests.push(url);
+  const restricted = ['min_length','max_length','elevation_gain_min','elevation_gain_max','slope_min','slope_max'].some(key => url.searchParams.has(key));
+  return route.fulfill({json:{type:'FeatureCollection',features:restricted ? [] : [
+   {type:'Feature',properties:{id:fixtureId,name:'Long route with descents',categories:['hiking'],length_km:128,elevation_gain:5000,slope_min:-30,slope_max:35},geometry:{type:'MultiLineString',coordinates:[[[37,56],[38,57]]]}},
+   {type:'Feature',properties:{id:'unenriched',name:'Without elevation',categories:['walking'],length_km:1,elevation_gain:null,slope_min:null,slope_max:null},geometry:{type:'MultiLineString',coordinates:[[[37,56],[37.1,56.1]]]}}
+  ]}});
+ });
+ await page.goto('/?zoom=7&lat=56.261660&lng=38.380737');
+ await expect.poll(() => requests.length).toBeGreaterThan(0);
+ await expect.poll(() => page.locator('.track-cluster-marker, .marker-cluster').count()).toBeGreaterThan(0);
+ await expect(page.getByText('No tracks match these filters')).toHaveCount(0);
+ await page.reload();
+ await expect.poll(() => page.locator('.track-cluster-marker, .marker-cluster').count()).toBeGreaterThan(0);
+ expect(requests.every(url => !url.searchParams.has('slope_min') && !url.searchParams.has('max_length') && !url.searchParams.has('elevation_gain_max'))).toBe(true);
+ await page.goto('/?zoom=12&lat=56&lng=37');
+ await expect.poll(() => page.locator('.leaflet-overlay-pane canvas').count()).toBeGreaterThan(0);
+});
+
+for (const width of [1280, 390, 320]) {
+ test(`filter rows keep alignment and range values at ${width}px`, async ({page}) => {
+  await page.setViewportSize({width,height:844});
+  await page.route('**/api/tracks?**', route => route.fulfill({json:{type:'FeatureCollection',features:[
+   {type:'Feature',properties:{id:fixtureId,name:'Filter layout',categories:['hiking','running'],length_km:10,elevation_gain:933,slope_min:0,slope_max:10.7},geometry:{type:'MultiLineString',coordinates:[[[37,56],[37.1,56.1]]]}}
+  ]}}));
+  await page.goto('/?zoom=7&lat=56&lng=37');
+  if (width < 640) await page.getByRole('button',{name:'Show filters',exact:true}).click();
+  const panel = page.getByRole('group',{name:'Track filters'});
+  await expect(panel).toBeVisible();
+  expect(await panel.locator('.panel-title').evaluate(el=>{const box=el.getBoundingClientRect();return el.contains(document.elementFromPoint(box.x+box.width/2,box.y+box.height/2));})).toBe(true);
+  const rows = panel.locator('.category-checkboxes .track-tag-option');
+  await expect(rows).toHaveCount(2);
+  for (const row of await rows.all()) {
+   const box = (await row.boundingBox())!;
+   const check = (await row.locator('input').boundingBox())!;
+   const text = (await row.locator('span').boundingBox())!;
+   expect(text.x - check.x - check.width).toBeCloseTo(8,0);
+   expect(Math.abs(check.y + check.height / 2 - box.y - box.height / 2)).toBeLessThan(1);
+   expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+  await expect(panel.locator('.slider-tooltip')).toHaveCount(0);
+  await expect(panel.locator('.filter-range-value')).toHaveCount(3);
+  const box = (await panel.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
+  expect(await panel.evaluate(el=>el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.mouse.move(0,843);
+  await panel.screenshot({path:`../.impeccable/review/filter-layout-${width}.png`,animations:'disabled'});
+ });
+}
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+ test(`cluster camera remains continuous with ${reducedMotion} motion`, async ({page}) => {
+  await page.emulateMedia({reducedMotion});
+  await page.route('**/api/tracks?**', route => route.fulfill({json:{type:'FeatureCollection',features:[0,1].map(index => ({
+   type:'Feature',properties:{id:`cluster-${index}`,name:`Cluster route ${index}`,categories:['hiking'],length_km:5},
+   geometry:{type:'MultiLineString',coordinates:[[[37+index*0.04,56+index*0.03],[37.01+index*0.04,56.01+index*0.03]]]}
+  }))}}));
+  await page.goto('/?zoom=7&lat=56.02&lng=37.02');
+  const cluster = page.locator('.marker-cluster');
+  await expect(cluster).toHaveCount(1);
+  await page.evaluate(() => {
+   const result = {frames:[] as string[],blankFrames:0};
+   window.__clusterMotion = result;
+   const start = performance.now();
+   const sample = () => {
+    result.frames.push([...document.querySelectorAll('.leaflet-tile-container')].map(el=>getComputedStyle(el).transform).join('|'));
+    if (!document.querySelector('.marker-cluster,.track-cluster-marker,.leaflet-overlay-pane canvas')) result.blankFrames++;
+    if (performance.now()-start < 1200) requestAnimationFrame(sample);
+    else window.__clusterMotionDone = true;
+   };
+   requestAnimationFrame(sample);
+  });
+  await cluster.click();
+  await page.waitForFunction(()=>window.__clusterMotionDone);
+  const motion = await page.evaluate(()=>window.__clusterMotion);
+  expect(motion.blankFrames).toBe(0);
+  if (reducedMotion === 'no-preference') expect(new Set(motion.frames).size).toBeGreaterThan(5);
+  else expect(new Set(motion.frames).size).toBeLessThanOrEqual(3);
+  await expect.poll(()=>page.locator('.leaflet-overlay-pane canvas').count()).toBeGreaterThan(0);
+  await expect.poll(()=>Number(new URL(page.url()).searchParams.get('lng'))).toBeGreaterThan(37.023);
+  expect(Number(new URL(page.url()).searchParams.get('lng'))).toBeLessThan(37.027);
  });
 }

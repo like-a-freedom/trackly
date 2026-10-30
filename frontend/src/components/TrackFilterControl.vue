@@ -184,7 +184,7 @@
           </div>
 
           <!-- Other filters shown only when there are actual tracks in viewport -->
-          <template v-if="hasTracksInViewport">
+          <template v-if="hasTracksInArea">
             <div
               v-if="showCategories"
               class="filter-section"
@@ -220,13 +220,19 @@
               v-if="showLength"
               class="filter-section"
             >
-              <label>Track length (km):</label>
+              <div class="filter-range-heading">
+                <span id="filter-length-label">Track length (km)</span>
+                <output class="filter-range-value">{{ formatRange(stableMinLength === stableMaxLength ? [stableMinLength, stableMaxLength] : lengthRange, 2, 'km') }}</output>
+              </div>
               <Slider
                 v-model="lengthRange"
+                aria-labelledby="filter-length-label"
+                v-if="stableMinLength < stableMaxLength"
+                @update:model-value="rangeFiltersActive.length = true"
                 :min="stableMinLength"
                 :max="stableMaxLength"
                 :step="0.1"
-                :tooltip="true"
+                :tooltips="false"
                 :lazy="true"
                 :format="val => val.toFixed(2)"
                 :range="true"
@@ -236,13 +242,19 @@
               v-if="showElevation && hasElevationData"
               class="filter-section"
             >
-              <label>Elevation gain (m):</label>
+              <div class="filter-range-heading">
+                <span id="filter-elevation-label">Elevation gain (m)</span>
+                <output class="filter-range-value">{{ formatRange(stableMinElevationGain === stableMaxElevationGain ? [stableMinElevationGain, stableMaxElevationGain] : elevationGainRange, 0, 'm') }}</output>
+              </div>
               <Slider
                 v-model="elevationGainRange"
+                aria-labelledby="filter-elevation-label"
+                v-if="stableMinElevationGain < stableMaxElevationGain"
+                @update:model-value="rangeFiltersActive.elevation = true"
                 :min="stableMinElevationGain"
                 :max="stableMaxElevationGain"
                 :step="10"
-                :tooltip="true"
+                :tooltips="false"
                 :lazy="true"
                 :format="val => `${Math.round(val)}m`"
                 :range="true"
@@ -252,13 +264,19 @@
               v-if="showSlope && hasSlopeData"
               class="filter-section"
             >
-              <label>Slope (%):</label>
+              <div class="filter-range-heading">
+                <span id="filter-slope-label">Slope (%)</span>
+                <output class="filter-range-value">{{ formatRange(stableMinSlope === stableMaxSlope ? [stableMinSlope, stableMaxSlope] : slopeRange, 1, '%') }}</output>
+              </div>
               <Slider
                 v-model="slopeRange"
+                aria-labelledby="filter-slope-label"
+                v-if="stableMinSlope < stableMaxSlope"
+                @update:model-value="rangeFiltersActive.slope = true"
                 :min="stableMinSlope"
                 :max="stableMaxSlope"
                 :step="0.1"
-                :tooltip="true"
+                :tooltips="false"
                 :lazy="true"
                 :format="val => `${val.toFixed(1)}%`"
                 :range="true"
@@ -333,6 +351,7 @@
 </template>
 
 <script setup>
+import { formatFilterRange as formatRange } from "../utils/filterRange";
 import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue';
 import Slider from '@vueform/slider';
 import '@vueform/slider/themes/default.css';
@@ -375,7 +394,9 @@ let previousMyTracksValue = false;
 let pendingClearTimeout = null;
 
 // Also provide immediate emit for tests
+const rangeFiltersActive = ref({length:false,elevation:false,slope:false});
 const emitFilter = (filterState) => {
+  filterState = {...filterState, rangeFiltersActive:{...rangeFiltersActive.value}};
   // Check if myTracks filter specifically changed (this triggers server refetch)
   const myTracksChanged = filterState.myTracks !== previousMyTracksValue;
   previousMyTracksValue = filterState.myTracks;
@@ -576,6 +597,12 @@ onMounted(() => {
   if (savedFiltersRaw) {
     try {
       const savedFilters = JSON.parse(savedFiltersRaw);
+      // Legacy versions persisted automatic slider bounds as if the user chose them.
+      rangeFiltersActive.value = {
+        length: savedFilters.rangeFiltersActive?.length === true,
+        elevation: savedFilters.rangeFiltersActive?.elevation === true,
+        slope: savedFilters.rangeFiltersActive?.slope === true,
+      };
       if (Array.isArray(savedFilters.categories)) {
         // Use saved categories, they will be filtered by watchers if needed
         initialCategories = savedFilters.categories;
@@ -686,7 +713,7 @@ watch(() => props.categories, (newCategories) => {
 
   // Don't automatically change user selections based on viewport changes
   // But we need to re-emit so parent gets filtered values for the new viewport
-  const validCategories = newCategories ? selectedCategories.value.filter(cat => newCategories.includes(cat)) : selectedCategories.value;
+  const validCategories = [...selectedCategories.value];
 
   emitFilter({
     categories: validCategories,
@@ -721,7 +748,7 @@ watch(
 
 watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTracks, showHeatmap], ([cats, lengthRange, elevationGainRange, slopeRange, myTracks, heatmapVisible], [oldCats, oldLengthRange, oldElevationGainRange, oldSlopeRange, oldMyTracks, oldHeatmapVisible]) => {
   // Emit validated values (filtered to what's available in current viewport)
-  const validCategories = props.categories ? cats.filter(cat => props.categories.includes(cat)) : cats;
+  const validCategories = [...cats];
   let validLengthRange = lengthRange;
   let validElevationGainRange = elevationGainRange;
   let validSlopeRange = slopeRange;
@@ -775,6 +802,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
   if (cats !== null && cats !== undefined && lengthRange && lengthRange.length === 2 && elevationGainRange && elevationGainRange.length === 2 && slopeRange && slopeRange.length === 2) {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+        rangeFiltersActive: rangeFiltersActive.value,
         categories: cats,
         lengthRange: lengthRange,
         elevationGainRange: elevationGainRange,
@@ -787,6 +815,7 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
 }, { deep: true });
 
 function resetFilters() {
+  rangeFiltersActive.value = {length:false,elevation:false,slope:false};
   // Use global session values for reset instead of viewport-based props
   // This ensures that reset doesn't change when user zooms in/out
   selectedCategories.value = props.globalCategories ? [...props.globalCategories] : [];
@@ -797,6 +826,7 @@ function resetFilters() {
   // Immediately persist reset state
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+      rangeFiltersActive: rangeFiltersActive.value,
       categories: selectedCategories.value,
       lengthRange: lengthRange.value,
       elevationGainRange: elevationGainRange.value,
@@ -912,7 +942,8 @@ onUnmounted(() => {
   z-index: 1300; /* Same as wrapper */
   min-width: 210px;
   max-width: 320px;
-  width: 320px !important;
+  inline-size: min(320px, calc(100dvw - 32px)) !important;
+  width: min(320px, calc(100dvw - 32px)) !important;
   overflow: clip;
   box-sizing: border-box !important;
   margin-block-start: 8px; /* space from button */
@@ -1007,8 +1038,7 @@ onUnmounted(() => {
   padding: 0;
   cursor: pointer;
   flex-shrink: 0;
-  position: relative;
-  inset-block-start: 2px; /* Align checkbox center with text center */
+  accent-color: var(--color-action); /* Align checkbox center with text center */
 }
 
 .option-checkbox:disabled {
@@ -1037,11 +1067,13 @@ onUnmounted(() => {
   }
 }
 .filter-section {
-  margin-block-end: 12px;
+  display: grid;
+  gap: 8px;
+  margin-block-end: 16px;
 }
-.filter-section label {
+.filter-section > label {
   display: block;
-  margin-block-end: 12px;
+  margin: 0;
   font-weight: 500;
 }
 
@@ -1050,35 +1082,34 @@ onUnmounted(() => {
   margin-block-start: 12px;
 }
 
-/* Add padding for the slider inside the filter-section */
-.filter-section .slider-target {
-  display: block;
-  width: 95%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding-inline-start: 15px;
-  padding-inline-end: 15px;
-  margin-inline-start: auto;
-  margin-inline-end: auto;
-  margin-block-start: 40px;
-  margin-block-end: 20px;
+.filter-range-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
 }
-
-/* Make slider tooltips smaller and more compact */
-:deep(.slider-tooltip) {
-  font-size: var(--text-sm) !important; /* Harmonize with form text */
-  font-weight: var(--weight-medium) !important;
-  min-width: 14px !important;
-  padding: 2px 4px !important;
-  border-radius: 3px !important;
-  line-height: 1.1 !important;
-  --slider-tooltip-font-size: 0.87rem;
-  --slider-tooltip-line-height: 1.1;
-  --slider-tooltip-font-weight: 500;
-  --slider-tooltip-min-width: 14px;
-  --slider-tooltip-py: 0px;
-  --slider-tooltip-px: 4px;
-  --slider-tooltip-radius: 3px;
+.filter-range-value {
+  margin-inline-start: auto;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.filter-section .slider-target {
+  --slider-connect-bg: var(--color-action);
+  --slider-bg: var(--color-line);
+  --slider-height: 4px;
+  --slider-handle-width: 20px;
+  --slider-handle-height: 20px;
+  --slider-handle-ring-color: var(--color-focus-ring);
+  --slider-handle-ring-width: 2px;
+  margin: 12px 10px;
+  inline-size: calc(100% - 20px);
+  min-inline-size: 0;
+}
+:deep(.slider-handle:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
 }
 
 /* Harmonize checkbox styling with form text */
@@ -1086,7 +1117,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-block-start: 6px;
+  margin: 0;
   max-height: 200px;
   overflow-y: auto;
   /* Allow vertical scrolling only within this container */
@@ -1097,9 +1128,9 @@ onUnmounted(() => {
 
 .checkbox-item {
   display: flex;
-  align-items: flex-start; /* Align to top, then adjust checkbox manually */
+  align-items: center;
   gap: 8px;
-  min-height: 24px;
+  min-height: 44px;
   position: relative;
 }
 

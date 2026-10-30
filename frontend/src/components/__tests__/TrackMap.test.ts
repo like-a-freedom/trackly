@@ -428,7 +428,7 @@ describe('TrackMap', () => {
             expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true);
         });
 
-        it('should show no tracks when no categories are selected', async () => {
+        it('should show all tracks when no categories are selected', async () => {
             const polylines = [
                 {
                     properties: { id: 'track1', categories: ['running'], length_km: 10 },
@@ -467,8 +467,8 @@ describe('TrackMap', () => {
             const track1Feature = wrapper.vm.geojsonData.features.find((f: { properties: { id: string } }) => f.properties.id === 'track1');
             const track2Feature = wrapper.vm.geojsonData.features.find((f: { properties: { id: string } }) => f.properties.id === 'track2');
 
-            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(false);
-            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(false);
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true);
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true);
         });
 
         it('should filter tracks by length range', async () => {
@@ -958,8 +958,8 @@ describe('TrackMap', () => {
             const track2Feature = wrapper.vm.geojsonData.features.find((f: { properties: { id: string } }) => f.properties.id === 'track2');
 
             // Normal behavior: no categories selected = show nothing
-            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(false);
-            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(false);
+            expect(wrapper.vm.geoJsonFilter(track1Feature)).toBe(true);
+            expect(wrapper.vm.geoJsonFilter(track2Feature)).toBe(true);
 
             // Set transitioning state
             wrapper.vm.isTransitioning = true;

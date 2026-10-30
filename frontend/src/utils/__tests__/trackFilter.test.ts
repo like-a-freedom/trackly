@@ -41,12 +41,12 @@ describe('geoJsonFilter', () => {
             expect(result).toBe(false);
         });
 
-        it('returns false when no categories selected and not transitioning', () => {
+        it('returns true when no categories selected and not transitioning', () => {
             const result = geoJsonFilter(
                 makeFeature({ categories: ['hiking'] }),
                 { ...baseFilterState, categories: [] },
             );
-            expect(result).toBe(false);
+            expect(result).toBe(true);
         });
     });
 
@@ -175,4 +175,13 @@ describe('geoJsonFilter', () => {
             expect(result).toBe(false);
         });
     });
+});
+
+ describe('unrestricted map filters', () => {
+ it('does not hide long routes, descents or missing enrichment when sliders were not changed', () => {
+  const filters = {...baseFilterState, categories:[], rangeFiltersActive:{length:false,elevation:false,slope:false}};
+  for (const properties of [{length_km:128,elevation_gain:5000,slope_min:-30,slope_max:35},{length_km:0.25,elevation_gain:null,slope_min:null,slope_max:null}]) {
+   expect(geoJsonFilter({properties:{...properties,categories:['hiking']}},filters)).toBe(true);
+  }
+ });
 });

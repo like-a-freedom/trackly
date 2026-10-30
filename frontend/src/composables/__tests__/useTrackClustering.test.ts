@@ -14,7 +14,7 @@ const mockMarkerClusterGroup = {
 vi.mock('leaflet', () => {
     return {
         default: {
-            marker: vi.fn(() => ({ trackData: null })),
+            marker: vi.fn(() => ({ trackData: null, _animateZoom: vi.fn() })),
             divIcon: vi.fn(() => ({})),
             markerClusterGroup: vi.fn(() => mockMarkerClusterGroup)
         }
@@ -104,6 +104,7 @@ describe('useTrackClustering', () => {
             expect(mockL.divIcon).toHaveBeenCalled();
             expect(result).toBeTruthy();
             expect(result.trackData).toBe(track);
+            expect(vi.isMockFunction(result._animateZoom)).toBe(true);
         });
     });
 
@@ -116,8 +117,8 @@ describe('useTrackClustering', () => {
                     disableClusteringAtZoom: 11,
                     maxClusterRadius: 50,
                     showCoverageOnHover: false,
-                    zoomToBoundsOnClick: true,
-                    animate: false, // Updated to match current implementation
+                    zoomToBoundsOnClick: false,
+                    animate: true,
                     animateAddingMarkers: false, // Updated to match current implementation
                     chunkedLoading: true,
                     chunkInterval: 50,

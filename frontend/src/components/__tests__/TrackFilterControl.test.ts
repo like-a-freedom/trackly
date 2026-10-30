@@ -136,6 +136,25 @@ describe('TrackFilterControl', () => {
         vi.restoreAllMocks();
     });
 
+
+    it('activates only a slider changed by the user and resets all numeric restrictions', async () => {
+        wrapper = mount(TrackFilterControl, {props:createDefaultProps()});
+        await nextTick();
+        const slider = wrapper.findComponent({name:'Slider'});
+        slider.vm.$emit('update:modelValue', [10,20]);
+        await nextTick();
+        expect(wrapper.emitted('update:filter').at(-1)[0].rangeFiltersActive).toEqual({length:true,elevation:false,slope:false});
+        expect(JSON.parse(mockLocalStorage.setItem.mock.calls.filter(([key]) => key === LOCAL_STORAGE_KEY).at(-1)[1]).rangeFiltersActive.length).toBe(true);
+        wrapper.vm.resetFilters(); await nextTick();
+        expect(wrapper.emitted('update:filter').at(-1)[0].rangeFiltersActive).toEqual({length:false,elevation:false,slope:false});
+    });
+    it('restores explicitly selected numeric restrictions', async () => {
+        setStoredFilters(JSON.stringify({categories:[],lengthRange:[10,20],elevationGainRange:[0,2000],slopeRange:[0,20],rangeFiltersActive:{length:true,elevation:false,slope:false}}));
+        wrapper = mount(TrackFilterControl, {props:createDefaultProps()});
+        await nextTick();
+        expect(wrapper.emitted('update:filter').at(-1)[0].rangeFiltersActive.length).toBe(true);
+        expect(wrapper.emitted('update:filter').at(-1)[0].lengthRange).toEqual([10,20]);
+    });
     describe('Initial state', () => {
         it('renders filter control correctly', () => {
             wrapper = mount(TrackFilterControl, {
@@ -305,11 +324,11 @@ describe('TrackFilterControl', () => {
             // My tracks checkbox should still be visible
             expect(wrapper.find('#show-my-tracks').exists()).toBe(true);
             // Other filters should be hidden
-            expect(wrapper.find('.category-checkboxes').exists()).toBe(false);
+            expect(wrapper.find('.category-checkboxes').exists()).toBe(true);
             // Should show special message for no matching tracks
-            expect(wrapper.find('.no-tracks-placeholder').exists()).toBe(true);
-            expect(wrapper.text()).toContain('No tracks match these filters');
-            expect(wrapper.text()).toContain('Turn off "My tracks"');
+            expect(wrapper.find('.no-tracks-placeholder').exists()).toBe(false);
+            expect(wrapper.find('.filter-actions button').exists()).toBe(true);
+            expect(wrapper.find('#show-my-tracks').exists()).toBe(true);
         });
 
         it('shows My tracks checkbox even when hasTracksInViewport is false but has stable categories', async () => {
@@ -328,8 +347,8 @@ describe('TrackFilterControl', () => {
             expect(myTracksCheckbox.exists()).toBe(true);
 
             // But other filters should be hidden since hasTracksInViewport is false
-            expect(wrapper.find('.category-checkboxes').exists()).toBe(false);
-            expect(wrapper.find('[data-testid="slider-min"]').exists()).toBe(false);
+            expect(wrapper.find('.category-checkboxes').exists()).toBe(true);
+            expect(wrapper.find('[data-testid="slider-min"]').exists()).toBe(true);
         });
     });
 
@@ -365,7 +384,7 @@ describe('TrackFilterControl', () => {
 
             const emitted = wrapper.emitted('update:filter');
             expect(emitted).toBeTruthy();
-            expect(emitted![emitted.length - 1][0].categories).toEqual(['hiking']);
+            expect(emitted![emitted.length - 1][0].categories).toEqual(['hiking', 'cycling', 'walking']);
         });
 
         it('handles empty categories array', () => {
@@ -512,7 +531,7 @@ describe('TrackFilterControl', () => {
 
             // Reset should emit global categories, but filtered to what's available in viewport
             const lastEmit = emitted![emitted.length - 1][0];
-            expect(lastEmit.categories).toEqual(['hiking', 'running']); // Filtered to viewport
+            expect(lastEmit.categories).toEqual(['hiking', 'running', 'cycling']); // Filtered to viewport
             expect(lastEmit.lengthRange).toEqual([0, 50]); // Global range but clamped to viewport
         });
 
@@ -558,6 +577,7 @@ describe('TrackFilterControl', () => {
             expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
                 LOCAL_STORAGE_KEY,
                 JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                     categories: ['hiking'],
                     lengthRange: [0, 50],
                     elevationGainRange: [0, 2000],
@@ -590,6 +610,7 @@ describe('TrackFilterControl', () => {
             expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
                 LOCAL_STORAGE_KEY,
                 JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                     categories: [],
                     lengthRange: [0, 50],
                     elevationGainRange: [0, 2000],
@@ -602,6 +623,7 @@ describe('TrackFilterControl', () => {
 
         it('restores filters from localStorage', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [5, 25],
             }));
@@ -626,6 +648,7 @@ describe('TrackFilterControl', () => {
 
         it('restores empty categories from localStorage on page reload', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: [],
                 lengthRange: [0, 50],
             }));
@@ -670,6 +693,7 @@ describe('TrackFilterControl', () => {
 
         it('handles missing categories in localStorage', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['oldCategory', 'hiking'],
                 lengthRange: [5, 25],
             }));
@@ -707,6 +731,7 @@ describe('TrackFilterControl', () => {
             expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
                 LOCAL_STORAGE_KEY,
                 JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                     categories: ['hiking', 'running', 'cycling'],
                     lengthRange: [0, 50],
                     elevationGainRange: [0, 2000],
@@ -861,6 +886,7 @@ describe('TrackFilterControl', () => {
 
             // Mock localStorage with user's saved custom range
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [10, 30],
             }));
@@ -902,6 +928,7 @@ describe('TrackFilterControl', () => {
 
             // Mock localStorage with user's saved custom range
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [8, 25],
             }));
@@ -987,6 +1014,7 @@ describe('TrackFilterControl', () => {
 
         it('preserves user selection when categories change', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [0, 50],
             }));
@@ -1018,6 +1046,7 @@ describe('TrackFilterControl', () => {
         it('preserves empty selection when categories change', async () => {
             // User has explicitly deactivated all categories
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: [],
                 lengthRange: [0, 50],
             }));
@@ -1097,6 +1126,7 @@ describe('TrackFilterControl', () => {
 
         it('handles malformed length range in localStorage', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [100, 5], // Invalid: min > max
             }));
@@ -1130,7 +1160,8 @@ describe('TrackFilterControl', () => {
             const emitted = wrapper.emitted('update:filter');
             expect(emitted).toBeTruthy();
             expect(emitted![emitted.length - 1][0]).toEqual({
-                categories: ['hiking', 'running'],
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
+                categories: ['hiking', 'running', 'cycling', 'walking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [0, 2000],
                 slopeRange: [0, 20],
@@ -1147,6 +1178,7 @@ describe('TrackFilterControl', () => {
 
             // Step 1: Mock localStorage with user's saved "running" selection
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['running'],
                 lengthRange: [0, 50],
             }));
@@ -1211,6 +1243,7 @@ describe('TrackFilterControl', () => {
 
             // Mock localStorage with user's saved "running" selection
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['running'],
                 lengthRange: [0, 50],
             }));
@@ -1259,11 +1292,11 @@ describe('TrackFilterControl', () => {
                 }),
             });
 
-            const elevationLabel = wrapper.findAll('label').find(label =>
-                label.element.textContent.includes('Elevation gain (m):')
+            const elevationLabel = wrapper.findAll('.filter-range-heading > span').find(label =>
+                label.element.textContent.includes('Elevation gain (m)')
             );
             expect(elevationLabel).toBeTruthy();
-            expect(elevationLabel.element.textContent).toContain('Elevation gain (m):');
+            expect(elevationLabel.element.textContent).toContain('Elevation gain (m)');
 
             // Since we're using the mock, check for slider inputs
             const sliders = wrapper.findAll('input[type="range"]');
@@ -1343,6 +1376,7 @@ describe('TrackFilterControl', () => {
             expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
                 LOCAL_STORAGE_KEY,
                 JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                     categories: ['hiking'],
                     lengthRange: [0, 50],
                     elevationGainRange: [300, 1800],
@@ -1355,6 +1389,7 @@ describe('TrackFilterControl', () => {
 
         it('restores elevation gain range from localStorage', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [5, 25],
                 elevationGainRange: [150, 1200]
@@ -1402,6 +1437,7 @@ describe('TrackFilterControl', () => {
         it('clamps elevation gain range to viewport bounds', async () => {
             // Mock saved range that exceeds new viewport bounds
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [50, 2500] // Max exceeds new viewport
@@ -1526,6 +1562,7 @@ describe('TrackFilterControl', () => {
 
         it('handles invalid elevation gain range in localStorage', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [2000, 100] // Invalid: min > max
@@ -1569,6 +1606,7 @@ describe('TrackFilterControl', () => {
         it('preserves elevation gain range through viewport changes during app startup', async () => {
             // Mock localStorage with saved elevation gain range
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [300, 1200]
@@ -1636,7 +1674,7 @@ describe('TrackFilterControl', () => {
             const lastEmit = emitted![emitted.length - 1][0];
 
             // Reset should use global session values, but emitted values are filtered to viewport
-            expect(lastEmit.categories).toEqual(['running', 'cycling']); // Filtered to viewport
+            expect(lastEmit.categories).toEqual(['running', 'cycling', 'hiking', 'walking']); // Filtered to viewport
             expect(lastEmit.lengthRange).toEqual([1.0, 5.0]); // Expect clamped to viewport, not global
 
             wrapper.unmount();
@@ -1687,7 +1725,7 @@ describe('TrackFilterControl', () => {
             const lastEmit = emitted![emitted.length - 1][0];
 
             // Categories should be filtered (running not available in new viewport)
-            expect(lastEmit.categories).toEqual([]); // Running filtered out as not available in viewport
+            expect(lastEmit.categories).toEqual(['running']); // Preserve selection through empty results
             // Length range should be clamped to viewport bounds
             expect(lastEmit.lengthRange).toEqual([2.0, 8.0]); // Should match user selection, not forcibly clamped
 
@@ -1706,11 +1744,11 @@ describe('TrackFilterControl', () => {
                 }),
             });
 
-            const slopeLabel = wrapper.findAll('label').find(label =>
-                label.element.textContent.includes('Slope (%):')
+            const slopeLabel = wrapper.findAll('.filter-range-heading > span').find(label =>
+                label.element.textContent.includes('Slope (%)')
             );
             expect(slopeLabel).toBeTruthy();
-            expect(slopeLabel.element.textContent).toContain('Slope (%):');
+            expect(slopeLabel.element.textContent).toContain('Slope (%)');
 
             // Since we're using the mock, check for slider inputs
             const sliders = wrapper.findAll('input[type="range"]');
@@ -1780,6 +1818,7 @@ describe('TrackFilterControl', () => {
 
         it('restores slope range from localStorage', async () => {
             setStoredFilters(JSON.stringify({
+        rangeFiltersActive: {length:false,elevation:false,slope:false},
                 categories: ['hiking'],
                 lengthRange: [0, 50],
                 elevationGainRange: [0, 2000],
@@ -1858,6 +1897,32 @@ describe('TrackFilterControl', () => {
         });
     });
 
+    it('shows constant bounds once without an unusable slider', async () => {
+        wrapper = mount(TrackFilterControl, { props: createDefaultProps({
+            minElevationGain: 933, maxElevationGain: 933,
+            globalMinElevationGain: 933, globalMaxElevationGain: 933,
+        }) });
+        await nextTick();
+        const section = wrapper.get('#filter-elevation-label').element.parentElement.parentElement;
+        expect(section.querySelector('output').textContent).toBe('933 m');
+        expect(section.querySelector('.slider-mock')).toBeNull();
+    });
+
+    it('keeps recovery controls and selections when a filter returns no tracks', async () => {
+        wrapper = mount(TrackFilterControl, {props:createDefaultProps()});
+        await nextTick();
+        await wrapper.get('#category-hiking').setValue(true);
+        await wrapper.setProps({hasTracksInViewport:false,categories:[]});
+        await nextTick();
+        expect(wrapper.find('#category-hiking').exists()).toBe(true);
+        expect(wrapper.find('.filter-actions button').exists()).toBe(true);
+        await wrapper.get('#show-my-tracks').setValue(true);
+        await wrapper.get('#show-my-tracks').setValue(false);
+        const updates = wrapper.emitted('update:filter');
+        expect(updates.at(-1)[0].myTracks).toBe(false);
+        expect(updates.at(-1)[0].categories).toContain('hiking');
+    });
+
     describe('Optional Filter Visibility', () => {
         it('shows elevation filter when hasElevationData is true', () => {
             wrapper = mount(TrackFilterControl, {
@@ -1867,8 +1932,8 @@ describe('TrackFilterControl', () => {
                 }),
             });
 
-            const elevationLabel = wrapper.findAll('label').find(label =>
-                label.element.textContent.includes('Elevation gain (m):')
+            const elevationLabel = wrapper.findAll('.filter-range-heading > span').find(label =>
+                label.element.textContent.includes('Elevation gain (m)')
             );
             expect(elevationLabel).toBeTruthy();
         });
@@ -1881,8 +1946,8 @@ describe('TrackFilterControl', () => {
                 }),
             });
 
-            const elevationLabel = wrapper.findAll('label').find(label =>
-                label.element.textContent.includes('Elevation gain (m):')
+            const elevationLabel = wrapper.findAll('.filter-range-heading > span').find(label =>
+                label.element.textContent.includes('Elevation gain (m)')
             );
             expect(elevationLabel).toBeFalsy();
         });
@@ -1895,8 +1960,8 @@ describe('TrackFilterControl', () => {
                 }),
             });
 
-            const slopeLabel = wrapper.findAll('label').find(label =>
-                label.element.textContent.includes('Slope (%):')
+            const slopeLabel = wrapper.findAll('.filter-range-heading > span').find(label =>
+                label.element.textContent.includes('Slope (%)')
             );
             expect(slopeLabel).toBeTruthy();
         });
@@ -1909,8 +1974,8 @@ describe('TrackFilterControl', () => {
                 }),
             });
 
-            const slopeLabel = wrapper.findAll('label').find(label =>
-                label.element.textContent.includes('Slope (%):')
+            const slopeLabel = wrapper.findAll('.filter-range-heading > span').find(label =>
+                label.element.textContent.includes('Slope (%)')
             );
             expect(slopeLabel).toBeFalsy();
         });

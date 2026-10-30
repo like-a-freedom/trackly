@@ -5,6 +5,7 @@
  */
 
 export interface FilterState {
+    rangeFiltersActive?: {length:boolean;elevation:boolean;slope:boolean};
     categories: string[];
     lengthRange: [number, number];
     elevationGainRange: [number, number];
@@ -17,10 +18,10 @@ export interface TrackFeature {
         id?: string;
         categories?: string[];
         length_km?: number;
-        elevation_gain?: number;
-        elevation_up?: number;
-        slope_min?: number;
-        slope_max?: number;
+        elevation_gain?: number | null;
+        elevation_up?: number | null;
+        slope_min?: number | null;
+        slope_max?: number | null;
         [key: string]: unknown;
     };
 }
@@ -87,9 +88,6 @@ export function geoJsonFilter(
         return props != null && props.id === selectedTrackId;
     }
 
-    if ((filterState.categories?.length ?? 0) === 0) {
-        return false;
-    }
 
     return matchesAll(filterState, cats, len, effectiveGain, slopeMin, slopeMax, epsilon, epsilonElevation, epsilonSlope);
 }
@@ -99,28 +97,28 @@ function matchesAll(
     cats: string[],
     len: number | undefined,
     effectiveGain: number | null,
-    slopeMin: number | undefined,
-    slopeMax: number | undefined,
+    slopeMin: number | null | undefined,
+    slopeMax: number | null | undefined,
     epsilon: number,
     epsilonElevation: number,
     epsilonSlope: number,
 ): boolean {
-    const catMatch = (filterState.categories ?? []).some((cat) => cats.includes(cat));
+    const catMatch = !filterState.categories?.length || (filterState.categories ?? []).some((cat) => cats.includes(cat));
 
     const min = filterState.lengthRange?.[0] ?? 0;
     const max = filterState.lengthRange?.[1] ?? Number.POSITIVE_INFINITY;
-    const lenMatch = len !== undefined && len >= min - epsilon && len <= max + epsilon;
+    const lenMatch = filterState.rangeFiltersActive?.length === false || len !== undefined && len >= min - epsilon && len <= max + epsilon;
 
     const elevationMin = filterState.elevationGainRange?.[0] ?? 0;
     const elevationMax = filterState.elevationGainRange?.[1] ?? Number.POSITIVE_INFINITY;
-    const elevationMatch =
+    const elevationMatch = filterState.rangeFiltersActive?.elevation === false ||
         effectiveGain === null ||
         (effectiveGain >= elevationMin - epsilonElevation &&
             effectiveGain <= elevationMax + epsilonElevation);
 
     const slopeFilterMin = filterState.slopeRange?.[0] ?? 0;
     const slopeFilterMax = filterState.slopeRange?.[1] ?? 20;
-    const slopeMatch =
+    const slopeMatch = filterState.rangeFiltersActive?.slope === false ||
         slopeMin === null ||
         slopeMin === undefined ||
         slopeMax === null ||

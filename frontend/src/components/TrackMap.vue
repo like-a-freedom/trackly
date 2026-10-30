@@ -33,30 +33,32 @@
         :options-style="geoJsonStyle"
       />
     </template>
-    <TrackFilterControl
-      v-if="!props.selectedTrackDetail"
-      class="map-filter-control"
-      :categories="allCategories"
-      :min-length="minTrackLength"
-      :max-length="maxTrackLength"
-      :min-elevation-gain="minElevationGain"
-      :max-elevation-gain="maxElevationGain"
-      :min-slope="minSlope"
-      :max-slope="maxSlope"
-      :global-categories="globalCategories"
-      :global-min-length="globalMinTrackLength"
-      :global-max-length="globalMaxTrackLength"
-      :global-min-elevation-gain="globalMinElevationGain"
-      :global-max-elevation-gain="globalMaxElevationGain"
-      :global-min-slope="globalMinSlope"
-      :global-max-slope="globalMaxSlope"
-      :has-elevation-data="hasElevationData"
-      :has-slope-data="hasSlopeData"
-      :has-tracks-in-viewport="
-        !!(props.polylines && props.polylines.length > 0)
-      "
-      @update:filter="onFilterChange"
-    />
+    <Teleport to="body">
+      <TrackFilterControl
+        v-if="!props.selectedTrackDetail"
+        class="map-filter-control"
+        :categories="allCategories"
+        :min-length="minTrackLength"
+        :max-length="maxTrackLength"
+        :min-elevation-gain="minElevationGain"
+        :max-elevation-gain="maxElevationGain"
+        :min-slope="minSlope"
+        :max-slope="maxSlope"
+        :global-categories="globalCategories"
+        :global-min-length="globalMinTrackLength"
+        :global-max-length="globalMaxTrackLength"
+        :global-min-elevation-gain="globalMinElevationGain"
+        :global-max-elevation-gain="globalMaxElevationGain"
+        :global-min-slope="globalMinSlope"
+        :global-max-slope="globalMaxSlope"
+        :has-elevation-data="hasElevationData"
+        :has-slope-data="hasSlopeData"
+        :has-tracks-in-viewport="
+          !!(props.polylines && props.polylines.length > 0)
+        "
+        @update:filter="onFilterChange"
+      />
+    </Teleport>
 
     <!-- Chart hover/fixed marker -->
     <LCircleMarker
@@ -366,12 +368,12 @@ const clusteringConfig = computed(() => ({
   maxClusterRadius: 36,
   // Show coverage area when hovering over cluster
   showCoverageOnHover: true,
-  // Zoom to show all items in cluster when clicking
-  zoomToBoundsOnClick: true,
+  // Use one camera flight from the cluster click handler
+  zoomToBoundsOnClick: false,
   // Animate cluster creation/destruction
-  animate: true,
+  animate: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   // Animation duration
-  animateAddingMarkers: true,
+  animateAddingMarkers: false,
 }));
 
 // Cluster adapter — wraps MarkerClusterGroup lifecycle
@@ -482,11 +484,15 @@ function initializeClustering(map) {
   try {
     // Initialize cluster group via adapter
     const clusterGroup = clusterAdapter.initialize(clusteringConfig.value);
+    clustering.clusterGroup.value = clusterGroup;
 
     // Wire up cluster events through the adapter
     clusterAdapter.on("clusterclick", (e) => {
       try { onClusterClick(e); }
       catch (error) { console.error("[TrackMap] Error in cluster click handler:", error); }
+    });
+    clusterAdapter.on("clusterkeypress", (e) => {
+      if (e.originalEvent?.key === "Enter" || e.originalEvent?.keyCode === 13) onClusterClick(e);
     });
     clusterAdapter.on("click", (e) => {
       try { onClusterMarkerClick(e); }
