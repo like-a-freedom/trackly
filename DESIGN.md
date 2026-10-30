@@ -214,3 +214,21 @@ safe fallback copy. The collapsed “Technical details” disclosure contains on
 the HTTP status, request method/path and optional error reference. Backend 500
 responses carry `error_id` and `x-error-id`; the same reference is logged with the
 underlying cause. These fields help support investigate without exposing internals.
+
+
+### Data availability and numeric filters
+
+This is the canonical policy for map filters, track details, charts and editor statistics.
+
+- Omit optional metrics, chart modes and filter options when underlying data is absent. Omit headings with no visible content. Do not substitute zero, `N/A` or repeated “(no data)” labels for missing optional measurements.
+- Finite zero is meaningful when the measurement was recorded (for example pause time or flat terrain). Domain validity still applies: missing timing must not appear as `0s`.
+- A numeric filter always has a usable slider, including when just one track is available or every track has the same value. Length and elevation gain domains start at zero and extend to the observed maximum (at least 1 km / 1 m for an all-zero dataset). Slope includes zero and the observed signed extremes (at least 1% maximum). These bounds define selectable thresholds, not fabricated measurements. Never replace a filter with an unexplained read-only metric.
+- Preserve filter controls, available domains and selections when filtering returns no matches. Filtered responses must not clamp the user's selection or redefine capability availability. Keep Reset reachable.
+- Loading preserves current content with a loading indicator; failed requests use the shared request-error pattern and recovery. Neither state is “no data”.
+- Disable an action only for a temporary, actionable prerequisite, such as saving in progress. Explain the prerequisite when not obvious. Deployment-disabled features are omitted.
+- Empty editable fields remain available to owners through an Add action. Required form fields remain visible and validate inline; missing read-only optional fields are omitted.
+- Entirely empty maps use the no-tracks state; empty filtered results provide adjustment/reset guidance. Avoid nested scrolling in filter category lists; the containing panel owns viewport overflow.
+
+Implementation: `domain/metricAvailability.ts` checks finite numeric presence; presentation components apply domain validity and omit empty sections. Filter availability persists once observed for the lifetime of the map control.
+
+Research: [NN/g dropdown guidelines](https://www.nngroup.com/articles/drop-down-menus/) warn against disappearing interdependent options and favor spatial consistency. [Carbon empty states](https://www.carbondesignsystem.com/building-blocks/core/patterns/empty-states) distinguishes missing data, user-action results and system failures. Hiding initially irrelevant optional metrics is Trackly's contextual decision, not a universal rule to hide disabled controls.

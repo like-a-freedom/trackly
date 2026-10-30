@@ -204,7 +204,7 @@ describe('TrackFilterControl', () => {
             expect(sliderMin.exists()).toBe(true);
             expect(sliderMax.exists()).toBe(true);
             // Slider uses stable values which are initialized from props
-            expect(sliderMin.attributes('min')).toBe('5');
+            expect(sliderMin.attributes('min')).toBe('0');
             expect(sliderMin.attributes('max')).toBe('25');
         });
 
@@ -468,7 +468,7 @@ describe('TrackFilterControl', () => {
             const sliderMin = wrapper.find('[data-testid="slider-min"]');
             const sliderMax = wrapper.find('[data-testid="slider-max"]');
 
-            expect(sliderMin.attributes('min')).toBe('5');
+            expect(sliderMin.attributes('min')).toBe('0');
             expect(sliderMax.attributes('max')).toBe('40');
         });
     });
@@ -1897,7 +1897,7 @@ describe('TrackFilterControl', () => {
         });
     });
 
-    it('shows constant bounds once without an unusable slider', async () => {
+    it('keeps a usable slider alongside coincident observed bounds', async () => {
         wrapper = mount(TrackFilterControl, { props: createDefaultProps({
             minElevationGain: 933, maxElevationGain: 933,
             globalMinElevationGain: 933, globalMaxElevationGain: 933,
@@ -1905,7 +1905,7 @@ describe('TrackFilterControl', () => {
         await nextTick();
         const section = wrapper.get('#filter-elevation-label').element.parentElement.parentElement;
         expect(section.querySelector('output').textContent).toBe('933 m');
-        expect(section.querySelector('.slider-mock')).toBeNull();
+        expect(section.querySelector('.slider-mock')).not.toBeNull();
     });
 
     it('keeps recovery controls and selections when a filter returns no tracks', async () => {
@@ -1944,7 +1944,33 @@ describe('TrackFilterControl', () => {
         expect(wrapper.emitted('update:filter').at(-1)[0].categories).toEqual(['other']);
     });
 
+    it('keeps usable sliders when all tracks have the same length and elevation', async () => {
+        wrapper = mount(TrackFilterControl, {props:createDefaultProps({minLength:88.82,maxLength:88.82,minElevationGain:1947,maxElevationGain:1947})});
+        await nextTick();
+        const sliders = wrapper.findAllComponents({name:'Slider'});
+        expect(sliders).toHaveLength(3);
+        expect(sliders[0].props('min')).toBe(0);
+        expect(sliders[0].props('max')).toBe(88.82);
+        expect(sliders[1].props('min')).toBe(0);
+        expect(sliders[1].props('max')).toBe(1947);
+        sliders[0].vm.$emit('update:modelValue', [0,80]);
+        await nextTick();
+        expect(wrapper.emitted('update:filter').at(-1)[0].lengthRange).toEqual([0,80]);
+    });
+
     describe('Optional Filter Visibility', () => {
+        it('omits unavailable filter options but retains options after an empty response', async () => {
+            wrapper = mount(TrackFilterControl, {props:createDefaultProps({hasElevationData:false,hasSlopeData:false})});
+            await wrapper.get('.filter-options-btn').trigger('click');
+            expect(wrapper.find('#show-elevation').exists()).toBe(false);
+            expect(wrapper.find('#show-slope').exists()).toBe(false);
+            expect(wrapper.text()).not.toContain('(no data)');
+            await wrapper.setProps({hasElevationData:true,hasSlopeData:true});
+            await wrapper.setProps({hasElevationData:false,hasSlopeData:false,hasTracksInViewport:false});
+            expect(wrapper.get('#show-elevation').attributes('disabled')).toBeUndefined();
+            expect(wrapper.get('#show-slope').attributes('disabled')).toBeUndefined();
+        });
+
         it('shows elevation filter when hasElevationData is true', () => {
             wrapper = mount(TrackFilterControl, {
                 props: createDefaultProps({

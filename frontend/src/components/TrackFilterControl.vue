@@ -110,44 +110,32 @@
                 class="checkbox-label"
               >Track length</label>
             </div>
-            <div class="checkbox-item">
+            <div v-if="availableElevationData" class="checkbox-item">
               <input
                 id="show-elevation"
                 v-model="showElevation"
                 type="checkbox"
                 class="option-checkbox"
-                :disabled="!availableElevationData"
               >
               <label
                 for="show-elevation"
                 class="checkbox-label"
-                :class="{ disabled: !availableElevationData }"
               >
                 Elevation gain
-                <span
-                  v-if="!availableElevationData"
-                  class="disabled-hint"
-                >(no data)</span>
               </label>
             </div>
-            <div class="checkbox-item">
+            <div v-if="availableSlopeData" class="checkbox-item">
               <input
                 id="show-slope"
                 v-model="showSlope"
                 type="checkbox"
                 class="option-checkbox"
-                :disabled="!availableSlopeData"
               >
               <label
                 for="show-slope"
                 class="checkbox-label"
-                :class="{ disabled: !availableSlopeData }"
               >
                 Slope
-                <span
-                  v-if="!availableSlopeData"
-                  class="disabled-hint"
-                >(no data)</span>
               </label>
             </div>
             <div class="checkbox-item">
@@ -222,15 +210,14 @@
             >
               <div class="filter-range-heading">
                 <span id="filter-length-label">Track length (km)</span>
-                <output class="filter-range-value">{{ formatRange(stableMinLength === stableMaxLength ? [stableMinLength, stableMaxLength] : lengthRange, 2, 'km') }}</output>
+                <output class="filter-range-value">{{ formatRange(lengthRange, 2, 'km') }}</output>
               </div>
               <Slider
                 v-model="lengthRange"
                 aria-labelledby="filter-length-label"
-                v-if="stableMinLength < stableMaxLength"
                 @update:model-value="rangeFiltersActive.length = true"
-                :min="stableMinLength"
-                :max="stableMaxLength"
+                :min="lengthDomain[0]"
+                :max="lengthDomain[1]"
                 :step="0.1"
                 :tooltips="false"
                 :lazy="true"
@@ -244,15 +231,14 @@
             >
               <div class="filter-range-heading">
                 <span id="filter-elevation-label">Elevation gain (m)</span>
-                <output class="filter-range-value">{{ formatRange(stableMinElevationGain === stableMaxElevationGain ? [stableMinElevationGain, stableMaxElevationGain] : elevationGainRange, 0, 'm') }}</output>
+                <output class="filter-range-value">{{ formatRange(elevationGainRange, 0, 'm') }}</output>
               </div>
               <Slider
                 v-model="elevationGainRange"
                 aria-labelledby="filter-elevation-label"
-                v-if="stableMinElevationGain < stableMaxElevationGain"
                 @update:model-value="rangeFiltersActive.elevation = true"
-                :min="stableMinElevationGain"
-                :max="stableMaxElevationGain"
+                :min="elevationGainDomain[0]"
+                :max="elevationGainDomain[1]"
                 :step="10"
                 :tooltips="false"
                 :lazy="true"
@@ -266,15 +252,14 @@
             >
               <div class="filter-range-heading">
                 <span id="filter-slope-label">Slope (%)</span>
-                <output class="filter-range-value">{{ formatRange(stableMinSlope === stableMaxSlope ? [stableMinSlope, stableMaxSlope] : slopeRange, 1, '%') }}</output>
+                <output class="filter-range-value">{{ formatRange(slopeRange, 1, '%') }}</output>
               </div>
               <Slider
                 v-model="slopeRange"
                 aria-labelledby="filter-slope-label"
-                v-if="stableMinSlope < stableMaxSlope"
                 @update:model-value="rangeFiltersActive.slope = true"
-                :min="stableMinSlope"
-                :max="stableMaxSlope"
+                :min="slopeDomain[0]"
+                :max="slopeDomain[1]"
                 :step="0.1"
                 :tooltips="false"
                 :lazy="true"
@@ -554,6 +539,11 @@ const stableMaxSlope = ref(20);
 
 // Filter visibility options
 const showFilterOptions = ref(false);
+// Non-negative metrics include zero so a single observed value remains filterable.
+const lengthDomain = computed(() => [0, Math.max(stableMaxLength.value, 1)]);
+const elevationGainDomain = computed(() => [0, Math.max(stableMaxElevationGain.value, 1)]);
+const slopeDomain = computed(() => [Math.min(0, stableMinSlope.value), Math.max(1, stableMaxSlope.value)]);
+
 const showCategories = ref(true);
 const showLength = ref(true);
 const showElevation = ref(true);

@@ -379,6 +379,8 @@ for (const width of [1280, 390, 320]) {
   }
   await expect(panel.locator('.slider-tooltip')).toHaveCount(0);
   await expect(panel.locator('.filter-range-value')).toHaveCount(3);
+  await expect(panel.locator('.slider-target')).toHaveCount(3);
+  await expect(panel.locator('.slider-handle')).toHaveCount(6);
   const box = (await panel.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(width);
@@ -432,4 +434,15 @@ test('heatmap toggle draws API points and removes the layer when disabled', asyn
  await expect(page.locator('canvas.leaflet-heatmap-layer')).toHaveCount(1);
  await toggle.uncheck();
  await expect(page.locator('canvas.leaflet-heatmap-layer')).toHaveCount(0);
+});
+
+
+test('omits filter options without data instead of disabled no-data entries', async ({page}) => {
+ await page.route('**/api/tracks?**', route => route.fulfill({json:{type:'FeatureCollection',features:[{type:'Feature',properties:{id:fixtureId,categories:['hiking'],length_km:5},geometry:{type:'MultiLineString',coordinates:[[[37,56],[37.01,56.01]]]}}]}}));
+ await page.goto('/?zoom=10&lat=56&lng=37');
+ await page.getByRole('button',{name:'Toggle filter options'}).click();
+ await expect(page.locator('#show-length')).toBeVisible();
+ await expect(page.locator('#show-elevation')).toHaveCount(0);
+ await expect(page.locator('#show-slope')).toHaveCount(0);
+ await expect(page.getByText('(no data)', {exact:true})).toHaveCount(0);
 });

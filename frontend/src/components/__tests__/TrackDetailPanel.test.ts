@@ -780,7 +780,7 @@ describe('TrackDetailPanel', () => {
         props: { track: trackWithZeros }
       });
 
-      expect(wrapper.text()).toContain('Duration'); // Duration section should be hidden when 0
+      expect(wrapper.text()).not.toContain('Duration'); // Missing duration section should be hidden when 0
     });
 
     it('handles extremely large values', () => {
@@ -2362,10 +2362,11 @@ describe('track description hierarchy', () => {
 });
 
 describe('recorded track duration', () => {
-  it.each([[0, 'Not recorded'], [null, 'Not recorded'], [undefined, 'Not recorded'], [3661, '1h 1m 1s']])('renders duration %s as %s', (duration, expected) => {
+  it.each([[0, null], [null, null], [undefined, null], [3661, '1h 1m 1s']])('renders duration %s as %s', (duration, expected) => {
     const wrapper = mount(TrackDetailPanel, { props: { track: { id: 'duration', categories: [], duration_seconds: duration } } });
     const item = wrapper.findAll('.basic-info-grid .stat-item').find(item => item.text().includes('Duration'));
-    expect(item.text()).toContain(expected);
+    if (expected === null) expect(item).toBeUndefined();
+    else expect(item.text()).toContain(expected);
     wrapper.unmount();
   });
 });

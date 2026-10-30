@@ -967,7 +967,7 @@ const hasSlopeData = computed(() => {
   }
 
   // Check if slope metrics are available
-  const hasMetrics = track?.slope_min !== null && track?.slope_max !== null;
+  const hasMetrics = [track?.slope_min, track?.slope_max, track?.slope_avg].some(value => typeof value === "number" && Number.isFinite(value));
   return hasMetrics;
 });
 

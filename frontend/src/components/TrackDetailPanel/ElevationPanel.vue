@@ -1,4 +1,5 @@
 <script setup>
+import { hasMetric } from "../../domain/metricAvailability";
 import { computed } from 'vue';
 import TrackActionButton from "../TrackActionButton.vue";
 import ElevationChart from '../ElevationChart.vue';
@@ -196,35 +197,35 @@ function handleChartModeChange(mode) {
         <!-- Elevation Statistics -->
         <div v-if="hasElevationData" class="elevation-stats">
             <div
-                v-if="track.elevation_gain !== undefined && track.elevation_gain !== null"
+                v-if="hasMetric(track.elevation_gain)"
                 class="stat-item"
             >
                 <span class="stat-label">Total ascent</span>
                 <span class="stat-value">{{ track.elevation_gain.toFixed(0) }} m</span>
             </div>
             <div
-                v-if="track.elevation_loss !== undefined && track.elevation_loss !== null"
+                v-if="hasMetric(track.elevation_loss)"
                 class="stat-item"
             >
                 <span class="stat-label">Total descent</span>
                 <span class="stat-value">{{ Math.abs(track.elevation_loss).toFixed(0) }} m</span>
             </div>
             <div
-                v-if="track.elevation_gain !== undefined && track.elevation_gain !== null && track.elevation_loss !== undefined && track.elevation_loss !== null"
+                v-if="hasMetric(track.elevation_gain) && hasMetric(track.elevation_loss)"
                 class="stat-item"
             >
                 <span class="stat-label">Net elevation</span>
                 <span class="stat-value">{{ netElevation }} m</span>
             </div>
             <div
-                v-if="track.elevation_min !== undefined && track.elevation_min !== null"
+                v-if="hasMetric(track.elevation_min)"
                 class="stat-item"
             >
                 <span class="stat-label">Minimum elevation</span>
                 <span class="stat-value">{{ track.elevation_min.toFixed(0) }} m</span>
             </div>
             <div
-                v-if="track.elevation_max !== undefined && track.elevation_max !== null"
+                v-if="hasMetric(track.elevation_max)"
                 class="stat-item"
             >
                 <span class="stat-label">Maximum elevation</span>

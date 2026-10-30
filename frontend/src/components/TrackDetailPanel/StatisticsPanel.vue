@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { hasMetric } from '../../domain/metricAvailability';
 import { formatDuration } from '../../utils/format';
 
 const props = defineProps({
@@ -15,10 +16,10 @@ const props = defineProps({
 const emit = defineEmits(['speed-unit-change']);
 
 const hasSpeedData = computed(() =>
-    props.track.moving_avg_speed !== undefined ||
-    props.track.moving_avg_pace !== undefined ||
-    props.track.avg_hr !== undefined
+    ['moving_avg_speed', 'moving_avg_pace', 'moving_time', 'pause_time', 'avg_hr', 'hr_min', 'hr_max']
+        .some(key => hasMetric(props.track[key]))
 );
+const hasDuration = computed(() => !!props.formattedDuration && props.formattedDuration !== 'N/A');
 
 function handleSpeedUnitChange(unit: string) {
     emit('speed-unit-change', unit);
@@ -60,11 +61,11 @@ function handleSpeedUnitChange(unit: string) {
                 <span class="stat-value">{{ formattedDistance }}</span>
             </div>
             <div
-
+                v-if="hasDuration"
                 class="stat-item"
             >
                 <span class="stat-label">Duration</span>
-                <span class="stat-value">{{ formattedDuration && formattedDuration !== 'N/A' ? formattedDuration : 'Not recorded' }}</span>
+                <span class="stat-value">{{ formattedDuration }}</span>
             </div>
         </div>
     </div>
@@ -75,8 +76,7 @@ function handleSpeedUnitChange(unit: string) {
         <div class="speed-pace-grid">
             <div
                 v-if="
-                    track.moving_avg_speed !== undefined &&
-                    track.moving_avg_speed !== null
+                    hasMetric(track.moving_avg_speed)
                 "
                 class="stat-item"
             >
@@ -85,8 +85,7 @@ function handleSpeedUnitChange(unit: string) {
             </div>
             <div
                 v-if="
-                    track.moving_avg_pace !== undefined &&
-                    track.moving_avg_pace !== null
+                    hasMetric(track.moving_avg_pace)
                 "
                 class="stat-item"
             >
@@ -94,35 +93,35 @@ function handleSpeedUnitChange(unit: string) {
                 <span class="stat-value">{{ formattedMovingAvgPace }}</span>
             </div>
             <div
-                v-if="track.moving_time !== undefined && track.moving_time !== null"
+                v-if="hasMetric(track.moving_time)"
                 class="stat-item"
             >
                 <span class="stat-label">Moving time</span>
                 <span class="stat-value">{{ formatDuration(track.moving_time) }}</span>
             </div>
             <div
-                v-if="track.pause_time !== undefined && track.pause_time !== null"
+                v-if="hasMetric(track.pause_time)"
                 class="stat-item"
             >
                 <span class="stat-label">Pause time</span>
                 <span class="stat-value">{{ formatDuration(track.pause_time) }}</span>
             </div>
             <div
-                v-if="track.avg_hr !== undefined && track.avg_hr !== null"
+                v-if="hasMetric(track.avg_hr)"
                 class="stat-item"
             >
                 <span class="stat-label">Average HR</span>
                 <span class="stat-value">{{ Math.round(track.avg_hr) }} bpm</span>
             </div>
             <div
-                v-if="track.hr_min !== undefined && track.hr_min !== null"
+                v-if="hasMetric(track.hr_min)"
                 class="stat-item"
             >
                 <span class="stat-label">Minimum HR</span>
                 <span class="stat-value">{{ Math.round(track.hr_min) }} bpm</span>
             </div>
             <div
-                v-if="track.hr_max !== undefined && track.hr_max !== null"
+                v-if="hasMetric(track.hr_max)"
                 class="stat-item"
             >
                 <span class="stat-label">Maximum HR</span>

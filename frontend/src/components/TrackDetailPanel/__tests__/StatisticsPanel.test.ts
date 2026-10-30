@@ -61,11 +61,12 @@ describe('StatisticsPanel', () => {
         expect(wrapper.text()).toContain('1h 0m 0s');
     });
 
-    it('explains when duration was not recorded', () => {
+    it('omits duration when it was not recorded', () => {
         props.track.duration_seconds = 0;
         props.formattedDuration = 'N/A';
         const wrapper = mount(StatisticsPanel, { props });
-        expect(wrapper.text()).toContain('Not recorded');
+        expect(wrapper.text()).not.toContain('Duration');
+        expect(wrapper.text()).not.toContain('Not recorded');
     });
 
 
@@ -94,6 +95,8 @@ describe('StatisticsPanel', () => {
         props.track.moving_avg_speed = undefined;
         props.track.moving_avg_pace = undefined;
         props.track.avg_hr = undefined;
+        props.track.hr_min = undefined;
+        props.track.hr_max = undefined;
         const wrapper = mount(StatisticsPanel, { props });
         expect(wrapper.text()).not.toContain('Statistics');
     });
@@ -104,3 +107,11 @@ describe('StatisticsPanel', () => {
         expect(wrapper.text()).toContain('150 bpm');
     });
 });
+
+ it('omits empty statistics for null metrics and shows valid zero pause time', () => {
+  const wrapper = mount(StatisticsPanel, {props:{track:{moving_avg_speed:null,moving_avg_pace:null,avg_hr:null}}});
+  expect(wrapper.text()).not.toContain('Statistics');
+  const zero = mount(StatisticsPanel, {props:{track:{pause_time:0}}});
+  expect(zero.text()).toContain('Statistics');
+  expect(zero.text()).toContain('Pause time');
+ });
