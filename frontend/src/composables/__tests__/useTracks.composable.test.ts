@@ -771,6 +771,14 @@ describe('useTracks composable', () => {
     });
 
     describe('fetchHeatmapInBounds', () => {
+        it('accepts the point array returned by the heatmap API', async () => {
+            const points = [{lat:56,lon:37,weight:4}];
+            fetchMock.mockResolvedValue({ok:true,json:async()=>points});
+            const {fetchHeatmapInBounds,heatmapPoints} = useTracks();
+            await fetchHeatmapInBounds({sw:[35,55],ne:[40,57]});
+            expect(heatmapPoints.value).toEqual(points);
+        });
+
         it('sends the session header so private tracks are attributed correctly', async () => {
             const mockBounds = {
                 sw: [10, 50],

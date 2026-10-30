@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 import type { MapLayer, MapAdapter } from '../map/MapAdapter';
 import type { LatLngTuple } from '@/types';
 
@@ -28,7 +28,7 @@ export function useHeatmap(
     paneName: string = 'heatmapPane',
     options: HeatmapOptions = {}
 ) {
-    const heatLayer: Ref<MapLayer | null> = ref(null);
+    const heatLayer: Ref<MapLayer | null> = shallowRef(null);
     const heatmapMaxWeight: Ref<number> = ref(0);
 
     const mergedOptions = { ...DEFAULT_HEATMAP_OPTIONS, ...options };
@@ -62,7 +62,7 @@ export function useHeatmap(
 
     function removeHeatmapLayer(): void {
         if (heatLayer.value) {
-            adapter.removeLayer(heatLayer.value);
+            heatLayer.value.remove();
         }
         heatLayer.value = null;
         heatmapMaxWeight.value = 0;
@@ -96,7 +96,7 @@ export function useHeatmap(
             !heatLayer.value || heatmapMaxWeight.value !== maxWeight;
 
         if (shouldRecreate && heatLayer.value) {
-            adapter.removeLayer(heatLayer.value);
+            heatLayer.value.remove();
             heatLayer.value = null;
         }
 
@@ -110,7 +110,7 @@ export function useHeatmap(
                 pane: paneName,
             });
             if (heatLayer.value) {
-                adapter.addLayer(heatLayer.value);
+                heatLayer.value.addTo(adapter);
             }
             heatmapMaxWeight.value = maxWeight;
         } else if (heatLayer.value.setLatLngs) {

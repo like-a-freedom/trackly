@@ -116,16 +116,16 @@
                 v-model="showElevation"
                 type="checkbox"
                 class="option-checkbox"
-                :disabled="!hasElevationData"
+                :disabled="!availableElevationData"
               >
               <label
                 for="show-elevation"
                 class="checkbox-label"
-                :class="{ disabled: !hasElevationData }"
+                :class="{ disabled: !availableElevationData }"
               >
                 Elevation gain
                 <span
-                  v-if="!hasElevationData"
+                  v-if="!availableElevationData"
                   class="disabled-hint"
                 >(no data)</span>
               </label>
@@ -136,16 +136,16 @@
                 v-model="showSlope"
                 type="checkbox"
                 class="option-checkbox"
-                :disabled="!hasSlopeData"
+                :disabled="!availableSlopeData"
               >
               <label
                 for="show-slope"
                 class="checkbox-label"
-                :class="{ disabled: !hasSlopeData }"
+                :class="{ disabled: !availableSlopeData }"
               >
                 Slope
                 <span
-                  v-if="!hasSlopeData"
+                  v-if="!availableSlopeData"
                   class="disabled-hint"
                 >(no data)</span>
               </label>
@@ -239,7 +239,7 @@
               />
             </div>
             <div
-              v-if="showElevation && hasElevationData"
+              v-if="showElevation && availableElevationData"
               class="filter-section"
             >
               <div class="filter-range-heading">
@@ -261,7 +261,7 @@
               />
             </div>
             <div
-              v-if="showSlope && hasSlopeData"
+              v-if="showSlope && availableSlopeData"
               class="filter-section"
             >
               <div class="filter-range-heading">
@@ -351,6 +351,8 @@
 </template>
 
 <script setup>
+import { TRACK_CATEGORIES } from '../domain/trackCategories';
+const supportedCategories = values => (values ?? []).filter(value => TRACK_CATEGORIES.some(option => option.value === value));
 import { formatFilterRange as formatRange } from "../utils/filterRange";
 import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue';
 import Slider from '@vueform/slider';
@@ -479,15 +481,24 @@ watch(() => props.hasTracksInViewport, (newValue, oldValue) => {
   }
 });
 
+const availableElevationData = ref(props.hasElevationData);
+const availableSlopeData = ref(props.hasSlopeData);
+watch(() => [props.hasElevationData, props.hasSlopeData], ([elevation, slope]) => {
+  availableElevationData.value ||= elevation;
+  availableSlopeData.value ||= slope;
+});
+
 // Update stable copies of props - only call when not in pending state
 function updateStableValues() {
   // Update categories only if we have actual data, don't clear if empty
   if (props.categories && props.categories.length > 0) {
-    stableCategories.value = [...props.categories];
+    stableCategories.value = [...new Set([...stableCategories.value, ...supportedCategories(props.categories)])];
   } else if (props.globalCategories && props.globalCategories.length > 0 && stableCategories.value.length === 0) {
     // If we have no stable categories yet, use global categories as fallback
-    stableCategories.value = [...props.globalCategories];
+    stableCategories.value = supportedCategories(props.globalCategories);
   }
+
+  if (!props.hasTracksInViewport || Object.values(rangeFiltersActive.value).some(Boolean)) return;
 
   if (typeof props.minLength === 'number') {
     stableMinLength.value = props.minLength;
@@ -643,7 +654,7 @@ onMounted(() => {
     }
   }
 
-  selectedCategories.value = initialCategories;
+  selectedCategories.value = supportedCategories(initialCategories);
   lengthRange.value = initialLengthRange;
   elevationGainRange.value = initialElevationGainRange;
   slopeRange.value = initialSlopeRange;
@@ -651,9 +662,9 @@ onMounted(() => {
   // Initialize stable values from props, preferring globalCategories to avoid empty state
   // Use categories if available and non-empty, otherwise use globalCategories
   if (props.categories && props.categories.length > 0) {
-    stableCategories.value = [...props.categories];
+    stableCategories.value = [...new Set([...stableCategories.value, ...supportedCategories(props.categories)])];
   } else if (props.globalCategories && props.globalCategories.length > 0) {
-    stableCategories.value = [...props.globalCategories];
+    stableCategories.value = supportedCategories(props.globalCategories);
   } else {
     stableCategories.value = [];
   }
@@ -753,42 +764,6 @@ watch([selectedCategories, lengthRange, elevationGainRange, slopeRange, showMyTr
   let validElevationGainRange = elevationGainRange;
   let validSlopeRange = slopeRange;
 
-  // Clamp length range to current viewport bounds
-  if (props.minLength !== undefined && props.maxLength !== undefined) {
-    const [min, max] = lengthRange;
-    const clampedMin = Math.max(props.minLength, Math.min(props.maxLength, min));
-    const clampedMax = Math.max(props.minLength, Math.min(props.maxLength, max));
-    if (clampedMin <= clampedMax) {
-      validLengthRange = [clampedMin, clampedMax];
-    } else {
-      validLengthRange = [props.minLength, props.maxLength];
-    }
-  }
-
-  // Clamp elevation gain range to current viewport bounds
-  if (props.minElevationGain !== undefined && props.maxElevationGain !== undefined) {
-    const [min, max] = elevationGainRange;
-    const clampedMin = Math.max(props.minElevationGain, Math.min(props.maxElevationGain, min));
-    const clampedMax = Math.max(props.minElevationGain, Math.min(props.maxElevationGain, max));
-    if (clampedMin <= clampedMax) {
-      validElevationGainRange = [clampedMin, clampedMax];
-    } else {
-      validElevationGainRange = [props.minElevationGain, props.maxElevationGain];
-    }
-  }
-
-  // Clamp slope range to current viewport bounds
-  if (props.minSlope !== undefined && props.maxSlope !== undefined) {
-    const [min, max] = slopeRange;
-    const clampedMin = Math.max(props.minSlope, Math.min(props.maxSlope, min));
-    const clampedMax = Math.max(props.minSlope, Math.min(props.maxSlope, max));
-    if (clampedMin <= clampedMax) {
-      validSlopeRange = [clampedMin, clampedMax];
-    } else {
-      validSlopeRange = [props.minSlope, props.maxSlope];
-    }
-  }
-
   emitFilter({
     categories: validCategories,
     lengthRange: validLengthRange,
@@ -818,7 +793,7 @@ function resetFilters() {
   rangeFiltersActive.value = {length:false,elevation:false,slope:false};
   // Use global session values for reset instead of viewport-based props
   // This ensures that reset doesn't change when user zooms in/out
-  selectedCategories.value = props.globalCategories ? [...props.globalCategories] : [];
+  selectedCategories.value = supportedCategories(props.globalCategories);
   lengthRange.value = [props.globalMinLength || 0, props.globalMaxLength || 50];
   elevationGainRange.value = [props.globalMinElevationGain || 0, props.globalMaxElevationGain || 2000];
   slopeRange.value = [props.globalMinSlope || 0, props.globalMaxSlope || 20];
@@ -1118,12 +1093,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 8px;
   margin: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  /* Allow vertical scrolling only within this container */
-  touch-action: pan-y;
-  /* Enable momentum scrolling on iOS */
-  -webkit-overflow-scrolling: touch;
+  min-inline-size: 0;
 }
 
 .checkbox-item {

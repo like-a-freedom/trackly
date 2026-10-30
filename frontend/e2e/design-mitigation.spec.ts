@@ -421,3 +421,15 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   expect(Number(new URL(page.url()).searchParams.get('lng'))).toBeLessThan(37.027);
  });
 }
+
+
+test('heatmap toggle draws API points and removes the layer when disabled', async ({page}) => {
+ await page.route('**/api/tracks/heatmap?**', route => route.fulfill({json:[{lat:56,lon:37,weight:10}]}));
+ await page.goto('/?zoom=10&lat=56&lng=37');
+ await page.getByRole('button',{name:'Toggle filter options'}).click();
+ const toggle = page.getByLabel('Heatmap layer', {exact:true});
+ await toggle.check();
+ await expect(page.locator('canvas.leaflet-heatmap-layer')).toHaveCount(1);
+ await toggle.uncheck();
+ await expect(page.locator('canvas.leaflet-heatmap-layer')).toHaveCount(0);
+});

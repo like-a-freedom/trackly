@@ -255,9 +255,10 @@ export function useTracks() {
             });
             if (!response.ok) throw new Error('Failed to fetch heatmap data');
             const data = await response.json();
-            if (data && Array.isArray(data.points)) {
-                store.heatmapPoints = data.points;
-                setCachedHeatmap(cacheKey, data.points);
+            const points = Array.isArray(data) ? data : data?.points;
+            if (Array.isArray(points)) {
+                store.heatmapPoints = points;
+                setCachedHeatmap(cacheKey, points);
             } else {
                 store.heatmapPoints = [];
             }

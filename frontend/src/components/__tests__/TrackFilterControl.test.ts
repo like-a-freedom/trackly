@@ -1434,7 +1434,7 @@ describe('TrackFilterControl', () => {
             expect(wrapper.vm.elevationGainRange).toEqual([0, 2000]);
         });
 
-        it('clamps elevation gain range to viewport bounds', async () => {
+        it('preserves elevation selection independently of result bounds', async () => {
             // Mock saved range that exceeds new viewport bounds
             setStoredFilters(JSON.stringify({
         rangeFiltersActive: {length:false,elevation:false,slope:false},
@@ -1462,7 +1462,7 @@ describe('TrackFilterControl', () => {
             const emitted = wrapper.emitted('update:filter');
             expect(emitted).toBeTruthy();
             const lastEmit = emitted![emitted.length - 1][0];
-            expect(lastEmit.elevationGainRange).toEqual([50, 2000]);
+            expect(lastEmit.elevationGainRange).toEqual([50, 2500]);
         });
 
         it('preserves elevation gain range when viewport props change', async () => {
@@ -1675,7 +1675,7 @@ describe('TrackFilterControl', () => {
 
             // Reset should use global session values, but emitted values are filtered to viewport
             expect(lastEmit.categories).toEqual(['running', 'cycling', 'hiking', 'walking']); // Filtered to viewport
-            expect(lastEmit.lengthRange).toEqual([1.0, 5.0]); // Expect clamped to viewport, not global
+            expect(lastEmit.lengthRange).toEqual([0.5, 10]); // Expect clamped to viewport, not global
 
             wrapper.unmount();
         });
@@ -1921,6 +1921,27 @@ describe('TrackFilterControl', () => {
         const updates = wrapper.emitted('update:filter');
         expect(updates.at(-1)[0].myTracks).toBe(false);
         expect(updates.at(-1)[0].categories).toContain('hiking');
+    });
+
+    it('retains numeric controls and slope selection after an empty response', async () => {
+        wrapper = mount(TrackFilterControl, {props:createDefaultProps()});
+        await nextTick();
+        wrapper.findAllComponents({name:'Slider'}).at(-1).vm.$emit('update:modelValue', [3, 12]);
+        await nextTick();
+        await wrapper.setProps({categories:[],hasTracksInViewport:false,hasSlopeData:false,hasElevationData:false,minLength:0,maxLength:0,minSlope:0,maxSlope:0,minElevationGain:0,maxElevationGain:0});
+        await new Promise(resolve => setTimeout(resolve, 400));
+        expect(wrapper.findAllComponents({name:'Slider'})).toHaveLength(3);
+        await wrapper.get('#show-my-tracks').setValue(true);
+        expect(wrapper.emitted('update:filter').at(-1)[0].slopeRange).toEqual([3,12]);
+    });
+
+    it('excludes legacy custom categories from filter choices and restored selections', async () => {
+        setStoredFilters(JSON.stringify({categories:['My own category','other']}));
+        wrapper = mount(TrackFilterControl, {props:createDefaultProps({categories:['hiking','My own category','other']})});
+        await nextTick();
+        expect(wrapper.text()).not.toContain('My own category');
+        expect(wrapper.find('#category-other').exists()).toBe(true);
+        expect(wrapper.emitted('update:filter').at(-1)[0].categories).toEqual(['other']);
     });
 
     describe('Optional Filter Visibility', () => {
